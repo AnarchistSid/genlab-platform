@@ -71,6 +71,7 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
                                 from genlab_core.media.post_render_transform import (
                                     apply_post_render_transformations,
                                 )
+
                                 content = story.get("content") or {}
                                 blueprint_context = {
                                     "hook": hook_text,
@@ -78,7 +79,13 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
                                     "title": story.get("title", ""),
                                     "summary": story.get("summary", ""),
                                 }
-                                result = apply_post_render_transformations(
+                                # Task #581 (2026-07-08): now returns
+                                # (path, arm_ids_by_dimension). The dict
+                                # travels through push_to_backlog into
+                                # register_pending_feedback so
+                                # transformation arms get reward-attributed
+                                # per dimension.
+                                result, _arm_ids = apply_post_render_transformations(
                                     result,
                                     niche_id="ai_creators",
                                     niche_root=BB_ROOT,
@@ -86,6 +93,8 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
                                     blueprint_context=blueprint_context,
                                     video_duration_s=55.0,
                                 )
+                                if _arm_ids:
+                                    story["arm_ids_by_dimension"] = dict(_arm_ids)
                                 story.setdefault("media", {})["rendered_path"] = result
                                 story["media"]["render_status"] = "video_ready"
                                 story["media"]["compositor"] = "frame_compositor"

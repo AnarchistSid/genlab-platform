@@ -107,6 +107,15 @@ def register_pending_feedback(
             arm_propensity = fields.get("bandit_propensity")
             arm_temperature = 0.5 if arm_propensity is not None else None
 
+            # Task #581 (2026-07-08): transformation arm attribution.
+            # ``push_to_backlog`` serializes ``story["arm_ids_by_dimension"]``
+            # to JSON and stores under this key. Decode here so
+            # ``PendingFeedbackTask.arm_ids_by_dimension`` gets the native
+            # dict shape ``{dimension: arm_id}``. Reward router at
+            # ``metric_collector.py:1077`` reads this at the 48h collection
+            # window and routes per-dimension bandit updates.
+            arm_ids_by_dim = _parse_arm_ids_by_dimension(fields.get("arm_ids_by_dimension"))
+
             task = PendingFeedbackTask(
                 content_id=candidate_id or record_id[:16],
                 platform=plat,
@@ -120,10 +129,44 @@ def register_pending_feedback(
                 bandit_context=bandit_ctx,
                 propensity=arm_propensity,
                 temperature=arm_temperature,
+                arm_ids_by_dimension=arm_ids_by_dim,
             )
             fb_store.create(task)
     except Exception as e:
         logger.warning("[publish] PendingFeedback registration failed (non-fatal): %s", e)
+
+
+def _parse_arm_ids_by_dimension(raw: Any) -> dict[str, str]:
+    """Decode ``fields["arm_ids_by_dimension"]`` back to native dict.
+
+    ``push_to_backlog`` writes this as a JSON string; the DB backend
+    may return it as either str (Postgres text col) or dict (JSONB
+    col after psycopg auto-decoding), so accept both shapes. Empty /
+    malformed inputs return ``{}`` — matches the
+    ``PendingFeedbackTask.arm_ids_by_dimension`` default, so a missing
+    or corrupt value cleanly means "no transformation arms attributed
+    for this publish" and the router skips.
+
+    Task #581 (2026-07-08) — see docstring of
+    ``register_pending_feedback``.
+    """
+    if not raw:
+        return {}
+    if isinstance(raw, dict):
+        # Coerce values to str because bandit_arms.arm_id is a text
+        # column and the router does string equality lookups.
+        return {str(k): str(v) for k, v in raw.items() if k and v}
+    if isinstance(raw, str):
+        try:
+            import json as _json
+
+            parsed = _json.loads(raw)
+        except (ValueError, TypeError):
+            logger.debug("[publish] arm_ids_by_dimension JSON decode failed: %r", raw[:80])
+            return {}
+        if isinstance(parsed, dict):
+            return {str(k): str(v) for k, v in parsed.items() if k and v}
+    return {}
 
 
 def _normalize_post_id(platform: str, post_id: str) -> str:
