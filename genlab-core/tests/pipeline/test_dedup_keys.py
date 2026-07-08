@@ -416,3 +416,76 @@ def test_load_dedup_keys_ttl_parametrised(ttl_value: int | None, expected_active
     cfg = {"pipeline": {"url_dedup_ttl_days": ttl_value}} if ttl_value is not None else {}
     keys = load_dedup_keys(niche_id="gaming", backlog_client=client, niche_config=cfg)
     assert keys.n_active_blueprints == expected_active
+
+
+# ── dedup_keys._is_blocking_row / video_id_dedup.is_blocking parity ─────────
+# Regression pin for the divergence discovered during DEV-2 (2026-07-08 audit).
+# Before this fix, _is_blocking_row implemented only rule 1 (status in
+# LIVE_OR_PENDING) while video_id_dedup.is_blocking implemented rule 1 AND
+# rule 2 (committed-to-publish gate). The URL/title/video_id dedup set was
+# populated from the smaller predicate — a SCHEDULED-approved blueprint's
+# URL would fall OUT of the dedup set even though the video_id path would
+# still block it. Silently created two behaviours for the same "should
+# this content be considered a duplicate?" question.
+
+
+def test_is_blocking_row_delegates_to_video_id_dedup_is_blocking() -> None:
+    """_is_blocking_row MUST return whatever video_id_dedup.is_blocking
+    returns for the same row. Locks in the single-source-of-truth.
+
+    If a future edit re-inlines the check here without also updating
+    video_id_dedup, this test fires on the FIRST row that exercises the
+    divergent semantics."""
+    from genlab_core.pipeline.dedup_keys import _is_blocking_row
+    from genlab_core.pipeline.video_id_dedup import is_blocking
+
+    rows = [
+        # Rule 1: LIVE_OR_PENDING status
+        {"fields": {"status": "PUBLISHED"}},
+        {"fields": {"status": "SCHEDULED"}},
+        {"fields": {"status": "VISUAL_READY"}},
+        {"fields": {"status": "DRAFTED"}},
+        # Rule 2: committed-to-publish gate — SCHEDULED-approved shape
+        {
+            "fields": {
+                "status": "VISUAL_READY",
+                "action_taken": "approved",
+                "scheduled_for": "2026-07-09T06:30:00+00:00",
+            }
+        },
+        # NOT blocking: archived
+        {"fields": {"status": "ARCHIVED"}},
+        # NOT blocking: rejected without commitment
+        {"fields": {"status": "REJECTED", "action_taken": "rejected"}},
+        # Malformed shapes
+        {},
+        {"fields": {}},
+        {"fields": {"status": None}},
+    ]
+    for row in rows:
+        assert _is_blocking_row(row) is is_blocking(row), (
+            "_is_blocking_row diverges from video_id_dedup.is_blocking on "
+            f"row {row!r}. The two predicates MUST return the same value for "
+            "every input or the URL/title/video_id dedup set will drift "
+            "from the video_id dedup gate — the exact class-of-bug found "
+            "during the DEV-2 extraction (2026-07-08 audit)."
+        )
+
+
+def test_is_blocking_row_catches_scheduled_approved_case() -> None:
+    """The specific case the pre-fix code missed: a VISUAL_READY blueprint
+    with action_taken='approved' + scheduled_for populated. Prior to the
+    2026-07-08 fix this returned False (rule 1 only), meaning the URL
+    would silently fall out of the block set."""
+    from genlab_core.pipeline.dedup_keys import _is_blocking_row
+
+    row = {
+        "fields": {
+            "status": "VISUAL_READY",  # NOT in LIVE_OR_PENDING per default
+            "action_taken": "approved",
+            "scheduled_for": "2026-07-09T06:30:00+00:00",
+        }
+    }
+    # If this fails, someone re-inlined _is_blocking_row without carrying
+    # over rule 2. Restore the delegation to video_id_dedup.is_blocking.
+    assert _is_blocking_row(row) is True

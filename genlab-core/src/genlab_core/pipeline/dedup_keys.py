@@ -75,9 +75,35 @@ _TITLE_JACCARD_THRESHOLD = 0.65
 
 
 def _is_blocking_row(row: dict) -> bool:
-    """True if this blueprint should block re-creation of the same content."""
-    fields = row.get("fields", row)
-    return fields.get("status", "") in _BLOCKING_STATUSES
+    """True if this blueprint should block re-creation of the same content.
+
+    Delegates to :func:`genlab_core.pipeline.video_id_dedup.is_blocking`
+    so the URL/title/video_id dedup set is populated from the SAME
+    predicate the video_id dedup gate uses. Prior to this fix (found
+    during DEV-2's extraction, 2026-07-08), the two paths diverged:
+
+    * ``video_id_dedup.is_blocking`` implemented rule 1 (status in
+      ``LIVE_OR_PENDING``) AND rule 2 (committed-to-publish:
+      ``action_taken='approved'`` + ``scheduled_for`` populated).
+    * The old inline ``dedup_keys._is_blocking_row`` implemented
+      ONLY rule 1.
+
+    That divergence meant a SCHEDULED-approved blueprint's URL was
+    NOT in the ``load_dedup_keys`` block set → a fresh fetcher run
+    could create a duplicate blueprint whose ``push_to_backlog``
+    revive path would then silently drop the approval + schedule slot.
+    Invisible to tests today because no drift-prevention fixture
+    exercised the SCHEDULED-approved shape, but forensically dangerous
+    per ``cleanup_safety.md`` "Scheduled Posts Are Sacred".
+
+    Import kept at function-call time to avoid a circular import risk
+    with :mod:`video_id_dedup` at module-load (both live under
+    ``genlab_core.pipeline`` but the sibling module reads DedupKeys
+    types transitively via other pipeline modules).
+    """
+    from genlab_core.pipeline.video_id_dedup import is_blocking
+
+    return is_blocking(row)
 
 
 def _is_within_url_ttl(bp: dict, cutoff: datetime | None) -> bool:
