@@ -785,7 +785,9 @@ from server.api.costs import bp as costs_bp
 from server.api.counterfactual_replay import bp as counterfactual_replay_bp
 from server.api.cross_niche_transfer import bp as cross_niche_transfer_bp
 from server.api.engagement import bp as engagement_bp
+from server.api.ensemble_votes import bp as ensemble_votes_bp
 from server.api.events import bp as events_bp
+from server.api.flag_state import bp as flag_state_bp
 from server.api.health import bp as health_bp
 from server.api.learning import bp as learning_bp
 from server.api.legal import legal_bp
@@ -868,6 +870,12 @@ app.register_blueprint(
 app.register_blueprint(
     conformal_router_bp
 )  # L4 (2026-07-08 audit): /api/v1/conformal-router/state — conformal router q_hat observability
+app.register_blueprint(
+    flag_state_bp
+)  # L11 (2026-07-08 audit): /api/v1/flags/state — aggregated GENLAB_* flag states
+app.register_blueprint(
+    ensemble_votes_bp
+)  # L5 (2026-07-08 audit): /api/v1/ensemble-votes/summary — per-component participation + recommendation distribution
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)

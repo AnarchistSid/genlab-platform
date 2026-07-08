@@ -488,7 +488,7 @@ def ensemble_decide(
         else f"n_voters={n_voters} — {recommendation}"
     )
 
-    return EnsembleDecision(
+    decision = EnsembleDecision(
         score=score,
         disagreement=disagreement,
         n_voters=n_voters,
@@ -496,6 +496,32 @@ def ensemble_decide(
         recommendation=recommendation,
         reasons=reasons,
     )
+
+    # L5 (2026-07-08 audit): persist per-component votes for post-hoc
+    # analysis. Guarded by its own independent flag so ensemble can
+    # run without persistence (existing behaviour). Fail-open — the
+    # decision itself always reaches the caller even if the audit-
+    # trail write fails.
+    blueprint_id = str(blueprint.get("id") or "")
+    try:
+        from genlab_core.scheduling.ensemble_persist import (
+            record_decision as _record_decision,
+        )
+
+        _record_decision(blueprint_id, niche_id, decision)
+    except Exception as exc:
+        # Import failure or unexpected raise from record_decision
+        # itself (record_decision NEVER raises, but defense in depth).
+        logger.warning(
+            "ensemble_decide.persist_hook_failed",
+            extra={
+                "error": str(exc),
+                "blueprint_id": blueprint_id,
+                "niche_id": niche_id,
+            },
+        )
+
+    return decision
 
 
 __all__ = [
