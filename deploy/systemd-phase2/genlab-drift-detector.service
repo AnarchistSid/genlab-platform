@@ -1,0 +1,46 @@
+[Unit]
+# L7 (2026-07-08 audit) — daily bandit-arm drift detection.
+#
+# Compares recent-window vs baseline-window win rates for every arm
+# with enough observations in both windows. Signals with |z| >= 2.0
+# get persisted to Postgres via the L7 write hook (guarded by
+# ``GENLAB_DRIFT_PERSIST_ENABLED=1``) so the DriftSignalCard on
+# Mission Control shows current + historical regressions.
+#
+# Depends on daily snapshots written by
+# `bandit_arms_snapshot.service` at 21:30 UTC. This service fires
+# 04:15 UTC (~7h after) so the previous night's snapshot is included
+# in the recent window without racing the writer.
+#
+# Fail-open: a snapshot dir with no CSVs → `detect_all_drift`
+# returns [], writer is a no-op, service exits 0. Missing dir logs
+# a WARNING but doesn't fail the unit.
+Description=GenLab bandit-arm drift detection (L7, 2026-07-08)
+Documentation=https://github.com/AnarchistSid/genlab-platform/pull/729
+After=network-online.target postgresql.service
+# Alert on failure via the shared template — matches the
+# `verify_reward_shaper_recovery.service` pattern from PR #720.
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=UV_FROZEN=1
+# Snapshot dir is populated by `bandit_arms_snapshot.service` at
+# `/mnt/genlab-media/snapshots/bandit_arms_YYYYMMDD.csv`. The module
+# reads BANDIT_SNAPSHOT_DIR env var if set; falls back to prod
+# default otherwise.
+Environment=BANDIT_SNAPSHOT_DIR=/mnt/genlab-media/snapshots
+# CLI reads --recent-days / --baseline-days / --threshold-z args but
+# the defaults match the module's constants (3/7/2.0) — no need to
+# override on the systemd invocation.
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.learning.drift_detector
+TimeoutSec=300
+
+[Install]
+WantedBy=multi-user.target
