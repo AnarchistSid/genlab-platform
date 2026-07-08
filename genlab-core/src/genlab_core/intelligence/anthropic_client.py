@@ -186,11 +186,14 @@ class AnthropicStrategistClient:
             raise RuntimeError("ANTHROPIC_API_KEY not set in environment")
         return anthropic.Anthropic(api_key=api_key)
 
-    @staticmethod
-    def _is_transient(exc: Exception) -> bool:
-        """Heuristic — anthropic SDK transient errors typically have these names."""
-        name = type(exc).__name__
-        return name in {
+    # DEV-3 (2026-07-08 audit) — locked-in name list used by both
+    # the string-match path and pin tests. If the anthropic SDK
+    # renames a class the isinstance path (below) still catches it
+    # via the actual class hierarchy; if the SDK removes a name
+    # entirely the string list preserves backward compat with
+    # in-flight retries queued against the old name.
+    _TRANSIENT_ERROR_NAMES: frozenset[str] = frozenset(
+        {
             "APIConnectionError",
             "APITimeoutError",
             "InternalServerError",
@@ -198,3 +201,56 @@ class AnthropicStrategistClient:
             "TimeoutError",
             "ConnectionError",
         }
+    )
+
+    @staticmethod
+    def _is_transient(exc: Exception) -> bool:
+        """Return True iff ``exc`` is a transient error worth retrying.
+
+        Belt-and-suspenders after the DEV-3 audit (2026-07-08): the
+        pre-fix version matched only on ``type(exc).__name__``, which
+        silently stops retrying if the anthropic SDK ever renames one
+        of these classes. Now we ALSO check isinstance against the
+        real class hierarchy, catching future renames as long as the
+        SDK preserves the subclass relationship (which SDKs usually
+        do — the class rename is invariably backed by an alias or a
+        subclass).
+
+        Both paths run; either one returning True wins. Tests can
+        still raise ad-hoc classes with the historical names and
+        get retry behaviour, so the pin surface stays stable.
+        """
+        # 1. Name-based match — historical behaviour, preserved.
+        name = type(exc).__name__
+        if name in AnthropicStrategistClient._TRANSIENT_ERROR_NAMES:
+            return True
+
+        # 2. isinstance-based match — catches future SDK renames as
+        #    long as the class hierarchy is preserved. Lazy import
+        #    so test envs without anthropic still work (mirrors the
+        #    _get_client lazy-import pattern above).
+        try:
+            import anthropic  # noqa: PLC0415 — lazy: tests may skip SDK.
+        except ImportError:
+            return False
+
+        # Collect the classes we know about from the SDK. Using
+        # ``getattr(anthropic, ..., None)`` because ``anthropic``
+        # may not expose every class we listed (older SDK versions
+        # lacked ``APITimeoutError``, for example). Any missing
+        # attribute simply doesn't participate in the isinstance
+        # check.
+        transient_classes = tuple(
+            cls
+            for cls in (
+                getattr(anthropic, "APIConnectionError", None),
+                getattr(anthropic, "APITimeoutError", None),
+                getattr(anthropic, "RateLimitError", None),
+                getattr(anthropic, "InternalServerError", None),
+            )
+            if isinstance(cls, type)
+        )
+        if transient_classes and isinstance(exc, transient_classes):
+            return True
+
+        return False
