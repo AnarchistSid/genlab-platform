@@ -121,7 +121,17 @@ def check_bandit_posterior_drift(niche_id: str) -> list[Alert]:
                 alerts.append(
                     Alert(
                         check="bandit_posterior_drift",
-                        severity="error",
+                        # NOTE: Alert.__init__ docstring says "critical or
+                        # warning". Previously this used "error" which is
+                        # NOT one of the documented severities — the CLI
+                        # output filter at health_monitor.py:333-334 groups
+                        # by exactly "critical" and "warning", so an "error"
+                        # severity was SILENTLY DROPPED from the operator's
+                        # terminal (though still written to DB). Content
+                        # arms stuck at uniform prior with 14 days of arm-
+                        # specific rewards is a meaningful signal but not
+                        # incident-level → "warning" is the right severity.
+                        severity="warning",
                         message=(
                             f"{len(content_unmoved)} content arm(s) at uniform "
                             f"prior despite arm-specific rewards in last 14 days"
