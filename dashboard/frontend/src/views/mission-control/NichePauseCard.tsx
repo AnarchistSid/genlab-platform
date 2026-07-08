@@ -63,7 +63,10 @@ export function NichePauseCard() {
   const pausedCount = pausedByNiche.size;
 
   return (
-    <div className="bento-card">
+    // id="niche-pause-card" is the anchor target for the top-surface
+    // NichePauseBanner's scroll-into-view. Keep in sync with
+    // _PAUSE_CARD_ANCHOR_ID in NichePauseBanner.tsx.
+    <div id="niche-pause-card" className="bento-card">
       <h3 className="card-title">
         Publishing Pauses
         <span className="ml-2 text-[10px] text-text-muted font-normal">

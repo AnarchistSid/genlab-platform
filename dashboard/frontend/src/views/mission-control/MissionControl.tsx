@@ -39,6 +39,7 @@ import { CounterfactualReplayCard } from "./CounterfactualReplayCard";
 import { ProductBanditCard } from "./ProductBanditCard";
 import { TransformationBanditCard } from "./TransformationBanditCard";
 import { BanditHourHeatmap } from "./BanditHourHeatmap";
+import { NichePauseBanner } from "./NichePauseBanner";
 import { NichePauseCard } from "./NichePauseCard";
 import { ComplianceStatsCard } from "./ComplianceStatsCard";
 import { PerPlatformHealthCard } from "./PerPlatformHealthCard";
@@ -187,6 +188,13 @@ export default function MissionControl() {
 
       {/* Publishing alert banner — shows unresolved publish failures/warnings */}
       <PublishingAlertBanner />
+
+      {/* Niche pause banner (H3, 2026-07-08 audit) — top-surface
+          reminder when any niche is paused so operator doesn't lose
+          30 minutes debugging "why isn't gaming publishing?" before
+          finding NichePauseCard below the fold. Renders NOTHING
+          when no niches are paused. */}
+      <NichePauseBanner />
 
       {/* Alert Banner (conditional) */}
       {alertInfo && (
