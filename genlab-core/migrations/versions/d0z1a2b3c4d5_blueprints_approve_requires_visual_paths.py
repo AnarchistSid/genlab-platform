@@ -1,8 +1,21 @@
 """blueprints — CHECK constraint: approved+scheduled requires visual_paths (#577)
 
 Revision ID: d0z1a2b3c4d5
-Revises: c0z1a2b3c4d5
+Revises: c0z1a2b3c4d5, c9x0y1z2ab34
 Create Date: 2026-07-08 16:50:00.000000+00:00
+
+## Also a mergepoint
+
+Prod had 2 unmerged heads: ``c9x0y1z2ab34`` (2026-07-05 mergepoint
+of transformation + late_reward) and ``c0z1a2b3c4d5`` (the L3 chain
+which extended late_reward but never merged with transformation).
+Applying THIS migration also unifies those 2 heads — the down_revision
+tuple declares both as parents, following the same pattern used in
+``c9x0y1z2ab34_merge_late_reward_and_transformation.py`` and
+``b8w9x0y1z2ab_merge_transformation_and_strategist.py``.
+
+After this migration applies, ``d0z1a2b3c4d5`` is the single head
+and future migrations descend cleanly from it.
 
 ## Background
 
@@ -75,7 +88,10 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "d0z1a2b3c4d5"
-down_revision = "c0z1a2b3c4d5"
+# Two parents — merges the c9x… (transformation+late_reward) head
+# with the L3 chain (c0z…) that extended late_reward independently.
+# See the docstring above for the topology diagram.
+down_revision = ("c0z1a2b3c4d5", "c9x0y1z2ab34")
 branch_labels = None
 depends_on = None
 
