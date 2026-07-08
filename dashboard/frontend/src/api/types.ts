@@ -1492,6 +1492,48 @@ export interface TransformationBanditSummary {
 }
 
 // ───────────────────────────────────────────────────────────────
+// L11 (2026-07-08 audit) — flag-state aggregator types.
+// One catalogued entry per GENLAB_* env flag.
+// ───────────────────────────────────────────────────────────────
+
+/** Reflects `_classify_value` in `dashboard/server/api/flag_state.py`.
+ * `"disabled_by_flag"` is the polarity=disable case with a truthy
+ * value (feature is turned OFF by operator). */
+export type FlagStatus =
+  | "active"
+  | "dormant"
+  | "mis_set"
+  | "disabled_by_flag";
+
+export type FlagPolarity = "enable" | "disable";
+
+export interface FlagEntry {
+  name: string;
+  group: string;
+  role: string;
+  polarity: FlagPolarity;
+  /** Raw env value (redacted to "…" if >32 chars). `null` when unset. */
+  raw_value: string | null;
+  status: FlagStatus;
+  /** Human-readable warning when status is `mis_set`. */
+  warning: string | null;
+}
+
+export interface FlagStateSummary {
+  total: number;
+  active: number;
+  dormant: number;
+  mis_set: number;
+  /** Present when at least one disable-polarity flag is truthy. */
+  disabled_by_flag?: number;
+}
+
+export interface FlagStatePayload {
+  flags: FlagEntry[];
+  summary: FlagStateSummary;
+}
+
+// ───────────────────────────────────────────────────────────────
 // L3 PR 9 (2026-07-07) — Product bandit observability types.
 // Monetization Layer 3 sprint. Sibling of TransformationBanditSummary
 // but simpler shape: products live under one dimension

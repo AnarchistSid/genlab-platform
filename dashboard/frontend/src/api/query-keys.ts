@@ -230,4 +230,10 @@ export const queryKeys = {
     list: (nicheId: string, topN: number) =>
       ["source-performance", nicheId, topN] as const,
   },
+  /** L11 (2026-07-08 audit) — aggregated GENLAB_* flag states.
+   *  Refreshes on demand (env doesn't change without SSH); a slow
+   *  poll is fine. */
+  flagState: {
+    get: () => ["flag-state"] as const,
+  },
 };

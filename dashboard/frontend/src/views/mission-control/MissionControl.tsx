@@ -34,6 +34,7 @@ import { StrategistReportCard } from "./StrategistReportCard";
 import { TrendAnticipationCard } from "./TrendAnticipationCard";
 import { TrendAnticipationAccuracyCard } from "./TrendAnticipationAccuracyCard";
 import { CrossNichePriorsCard } from "./CrossNichePriorsCard";
+import { FlagStateCard } from "./FlagStateCard";
 import { TopCreatorPriorsCard } from "./TopCreatorPriorsCard";
 import { CounterfactualReplayCard } from "./CounterfactualReplayCard";
 import { ProductBanditCard } from "./ProductBanditCard";
@@ -354,6 +355,13 @@ export default function MissionControl() {
                 so operator can see which artifact source is
                 observation-only vs active without checking .env. */}
             <TopCreatorPriorsCard />
+            {/* L11 observability (2026-07-08 audit): all 36
+                catalogued GENLAB_* env flags in one card, grouped
+                by capability. Primary operator value: catches
+                mis-set values (e.g. "true" when reader wants "1")
+                that silently no-op — the class-of-bug that
+                motivated the entire flag-audit epic. */}
+            <FlagStateCard />
             {/* Intervention 7 observability (2026-07-01): monthly
                 counterfactual replay. Shows per-niche IPS + DR reward
                 estimates so the operator can see which arms would
