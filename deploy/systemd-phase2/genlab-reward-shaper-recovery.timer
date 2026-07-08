@@ -1,0 +1,16 @@
+[Unit]
+Description=GenLab reward-shaper recovery check timer
+
+[Timer]
+# Weekly Monday 05:15 UTC = 10:45 IST Monday morning. Delayed 15 min
+# after the strategist runs (Sun 02:00 UTC) + cross-niche transfer
+# runs (Mon 05:30 UTC) so its output is fresh when this fires.
+#
+# First fire: Monday 2026-07-13 (5 days post-#713 deploy) — enough
+# data to be meaningful. Persistent=true means if the box is down
+# on Monday, it runs on next boot.
+OnCalendar=Mon *-*-* 05:15:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
