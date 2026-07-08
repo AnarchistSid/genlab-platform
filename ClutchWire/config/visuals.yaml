@@ -58,10 +58,12 @@ branding:
 
 # Intelligent Transformation (PR 1-16 sprint, 2026-07-05)
 # Multi-dimensional bandit-driven render choices per publish.
-# Schema-only until GENLAB_INTELLIGENT_TRANSFORM_ENABLED=1 + enabled: true below.
-# See memory: intelligent-transformation-architecture-2026-07-05
+# Activated on prod 2026-07-05. Repo synced to match 2026-07-08 to
+# stop the recurring stash-pop-on-deploy dance (task #520 activation
+# state now reflected in main). See memory:
+# intelligent-transformation-architecture-2026-07-05.
 intelligent_transform:
-  enabled: false  # per-niche activation; GENLAB_INTELLIGENT_TRANSFORM_ENABLED env also required
+  enabled: true  # per-niche activation; GENLAB_INTELLIGENT_TRANSFORM_ENABLED env also required
   dimensions:
     music_mood:
       enabled: true
