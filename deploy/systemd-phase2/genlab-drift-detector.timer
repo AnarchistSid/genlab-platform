@@ -1,0 +1,22 @@
+[Unit]
+Description=GenLab drift detector timer — daily 04:15 UTC
+
+[Timer]
+# 04:15 UTC = 09:45 IST. Chosen so the previous night's snapshot
+# writer (fires 21:30 UTC) has completed and its file is included
+# in the recent-window computation. ~7h gap absorbs snapshot writer
+# retries + drift into next day.
+#
+# Daily cadence is right for this signal: bandit posteriors shift
+# over 24-72h windows. Weekly would miss regressions until they've
+# already ossified; hourly would burn cycles on stable states.
+#
+# Persistent=true catches missed fires — e.g. if the box was down
+# for maintenance, the next boot triggers the run so the drift
+# timeline stays continuous.
+OnCalendar=*-*-* 04:15:00 UTC
+Persistent=true
+Unit=genlab-drift-detector.service
+
+[Install]
+WantedBy=timers.target
