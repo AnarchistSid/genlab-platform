@@ -35,6 +35,7 @@ import {
   sources,
   type YoutubeChannelEntry,
 } from "@/api/client";
+import { humanizeApiError } from "@/lib/humanize-api-error";
 import { NICHE_IDS, getNicheInfo, type NicheId } from "@/niches/registry";
 
 const QK = (nicheId: NicheId) => ["config", "youtube-channels", nicheId];
@@ -61,7 +62,7 @@ export function SourcesEditor() {
       setFormError(null);
       void qc.invalidateQueries({ queryKey: QK(nicheId) });
     },
-    onError: (err: Error) => setFormError(err.message),
+    onError: (err) => setFormError(humanizeApiError(err).message),
   });
 
   const removeMutation = useMutation({
@@ -70,7 +71,7 @@ export function SourcesEditor() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: QK(nicheId) });
     },
-    onError: (err: Error) => setFormError(err.message),
+    onError: (err) => setFormError(humanizeApiError(err).message),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
