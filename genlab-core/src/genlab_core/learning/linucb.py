@@ -308,6 +308,93 @@ class LinUCBArm:
             "n_obs": self.n_obs,
         }
 
+    # L12 (2026-07-08 audit) — thresholds pulled out for pin testing.
+    # A condition number this high means the matrix is effectively
+    # singular at float64 precision — inversion would give garbage
+    # even if it doesn't raise. 1e12 is well below float64's ~1e16
+    # dynamic range, so a legitimate well-fit posterior stays under
+    # this even after hundreds of updates.
+    _CONDITION_NUMBER_LIMIT: float = 1.0e12
+
+    @classmethod
+    def _validate_state(
+        cls, A: np.ndarray, b: np.ndarray, *, n_obs: int
+    ) -> tuple[np.ndarray, np.ndarray] | None:
+        """Validate a restored (A, b) pair. Return the pair if healthy,
+        None if the state is corrupt and the caller should hard-reset.
+
+        Checks (L12):
+          1. ``A`` must be finite everywhere (no NaN, no Inf). A single
+             NaN entry propagates through matrix inversion and taints
+             every subsequent predict.
+          2. ``b`` must be finite everywhere. Same reasoning.
+          3. ``A`` must not be near-singular (condition number below
+             ``_CONDITION_NUMBER_LIMIT``). A near-singular matrix means
+             the inversion at predict-time produces amplified rounding
+             error — a "successful" predict with garbage output. Better
+             to reset than to steer traffic on garbage.
+          4. ``A`` must be square. Non-square gets caught by later
+             shape checks too but this fails fast.
+
+        Returns None on any failure; caller then hard-resets to a fresh
+        arm. On success returns the (possibly-unchanged) (A, b) pair.
+        """
+        # 1 + 2: NaN / Inf guard. np.isfinite is the standard way — it
+        # returns True for finite floats and False for NaN, +Inf, -Inf.
+        if not np.isfinite(A).all():
+            logger.warning(
+                "[LinUCB] restored A_matrix contains NaN/Inf entries "
+                "(n_obs=%d) — resetting arm to fresh state",
+                n_obs,
+            )
+            return None
+        if not np.isfinite(b).all():
+            logger.warning(
+                "[LinUCB] restored b_vector contains NaN/Inf entries "
+                "(n_obs=%d) — resetting arm to fresh state",
+                n_obs,
+            )
+            return None
+
+        # 4: Square check. Do this BEFORE the condition-number computation
+        # because ``np.linalg.cond`` on a non-square matrix would raise
+        # anyway; failing fast here gives a cleaner log line.
+        if A.ndim != 2 or A.shape[0] != A.shape[1]:
+            logger.warning(
+                "[LinUCB] restored A_matrix has non-square shape %s "
+                "(n_obs=%d) — resetting arm to fresh state",
+                A.shape,
+                n_obs,
+            )
+            return None
+
+        # 3: Condition number. ``np.linalg.cond`` returns +inf for a
+        # truly singular matrix, so the same comparison catches both
+        # "singular" and "near-singular". Wrap in try/except in case
+        # BLAS itself throws on a pathological matrix — treat as
+        # corruption too.
+        try:
+            cond = float(np.linalg.cond(A))
+        except (np.linalg.LinAlgError, ValueError) as exc:
+            logger.warning(
+                "[LinUCB] cond(A_matrix) raised %s (n_obs=%d) — "
+                "resetting arm to fresh state",
+                type(exc).__name__,
+                n_obs,
+            )
+            return None
+        if not np.isfinite(cond) or cond > cls._CONDITION_NUMBER_LIMIT:
+            logger.warning(
+                "[LinUCB] restored A_matrix is (near-)singular "
+                "(cond=%.2e, limit=%.2e, n_obs=%d) — resetting arm",
+                cond,
+                cls._CONDITION_NUMBER_LIMIT,
+                n_obs,
+            )
+            return None
+
+        return A, b
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> LinUCBArm:
         """Restore arm state from a serialized dict.
@@ -326,9 +413,33 @@ class LinUCBArm:
         need explicit operator intent. We log a warning + return the
         arm as-is; the caller's downstream predict/update will mismatch
         and fall through the metric_collector's existing shape-guard.
+
+        L12 (2026-07-08 audit) — state validation. Corrupt persisted
+        state (NaN/Inf entries, singular / near-singular A) would
+        silently produce garbage predictions or raise inside predict()
+        every call. On corruption we log LOUDLY and reset the arm to
+        a fresh identity/zero baseline. Better to lose one arm's
+        learning than to steer live traffic with a NaN posterior; the
+        reset arm re-accumulates through normal `update()` calls.
+        See :meth:`_validate_state` for the exact checks.
         """
         A = np.array(data["A_matrix"], dtype=np.float64)
         b = np.array(data["b_vector"], dtype=np.float64)
+
+        # L12 validation runs BEFORE dimensional migration so a corrupt
+        # legacy 12-D arm doesn't get padded up and cascade the NaN
+        # through to the CONTEXT_DIM shape. If the pre-pad matrix is
+        # corrupt we reset to a fresh (post-pad) arm.
+        validated = cls._validate_state(
+            A, b, n_obs=int(data.get("n_obs", 0))
+        )
+        if validated is None:
+            # Full reset — return a fresh arm at CONTEXT_DIM so the
+            # caller's dict still lines up with the live decision path.
+            # ``alpha`` is preserved because it's a per-arm tuning
+            # parameter, not affected by the corruption.
+            return cls(d=CONTEXT_DIM, alpha=data.get("alpha", 1.0))
+        A, b = validated
         d_stored = A.shape[0]
 
         # ONLY pad legacy production arms (_LEGACY_CONTEXT_DIM == 12).
