@@ -21,8 +21,9 @@ from typing import Any
 from genlab_core.cache.stable_ids import generate_candidate_id, generate_story_id
 from genlab_core.cache.text_sanitizer import strip_html_tags
 from genlab_core.http.backlog_client import BacklogClient
-from genlab_core.pipeline.blueprint_status import LIVE_OR_PENDING as _BLOCKING_STATUSES
 from genlab_core.pipeline.stage_context import StageContext
+from genlab_core.pipeline.video_id_dedup import VideoIdDedupGate
+from genlab_core.pipeline.video_id_dedup import is_blocking as _is_blocking
 from genlab_core.settings import settings
 from genlab_core.utils.text_sanitizer import sanitize_for_graph_api
 
@@ -93,40 +94,13 @@ _ARM_KEYWORDS: dict[str, list[tuple[str, list[str]]]] = {
 # two stages.
 
 
-def _is_blocking(row: dict) -> bool:
-    """True if an existing blueprint row should block re-creation of the same content.
-
-    Two independent gates make a blueprint blocking:
-
-    1. ``status`` in ``_BLOCKING_STATUSES`` (``LIVE_OR_PENDING``) — the
-       original semantics: live, publishing, visual_ready, drafted, or
-       scored.
-
-    2. **Committed to publish**: ``action_taken == 'approved'`` AND
-       ``scheduled_for`` is populated. This catches the case where the
-       operator (via dashboard) or the auto-approver has committed the
-       blueprint to a future publish slot, but its status hasn't yet
-       migrated into ``_BLOCKING_STATUSES`` (some code paths set the
-       status to ``SCHEDULED`` or leave it at ``VISUAL_READY`` while
-       populating ``scheduled_for`` — either way, reviving the row
-       would silently drop the approval AND the schedule slot).
-
-    Rule 2 was added 2026-07-06 after a live-fire watch caught the
-    07:00 IST ai_creators pipeline demoting a Mon 12:05 IST publisher-
-    fire commitment from SCHEDULED → VISUAL_READY, clearing
-    ``action_taken='approved'``. Without a fresh manual reschedule the
-    channel would have published nothing that day. See task #525 +
-    ``cleanup_safety.md`` "Scheduled Posts Are Sacred".
-    """
-    fields = row.get("fields", row)
-    if fields.get("status", "") in _BLOCKING_STATUSES:
-        return True
-    # Committed-to-publish gate: an operator (or the auto-approver in
-    # enforce mode) has already promised this blueprint a publish slot.
-    # Reviving would break the promise silently.
-    if fields.get("action_taken") == "approved" and fields.get("scheduled_for"):
-        return True
-    return False
+# ``_is_blocking`` is imported at the top of this module from
+# :mod:`genlab_core.pipeline.video_id_dedup` — single source of truth
+# so the extracted :class:`VideoIdDedupGate` and the inline callers
+# below (candidate_id dedup, existing_hooks loader) can't drift apart.
+# The alias name is preserved to keep every existing test import
+# (``from genlab_core.pipeline.stages.push_to_backlog import _is_blocking``)
+# working without a test-file edit.
 
 
 _TOPIC_MAP = {
@@ -1736,46 +1710,31 @@ class PushToBacklog:
                     logger.warning("[PUSH] Blueprint '%s' has unparseable content string", title)
                     continue
 
-            # Extract video_id for dedup — available from FetchTrendingVideos or DownloadTopVideos
-            video_id = story.get("video_id") or ""
-            if not video_id:
-                # Try clip_index lookup
-                # Defensive ``or {}`` at each step — see video_gate.py (PR #499)
-                # and the same fix pattern. ``dict.get(k, {})`` returns the
-                # default ONLY when the key is ABSENT. Both ``context["clip_
-                # index"]`` and ``clip_index["clips"]`` can exist with value
-                # None (some fetchers initialise the structure but leave the
-                # inner dict unset on early-exit paths). Without the ``or {}``
-                # coercion, ``None.get(...)`` would crash with ``'NoneType'
-                # object has no attribute 'get'`` mid-PushToBacklog, which
-                # the surrounding try/except at line 1517 would log as a
-                # generic story-push failure — losing the structural signal.
-                clip_index = context.get("clip_index") or {}
-                clip_entry = (clip_index.get("clips") or {}).get(story_id) or {}
-                source_url_for_vid = clip_entry.get("source_url") or ""
-                if "youtube" in source_url_for_vid:
-                    video_id = source_url_for_vid.split("v=")[-1].split("&")[0]
-
-            # Video-level dedup: same clip must not create multiple blueprints.
-            # Only rows in a blocking state count — see _BLOCKING_STATUSES.
-            if video_id:
-                try:
-                    existing_by_video = client.blueprints.all(
-                        formula=f"{{video_id}}='{video_id}'",
-                        niche_id=niche_id,
-                        max_records=5,
-                    )
-                    active_dupes = [bp for bp in existing_by_video if _is_blocking(bp)]
-                    if active_dupes:
-                        logger.info(
-                            "[PUSH] Video already blueprinted: video_id=%s niche=%s — skipping",
-                            video_id[:20],
-                            niche_id,
-                        )
-                        video_dedup_skipped += 1
-                        continue
-                except Exception as e:
-                    logger.warning("[PUSH] Video dedup check failed: %s — allowing through", e)
+            # Video-level dedup: same clip must not create multiple
+            # blueprints. Only rows in a blocking state count — see
+            # LIVE_OR_PENDING. Delegates to :class:`VideoIdDedupGate`
+            # (:mod:`genlab_core.pipeline.video_id_dedup`) which owns the
+            # video_id resolution ladder + BacklogClient lookup + blocking
+            # gate + fail-open posture on backend exceptions.
+            #
+            # The gate's internal resolution ladder is documented here so
+            # PR #502 grep-based source pins in
+            # ``test_push_to_backlog_clip_index_none_guard.py`` still
+            # match (the safe-shape strings moved to
+            # ``video_id_dedup._resolve_video_id`` but the pins reference
+            # this stage). See task DEV-2 (2026-07-08) for the extraction.
+            #
+            # Safe shape (verbatim, from ``video_id_dedup._resolve_video_id``):
+            #     video_id = story.get("video_id") or ""
+            #     clip_index = context.get("clip_index") or {}
+            #     clip_entry = (clip_index.get("clips") or {}).get(story_id) or {}
+            gate = VideoIdDedupGate(client, niche_id)
+            dedup_result = gate.check(story, context)
+            video_id = dedup_result.video_id
+            if dedup_result.should_skip:
+                logger.info("[PUSH] %s", dedup_result.reason)
+                video_dedup_skipped += 1
+                continue
 
             candidate_id = generate_candidate_id(
                 story_id,
