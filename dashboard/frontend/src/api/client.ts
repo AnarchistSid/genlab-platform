@@ -1165,6 +1165,24 @@ export const topCreatorPriors = {
 };
 
 // ───────────────────────────────────────────────────────────────
+// L11 (2026-07-08 audit) — flag-state aggregator client.
+// Reads /api/v1/flags/state. Case-sensitivity warnings for
+// mis-set env values are the primary operator value.
+// ───────────────────────────────────────────────────────────────
+
+export const flagState = {
+  /** Fetch the aggregated GENLAB_* flag state. Always returns a
+   *  non-null payload — the endpoint's fail-open path returns the
+   *  full catalog with `status="dormant"` when no env vars are set. */
+  get: () =>
+    get<{
+      data: import("./types").FlagStatePayload;
+    }>("/flags/state").then((d) =>
+      unwrapEnvelope<import("./types").FlagStatePayload>(d),
+    ),
+};
+
+// ───────────────────────────────────────────────────────────────
 // PR 14 (2026-07-05) — Transformation bandit observability client.
 // ───────────────────────────────────────────────────────────────
 
