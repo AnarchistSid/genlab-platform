@@ -298,6 +298,23 @@ def detect_all_drift(
     # Sort by z-score ascending so the most-regressed arms (negative z)
     # appear first.
     signals.sort(key=lambda s: s.z_score)
+
+    # L7 (2026-07-08 audit): persist to Postgres for trend analysis.
+    # Guarded by its own flag so `detect_all_drift`'s in-memory return
+    # value is unchanged for callers that don't want the DB round-trip.
+    # Fail-open — a persistence failure never masks the signal list.
+    try:
+        from genlab_core.learning.drift_persist import record_signals
+
+        record_signals(signals)
+    except Exception as exc:
+        # `record_signals` itself never raises (documented contract),
+        # but defense in depth against a future accidental regression.
+        logger.warning(
+            "[drift] persist hook failed: %s (signals still returned)",
+            exc,
+        )
+
     return signals
 
 
