@@ -774,11 +774,13 @@ from server.api.audience import bp as audience_bp
 from server.api.auto_approval import bp as auto_approval_bp
 from server.api.bandit_hour_posteriors import bp as bandit_hour_posteriors_bp
 from server.api.bandit_platform_divergence import bp as bandit_platform_divergence_bp
+from server.api.bayesian_gate import bp as bayesian_gate_bp
 from server.api.blueprints import bp as blueprints_bp
 from server.api.blueprints import health_bp as focus_health_bp
 from server.api.compliance import bp as compliance_bp
 from server.api.config_routes import bp as config_bp
 from server.api.config_routes import settings_bp
+from server.api.conformal_router import bp as conformal_router_bp
 from server.api.costs import bp as costs_bp
 from server.api.counterfactual_replay import bp as counterfactual_replay_bp
 from server.api.cross_niche_transfer import bp as cross_niche_transfer_bp
@@ -860,6 +862,12 @@ app.register_blueprint(
 app.register_blueprint(
     top_creator_priors_bp
 )  # B.2 + B.3 (2026-07-08): /api/v1/top-creator-priors/{latest,uploads} — A+B intelligence stack observability
+app.register_blueprint(
+    bayesian_gate_bp
+)  # L4 (2026-07-08 audit): /api/v1/bayesian-gate/state — Bayesian LR gate posterior observability
+app.register_blueprint(
+    conformal_router_bp
+)  # L4 (2026-07-08 audit): /api/v1/conformal-router/state — conformal router q_hat observability
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)
