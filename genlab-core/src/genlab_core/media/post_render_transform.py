@@ -37,7 +37,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -114,8 +113,17 @@ def apply_post_render_transformations(
         (if enabled + config allowed) or the input ``rendered_path``
         unchanged (fail-open).
     """
-    # Env kill-switch: if the flag isn't "1", short-circuit.
-    if os.environ.get("GENLAB_INTELLIGENT_TRANSFORM_ENABLED") != "1":
+    # Env kill-switch. Uses the shared ``env_true`` helper so this site's
+    # truthiness semantics match the sibling checks in
+    # ``transformation_orchestrator._flag_enabled`` and
+    # ``transformation_selector._flag_enabled``. Round-3 flag audit
+    # (2026-07-08) found this site alone used ``!= "1"`` (strict) while
+    # the siblings used ``.lower() in ("1", "true", "yes", "on")`` —
+    # setting the flag to ``"true"`` produced a partial fire (selector
+    # picks arms, orchestrator accepts, post_render silently rejects).
+    from genlab_core.settings import env_true
+
+    if not env_true("GENLAB_INTELLIGENT_TRANSFORM_ENABLED"):
         logger.debug(
             "[%s] GENLAB_INTELLIGENT_TRANSFORM_ENABLED off — post_render_transform skipping",
             niche_id,

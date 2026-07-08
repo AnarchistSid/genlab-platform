@@ -50,7 +50,6 @@ Related sprint context:
 from __future__ import annotations
 
 import logging
-import os
 import random
 from dataclasses import dataclass, field
 
@@ -126,9 +125,12 @@ class TransformationChoices:
 
 
 def _flag_enabled() -> bool:
-    """Check the env kill-switch flag."""
-    value = os.environ.get("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "").strip().lower()
-    return value in ("1", "true", "yes", "on")
+    """Check the env kill-switch flag via the shared ``env_true`` helper
+    so all 3 read sites for ``GENLAB_INTELLIGENT_TRANSFORM_ENABLED``
+    agree on truthiness (round-3 flag audit, 2026-07-08)."""
+    from genlab_core.settings import env_true
+
+    return env_true("GENLAB_INTELLIGENT_TRANSFORM_ENABLED")
 
 
 def _get_declared_values(dim_config, list_field: str) -> set[str]:
@@ -150,7 +152,7 @@ def _parse_arm_id(arm_id: str) -> tuple[str, str] | None:
     """
     if not arm_id.startswith(_ARM_ID_PREFIX):
         return None
-    rest = arm_id[len(_ARM_ID_PREFIX):]
+    rest = arm_id[len(_ARM_ID_PREFIX) :]
     parts = rest.split("__", 1)
     if len(parts) != 2:
         return None
@@ -191,8 +193,7 @@ def _pick_arm(
 
     # Thompson sampling — one Beta(α, β) draw per arm, pick argmax
     samples = [
-        (r.betavariate(alpha, beta), arm_id, value)
-        for arm_id, value, alpha, beta in candidates
+        (r.betavariate(alpha, beta), arm_id, value) for arm_id, value, alpha, beta in candidates
     ]
     samples.sort(key=lambda t: t[0], reverse=True)
     _, chosen_arm_id, chosen_value = samples[0]
@@ -245,9 +246,7 @@ def select_transformation_dimensions(
 
     # Gate 2: env kill-switch
     if not _flag_enabled():
-        logger.debug(
-            "[transform_selector] GENLAB_INTELLIGENT_TRANSFORM_ENABLED off"
-        )
+        logger.debug("[transform_selector] GENLAB_INTELLIGENT_TRANSFORM_ENABLED off")
         return result
 
     # Load arms
@@ -266,9 +265,7 @@ def select_transformation_dimensions(
             return result
 
     if proxy is None:
-        logger.warning(
-            "[transform_selector] no bandit_arms proxy available for %s", niche_id
-        )
+        logger.warning("[transform_selector] no bandit_arms proxy available for %s", niche_id)
         return result
 
     try:
@@ -276,9 +273,7 @@ def select_transformation_dimensions(
 
         all_arms = load_all_arms(proxy, niche_id)
     except Exception as exc:
-        logger.warning(
-            "[transform_selector] arm load failed for %s: %s", niche_id, exc
-        )
+        logger.warning("[transform_selector] arm load failed for %s: %s", niche_id, exc)
         return result
 
     # Filter to transformation arms + group by dimension
@@ -308,7 +303,8 @@ def select_transformation_dimensions(
         if not declared_values:
             logger.debug(
                 "[transform_selector] %s.%s: no declared values in config",
-                niche_id, dim_name,
+                niche_id,
+                dim_name,
             )
             continue
 
@@ -316,7 +312,8 @@ def select_transformation_dimensions(
         if not db_candidates:
             logger.debug(
                 "[transform_selector] %s.%s: no arms in bandit_arms table",
-                niche_id, dim_name,
+                niche_id,
+                dim_name,
             )
             continue
 
@@ -332,8 +329,10 @@ def select_transformation_dimensions(
                 "[transform_selector] %s.%s: all DB arms filtered out by "
                 "config-drift check. DB has %d arms, config declared %d "
                 "values — no overlap.",
-                niche_id, dim_name,
-                len(db_candidates), len(declared_values),
+                niche_id,
+                dim_name,
+                len(db_candidates),
+                len(declared_values),
             )
             continue
 

@@ -41,7 +41,6 @@ Related sprint context:
 from __future__ import annotations
 
 import logging
-import os
 import shutil
 import tempfile
 from dataclasses import dataclass, field
@@ -75,9 +74,12 @@ class TransformationResult:
 
 
 def _flag_enabled() -> bool:
-    """Global env kill-switch check. Matches selector's semantics."""
-    value = os.environ.get("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "").strip().lower()
-    return value in ("1", "true", "yes", "on")
+    """Global env kill-switch check. Uses the shared ``env_true`` helper
+    so orchestrator, selector, and ``post_render_transform`` all agree
+    on truthiness semantics (round-3 flag audit, 2026-07-08)."""
+    from genlab_core.settings import env_true
+
+    return env_true("GENLAB_INTELLIGENT_TRANSFORM_ENABLED")
 
 
 def _trim_video(
@@ -113,20 +115,20 @@ def _trim_video(
     cmd = [
         ffmpeg,
         "-y",
-        "-ss", f"{start_s:.3f}",
-        "-i", str(source_path),
-        "-t", f"{duration:.3f}",
-        "-c", "copy",
+        "-ss",
+        f"{start_s:.3f}",
+        "-i",
+        str(source_path),
+        "-t",
+        f"{duration:.3f}",
+        "-c",
+        "copy",
         str(output_path),
     ]
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout_seconds
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_seconds)
     except (subprocess.TimeoutExpired, OSError) as exc:
-        logger.warning(
-            "[transformation_orchestrator] trim ffmpeg failed: %s", exc
-        )
+        logger.warning("[transformation_orchestrator] trim ffmpeg failed: %s", exc)
         return False
     if result.returncode != 0:
         logger.warning(
@@ -198,15 +200,14 @@ def apply_transformations(
     if not _flag_enabled():
         logger.debug(
             "[transformation_orchestrator] GENLAB_INTELLIGENT_TRANSFORM_ENABLED off "
-            "— pipeline no-op for %s", niche_id,
+            "— pipeline no-op for %s",
+            niche_id,
         )
         return TransformationResult(output_path=source_video_path)
 
     # Gate 2: per-niche config
     if not getattr(config, "enabled", False):
-        logger.debug(
-            "[transformation_orchestrator] config disabled for %s", niche_id
-        )
+        logger.debug("[transformation_orchestrator] config disabled for %s", niche_id)
         return TransformationResult(output_path=source_video_path)
 
     # Run selector
@@ -219,21 +220,24 @@ def apply_transformations(
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             "[transformation_orchestrator] selector failed for %s: %s",
-            niche_id, exc,
+            niche_id,
+            exc,
         )
         return TransformationResult(output_path=source_video_path)
 
     if choices.is_empty():
         logger.info(
             "[transformation_orchestrator] no choices selected for %s "
-            "(cold-start or all filtered out)", niche_id,
+            "(cold-start or all filtered out)",
+            niche_id,
         )
         return TransformationResult(output_path=source_video_path)
 
     logger.info(
-        "[transformation_orchestrator] running %d transformation stages "
-        "for %s: %s",
-        len(choices.choices), niche_id, sorted(choices.choices.keys()),
+        "[transformation_orchestrator] running %d transformation stages for %s: %s",
+        len(choices.choices),
+        niche_id,
+        sorted(choices.choices.keys()),
     )
 
     result = TransformationResult(
@@ -256,9 +260,7 @@ def apply_transformations(
         if "highlight_moment" in choices.choices:
             method = choices.choices["highlight_moment"].dimension_value
             try:
-                window_seconds = int(
-                    config.dimensions.highlight_moment.window_seconds
-                )
+                window_seconds = int(config.dimensions.highlight_moment.window_seconds)
             except (AttributeError, ValueError, TypeError):
                 window_seconds = 8
 
@@ -276,8 +278,8 @@ def apply_transformations(
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
-                    "[transformation_orchestrator] highlight_detector "
-                    "raised: %s", exc,
+                    "[transformation_orchestrator] highlight_detector raised: %s",
+                    exc,
                 )
                 window = None
 
@@ -287,16 +289,11 @@ def apply_transformations(
             need_trim = (
                 window is not None
                 and window.is_valid()
-                and (
-                    window.start_s > 0.01
-                    or window.end_s < video_duration_s - 0.01
-                )
+                and (window.start_s > 0.01 or window.end_s < video_duration_s - 0.01)
             )
             if need_trim:
                 trim_path = temp_dir / "00_trim.mp4"
-                trim_success = _trim_video(
-                    current_path, trim_path, window.start_s, window.end_s
-                )
+                trim_success = _trim_video(current_path, trim_path, window.start_s, window.end_s)
                 if trim_success:
                     current_path = trim_path
                     # Downstream caption timing must reflect the
@@ -359,9 +356,7 @@ def apply_transformations(
                     pattern=pattern,
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "[transformation_orchestrator] pan_zoom raised: %s", exc
-                )
+                logger.warning("[transformation_orchestrator] pan_zoom raised: %s", exc)
                 success = False
             if success:
                 current_path = next_path
@@ -393,8 +388,8 @@ def apply_transformations(
                     ]
                 except Exception as exc:  # noqa: BLE001
                     logger.debug(
-                        "[transformation_orchestrator] caption_segments "
-                        "deserialize failed: %s", exc,
+                        "[transformation_orchestrator] caption_segments deserialize failed: %s",
+                        exc,
                     )
                     segments = None
 
@@ -406,9 +401,11 @@ def apply_transformations(
                 or "yellow"
             )
             try:
-                pacing_ms = int(
-                    choices.choices["caption_pacing"].dimension_value
-                ) if "caption_pacing" in choices.choices else 750
+                pacing_ms = (
+                    int(choices.choices["caption_pacing"].dimension_value)
+                    if "caption_pacing" in choices.choices
+                    else 750
+                )
             except (ValueError, TypeError):
                 pacing_ms = 750
 
@@ -458,28 +455,16 @@ def apply_transformations(
                     composite_for_reel,
                 )
 
-                intro_dir = (
-                    config.dimensions.intro_animation.asset_dir
-                    or "assets/motion/intros"
-                )
-                outro_dir = (
-                    config.dimensions.outro_cta.asset_dir
-                    or "assets/motion/outros"
-                )
+                intro_dir = config.dimensions.intro_animation.asset_dir or "assets/motion/intros"
+                outro_dir = config.dimensions.outro_cta.asset_dir or "assets/motion/outros"
                 asset_choice = MotionAssetChoice(
                     niche_root=niche_root,
-                    intro_template=(
-                        intro_choice.dimension_value if intro_choice else ""
-                    ),
+                    intro_template=(intro_choice.dimension_value if intro_choice else ""),
                     intro_asset_dir=intro_dir,
-                    outro_template=(
-                        outro_choice.dimension_value if outro_choice else ""
-                    ),
+                    outro_template=(outro_choice.dimension_value if outro_choice else ""),
                     outro_asset_dir=outro_dir,
                 )
-                success = composite_for_reel(
-                    asset_choice, current_path, next_path
-                )
+                success = composite_for_reel(asset_choice, current_path, next_path)
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "[transformation_orchestrator] motion_compositor raised: %s",
@@ -507,8 +492,8 @@ def apply_transformations(
                 result.output_path = output_path
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
-                    "[transformation_orchestrator] final copy failed: %s "
-                    "— falling back to source", exc,
+                    "[transformation_orchestrator] final copy failed: %s — falling back to source",
+                    exc,
                 )
                 result.output_path = source_video_path
         else:
@@ -524,8 +509,7 @@ def apply_transformations(
             pass
 
     logger.info(
-        "[transformation_orchestrator] %s complete — applied=%s skipped=%s "
-        "output=%s",
+        "[transformation_orchestrator] %s complete — applied=%s skipped=%s output=%s",
         niche_id,
         result.stages_applied,
         result.stages_skipped,

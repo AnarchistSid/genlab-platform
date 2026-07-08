@@ -312,7 +312,20 @@ def get_optimal_hours(
     # The cache is intentionally NOT consulted on the bandit path —
     # Thompson sampling is stochastic by design and operator's
     # repeated "Refresh" should reveal posterior variance.
-    if os.environ.get("GENLAB_OPTIMAL_TIME_BANDIT") == "1":
+    #
+    # Naming drift note (round-3 flag audit 2026-07-08): the canonical
+    # name is ``GENLAB_OPTIMAL_TIME_BANDIT_ENABLED`` (matches the
+    # ``_ENABLED`` suffix convention every other GENLAB flag uses) but
+    # this file originally read ``GENLAB_OPTIMAL_TIME_BANDIT`` (no
+    # suffix). Prod .env files still reference the un-suffixed name.
+    # The ``legacy_name`` arg preserves backward compat until prod
+    # migrates. See ``settings.env_true`` docstring.
+    from genlab_core.settings import env_true
+
+    if env_true(
+        "GENLAB_OPTIMAL_TIME_BANDIT_ENABLED",
+        legacy_name="GENLAB_OPTIMAL_TIME_BANDIT",
+    ):
         bandit_hours = sample_optimal_hours_from_bandit(niche_id, platform, top_n=top_n)
         if bandit_hours:
             logger.debug(
