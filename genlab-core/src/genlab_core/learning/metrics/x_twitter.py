@@ -39,13 +39,27 @@ def _fetch_x(post_id: str, niche_id: str = "") -> dict:
     bearer = os.getenv("X_BEARER_TOKEN", "").strip()  # X bearer is app-wide, no per-niche
     if not bearer:
         return {}
-    resp = requests.get(
-        f"https://api.twitter.com/2/tweets/{post_id}",
-        params={"tweet.fields": "public_metrics"},
-        headers={"Authorization": f"Bearer {bearer}"},
-        timeout=15,
-    )
-    resp.raise_for_status()
+    # Wrapped so 404 on deleted tweets, 429 rate-limits, 401 rotated auth,
+    # or transient 5xx never propagate to the orchestrator's bare
+    # `except Exception` (which would silently skip reward_48h). Round-2
+    # audit (2026-07-08) found this was the same failure mode as YouTube's
+    # unwrapped `raise_for_status()`; 76% of Twitter `pending_feedback`
+    # rows had NULL `reward_48h`. See `audit-deep-dive-2026-07-08.md`.
+    try:
+        resp = requests.get(
+            f"https://api.twitter.com/2/tweets/{post_id}",
+            params={"tweet.fields": "public_metrics"},
+            headers={"Authorization": f"Bearer {bearer}"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+    except Exception as exc:  # noqa: BLE001 — never crash the reward pass
+        logger.warning(
+            "[metric_collector] X/Twitter fetch failed for %s: %s",
+            post_id,
+            exc,
+        )
+        return {}
     public = resp.json().get("data", {}).get("public_metrics", {})
     impressions = int(public.get("impression_count", 0))
     likes = int(public.get("like_count", 0))

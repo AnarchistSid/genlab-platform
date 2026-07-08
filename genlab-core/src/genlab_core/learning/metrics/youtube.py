@@ -243,29 +243,56 @@ def _fetch_youtube(post_id: str, niche_id: str = "") -> dict:
     ):
         access_token = _yt_token_cache["token"]
     else:
-        token_resp = requests.post(
-            "https://oauth2.googleapis.com/token",
-            data={
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "refresh_token": refresh_token,
-                "grant_type": "refresh_token",
-            },
-            timeout=15,
-        )
-        token_resp.raise_for_status()
+        # Token refresh — wrapped so upstream 4xx/5xx or transport errors
+        # never propagate to the orchestrator. Round-2 audit (2026-07-08)
+        # found this unwrapped `raise_for_status()` was the single largest
+        # source of missing YT reward writes: any 401 on token refresh or
+        # transient network blip cascaded to orchestrator's bare
+        # `except Exception` which returned `{}`, silently skipping
+        # `reward_48h` compute. 82% of YT `pending_feedback` rows had
+        # NULL `reward_48h`. See `audit-deep-dive-2026-07-08.md`.
+        try:
+            token_resp = requests.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "refresh_token": refresh_token,
+                    "grant_type": "refresh_token",
+                },
+                timeout=15,
+            )
+            token_resp.raise_for_status()
+        except Exception as exc:  # noqa: BLE001 — never crash the reward pass
+            logger.warning(
+                "[metric_collector] YouTube token refresh failed for %s: %s",
+                niche_id,
+                exc,
+            )
+            return {}
         access_token = token_resp.json()["access_token"]
         _yt_token_cache["token"] = access_token
         _yt_token_cache["niche"] = niche_id
         _yt_token_cache["ts"] = now
 
-    resp = requests.get(
-        "https://www.googleapis.com/youtube/v3/videos",
-        params={"part": "statistics", "id": post_id},
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=15,
-    )
-    resp.raise_for_status()
+    # Video statistics fetch — same hardening rationale as token refresh above.
+    # A 404 on a deleted video, 403 on a private one, or transient 5xx must
+    # NOT kill the reward pass; log + return {} so the orchestrator can move on.
+    try:
+        resp = requests.get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            params={"part": "statistics", "id": post_id},
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+    except Exception as exc:  # noqa: BLE001 — never crash the reward pass
+        logger.warning(
+            "[metric_collector] YouTube stats fetch failed for %s: %s",
+            post_id,
+            exc,
+        )
+        return {}
     items = resp.json().get("items", [])
     if not items:
         return {}
