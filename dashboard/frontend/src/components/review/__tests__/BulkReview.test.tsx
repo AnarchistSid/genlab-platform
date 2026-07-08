@@ -138,10 +138,22 @@ describe("BulkReview — keyboard-driven approval flow", () => {
     expect(new Set(ids as string[])).toEqual(new Set(["bp1", "bp2", "bp3"]));
   });
 
-  it("Shift+A approves all 5 visible blueprints without needing selection", async () => {
+  it("Shift+A once ARMs but does not approve (H2 double-tap confirm)", async () => {
     const user = userEvent.setup();
     renderBulk();
 
+    await user.keyboard("{Shift>}A{/Shift}");
+
+    // Single Shift+A must NEVER fire the batch approve — that's the
+    // whole H2 safeguard. First press only arms + toasts.
+    expect(mockBatchApprove).not.toHaveBeenCalled();
+  });
+
+  it("Shift+A twice within window approves all 5 visible", async () => {
+    const user = userEvent.setup();
+    renderBulk();
+
+    await user.keyboard("{Shift>}A{/Shift}");
     await user.keyboard("{Shift>}A{/Shift}");
 
     expect(mockBatchApprove).toHaveBeenCalledTimes(1);
@@ -149,6 +161,33 @@ describe("BulkReview — keyboard-driven approval flow", () => {
     expect(new Set(ids as string[])).toEqual(
       new Set(["bp1", "bp2", "bp3", "bp4", "bp5"])
     );
+  });
+
+  it("Shift+A then Escape disarms — a second Shift+A does not approve", async () => {
+    const user = userEvent.setup();
+    renderBulk();
+
+    await user.keyboard("{Shift>}A{/Shift}");
+    await user.keyboard("{Escape}");
+    // Escape disarmed; Shift+A now re-arms rather than fires.
+    await user.keyboard("{Shift>}A{/Shift}");
+
+    expect(mockBatchApprove).not.toHaveBeenCalled();
+  });
+
+  it("Shift+A then any other action key disarms (e.g. '1' toggles + disarms)", async () => {
+    const user = userEvent.setup();
+    renderBulk();
+
+    await user.keyboard("{Shift>}A{/Shift}");
+    // A number-key press means "I want to select, not batch-approve"
+    // — should cancel the pending arm.
+    await user.keyboard("1");
+    // Second Shift+A now sees armed=false, so re-arms and does NOT
+    // approve. That means mockBatchApprove is still un-called.
+    await user.keyboard("{Shift>}A{/Shift}");
+
+    expect(mockBatchApprove).not.toHaveBeenCalled();
   });
 
   it("'a' with no selection toasts info and never fires the batch mutation", async () => {

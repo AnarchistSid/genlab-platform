@@ -24,7 +24,7 @@
  * the calibration logger (PR #177) measures, that will eventually
  * justify AUTO #2 enforcement.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowRight, Check, X, SkipForward, Eye } from "lucide-react";
@@ -110,6 +110,48 @@ export function BulkReview() {
   const batchApprove = useBatchApproveSchedule();
   const batchReview = useBatchReview();
 
+  /* --------------------------------------------------------------- *
+   * H2 (2026-07-08 audit): double-tap confirmation for Shift+A.
+   *
+   * Batch-approving 5 blueprints on one keystroke is the highest-
+   * blast-radius action in bulk-review — an errant Shift+A during
+   * a stressful review session ships 5 posts. Yet a full modal
+   * would break the keyboard-first velocity the whole feature is
+   * built around.
+   *
+   * Compromise: first Shift+A "arms" the action + toasts. Second
+   * Shift+A within 3s proceeds. Any other keystroke or 3s timeout
+   * disarms silently. Fast operators pay two keystrokes instead of
+   * one; accidental single-taps are a no-op.
+   *
+   * Implementation: uses refs (not React state) so the arm flag can
+   * be read + written inside the same handler tick without waiting
+   * for React to flush. A useState-based version fails the pin test
+   * because the second Shift+A fires before the first's state
+   * update commits.
+   * --------------------------------------------------------------- */
+  const shiftAArmedRef = useRef(false);
+  const shiftATimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const disarmShiftA = useCallback(() => {
+    if (shiftATimeoutRef.current !== null) {
+      clearTimeout(shiftATimeoutRef.current);
+      shiftATimeoutRef.current = null;
+    }
+    shiftAArmedRef.current = false;
+  }, []);
+
+  // Clean up the pending arm-timeout on unmount so timers don't
+  // fire against a stale component if the operator navigates away
+  // during the 3s window.
+  useEffect(() => {
+    return () => {
+      if (shiftATimeoutRef.current !== null) {
+        clearTimeout(shiftATimeoutRef.current);
+      }
+    };
+  }, []);
+
   const clampWindowStart = useCallback(
     (idx: number) => {
       // Don't let the window stranded past the end of the list.
@@ -182,13 +224,34 @@ export function BulkReview() {
     const ids = visible.map((bp) => bp.id);
     if (ids.length === 0) return;
     if (batchApprove.isPending) return;
+
+    // H2 confirmation: first press arms + toasts, second within 3s
+    // proceeds. Ref-based so both branches see the same value in
+    // rapid succession (no stale-closure hazard).
+    if (!shiftAArmedRef.current) {
+      shiftAArmedRef.current = true;
+      toast.info(
+        `Press Shift+A again within 3s to approve ALL ${ids.length} visible`,
+      );
+      if (shiftATimeoutRef.current !== null) {
+        clearTimeout(shiftATimeoutRef.current);
+      }
+      shiftATimeoutRef.current = setTimeout(() => {
+        shiftAArmedRef.current = false;
+        shiftATimeoutRef.current = null;
+      }, 3000);
+      return;
+    }
+
+    // Second Shift+A inside the arm window — proceed.
+    disarmShiftA();
     batchApprove.mutate(ids, {
       onSuccess: () => {
         clearSelection();
         advanceBatch();
       },
     });
-  }, [visible, batchApprove, clearSelection, advanceBatch]);
+  }, [visible, batchApprove, clearSelection, advanceBatch, disarmShiftA]);
 
   /* -------- Keyboard shortcuts -------- */
   useEffect(() => {
@@ -206,6 +269,24 @@ export function BulkReview() {
         }
       }
 
+      // Anything that isn't Shift+A disarms the H2 confirm state.
+      // Modifier keys ("Shift", "Control", "Alt", "Meta") emit their
+      // own keydown events as part of a chord — treat those as
+      // in-progress input, NOT as "different action" that disarms.
+      // Otherwise the second Shift+A's Shift keydown would disarm
+      // before the A even arrives.
+      //
+      // MUST run BEFORE the number-key early-return below, otherwise
+      // pressing "1" would toggle selection but leave the arm intact.
+      const isModifierKey =
+        e.key === "Shift" ||
+        e.key === "Control" ||
+        e.key === "Alt" ||
+        e.key === "Meta";
+      if (!isModifierKey && e.key !== "A" && shiftAArmedRef.current) {
+        disarmShiftA();
+      }
+
       // Number keys 1..BATCH_SIZE: toggle the Nth visible card
       if (e.key >= "1" && e.key <= String(BATCH_SIZE)) {
         const pos = Number(e.key) - 1;
@@ -219,7 +300,7 @@ export function BulkReview() {
           e.preventDefault();
           submitApproveSelected();
           break;
-        case "A": // shift+A — approve all visible (no selection needed)
+        case "A": // shift+A — approve all visible (double-tap confirm, see H2)
           e.preventDefault();
           submitApproveAllVisible();
           break;
@@ -251,6 +332,7 @@ export function BulkReview() {
     submitReviewSelected,
     advanceBatch,
     clearSelection,
+    disarmShiftA,
   ]);
 
   /* -------- Render -------- */
