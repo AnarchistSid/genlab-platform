@@ -81,6 +81,26 @@ if [[ ! -x "$UV" ]]; then
 fi
 
 # ----------------------------------------------------------------------------
+# Phase 0b — Privilege check for --apply mode
+# ----------------------------------------------------------------------------
+# 2026-07-09 (task #619): daemon-reload + systemctl restart in Phase 7
+# require root. Prior to this check the script would silently drop those
+# steps when invoked as a non-root user (e.g. `sudo -u genlab bash -c
+# ./deploy.sh --apply`), leaving the log with a benign-looking
+# "Reload daemon failed: Interactive authentication required" line and
+# continuing anyway. Config-only deploys survived that (pipelines
+# re-read YAML at runtime) but any systemd unit change silently didn't
+# take effect. Six deploys in one session hit this before it was
+# noticed. Fail loud instead of silently skipping.
+if [[ "$APPLY" -eq 1 && "$SKIP_RESTART" -ne 1 ]]; then
+    if [[ "$(id -u)" -ne 0 ]]; then
+        fail "--apply requires root (systemctl daemon-reload + restart need it). \
+Run as root, or pass --skip-restart if you know the deploy is code-only \
+and doesn't need service restarts."
+    fi
+fi
+
+# ----------------------------------------------------------------------------
 # Phase 1 — Repo sanity (working tree + branch)
 # ----------------------------------------------------------------------------
 cd "$GENLAB"
