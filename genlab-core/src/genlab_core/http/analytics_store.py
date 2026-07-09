@@ -21,6 +21,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from genlab_core.cache.post_id_norm import normalize_post_id
 from genlab_core.http.circuit_breaker import CircuitOpenError
 
 logger = logging.getLogger(__name__)
@@ -208,7 +209,18 @@ class AnalyticsStore:
         Returns the record id (string), or ``None`` on any failure.
         """
         # Avoid double-prefixing: post_id may already be 'youtube:ABC123'.
-        composite_id = post_id if post_id.startswith(f"{platform}:") else f"{platform}:{post_id}"
+        #
+        # Task #624 (2026-07-09) — use the canonical shared normalizer.
+        # The pre-#624 inline check was ``post_id.startswith(f"{platform}:")``
+        # which DIFFERED from the sibling normalizers in
+        # ``feedback_registration._normalize_post_id`` and
+        # ``pending_feedback_task._post_id_with_platform_prefix``:
+        # given cross-platform-tagged input like ``"youtube:abc"`` with
+        # ``platform="facebook"``, the sibling normalizers passed it
+        # through as-is but this site produced ``"facebook:youtube:abc"``
+        # — same class of double-prefix bug as #748. Consolidating on
+        # ``normalize_post_id`` closes the divergence.
+        composite_id = normalize_post_id(platform, post_id)
 
         reach = insights.get("reach", 0) or insights.get("impressions", 0) or 0
         likes = insights.get("likes", 0) or 0

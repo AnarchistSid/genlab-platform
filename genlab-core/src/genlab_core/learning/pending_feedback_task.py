@@ -30,22 +30,15 @@ def _post_id_with_platform_prefix(platform: str, post_id: str) -> str:
     ``feedback_registration._normalize_post_id``) and this class then
     added another prefix, producing ``facebook:facebook:1181...``.
 
-    Same idempotency contract as
-    ``feedback_registration._normalize_post_id`` and
-    ``http.analytics_store`` at line 211.
-
-    * Empty / falsy input → passes through unchanged
-    * Already ``{platform}:...`` → returns as-is
-    * Any other ``a:b``-shaped input (rare, e.g. cross-platform tag) →
-      returns as-is (matches sibling normalizers — don't second-guess
-      a caller who tagged intentionally)
-    * Bare id → prefixes with ``{platform}:``
+    Task #624 (2026-07-09) — delegates to
+    ``genlab_core.cache.post_id_norm.normalize_post_id``, the single
+    canonical implementation. This wrapper is preserved so the
+    existing ``from pending_feedback_task import _post_id_with_platform_prefix``
+    imports (there is one in ``tests/learning/``) don't break.
     """
-    if not post_id:
-        return post_id
-    if ":" in post_id:
-        return post_id
-    return f"{platform}:{post_id}"
+    from genlab_core.cache.post_id_norm import normalize_post_id
+
+    return normalize_post_id(platform, post_id)
 
 
 CollectionWindow = Literal["6h", "24h", "48h", "168h"]
