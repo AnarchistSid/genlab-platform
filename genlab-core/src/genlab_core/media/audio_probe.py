@@ -51,13 +51,29 @@ def has_meaningful_audio(
     # Step 1 — does an audio stream exist at all?
     stream = _probe_audio_stream(clip_path)
     if stream is None:
-        logger.debug("[audio_probe] No audio stream in %s", clip_path.name)
+        # Task #633 (2026-07-09 late evening): elevated DEBUG → INFO.
+        # Missing audio stream isn't necessarily a bug (some source
+        # clips are truly silent-video), but tonight's motion_compositor
+        # investigation raised the hypothesis that a music_mood
+        # transform sometimes produces zero-audio output that then
+        # breaks concat with -22 EINVAL. Making this INFO so
+        # operators grepping journal after a concat failure can
+        # correlate "audio_probe reported no audio" against
+        # motion_compositor's "Nothing was written into output file".
+        logger.info("[audio_probe] No audio stream in %s", clip_path.name)
         return False
 
     # Step 2 — measure volume
     mean_vol = _measure_volume(clip_path)
     if mean_vol is None:
-        logger.debug("[audio_probe] Could not measure volume for %s", clip_path.name)
+        # Task #633: same rationale as above. Measurement-failed
+        # correlates with motion_compositor concat -22 EINVAL
+        # hypothesis C (corrupted audio after music_mood stage).
+        logger.info(
+            "[audio_probe] Could not measure volume for %s (ffmpeg volumedetect "
+            "returned no mean_volume — file may have corrupted audio stream)",
+            clip_path.name,
+        )
         return False
 
     # Step 3 — compare against threshold

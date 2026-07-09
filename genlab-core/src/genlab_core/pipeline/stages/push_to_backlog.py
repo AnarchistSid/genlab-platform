@@ -632,7 +632,20 @@ def _load_linucb_arms(
             except Exception:
                 arms[arm_id] = LinUCBArm(d=CONTEXT_DIM)
     except Exception as exc:
-        logger.debug("[PUSH] LinUCB load failed: %s", exc)
+        # Task #633 (2026-07-09 late evening): elevated DEBUG →
+        # WARNING. When LinUCB arm load fails silently, ALL push_to_
+        # backlog decisions fall back to the pre-LinUCB path — every
+        # blueprint picks arms without LinUCB context, IPS propensity
+        # goes to None, and the LinUCB posteriors accumulate nothing.
+        # Silent-fail here means the entire contextual bandit is
+        # effectively disabled without operator visibility. Same
+        # class of bug as tonight's motion_compositor (#631).
+        logger.warning(
+            "[PUSH] LinUCB arm load failed (%s) — this pipeline run will "
+            "fall back to non-LinUCB arm selection; contextual bandit "
+            "will accumulate no observations for this batch.",
+            exc,
+        )
         return {}
     return arms
 
