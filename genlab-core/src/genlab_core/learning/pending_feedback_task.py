@@ -21,6 +21,33 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+
+def _post_id_with_platform_prefix(platform: str, post_id: str) -> str:
+    """Return ``{platform}:{post_id}`` idempotently.
+
+    Task #623 (2026-07-09) — prevents the double-prefix bug where
+    ``platform_post_id`` was already prefixed upstream (by
+    ``feedback_registration._normalize_post_id``) and this class then
+    added another prefix, producing ``facebook:facebook:1181...``.
+
+    Same idempotency contract as
+    ``feedback_registration._normalize_post_id`` and
+    ``http.analytics_store`` at line 211.
+
+    * Empty / falsy input → passes through unchanged
+    * Already ``{platform}:...`` → returns as-is
+    * Any other ``a:b``-shaped input (rare, e.g. cross-platform tag) →
+      returns as-is (matches sibling normalizers — don't second-guess
+      a caller who tagged intentionally)
+    * Bare id → prefixes with ``{platform}:``
+    """
+    if not post_id:
+        return post_id
+    if ":" in post_id:
+        return post_id
+    return f"{platform}:{post_id}"
+
+
 CollectionWindow = Literal["6h", "24h", "48h", "168h"]
 CollectionStatus = Literal[
     "awaiting_6h",
@@ -108,9 +135,21 @@ class PendingFeedbackTask(BaseModel):
             # prefix (metric_collector.fetch_platform_metrics), and the store
             # round-trips post_id -> platform_post_id consistently, so this is
             # backward-compatible with the reward pipeline.
-            "post_id": (
-                f"{self.platform}:{self.platform_post_id}" if self.platform_post_id else ""
-            ),
+            #
+            # 2026-07-09 (task #623): idempotent prefixing. The pre-fix line
+            # unconditionally prepended ``{platform}:`` even when ``platform_post_id``
+            # already had that prefix — 297 pending_feedback rows and ~400 across
+            # publishing_analytics ended up as ``facebook:facebook:1181...``.
+            # ``metric_collector.fetch_platform_metrics:86`` strips ONE prefix,
+            # leaving still-invalid ``facebook:1181...`` which the Meta/YT/etc
+            # APIs reject → every metric fetch returned 0 → every reward = 0 →
+            # the bandit received "everything fails" signal for weeks. This
+            # single line is the root cause of the entire learning stack being
+            # functionally dormant. Idempotent prefixing (skip if already
+            # ``{platform}:``) matches the same pattern used in
+            # ``feedback_registration._normalize_post_id`` and
+            # ``analytics_store`` at line 211.
+            "post_id": _post_id_with_platform_prefix(self.platform, self.platform_post_id),
             "platform": self.platform,
             "arm_id": self.bandit_arm or "",
             "bandit_context": (_json.dumps(self.bandit_context) if self.bandit_context else ""),
@@ -136,7 +175,5 @@ class PendingFeedbackTask(BaseModel):
         # column at the SQL DEFAULT '{}'. JSONB serialization matches
         # bandit_context pattern above.
         if self.arm_ids_by_dimension:
-            fields["arm_ids_by_dimension"] = _json.dumps(
-                self.arm_ids_by_dimension
-            )
+            fields["arm_ids_by_dimension"] = _json.dumps(self.arm_ids_by_dimension)
         return fields

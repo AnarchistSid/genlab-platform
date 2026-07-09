@@ -82,8 +82,24 @@ def fetch_platform_metrics(
     Uses per-niche credentials via niche_credentials to avoid cross-channel
     token leakage (e.g. fetching CriticalRush metrics with BB tokens).
     """
-    # Strip platform prefix from composite IDs (e.g., "instagram:123" → "123")
-    raw_id = post_id.split(":", 1)[1] if ":" in post_id else post_id
+    # Strip platform prefix from composite IDs (e.g., "instagram:123" → "123").
+    #
+    # 2026-07-09 (task #623): loop-strip to defensively handle double-
+    # prefixed values like ``facebook:facebook:1181...``. The write-side
+    # fix at ``pending_feedback_task._post_id_with_platform_prefix``
+    # stops NEW double-prefixed rows from being created, but 297+
+    # historical rows already have the shape. Backfill runs post-deploy;
+    # this loop is the safety net so metric collection unblocks
+    # immediately without waiting for the backfill. Also handles the
+    # (rare) case of ``platform:platform:platform:id`` shapes if a
+    # future bug adds a third prefix.
+    raw_id = post_id
+    while ":" in raw_id and raw_id.startswith(f"{platform}:"):
+        raw_id = raw_id[len(platform) + 1 :]
+    # If any non-platform prefix remains (e.g. ``other:id``), strip
+    # one more level to preserve the pre-#623 single-strip behavior.
+    if ":" in raw_id:
+        raw_id = raw_id.split(":", 1)[1]
 
     # Instagram Reels: use specialised 6h fetcher for early skip-rate signal
     if platform == "instagram" and window == "6h":
@@ -1091,8 +1107,7 @@ def process_pending_task(
                     )
                 except Exception as exc:  # noqa: BLE001 — fail-open
                     logger.warning(
-                        "[metric_collector] transformation reward router "
-                        "failed for %s/%s: %s",
+                        "[metric_collector] transformation reward router failed for %s/%s: %s",
                         task_record.niche_id,
                         task_record.platform_post_id,
                         exc,
