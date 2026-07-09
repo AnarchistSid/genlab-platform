@@ -224,9 +224,21 @@ class AnalyticsStore:
 
         reach = insights.get("reach", 0) or insights.get("impressions", 0) or 0
         likes = insights.get("likes", 0) or 0
-        comments = insights.get("comments", 0) or 0
+        # Task #636 (2026-07-09) — Threads API returns "replies" for what
+        # other platforms call "comments". Add the alias so Threads
+        # engagement rate doesn't systematically undervalue reply activity.
+        comments = insights.get("comments", 0) or insights.get("replies", 0) or 0
         saves = insights.get("saves", 0) or insights.get("saved", 0) or 0
-        shares = insights.get("shares", 0) or insights.get("retweets", 0) or 0
+        # Task #636 (2026-07-09) — Threads API returns "reposts" for what
+        # X/Twitter calls "retweets" and other platforms call "shares".
+        # Same alias-chain pattern as the "retweets" fallback that
+        # already handles X/Twitter's per-platform terminology.
+        shares = (
+            insights.get("shares", 0)
+            or insights.get("retweets", 0)
+            or insights.get("reposts", 0)
+            or 0
+        )
         plays = insights.get("plays", 0) or insights.get("views", 0) or 0
         impressions = insights.get("impressions", 0) or reach
         # BUGFIX (post-2026-06-25 audit): platform metric fetchers in

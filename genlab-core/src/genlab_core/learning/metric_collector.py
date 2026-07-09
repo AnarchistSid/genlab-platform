@@ -1147,8 +1147,20 @@ def process_pending_task(
                 niche_id=task_record.niche_id,
             )
         except Exception as exc:
-            logger.debug(
-                "[metric_collector] Analytics upsert failed for %s/%s: %s",
+            # Task #637 (2026-07-09) — elevated DEBUG → WARNING. Same
+            # class of bug as #631 motion_compositor + #633 sweep, but
+            # with the ``except → continue`` pattern instead of
+            # ``except → return`` that #633's grep pattern targeted.
+            # This site swallows analytics-upsert failures silently,
+            # which is how Threads' pipeline regression hid for weeks
+            # (see task #636 investigation). Elevating so a future
+            # "which platform / post_id is failing to persist?" audit
+            # doesn't need forensics — the answer will be in journalctl
+            # at default log level.
+            logger.warning(
+                "[metric_collector] Analytics upsert failed for %s/%s (%s) "
+                "— per-post engagement dashboards will be missing this "
+                "row; composite bandit reward may also be un-persisted.",
                 task_record.platform,
                 task_record.platform_post_id,
                 exc,
