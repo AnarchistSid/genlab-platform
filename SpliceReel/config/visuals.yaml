@@ -92,7 +92,15 @@ intelligent_transform:
     highlight_moment:
       enabled: true
       methods: [llm_pick, audio_peak, motion_peak, first_frame]
-      window_seconds: 8
+      # 2026-07-09 (task #617): bumped 8 → 12. Prior value of 8s
+      # produced composites of ~10–13s (window + intro + outro concat
+      # overhead) that failed post_render_transform's 15s min-duration
+      # guard, causing the orchestrator to fall back to base composite
+      # and return empty arm_ids — silently disabling attribution
+      # across all 22 recent reels. 12s window + ~3s intro + ~3s outro
+      # = ~18s composite, safely above 15s min. See post_render_transform.py:216
+      # for the comment that predicted this exact issue since 2026-07-07.
+      window_seconds: 12
     audio_ducking:
       enabled: true
       levels_db: [-9, -12, -15]
