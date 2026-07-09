@@ -1,8 +1,13 @@
 """LinUCB contextual bandit implementation.
 
-Upgrades the existing context-free Thompson Sampling to a contextual bandit
-that uses a 6-dimensional feature vector (day_of_week, hour_utc, source_type,
-duration_bucket, view_velocity, relevance_score).
+Upgrades the existing context-free Thompson Sampling to a contextual
+bandit that uses a **13-dimensional** feature vector. See
+``build_content_context()`` below for the full feature layout. Task
+#634 (2026-07-09) corrected stale docstring — the pre-#634 header
+claimed "6-dimensional feature vector" which was accurate at
+initial ship (2026-05) but has been outdated since Phase 2 L2 bumped
+to 13-D on 2026-06-30 (adding hook_length, caption_length,
+hashtag_count, has_affiliate, trending_score, content_type_showcase).
 
 Cold-start protection: arms with fewer than MIN_OBS_FOR_LINUCB observations
 fall back to Thompson Sampling (existing alpha/beta posteriors).
@@ -377,8 +382,7 @@ class LinUCBArm:
             cond = float(np.linalg.cond(A))
         except (np.linalg.LinAlgError, ValueError) as exc:
             logger.warning(
-                "[LinUCB] cond(A_matrix) raised %s (n_obs=%d) — "
-                "resetting arm to fresh state",
+                "[LinUCB] cond(A_matrix) raised %s (n_obs=%d) — resetting arm to fresh state",
                 type(exc).__name__,
                 n_obs,
             )
@@ -430,9 +434,7 @@ class LinUCBArm:
         # legacy 12-D arm doesn't get padded up and cascade the NaN
         # through to the CONTEXT_DIM shape. If the pre-pad matrix is
         # corrupt we reset to a fresh (post-pad) arm.
-        validated = cls._validate_state(
-            A, b, n_obs=int(data.get("n_obs", 0))
-        )
+        validated = cls._validate_state(A, b, n_obs=int(data.get("n_obs", 0)))
         if validated is None:
             # Full reset — return a fresh arm at CONTEXT_DIM so the
             # caller's dict still lines up with the live decision path.
@@ -646,28 +648,55 @@ def build_content_context(
 ) -> np.ndarray:
     """Build a 13-dimensional context feature vector for LinUCB.
 
-    Dimensions (expanded from 12 — Phase 2 L2, 2026-06-30):
-        0: day_of_week [0, 1]
-        1: hour_utc [0, 1]
-        2: source_type [0, 1]
-        3: duration_bucket [0, 1] — seconds / 60
-        4: view_velocity [0, 1] — velocity / 5000 (scaled down for new channels)
-        5: relevance_score [0, 1]
-        6: hook_length [0, 1] — chars / 60
-        7: niche_encoding [0, 1]
-        8: has_affiliate [0, 1] — binary
-        9: caption_length [0, 1] — chars / 200
-       10: hashtag_count [0, 1] — count / 10
-       11: trending_score [0, 1] — composite score
-       12: content_type_showcase [0, 1] — binary, 1.0 if content_type=="showcase"
+    ## Feature layout
 
-    Why content_type as a feature (not an arm): the bandit already
-    splits arms on content_type (showcase / news / etc.), so each arm
-    sees only its own type at training time. To learn cross-cutting
-    effects like "showcase on Instagram outperforms showcase on X" we
-    need showcase as a CONTEXTUAL feature WITHIN the arm's reward
-    model — the LinUCB theta vector then captures the per-arm
-    sensitivity to showcase-vs-not.
+    Dimensions (expanded from 12 — Phase 2 L2, 2026-06-30):
+        0: day_of_week [0, 1]                             — TIME
+        1: hour_utc [0, 1]                                — TIME
+        2: source_type [0, 1]                             — CONTENT
+        3: duration_bucket [0, 1] — seconds / 60          — CONTENT
+        4: view_velocity [0, 1] — velocity / 5000         — CONTENT
+        5: relevance_score [0, 1]                         — CONTENT
+        6: hook_length [0, 1] — chars / 60                — STYLE ← see note
+        7: niche_encoding [0, 1]                          — META
+        8: has_affiliate [0, 1] — binary                  — META
+        9: caption_length [0, 1] — chars / 200            — STYLE ← see note
+       10: hashtag_count [0, 1] — count / 10              — STYLE ← see note
+       11: trending_score [0, 1] — composite score        — CONTENT
+       12: content_type_showcase [0, 1] — binary          — META
+
+    ## Task #634 (2026-07-09) — mixed-feature architectural note
+
+    Dims 6, 9, and 10 are WRITER-DETERMINED style features
+    (hook length, caption length, hashtag count) — they depend on
+    what the writer produces, not on inherent content properties.
+    The comment at ``metric_collector.py:1461`` restricts LinUCB
+    updates to content_type arms with the stated justification
+    "context encodes content properties, not style". That claim was
+    accurate pre-Phase-2 (when the vector was 12-D and did not
+    include hook_length) but has been stale since 2026-06-30.
+
+    Two paths forward, both operator-decision (audit #634):
+        (A) purge dims 6/9/10 back to a content-only context
+            → LinUCB v3 retrain PR; invalidates all 26 currently
+            warm content_type arms
+        (B) drop the ``item_arm == content_type`` gate at
+            ``metric_collector.py:1466``
+            → style arms accumulate LinUCB state on the current
+            mixed-feature context; ~24 additional arms would
+            start warm-training over the next few weeks
+
+    Neither is ship-tonight scope. The mixed nature is documented
+    here so future auditors don't re-diagnose the same drift.
+
+    ## Why content_type as a feature (not an arm)
+
+    The bandit already splits arms on content_type (showcase / news
+    / etc.), so each arm sees only its own type at training time.
+    To learn cross-cutting effects like "showcase on Instagram
+    outperforms showcase on X" we need showcase as a CONTEXTUAL
+    feature WITHIN the arm's reward model — the LinUCB theta vector
+    then captures the per-arm sensitivity to showcase-vs-not.
 
     Returns:
         np.ndarray of shape (CONTEXT_DIM,) with float64 values in [0, 1].

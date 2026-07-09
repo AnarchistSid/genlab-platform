@@ -1458,10 +1458,34 @@ def _default_bandit_updater(
             beta += 1.0 - reward_clipped
             n_plays += 1
 
-            # LinUCB lives only on the primary content_type arm. The
-            # 12-dim feature vector encodes content properties, not
-            # style; mixing it into the style arm's posterior would
-            # learn a confounded model.
+            # LinUCB lives only on the primary content_type arm.
+            #
+            # Task #634 (2026-07-09 late evening) — stale-comment
+            # correction. The pre-#634 comment claimed "12-dim feature
+            # vector encodes content properties, not style" as the
+            # justification. Post Phase-2 L2 (2026-06-30), the vector
+            # was expanded to 13-D and now includes 3 STYLE features:
+            # hook_length (dim 6), caption_length (dim 9), and
+            # hashtag_count (dim 10). See build_content_context() in
+            # ``learning/linucb.py`` for the full layout.
+            #
+            # So the "no confounded model" argument is architecturally
+            # inconsistent with the current implementation — style
+            # features already influence the LinUCB posterior for
+            # content_type arms; the gate here doesn't prevent that.
+            #
+            # The gate stays in place pending an operator decision on
+            # the actual design question (audit #634):
+            #   (A) purge hook_length/caption_length/hashtag_count from
+            #       the context vector (LinUCB v3 retrain, invalidate
+            #       all 26 warm arms), OR
+            #   (B) drop this gate and let style arms accumulate
+            #       LinUCB state on the same mixed-content-style
+            #       context (accepts the current confounded feature
+            #       set, expands coverage 26 → ~50 arms).
+            #
+            # Ship-tonight-2026-07-09 audit landed the finding as a
+            # doc-only PR; the two-option decision is deferred.
             linucb_state_dict = None
             if item_arm == content_type and linucb_ctx_array is not None:
                 try:
