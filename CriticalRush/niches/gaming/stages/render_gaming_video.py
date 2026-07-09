@@ -359,11 +359,30 @@ class RenderGamingVideo(VisualRenderStrategy):
                     # transformation orchestrator on the composite.
                     # Fail-open — returns the base composite path unchanged
                     # if anything goes wrong.
+                    #
+                    # 2026-07-09 (task #615): unpack the (path, arm_ids)
+                    # tuple. Task #581 (2026-07-08) changed the return
+                    # type from ``str`` to ``tuple[str, dict]`` and
+                    # updated ``genlab_core.strategies.base_visual_render``
+                    # + ``BlackboxBrief.bb_strategies.visual_render``, but
+                    # missed this gaming-specific caller. The pre-fix
+                    # assignment stored the tuple in ``rendered_path``,
+                    # which then flowed into ``rendered_variants["vertical"]``.
+                    # ``validate_platform_variant`` at line ~422 called
+                    # ``Path(vpath)`` on the tuple → TypeError caught by
+                    # the sibling except at line 428 → ``valid = False``
+                    # → hard raise of VideoValidationError, blocking
+                    # every gaming render since #581 landed. Fix: match
+                    # base_visual_render's shape — unpack tuple + write
+                    # arm_ids to story so push_to_backlog._build_blueprint_fields
+                    # copies them to pending_feedback.arm_ids_by_dimension
+                    # for downstream reward routing.
                     if rendered_path:
                         try:
                             from genlab_core.media.post_render_transform import (
                                 apply_post_render_transformations,
                             )
+
                             content = story.get("content") or {}
                             blueprint_context = {
                                 "hook": hook,
@@ -371,10 +390,8 @@ class RenderGamingVideo(VisualRenderStrategy):
                                 "title": story.get("title", ""),
                                 "summary": story.get("summary", ""),
                             }
-                            gaming_niche_root = (
-                                Path(__file__).resolve().parents[1]
-                            )
-                            rendered_path = apply_post_render_transformations(
+                            gaming_niche_root = Path(__file__).resolve().parents[1]
+                            rendered_path, _arm_ids = apply_post_render_transformations(
                                 rendered_path,
                                 niche_id="gaming",
                                 niche_root=gaming_niche_root,
@@ -384,6 +401,8 @@ class RenderGamingVideo(VisualRenderStrategy):
                                 blueprint_context=blueprint_context,
                                 video_duration_s=float(min(clip_dur, 60)),
                             )
+                            if _arm_ids:
+                                story["arm_ids_by_dimension"] = dict(_arm_ids)
                         except Exception as exc:
                             logger.warning(
                                 "[RENDER] post_render_transform wire raised: %s",
