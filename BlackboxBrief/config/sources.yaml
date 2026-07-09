@@ -106,6 +106,15 @@ youtube_channels:
   # Channel IDs resolved via youtube.com/@handle externalId scrape.
   # PixelDojo AI handle could not be cleanly resolved — left out for
   # operator to add later (per partial-ship policy).
+  #
+  # Task #626 (2026-07-09, roadmap E6) re-verified: automated web
+  # discovery still cannot pin the channel_id (youtube.com/@pixeldojo
+  # returns 404, @PixelDojoAI 404, /c/PixelDojo 404). Operator must
+  # obtain the channel_id manually — one path: navigate to any known
+  # PixelDojo video → click channel name → URL bar shows /channel/UC...
+  # OR paste the channel URL into commentpicker.com/youtube-channel-id.
+  # All 34 currently-listed channels above verified reachable by
+  # scripts/verify_yt_rss_reachability.py (see PR #626 for E6 audit).
   - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCEAbqW0HFB_UxZoUDO0kJBw"
     name: "Aitrepreneur"
   - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UClnFtyUEaxQOCd1s5NKYGFA"
