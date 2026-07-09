@@ -101,6 +101,19 @@ _CREDIT_LOW_PATTERN = "credit balance is too low"
 # the banner.
 _SAMPLE_LINE_MAX = 200
 
+# Live-credit-check (task #621, 2026-07-09): before writing an alert
+# based on journal evidence, hit the API directly to see if credit is
+# currently exhausted RIGHT NOW. The 60-min journal window includes
+# stragglers from BEFORE any recent top-up, so ``matches > 0`` does
+# NOT mean credit is currently exhausted — it just means credit WAS
+# exhausted somewhere in the last hour.
+#
+# Cost per call is trivial (~$0.00001): ``max_tokens=1`` on the cheapest
+# Haiku model at 96 fires/day = ~$0.001/day total. Well worth eliminating
+# false-positive banner flicker after every top-up.
+_LIVE_CHECK_MODEL = "claude-haiku-4-5-20251001"
+_LIVE_CHECK_TIMEOUT_S = 10.0
+
 
 def _connect():
     """Open a psycopg connection from DATABASE_URL — returns None on
@@ -121,6 +134,105 @@ def _connect():
     except Exception as exc:  # noqa: BLE001
         logger.warning("[anthropic_credit_monitor] connection failed: %s", exc)
         return None
+
+
+def _live_credit_check() -> str:
+    """Attempt a minimal API call to determine current credit state.
+
+    Task #621 (2026-07-09) — added to prevent stale-journal false
+    positives. The journal scan looks at the last 60 minutes for the
+    credit-low pattern, but that window continues to hit for up to
+    60 minutes AFTER the operator tops up. The live check answers
+    "is credit CURRENTLY exhausted?" so we don't fire an alert when
+    the API is working right now.
+
+    Returns
+    -------
+    ``"flowing"`` — the API accepted a minimal ``max_tokens=1`` call
+        (or a non-credit-related error came back — auth, rate limit,
+        etc — all of which mean credit itself isn't the current issue).
+    ``"exhausted"`` — the API returned a body containing the
+        credit-low pattern (real exhaustion right now).
+    ``"unknown"`` — network error, missing API key, timeout, or any
+        other issue that prevents us from knowing. Caller treats
+        as fall-through: proceed to write alert based on journal
+        evidence, since we can't rule out exhaustion. That's the
+        safe default — better a false alert than a missed one.
+
+    Cost per call: ~$0.00001 (5 input tokens + 1 output token on
+    Haiku). At 96 fires/day: ~$0.001/day. Negligible.
+
+    Uses ``urllib`` deliberately — no anthropic SDK dependency, so
+    a broken SDK install (or a future SDK API break) can't disable
+    the monitor's live check. The API is versioned via header so
+    the shape stays stable.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        logger.debug(
+            "[anthropic_credit_monitor] ANTHROPIC_API_KEY not set — "
+            "live-credit-check returns 'unknown'"
+        )
+        return "unknown"
+
+    try:
+        import json
+        import urllib.error
+        import urllib.request
+
+        payload = json.dumps(
+            {
+                "model": _LIVE_CHECK_MODEL,
+                "max_tokens": 1,
+                "messages": [{"role": "user", "content": "."}],
+            }
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=_LIVE_CHECK_TIMEOUT_S) as resp:
+            # 200 status = call accepted = credit is flowing. We don't
+            # care about the response body — just that Anthropic didn't
+            # refuse it on billing grounds.
+            if 200 <= resp.status < 300:
+                return "flowing"
+            return "unknown"
+    except urllib.error.HTTPError as exc:
+        # 4xx/5xx path. Inspect the error body for the credit-low
+        # pattern — 400 "credit balance is too low" is the exact
+        # shape we're trying to detect. Any other HTTP error (auth,
+        # rate limit, server error) is NOT a credit issue and should
+        # not fire this specific alert.
+        try:
+            body = exc.read().decode("utf-8", errors="replace").lower()
+            if _CREDIT_LOW_PATTERN in body:
+                return "exhausted"
+        except Exception:  # noqa: BLE001 — body read is best-effort
+            pass
+        logger.debug(
+            "[anthropic_credit_monitor] live check got HTTP %s (non-credit); treating as 'unknown'",
+            exc.code,
+        )
+        return "unknown"
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        logger.debug(
+            "[anthropic_credit_monitor] live check network/timeout: %s — 'unknown'",
+            exc,
+        )
+        return "unknown"
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.debug(
+            "[anthropic_credit_monitor] live check unexpected error: %s — 'unknown'",
+            exc,
+        )
+        return "unknown"
 
 
 def _scan_journal(window_minutes: int) -> tuple[int, str | None]:
@@ -311,6 +423,7 @@ def scan_and_alert_on_credit_exhaustion(
     window_minutes: int = 60,
     dry_run: bool = False,
     resolve_cooldown_minutes: int = 30,
+    enable_live_check: bool = True,
 ) -> dict[str, Any]:
     """Scan recent journalctl output for the Anthropic credit-low
     pattern; if matched and no alert already fired today, write a
@@ -405,7 +518,54 @@ def scan_and_alert_on_credit_exhaustion(
             summary["errors"] = 1
         return summary
 
-    # ── 3. dedupe + write (matches > 0 path) ───────────────────────
+    # ── 3. Live-credit-check (task #621, 2026-07-09) ─────────────────
+    # ``matches > 0`` at this point only means credit-low errors appeared
+    # in the last 60 minutes of journal — NOT that credit is currently
+    # exhausted. After a top-up, journal stragglers persist for up to 60
+    # minutes and would trigger a false alert every 15 minutes. Ask the
+    # API directly: is credit flowing RIGHT NOW?
+    #
+    # Same discipline as ``alert_auto_resolver.auto_resolve_systemd_unit_alerts``
+    # which asks systemd "has this unit had a successful run since?"
+    # before considering an alert stale. Alerts should reflect CURRENT
+    # state, not the last N minutes of noise.
+    if enable_live_check:
+        live_state = _live_credit_check()
+        if live_state == "flowing":
+            logger.info(
+                "[anthropic_credit_monitor] %d journal matches BUT live API "
+                "check returned OK — credit is currently flowing. Treating "
+                "as stale-journal signal; auto-resolving any existing "
+                "alerts (matches window includes pre-topup stragglers).",
+                matches,
+            )
+            try:
+                with conn_cm as conn:
+                    resolved = _auto_resolve_stale_alerts(
+                        conn,
+                        cooldown_minutes=resolve_cooldown_minutes,
+                        dry_run=dry_run,
+                    )
+                    summary["alerts_resolved"] = resolved
+            except Exception as exc:  # noqa: BLE001 — fail-open
+                logger.warning(
+                    "[anthropic_credit_monitor] auto-resolve after live-check "
+                    "DB session failed: %s",
+                    exc,
+                )
+                summary["errors"] = 1
+            return summary
+        # else: live_state is "exhausted" or "unknown" — proceed to
+        # write path. "exhausted" is definitive. "unknown" is the safe
+        # default — better a false alert than a missed real one.
+        logger.info(
+            "[anthropic_credit_monitor] live check returned %r; proceeding "
+            "to write alert based on %d journal matches",
+            live_state,
+            matches,
+        )
+
+    # ── 4. dedupe + write (matches > 0 AND live-check didn't clear) ──
     try:
         with conn_cm as conn:
             if _has_recent_unresolved_alert(conn):
