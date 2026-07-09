@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
+from genlab_core.cache.post_id_norm import normalize_post_id
+
 logger = logging.getLogger(__name__)
 
 # List ID resolved by BacklogClient from config — this constant is unused.
@@ -60,7 +62,15 @@ def record_publish(
     fields = {
         "Title": f"{niche_id}:{platform}:{published_at[:10]}",
         "niche_id": niche_id,
-        "post_id": f"{platform}:{post_id}" if post_id else "",
+        # Task #625 (2026-07-09) — audit follow-up to #624/#748.
+        # Pre-#625 this was an inline ``f"{platform}:{post_id}"`` which
+        # shares the same class of bug as #748: no idempotence check.
+        # If ``post_id`` ever gets pre-prefixed upstream (currently
+        # unlikely — URL-tail extraction produces bare ids — but the
+        # invariant should not depend on that) the composite key
+        # becomes ``platform:platform:...`` and won't join with
+        # analytics.post_id. Canonical helper closes the class.
+        "post_id": normalize_post_id(platform, post_id),
         "platform": platform,
         "status": status,
         "published_at": published_at,
