@@ -364,6 +364,26 @@ def write_video_content(
             f"  to signal skip. Do NOT force a different style.\n"
         )
 
+    # Task #628 (2026-07-09, roadmap E2): content-angle preference
+    # hint. Symmetric to the ``STYLE MANDATE`` above but for the
+    # content_type dimension. Soft steering — the writer keeps
+    # editorial control if the story doesn't naturally fit the
+    # bandit-preferred angle. Fail-open on any error (import,
+    # backlog, empty niche) — the writer works exactly as before
+    # when this returns None.
+    content_angle_hint = ""
+    try:
+        from genlab_core.writing.content_type_hint import (
+            format_content_angle_prompt,
+            pick_content_type_hint,
+        )
+
+        picked = pick_content_type_hint(niche_id)
+        if picked:
+            content_angle_hint = format_content_angle_prompt(picked)
+    except Exception as exc:
+        logger.debug("[%s] content-angle hint injection skipped: %s", niche_id, exc)
+
     # PR Strategist-3: append operator-approved learning findings (top 5)
     # into the system prompt so the writer leans on causal patterns the
     # operator has explicitly validated. Fail-closed: if strategy_phase
@@ -486,6 +506,7 @@ def write_video_content(
         )
         + (f"{extra_instructions}\n\n" if extra_instructions else "")
         + style_hint
+        + content_angle_hint
         + findings_hint
         + "OUTPUT FORMAT — strictly enforced:\n"
         "Respond ONLY with valid JSON. ALL SIX KEYS ARE REQUIRED and must\n"
@@ -797,7 +818,8 @@ def write_video_content(
             except Exception as exc:
                 logger.debug(
                     "[%s] caption_segments generation skipped: %s",
-                    niche_id, exc,
+                    niche_id,
+                    exc,
                 )
 
         # ── R-50: enforce sentence case on every shipped text field ──────
