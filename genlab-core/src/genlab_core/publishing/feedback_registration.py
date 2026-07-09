@@ -180,20 +180,19 @@ def _normalize_post_id(platform: str, post_id: str) -> str:
     bandit + hook classifier silently lost feedback for IG-only
     publishes.
 
-    Rules:
-    - Empty / falsy post_id passes through unchanged (caller's
-      existing fallback handling stays the same).
-    - Already-prefixed (contains ``:``) passes through — don't
-      double-prefix even if the prefix doesn't match ``platform``.
-      Trusting the existing prefix preserves the (rare) case where
-      a caller intentionally tagged it differently.
-    - Bare id → ``{platform}:{id}``.
+    Task #624 (2026-07-09) — delegates to
+    ``genlab_core.cache.post_id_norm.normalize_post_id`` so the
+    contract is defined in one place. The re-export here preserves
+    the existing internal-caller import path
+    (``from feedback_registration import _normalize_post_id``) and
+    the existing test-suite pins.
     """
-    if not post_id:
-        return post_id
-    if ":" in post_id:
-        return post_id
-    return f"{platform}:{post_id}"
+    # Local import avoids a hard dependency cycle risk in the
+    # ``publishing`` layer at module-load time. cache/ is a leaf
+    # module with no genlab-core imports so this is a cheap call.
+    from genlab_core.cache.post_id_norm import normalize_post_id
+
+    return normalize_post_id(platform, post_id)
 
 
 def _is_published_status(pstatus: Any) -> bool:
