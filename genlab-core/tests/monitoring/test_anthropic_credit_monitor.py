@@ -685,3 +685,213 @@ def test_auto_resolve_cooldown_param_default_is_30():
         "30 = 2× the 15-min timer interval; lower values risk flapping "
         "during brief transients."
     )
+
+
+# ── task #621 (2026-07-09): live-API check pins ─────────────────────
+#
+# Motivation: on 2026-07-09 the credit monitor fired a fresh CRITICAL
+# alert 12 minutes after the 12:45 IST run despite the operator
+# topping up credit hours earlier. Root cause: the 60-min journal
+# window still had 3 credit-low error entries from BEFORE the top-up.
+# Without a live-state check, the monitor kept firing every 15 min
+# until the window slid past the old errors.
+#
+# The fix — ask the API directly whether credit is currently flowing
+# before deciding to write an alert — mirrors the discipline used in
+# ``alert_auto_resolver.auto_resolve_systemd_unit_alerts`` which asks
+# systemd "has this unit had a successful run since?" before deeming
+# an alert stale.
+
+
+def _fake_conn_for_write_and_resolve():
+    """Build a fake conn that supports BOTH the write path (has cursor
+    with execute) AND the auto-resolve path (execute + fetchall)."""
+    conn = MagicMock()
+    conn.__enter__.return_value = conn
+    conn.__exit__.return_value = False
+    # Write path uses conn.cursor() → cursor.execute()
+    cursor = MagicMock()
+    cursor.__enter__.return_value = cursor
+    cursor.__exit__.return_value = False
+    conn.cursor.return_value = cursor
+    # Both paths query pipeline_alerts via conn.execute — return no
+    # existing alert row so dedupe doesn't skip.
+    select_cursor = MagicMock()
+    select_cursor.fetchone.return_value = None
+    select_cursor.fetchall.return_value = []
+    select_cursor.rowcount = 0
+    conn.execute.return_value = select_cursor
+    conn._write_cursor = cursor
+    conn._select_cursor = select_cursor
+    return conn
+
+
+def test_live_check_flowing_skips_write_even_with_journal_matches():
+    """Happy-path fix pin: 3 journal matches + live API returns 'flowing'
+    → NO alert written. This is the 2026-07-09 sequence exactly."""
+    from genlab_core.monitoring import anthropic_credit_monitor
+
+    conn = _fake_conn_for_write_and_resolve()
+
+    with (
+        patch.object(
+            anthropic_credit_monitor,
+            "_scan_journal",
+            return_value=(3, "sample credit balance is too low"),
+        ),
+        patch.object(anthropic_credit_monitor, "_connect", return_value=conn),
+        patch.object(anthropic_credit_monitor, "_live_credit_check", return_value="flowing"),
+        patch.object(
+            anthropic_credit_monitor, "_auto_resolve_stale_alerts", return_value=1
+        ) as mock_resolve,
+    ):
+        summary = anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion()
+
+    assert summary["matches_found"] == 3
+    assert summary["alert_written"] is False, (
+        "Live check returned 'flowing' — alert must NOT be written. This "
+        "is the exact 2026-07-09 stale-journal false positive we fixed."
+    )
+    # And auto-resolve was called for any existing alerts.
+    assert mock_resolve.called, (
+        "When live check clears the alarm, existing unresolved alerts "
+        "must be auto-resolved so the banner clears immediately, not "
+        "60 min later when the journal window slides."
+    )
+
+
+def test_live_check_exhausted_proceeds_to_write():
+    """Confirmation pin: matches > 0 + live check returns 'exhausted'
+    → alert IS written. Live check is not a bypass; it's just a
+    stale-journal filter. Real exhaustion still surfaces."""
+    from genlab_core.monitoring import anthropic_credit_monitor
+
+    conn = _fake_conn_for_write_and_resolve()
+
+    with (
+        patch.object(
+            anthropic_credit_monitor,
+            "_scan_journal",
+            return_value=(3, "sample credit balance is too low"),
+        ),
+        patch.object(anthropic_credit_monitor, "_connect", return_value=conn),
+        patch.object(anthropic_credit_monitor, "_live_credit_check", return_value="exhausted"),
+    ):
+        summary = anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion()
+
+    assert summary["alert_written"] is True, (
+        "Live check confirmed 'exhausted' — alert MUST be written. "
+        "Otherwise the live check would silence real exhaustion."
+    )
+
+
+def test_live_check_unknown_falls_through_to_write():
+    """Safe-default pin: matches > 0 + live check returns 'unknown'
+    (network error, missing key, timeout) → alert IS written. Better
+    a false alert than a missed real one."""
+    from genlab_core.monitoring import anthropic_credit_monitor
+
+    conn = _fake_conn_for_write_and_resolve()
+
+    with (
+        patch.object(
+            anthropic_credit_monitor,
+            "_scan_journal",
+            return_value=(3, "sample credit balance is too low"),
+        ),
+        patch.object(anthropic_credit_monitor, "_connect", return_value=conn),
+        patch.object(anthropic_credit_monitor, "_live_credit_check", return_value="unknown"),
+    ):
+        summary = anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion()
+
+    assert summary["alert_written"] is True, (
+        "Live check returned 'unknown' — safe default is to write the "
+        "alert based on journal evidence. Missing a real exhaustion is "
+        "worse than a false positive that the operator can clear."
+    )
+
+
+def test_enable_live_check_false_disables_check_entirely():
+    """Escape hatch pin: passing enable_live_check=False MUST skip the
+    live-check step (used by tests that mock the monitor at a higher
+    level, or ops runs where live check would burn tokens unnecessarily)."""
+    from genlab_core.monitoring import anthropic_credit_monitor
+
+    conn = _fake_conn_for_write_and_resolve()
+
+    with (
+        patch.object(
+            anthropic_credit_monitor,
+            "_scan_journal",
+            return_value=(3, "sample"),
+        ),
+        patch.object(anthropic_credit_monitor, "_connect", return_value=conn),
+        patch.object(anthropic_credit_monitor, "_live_credit_check") as mock_live_check,
+    ):
+        summary = anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion(
+            enable_live_check=False,
+        )
+
+    assert not mock_live_check.called, (
+        "enable_live_check=False must skip _live_credit_check entirely — "
+        "no network call, no token spend."
+    )
+    # And write path still fires (matches > 0, dedupe empty, no live check).
+    assert summary["alert_written"] is True
+
+
+def test_matches_zero_never_calls_live_check():
+    """Efficiency pin: if journal has zero matches, the live check
+    isn't needed (nothing to potentially clear). Save the token cost
+    on the steady-state case (99%+ of fires)."""
+    from genlab_core.monitoring import anthropic_credit_monitor
+
+    conn = _fake_conn_for_write_and_resolve()
+
+    with (
+        patch.object(
+            anthropic_credit_monitor,
+            "_scan_journal",
+            return_value=(0, None),
+        ),
+        patch.object(anthropic_credit_monitor, "_connect", return_value=conn),
+        patch.object(anthropic_credit_monitor, "_live_credit_check") as mock_live_check,
+    ):
+        anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion()
+
+    assert not mock_live_check.called, (
+        "0 matches → auto-resolve path only. Live check should NOT fire "
+        "in steady-state — that would be 1440 wasted API calls/day."
+    )
+
+
+def test_live_check_default_is_true():
+    """Signature pin: enable_live_check default must be True on prod so
+    the fix takes effect without operator opt-in."""
+    import inspect
+
+    from genlab_core.monitoring import anthropic_credit_monitor
+
+    sig = inspect.signature(anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion)
+    param = sig.parameters.get("enable_live_check")
+    assert param is not None, (
+        "enable_live_check must be a keyword param of scan_and_alert_on_credit_exhaustion"
+    )
+    assert param.default is True, (
+        f"enable_live_check default should be True, got {param.default}. "
+        "Ships-on-default = fix propagates to prod automatically."
+    )
+
+
+def test_live_credit_check_no_api_key_returns_unknown():
+    """When ANTHROPIC_API_KEY is unset, live check returns 'unknown'
+    (safe default → falls through to write). Never raises."""
+    import os
+    from unittest.mock import patch as _patch
+
+    from genlab_core.monitoring import anthropic_credit_monitor
+
+    with _patch.dict(os.environ, {}, clear=True):
+        result = anthropic_credit_monitor._live_credit_check()
+
+    assert result == "unknown"
