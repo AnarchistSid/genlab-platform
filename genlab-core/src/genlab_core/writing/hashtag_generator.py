@@ -9,11 +9,19 @@ from __future__ import annotations
 
 import logging
 import re
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Base hashtags per niche — always included (2 per post)
+# Base hashtags per niche — always included (2 per post).
+#
+# Task #627 (2026-07-09, roadmap E4): this dict is the fallback
+# when the per-platform × per-niche pool config file is missing OR
+# doesn't specify a cell. See ``_load_platform_pools()`` for the
+# preferred lookup path. Keeping this hard-coded fallback preserves
+# behavior for any environment without the config file.
 _NICHE_BASE: dict[str, list[str]] = {
     "gaming": ["#Gaming", "#GamingClips"],
     "sports": ["#Sports", "#Clutch"],
@@ -21,6 +29,68 @@ _NICHE_BASE: dict[str, list[str]] = {
     "anime": ["#Anime", "#Manga"],
     "ai_creators": ["#AI", "#Tech"],
 }
+
+
+_PLATFORM_POOLS_YAML = (
+    Path(__file__).resolve().parents[3] / "config" / "platform_hashtag_pools.yaml"
+)
+
+
+@lru_cache(maxsize=1)
+def _load_platform_pools() -> dict[str, dict[str, list[str]]]:
+    """Read ``config/platform_hashtag_pools.yaml`` at first call.
+
+    Returns ``{platform: {niche_id: [tags]}}``. Fail-open: any read
+    or parse error yields ``{}``, and downstream lookups fall back
+    to ``_NICHE_BASE`` (platform-agnostic behavior — same as pre-
+    #627).
+
+    LRU-cached because this is called on every hashtag generation
+    (once per post) and the yaml is static. Test suites that need to
+    swap the pool call ``_load_platform_pools.cache_clear()``.
+    """
+    try:
+        import yaml  # local import — yaml is optional in some dev envs
+
+        text = _PLATFORM_POOLS_YAML.read_text(encoding="utf-8")
+        data = yaml.safe_load(text) or {}
+        platforms = data.get("platforms") or {}
+        # Coerce to the exact shape callers expect: str keys, list values.
+        result: dict[str, dict[str, list[str]]] = {}
+        for plat, niches in platforms.items():
+            if not isinstance(niches, dict):
+                continue
+            result[str(plat)] = {
+                str(nid): [str(t) for t in (tags or [])]
+                for nid, tags in niches.items()
+                if isinstance(tags, list)
+            }
+        return result
+    except FileNotFoundError:
+        # Legit: config file may not be present in bare test envs.
+        return {}
+    except Exception as exc:
+        logger.warning("[hashtag_generator] platform pool load failed: %s", exc)
+        return {}
+
+
+def _resolve_niche_base(niche_id: str, platform: str) -> list[str]:
+    """Look up base tags for (niche, platform), with fallback.
+
+    Precedence:
+      1. Per-platform × per-niche entry in
+         ``platform_hashtag_pools.yaml``
+      2. Legacy per-niche entry in ``_NICHE_BASE``
+      3. Generic ``["#Content"]``
+    """
+    pools = _load_platform_pools()
+    plat_map = pools.get(platform, {})
+    if niche_id in plat_map and plat_map[niche_id]:
+        return plat_map[niche_id]
+    if niche_id in _NICHE_BASE:
+        return _NICHE_BASE[niche_id]
+    return ["#Content"]
+
 
 # Topic keyword → hashtag mapping for common topics
 _TOPIC_HASHTAGS: dict[str, str] = {
@@ -172,8 +242,10 @@ def generate_hashtags(
 
     tags: list[str] = []
 
-    # 1. Niche base tags (always first)
-    base = _NICHE_BASE.get(niche_id, ["#Content"])
+    # 1. Niche base tags (always first). Task #627: prefer the
+    # per-platform × per-niche pool if config supplies one;
+    # otherwise fall through to the legacy per-niche defaults.
+    base = _resolve_niche_base(niche_id, platform)
     tags.extend(base[:2])
 
     # 2. Topic-specific tags from story content
