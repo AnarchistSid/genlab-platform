@@ -76,6 +76,27 @@ from pathlib import Path
 
 NICHES = ("ai_creators", "gaming", "sports", "movies", "anime")
 
+# 2026-07-09 (task #611): pull-back branch buffer.
+#
+# When the primary candidate filter (scheduled_for IS NULL) returns no
+# rows for a niche, but that niche has VISUAL_READY blueprints already
+# committed to far-future dates, we can shift the earliest of those
+# back to the target slot. This buffer is the minimum gap between the
+# future slot we're willing to steal FROM and the target slot we're
+# scheduling FOR.
+#
+# = 2 means: don't cannibalize tomorrow's slot to fill today. If we
+# pulled from target+1, next night's run (target = old target+1) would
+# find that slot empty and cascade the same problem forward. Requiring
+# >= 2 days of buffer means the pull-back leaves the immediately-
+# adjacent slot alone, breaking the cascade.
+#
+# Worst case with a fully stalled pipeline: the queue's far tail
+# shortens by ~1 day per night as we consume future slots. That's
+# graceful degradation vs the fail-immediately behavior that caused
+# sports to miss 2026-07-09.
+MIN_PULLBACK_DAYS = 2
+
 
 def _load_env_file(path: Path) -> None:
     """Same shape as verify_intelligent_transform's loader — dep-free."""
@@ -159,9 +180,38 @@ def niches_needing_scheduling(cur, target_date: date) -> set[str]:
     return set(NICHES) - already
 
 
-def pick_top_per_niche(cur, needing: set[str]) -> list[dict]:
+def pick_top_per_niche(
+    cur,
+    needing: set[str],
+    target_date: date | None = None,
+) -> list[dict]:
     """Return one row per niche in ``needing`` — the top-scoring
     VISUAL_READY that passes the LLM-refusal filter.
+
+    Two-pass selection:
+
+    1. **Primary (fresh)**: ``scheduled_for IS NULL`` — never-scheduled
+       candidates freshly produced by the pipeline. Highest signal:
+       these reflect today's ranking, haven't been reached-ahead by a
+       previous nightly run.
+    2. **Pull-back (recovery)**: for any niche in ``needing`` still
+       without a pick, look for VISUAL_READY blueprints whose
+       ``scheduled_for::date >= target_date + MIN_PULLBACK_DAYS``. Pick
+       the earliest. ``schedule_blueprints`` will rewrite
+       ``scheduled_for = target_slot`` in the follow-up UPDATE, so the
+       future-committed row is effectively shifted back to the target.
+
+    Rationale (2026-07-09, task #611): sports missed 2026-07-09 because
+    its queue had 5 VISUAL_READY blueprints all scheduled for 07-10
+    through 07-14 (a previous run had reached ahead). The primary
+    filter's ``scheduled_for IS NULL`` correctly rejected all 5 to avoid
+    double-scheduling, but no fallback existed. Runner exited 1
+    (correct — the slot was empty) and alerted, but nobody handled the
+    alert overnight and operator had to manually SQL-shift a blueprint.
+
+    ``target_date=None`` disables pull-back entirely — pin-tested to
+    preserve the primary-only shape when tests call this directly
+    without a date. Production always passes a date via ``main()``.
     """
     if not needing:
         return []
@@ -185,6 +235,63 @@ def pick_top_per_niche(cur, needing: set[str]) -> list[dict]:
         ORDER BY niche_id, priority_score DESC NULLS LAST, created_at ASC
         """,
         (list(needing),),
+    )
+    fresh = list(cur.fetchall())
+    if target_date is None:
+        return fresh
+    fresh_niches = {row["niche_id"] for row in fresh}
+    still_needing = needing - fresh_niches
+    if not still_needing:
+        return fresh
+    pullback = _pick_pullback_candidates(cur, still_needing, target_date)
+    return fresh + pullback
+
+
+def _pick_pullback_candidates(
+    cur,
+    needing: set[str],
+    target_date: date,
+) -> list[dict]:
+    """Fallback picker: pull an existing VISUAL_READY blueprint from a
+    far-future scheduled slot back to the target slot.
+
+    Filters mirror ``pick_top_per_niche``'s primary query EXCEPT:
+
+    * ``scheduled_for::date >= target_date + MIN_PULLBACK_DAYS`` instead
+      of ``scheduled_for IS NULL`` — pull-back only reaches into slots
+      at least ``MIN_PULLBACK_DAYS`` (=2) ahead of target, never
+      cannibalizes tomorrow's slot to fill today.
+    * ``ORDER BY scheduled_for ASC`` — pull the *earliest* far-future
+      blueprint so we minimally disturb the queue tail. If sports has
+      07-11, 07-12, 07-13 and target is 07-09, we take 07-11 (leaving
+      the tail 07-12, 07-13 intact for future nights). We do NOT take
+      07-13 first because that would strand 07-11 as the new gap.
+
+    Not called when ``needing`` is empty. Caller (``pick_top_per_niche``)
+    guarantees this.
+    """
+    min_pullback = target_date + timedelta(days=MIN_PULLBACK_DAYS)
+    cur.execute(
+        """
+        SELECT DISTINCT ON (niche_id)
+          id, niche_id, priority_score, hook, title, created_at,
+          scheduled_for AS pullback_from
+        FROM blueprints
+        WHERE niche_id = ANY(%s)
+          AND status = 'VISUAL_READY'
+          AND scheduled_for::date >= %s
+          AND (action_taken IS NULL OR action_taken NOT IN ('rejected', 'archived'))
+          AND hook IS NOT NULL
+          AND hook NOT ILIKE 'I need to stop%%'
+          AND hook NOT ILIKE 'I cannot%%'
+          AND hook NOT ILIKE 'I can''t%%'
+          AND hook NOT ILIKE 'I am unable%%'
+          AND hook NOT ILIKE 'I''m sorry%%'
+          AND hook NOT ILIKE 'I apologize%%'
+          AND length(hook) BETWEEN 15 AND 100
+        ORDER BY niche_id, scheduled_for ASC, priority_score DESC NULLS LAST
+        """,
+        (list(needing), min_pullback),
     )
     return list(cur.fetchall())
 
@@ -261,21 +368,36 @@ def main() -> int:
                 return 0
 
             print(f"Scheduling for: {sorted(needing)}")
-            picks = pick_top_per_niche(cur, needing)
+            picks = pick_top_per_niche(cur, needing, target_date=target_date)
 
-            # Warn if any niche had no schedulable candidate
+            # Distinguish fresh (scheduled_for was NULL) from pull-back
+            # picks (scheduled_for was a future date we're stealing back).
+            # _pick_pullback_candidates returns rows with a
+            # ``pullback_from`` field; the primary query does not.
+            pullback_niches = {p["niche_id"] for p in picks if p.get("pullback_from")}
+            if pullback_niches:
+                print(
+                    f"↩ Pulled back from far-future slots (task #611): "
+                    f"{sorted(pullback_niches)} — pipeline hadn't produced "
+                    "fresh candidates; recovered from future-committed queue."
+                )
+
+            # Warn if any niche had no schedulable candidate AT ALL
+            # (neither fresh nor pull-back). This is a genuine empty
+            # queue — pipeline stalled AND no future-committed rows.
             picked_niches = {p["niche_id"] for p in picks}
             missing = needing - picked_niches
             if missing:
                 print(
                     f"⚠️  No schedulable candidate for: {sorted(missing)} "
-                    "(empty VISUAL_READY queue or all filtered)"
+                    "(empty VISUAL_READY queue AND no pull-back available)"
                 )
 
             if args.dry_run:
                 for p in picks:
+                    tag = "PULL" if p.get("pullback_from") else "FRESH"
                     print(
-                        f"  DRY  {p['niche_id']:12s}  "
+                        f"  DRY  [{tag}] {p['niche_id']:12s}  "
                         f"score={p['priority_score']:.4f}  "
                         f"hook={p['hook'][:60]!r}"
                     )
