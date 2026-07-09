@@ -152,3 +152,114 @@ class TestPendingFeedbackTask:
             sharepoint_id="sp_abc123",
         )
         assert task.sharepoint_id == "sp_abc123"
+
+
+# ── task #623 (2026-07-09): post_id double-prefix bug ────────────────
+#
+# 297 pending_feedback rows have shape ``facebook:facebook:1181...``
+# because the pre-fix ``to_sharepoint_fields`` unconditionally prefixed
+# ``self.platform_post_id`` — which had ALREADY been prefixed upstream
+# by ``feedback_registration._normalize_post_id``. The double-prefix
+# then broke ``metric_collector.fetch_platform_metrics``'s single
+# ``.split(":", 1)`` strip, sending malformed IDs to platform APIs.
+#
+# Root cause of the entire learning stack producing reward=0 for weeks.
+
+
+def test_to_sharepoint_fields_prefixes_raw_post_id():
+    """Bare ID (no prefix) gets ``{platform}:`` added — same as pre-fix
+    behavior for that path (backward compat)."""
+    from datetime import UTC, datetime
+
+    from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
+
+    task = PendingFeedbackTask(
+        content_id="c1",
+        platform="facebook",
+        niche_id="ai_creators",
+        published_at=datetime.now(tz=UTC),
+        platform_post_id="1181921760782769",
+    )
+    fields = task.to_sharepoint_fields()
+    assert fields["post_id"] == "facebook:1181921760782769", (
+        "Bare ID must get ONE platform prefix added — that's the "
+        "backward-compat path for callers that pass raw IDs."
+    )
+
+
+def test_to_sharepoint_fields_does_not_double_prefix_already_prefixed():
+    """THE CORE #623 FIX: already-prefixed ID stays as single prefix,
+    not double. This is the exact 2026-07-09 bug that produced 297
+    rows with shape ``facebook:facebook:1181...``."""
+    from datetime import UTC, datetime
+
+    from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
+
+    task = PendingFeedbackTask(
+        content_id="c1",
+        platform="facebook",
+        niche_id="ai_creators",
+        published_at=datetime.now(tz=UTC),
+        # Simulates upstream _normalize_post_id having already prefixed
+        platform_post_id="facebook:1181921760782769",
+    )
+    fields = task.to_sharepoint_fields()
+    assert fields["post_id"] == "facebook:1181921760782769", (
+        f"Double prefix bug regressed. Got {fields['post_id']!r}. "
+        "The stored post_id must be single-prefixed even when the "
+        "input platform_post_id was already prefixed."
+    )
+
+
+def test_to_sharepoint_fields_empty_post_id_stays_empty():
+    """Empty ID → empty output (no spurious `facebook:` alone)."""
+    from datetime import UTC, datetime
+
+    from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
+
+    task = PendingFeedbackTask(
+        content_id="c1",
+        platform="facebook",
+        niche_id="ai_creators",
+        published_at=datetime.now(tz=UTC),
+        platform_post_id="",
+    )
+    fields = task.to_sharepoint_fields()
+    assert fields["post_id"] == "", (
+        "Empty post_id must pass through as empty — don't produce "
+        "'facebook:' with nothing after it."
+    )
+
+
+def test_helper_idempotent_prefix_never_triples():
+    """The helper must never triple-prefix. If a future bug adds a
+    third prefix upstream (e.g. ``facebook:facebook:1234``), the
+    helper still returns as-is — no growth."""
+    from genlab_core.learning.pending_feedback_task import (
+        _post_id_with_platform_prefix,
+    )
+
+    assert _post_id_with_platform_prefix("facebook", "facebook:1234") == "facebook:1234"
+    # Triple-prefixed input — helper preserves as-is; write side stays
+    # idempotent even if upstream regressed further.
+    assert (
+        _post_id_with_platform_prefix("facebook", "facebook:facebook:1234")
+        == "facebook:facebook:1234"
+    ), (
+        "Helper only PREVENTS growth; it doesn't SHRINK. The strip "
+        "loop in metric_collector handles historical bad data. "
+        "Growing the helper's responsibility could hide upstream bugs."
+    )
+
+
+def test_helper_leaves_foreign_prefix_alone():
+    """A caller who intentionally tagged ``other:id`` isn't overridden.
+    Matches ``feedback_registration._normalize_post_id`` semantics —
+    ``if ":" in post_id: return post_id``."""
+    from genlab_core.learning.pending_feedback_task import (
+        _post_id_with_platform_prefix,
+    )
+
+    # Called from facebook context but ID is tagged for another platform
+    # — trust the caller's intent.
+    assert _post_id_with_platform_prefix("facebook", "youtube:abc") == "youtube:abc"
