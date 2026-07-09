@@ -527,9 +527,292 @@ def test_cli_exits_zero_even_with_dry_run_flag():
             "errors": 0,
         }
 
-    with patch(
-        "genlab_core.observability.alert_auto_resolver.auto_resolve_systemd_unit_alerts",
-        side_effect=fake_resolver,
+    with (
+        patch(
+            "genlab_core.observability.alert_auto_resolver.auto_resolve_systemd_unit_alerts",
+            side_effect=fake_resolver,
+        ),
+        patch(
+            "genlab_core.observability.alert_auto_resolver.auto_resolve_nightly_schedule_missing_slot_alerts",
+            return_value={
+                "checked": 0,
+                "resolved": 0,
+                "skipped_slot_still_empty": 0,
+                "skipped_query_failed": 0,
+                "errors": 0,
+            },
+        ),
     ):
         assert mod.main(["--dry-run"]) == 0
         assert captured["dry_run"] is True
+
+
+# ── nightly_schedule_missing_slot resolver pins (task #613) ─────────
+#
+# Companion to task #612 (PR #739). When the specialized remediate
+# script writes a `nightly_schedule_missing_slot` alert, that alert
+# stays visible until this resolver detects the slot has been filled.
+
+
+def _build_missing_slot_message(target_date: str, niche: str) -> str:
+    """Mirror scripts/nightly_schedule_remediate.build_alert_message's shape."""
+    return (
+        f"Nightly scheduler could not fill {target_date} slot for '{niche}'.\n"
+        f"Publisher fires 06:35 UTC in ~10.5 hours.\n"
+        f"\n"
+        f"SUGGESTED SQL — shift the earliest far-future '{niche}' blueprint "
+        f"back to fill today:\n"
+        f"  UPDATE blueprints SET scheduled_for = '{target_date}T06:00:00+00:00'..."
+    )
+
+
+def test_missing_slot_resolves_when_slot_filled():
+    """Happy path: alert says sports 07-09 missing; blueprints table
+    now has a sports blueprint at 07-09 with (status='SCHEDULED' OR
+    action_taken='approved'). Resolver clears the alert."""
+    from genlab_core.observability import alert_auto_resolver
+
+    created = datetime(2026, 7, 8, 16, 30, 0, tzinfo=UTC)
+    row = {
+        "id": uuid4(),
+        "message": _build_missing_slot_message("2026-07-09", "sports"),
+        "created_at": created,
+        "niche_id": "sports",
+    }
+    fake_conn = _fake_conn([row])
+
+    # Second call (in _query_slot_is_filled) returns a row → slot IS filled.
+    slot_check_cursor = MagicMock()
+    slot_check_cursor.fetchone.return_value = {"?column?": 1}
+
+    slot_check_conn = MagicMock()
+    slot_check_conn.__enter__.return_value = slot_check_conn
+    slot_check_conn.__exit__.return_value = False
+    slot_check_conn.execute.return_value = slot_check_cursor
+
+    # _connect() is called 3 times:
+    #   1. To SELECT unresolved alerts
+    #   2. To query blueprints (slot-fill check)
+    #   3. To UPDATE pipeline_alerts
+    with patch.object(
+        alert_auto_resolver,
+        "_connect",
+        side_effect=[fake_conn, slot_check_conn, fake_conn],
+    ):
+        counters = alert_auto_resolver.auto_resolve_nightly_schedule_missing_slot_alerts()
+
+    assert counters["checked"] == 1
+    assert counters["resolved"] == 1
+    assert counters["skipped_slot_still_empty"] == 0
+    assert counters["errors"] == 0
+
+    # UPDATE fired on the write cursor
+    update_calls = [
+        c
+        for c in fake_conn._write_cursor.execute.call_args_list
+        if "UPDATE pipeline_alerts" in (c.args[0] if c.args else "")
+    ]
+    assert len(update_calls) == 1
+
+
+def test_missing_slot_does_not_resolve_when_slot_still_empty():
+    """Race-condition safety: if the slot is still empty (pipeline
+    genuinely stalled, operator hasn't acted, next-night pull-back
+    hasn't run yet), leave the alert visible."""
+    from genlab_core.observability import alert_auto_resolver
+
+    created = datetime(2026, 7, 8, 16, 30, 0, tzinfo=UTC)
+    row = {
+        "id": uuid4(),
+        "message": _build_missing_slot_message("2026-07-09", "sports"),
+        "created_at": created,
+        "niche_id": "sports",
+    }
+    fake_conn = _fake_conn([row])
+
+    # Slot-fill query returns None → not filled.
+    slot_check_cursor = MagicMock()
+    slot_check_cursor.fetchone.return_value = None
+
+    slot_check_conn = MagicMock()
+    slot_check_conn.__enter__.return_value = slot_check_conn
+    slot_check_conn.__exit__.return_value = False
+    slot_check_conn.execute.return_value = slot_check_cursor
+
+    with patch.object(
+        alert_auto_resolver,
+        "_connect",
+        side_effect=[fake_conn, slot_check_conn],
+    ):
+        counters = alert_auto_resolver.auto_resolve_nightly_schedule_missing_slot_alerts()
+
+    assert counters["checked"] == 1
+    assert counters["resolved"] == 0
+    assert counters["skipped_slot_still_empty"] == 1
+    assert counters["errors"] == 0
+
+
+def test_missing_slot_unparseable_message_counts_as_error():
+    """Regression pin: if the parse regex ever drifts from the message
+    format written by nightly_schedule_remediate.build_alert_message,
+    we must count errors NOT silently resolve. Leaving a
+    silently-parsed row would resolve it based on stale (target,niche)
+    values from another alert."""
+    from genlab_core.observability import alert_auto_resolver
+
+    created = datetime(2026, 7, 8, 16, 30, 0, tzinfo=UTC)
+    row = {
+        "id": uuid4(),
+        "message": "totally unrelated message body without the sentinel phrase",
+        "created_at": created,
+        "niche_id": "sports",
+    }
+    fake_conn = _fake_conn([row])
+
+    with patch.object(alert_auto_resolver, "_connect", return_value=fake_conn):
+        counters = alert_auto_resolver.auto_resolve_nightly_schedule_missing_slot_alerts()
+
+    assert counters["checked"] == 1
+    assert counters["errors"] == 1
+    assert counters["resolved"] == 0
+
+
+def test_missing_slot_dry_run_does_not_execute_update():
+    """dry_run path increments resolved counter but skips the UPDATE."""
+    from genlab_core.observability import alert_auto_resolver
+
+    created = datetime(2026, 7, 8, 16, 30, 0, tzinfo=UTC)
+    row = {
+        "id": uuid4(),
+        "message": _build_missing_slot_message("2026-07-09", "sports"),
+        "created_at": created,
+        "niche_id": "sports",
+    }
+    fake_conn = _fake_conn([row])
+
+    slot_check_cursor = MagicMock()
+    slot_check_cursor.fetchone.return_value = {"?column?": 1}
+    slot_check_conn = MagicMock()
+    slot_check_conn.__enter__.return_value = slot_check_conn
+    slot_check_conn.__exit__.return_value = False
+    slot_check_conn.execute.return_value = slot_check_cursor
+
+    with patch.object(
+        alert_auto_resolver,
+        "_connect",
+        # Only 2 connects: SELECT + slot-check. NO UPDATE in dry-run.
+        side_effect=[fake_conn, slot_check_conn],
+    ):
+        counters = alert_auto_resolver.auto_resolve_nightly_schedule_missing_slot_alerts(
+            dry_run=True
+        )
+
+    assert counters["resolved"] == 1
+    # No UPDATE call fired.
+    update_calls = [
+        c
+        for c in fake_conn._write_cursor.execute.call_args_list
+        if "UPDATE pipeline_alerts" in (c.args[0] if c.args else "")
+    ]
+    assert len(update_calls) == 0
+
+
+def test_missing_slot_empty_select_returns_zero_counters():
+    """When there are no unresolved alerts, no queries fire and all
+    counters return zero. Prevents wasted DB round-trips."""
+    from genlab_core.observability import alert_auto_resolver
+
+    fake_conn = _fake_conn([])
+
+    with patch.object(alert_auto_resolver, "_connect", return_value=fake_conn):
+        counters = alert_auto_resolver.auto_resolve_nightly_schedule_missing_slot_alerts()
+
+    assert counters == {
+        "checked": 0,
+        "resolved": 0,
+        "skipped_slot_still_empty": 0,
+        "skipped_query_failed": 0,
+        "errors": 0,
+    }
+
+
+def test_missing_slot_extract_regex_matches_real_message():
+    """Direct pin on the shape of the message body emitted by
+    scripts/nightly_schedule_remediate.build_alert_message. If a
+    refactor there changes the phrasing, THIS pin flips first."""
+    from genlab_core.observability.alert_auto_resolver import _extract_missing_slot
+
+    msg = _build_missing_slot_message("2026-07-09", "sports")
+    assert _extract_missing_slot(msg) == ("2026-07-09", "sports")
+
+
+def test_missing_slot_extract_regex_rejects_nonsense():
+    """Unparseable messages return None — resolver counts as error."""
+    from genlab_core.observability.alert_auto_resolver import _extract_missing_slot
+
+    assert _extract_missing_slot(None) is None
+    assert _extract_missing_slot("") is None
+    assert _extract_missing_slot("random text with 2026-07-09 in it") is None
+
+
+def test_cli_wrapper_calls_both_resolvers():
+    """The CLI wrapper (scripts/auto_resolve_alerts.py) must invoke
+    BOTH resolvers in a single run. Task #613 rationale: keeping
+    them in one systemd timer avoids drift where the missing-slot
+    resolver never gets fired because it has its own separately-
+    forgotten timer.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    # Repo root is 3 levels up from this test file:
+    #   genlab-core/tests/observability/test_alert_auto_resolver.py
+    # → genlab-core/tests/observability/../../.. = repo root
+    cli_path = Path(__file__).resolve().parents[3] / "scripts" / "auto_resolve_alerts.py"
+    assert cli_path.is_file(), f"CLI script not found at {cli_path}"
+
+    spec = importlib.util.spec_from_file_location("auto_resolve_alerts_cli", cli_path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(mod)
+
+    calls = []
+
+    def fake_systemd(**kw):
+        calls.append(("systemd_unit_failed", kw))
+        return {
+            "checked": 0,
+            "resolved": 0,
+            "skipped_still_failed": 0,
+            "skipped_no_recent_run": 0,
+            "errors": 0,
+        }
+
+    def fake_missing_slot(**kw):
+        calls.append(("nightly_schedule_missing_slot", kw))
+        return {
+            "checked": 0,
+            "resolved": 0,
+            "skipped_slot_still_empty": 0,
+            "skipped_query_failed": 0,
+            "errors": 0,
+        }
+
+    with (
+        patch(
+            "genlab_core.observability.alert_auto_resolver.auto_resolve_systemd_unit_alerts",
+            side_effect=fake_systemd,
+        ),
+        patch(
+            "genlab_core.observability.alert_auto_resolver.auto_resolve_nightly_schedule_missing_slot_alerts",
+            side_effect=fake_missing_slot,
+        ),
+    ):
+        assert mod.main([]) == 0
+
+    labels = {c[0] for c in calls}
+    assert labels == {"systemd_unit_failed", "nightly_schedule_missing_slot"}, (
+        f"CLI must invoke both resolvers; got {sorted(labels)}. "
+        "If a refactor drops one, the CriticalAlertsBanner will grow "
+        "stale rows for that check_name."
+    )
