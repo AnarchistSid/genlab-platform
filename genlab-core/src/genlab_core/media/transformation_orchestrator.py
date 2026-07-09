@@ -546,6 +546,30 @@ def apply_transformations(
                 if outro_choice:
                     result.stages_applied.append("outro_cta")
             else:
+                # Task #631 (2026-07-09 late evening): surface the
+                # "both attempts failed" case. Pre-#631 this branch
+                # was a silent state transition — orchestrator log
+                # showed skipped=['intro_animation', 'outro_cta'] but
+                # no ERROR indicated the motion pipeline had gone
+                # entirely dark for this render. Result: operators
+                # scanned pipeline logs and saw "orchestrator
+                # complete" without realizing arm attribution was
+                # discarded. Elevating so tomorrow's fire produces
+                # actionable signal.
+                logger.error(
+                    "[transformation_orchestrator] motion pipeline "
+                    "failed BOTH original AND fallback attempts for %s "
+                    "(intro=%r, outro=%r) — intro+outro dimensions have "
+                    "no attribution this render. Root cause is likely "
+                    "FFmpeg concat exit=234 (-22 EINVAL) on source video "
+                    "audio/video stream properties; see motion_compositor "
+                    "warnings above for the stderr tail. Real fix: "
+                    "validate intermediate transformation outputs before "
+                    "each concat step. Deferred as of 2026-07-09.",
+                    niche_id,
+                    intro_choice.dimension_value if intro_choice else "-",
+                    outro_choice.dimension_value if outro_choice else "-",
+                )
                 if intro_choice:
                     result.stages_skipped.append("intro_animation")
                 if outro_choice:
