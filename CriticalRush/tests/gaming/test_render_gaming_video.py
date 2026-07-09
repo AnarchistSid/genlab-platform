@@ -254,3 +254,79 @@ class TestAllPlatformsVertical:
 
         # Facebook uses vertical master via FrameCompositor
         mock_fc.compose.assert_called_once()
+
+
+# ── task #615 (2026-07-09): tuple-unpack regression pin ──────────────
+#
+# `apply_post_render_transformations` returns tuple[str, dict] since
+# task #581 (2026-07-08). Gaming's render stage was missed in that
+# audit — kept `rendered_path = apply_post_render_transformations(...)`
+# which stored the tuple as-is. That flowed into
+# `rendered_variants["vertical"]`, then `Path(vpath)` inside
+# `validate_platform_variant` raised TypeError caught by the
+# defensive except → `valid = False` → hard VideoValidationError,
+# blocking every gaming render.
+#
+# This pin locks the call site pattern so a future refactor can't
+# silently un-fix it.
+
+
+class TestPostRenderTransformCallSitePattern:
+    """Source-inspection pins for the intelligent-transform wire in
+    `RenderGamingVideo`. Runs as static analysis on the file text —
+    no imports, no execution. Cheap and impossible to bypass with
+    monkey-patching."""
+
+    _SOURCE_PATH = Path(__file__).resolve().parents[2] / (
+        "niches/gaming/stages/render_gaming_video.py"
+    )
+
+    def _read(self):
+        return self._SOURCE_PATH.read_text()
+
+    def test_unpacks_tuple_not_assigns_whole(self):
+        """The bug pattern was:
+
+            rendered_path = apply_post_render_transformations(...)
+
+        which stores the (path, arm_ids) tuple in rendered_path.
+        The correct pattern is:
+
+            rendered_path, _arm_ids = apply_post_render_transformations(...)
+
+        This pin FAILS if a future edit reverts to single-target
+        assignment."""
+        source = self._read()
+        # Find the call site — must be preceded by a tuple-unpack LHS.
+        bad_pattern = "rendered_path = apply_post_render_transformations("
+        good_pattern = "rendered_path, _arm_ids = apply_post_render_transformations("
+        assert bad_pattern not in source, (
+            "Gaming render must NOT assign the whole tuple to rendered_path. "
+            "Task #581 changed apply_post_render_transformations to return "
+            "(path, arm_ids); assigning the tuple to rendered_path stores "
+            "the tuple in rendered_variants and crashes Path(tuple) at "
+            "validation time (task #615)."
+        )
+        assert good_pattern in source, (
+            "Gaming render must unpack the (path, arm_ids) tuple. If the "
+            "return type of apply_post_render_transformations changed, "
+            "update both this pin and the call site."
+        )
+
+    def test_writes_arm_ids_to_story(self):
+        """Sibling call sites (base_visual_render.py:218,
+        BlackboxBrief.bb_strategies.visual_render.py) write
+        arm_ids_by_dimension into the story dict so
+        push_to_backlog._build_blueprint_fields can copy it into
+        pending_feedback.arm_ids_by_dimension. Gaming must match this
+        pattern — otherwise the reward wire ends at the render stage
+        and the 255 transformation arms accumulate zero observations
+        from gaming."""
+        source = self._read()
+        assert 'story["arm_ids_by_dimension"] = dict(_arm_ids)' in source, (
+            "Gaming render must write _arm_ids into story['arm_ids_by_dimension'] "
+            "when non-empty, matching the pattern in "
+            "genlab_core.strategies.base_visual_render at line ~218. "
+            "Without this, gaming's transformation arms never get "
+            "observations even when the orchestrator picks them."
+        )
