@@ -16,7 +16,17 @@ After=network-online.target
 # Exit code 1 → at least one niche had no schedulable VISUAL_READY.
 # Route to Mission Control alert via OnFailure so operator knows to
 # investigate (empty queue, all filtered, or content-quality regression).
+#
+# TWO OnFailure chains fire in parallel (task #612, 2026-07-09):
+# 1. Generic: systemd_failure_alert.sh writes a critical row with
+#    journal context. Same shape for every genlab-* unit failure.
+# 2. Specialized: nightly-schedule-remediate parses the journal for the
+#    exact "No schedulable candidate for: [niches]" line, queries the
+#    DB for pull-back candidates at target+1 (bypasses the automated
+#    pull-back's target+2 cascade guard — operator override), and
+#    writes an actionable alert with suggested SQL.
 OnFailure=genlab-service-failure-alert@%n.service
+OnFailure=genlab-nightly-schedule-remediate.service
 
 [Service]
 Type=oneshot
