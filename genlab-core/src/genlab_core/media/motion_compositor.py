@@ -86,10 +86,21 @@ def _resolve_asset_path(
         candidate = niche_root / asset_dir / f"{template_name}{ext}"
         if candidate.is_file():
             return candidate
-    logger.debug(
+    # Task #631 (2026-07-09 late evening): elevated DEBUG → WARNING.
+    # Live-fire showed this fires silently when the bandit picks a
+    # template name that doesn't have a physical asset file. Silent
+    # because DEBUG isn't in journalctl at default level. Result:
+    # motion_compositor returns False → intro/outro skipped → arm
+    # attribution discarded. Making this WARNING so future asset-vs-
+    # config drift surfaces at the ops layer.
+    logger.warning(
         "[motion_compositor] asset not found for %s: tried "
-        "%s/%s/{mp4,mov,webm}",
-        dimension, asset_dir, template_name,
+        "%s/%s/{mp4,mov,webm}. Bandit picked template that has no "
+        "physical asset — arm attribution for this dimension will "
+        "be discarded downstream.",
+        dimension,
+        asset_dir,
+        template_name,
     )
     return None
 
@@ -99,9 +110,7 @@ def _normalize_segment_label(index: int) -> str:
     return f"v{index}"
 
 
-def build_concat_filtergraph(
-    n_segments: int, width: int, height: int
-) -> str:
+def build_concat_filtergraph(n_segments: int, width: int, height: int) -> str:
     """Build the FFmpeg filter_complex string for concat with normalization.
 
     Each input's video is scaled + padded to (width, height) so mismatched
@@ -143,12 +152,8 @@ def build_concat_filtergraph(
         parts.append(f"[{i}:a]{aformat_expr}[a{i}]")
 
     # Compose the concat inputs — interleaved [vN][aN] pairs.
-    concat_inputs = "".join(
-        f"[v{i}][a{i}]" for i in range(n_segments)
-    )
-    parts.append(
-        f"{concat_inputs}concat=n={n_segments}:v=1:a=1[outv][outa]"
-    )
+    concat_inputs = "".join(f"[v{i}][a{i}]" for i in range(n_segments))
+    parts.append(f"{concat_inputs}concat=n={n_segments}:v=1:a=1[outv][outa]")
     return ";".join(parts)
 
 
@@ -164,29 +169,43 @@ def build_ffmpeg_command(
     for seg in segments:
         cmd.extend(["-i", str(seg)])
 
-    filtergraph = build_concat_filtergraph(
-        len(segments), spec.target_width, spec.target_height
+    filtergraph = build_concat_filtergraph(len(segments), spec.target_width, spec.target_height)
+    cmd.extend(
+        [
+            "-filter_complex",
+            filtergraph,
+            "-map",
+            "[outv]",
+            "-map",
+            "[outa]",
+            # CLAUDE.md compliance — bt709 color space is non-negotiable
+            # for web delivery. Match FrameCompositor's enforcement.
+            "-colorspace",
+            "bt709",
+            "-color_primaries",
+            "bt709",
+            "-color_trc",
+            "bt709",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:v",
+            "libx264",
+            "-preset",
+            spec.preset,
+            "-crf",
+            str(spec.crf),
+            "-c:a",
+            "aac",
+            "-b:a",
+            spec.audio_bitrate,
+            # Match FrameCompositor's audio channel + sample rate
+            "-ac",
+            "2",
+            "-ar",
+            "48000",
+            str(spec.output_path),
+        ]
     )
-    cmd.extend([
-        "-filter_complex", filtergraph,
-        "-map", "[outv]",
-        "-map", "[outa]",
-        # CLAUDE.md compliance — bt709 color space is non-negotiable
-        # for web delivery. Match FrameCompositor's enforcement.
-        "-colorspace", "bt709",
-        "-color_primaries", "bt709",
-        "-color_trc", "bt709",
-        "-pix_fmt", "yuv420p",
-        "-c:v", "libx264",
-        "-preset", spec.preset,
-        "-crf", str(spec.crf),
-        "-c:a", "aac",
-        "-b:a", spec.audio_bitrate,
-        # Match FrameCompositor's audio channel + sample rate
-        "-ac", "2",
-        "-ar", "48000",
-        str(spec.output_path),
-    ])
     return cmd
 
 
@@ -232,9 +251,16 @@ def composite_motion_graphics(
         return False
 
     if spec.intro_path is None and spec.outro_path is None:
-        logger.debug(
+        # Task #631 (2026-07-09 late evening): elevated DEBUG → INFO.
+        # Not a bug per se — the compositor genuinely has nothing to
+        # do when both assets are missing/unresolved. But at DEBUG this
+        # silently disappeared; at INFO an operator scanning journalctl
+        # can spot the pattern "every render skips motion" and cross-
+        # reference with the asset-not-found warnings above.
+        logger.info(
             "[motion_compositor] both intro and outro None — skipping "
-            "compositor (caller should use source_video_path directly)"
+            "compositor (caller uses source unchanged; no arm attribution "
+            "for intro/outro dimensions)"
         )
         return False
 
@@ -242,9 +268,7 @@ def composite_motion_graphics(
     # Verify all referenced assets exist
     for seg in segments:
         if not seg.exists():
-            logger.warning(
-                "[motion_compositor] segment missing: %s", seg
-            )
+            logger.warning("[motion_compositor] segment missing: %s", seg)
             return False
 
     from genlab_core.media.ffmpeg import get_ffmpeg_binary
@@ -257,8 +281,7 @@ def composite_motion_graphics(
 
     cmd = build_ffmpeg_command(spec, ffmpeg, segments)
     logger.info(
-        "[motion_compositor] compositing %d segments -> %s "
-        "(intro=%s outro=%s)",
+        "[motion_compositor] compositing %d segments -> %s (intro=%s outro=%s)",
         len(segments),
         spec.output_path,
         spec.intro_path.name if spec.intro_path else "-",
@@ -275,20 +298,21 @@ def composite_motion_graphics(
     except subprocess.TimeoutExpired:
         logger.warning(
             "[motion_compositor] ffmpeg timed out after %ds: %s",
-            timeout_seconds, spec.output_path,
+            timeout_seconds,
+            spec.output_path,
         )
         return False
     except (OSError, FileNotFoundError) as exc:
-        logger.warning(
-            "[motion_compositor] ffmpeg subprocess failed: %s", exc
-        )
+        logger.warning("[motion_compositor] ffmpeg subprocess failed: %s", exc)
         return False
 
     if result.returncode != 0:
         stderr_tail = "\n".join(result.stderr.strip().splitlines()[-5:])
         logger.warning(
             "[motion_compositor] ffmpeg exit=%d for %s. Last stderr:\n%s",
-            result.returncode, spec.output_path, stderr_tail,
+            result.returncode,
+            spec.output_path,
+            stderr_tail,
         )
         return False
 
