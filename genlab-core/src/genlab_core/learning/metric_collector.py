@@ -111,12 +111,24 @@ def fetch_platform_metrics(
             )
             return {}
 
+    # Task #635 (2026-07-09) — added ``x_twitter`` as a third alias for
+    # the X/Twitter fetcher. The publisher uses ``x_twitter`` as the
+    # canonical registry_id (see ``platforms/registry.py`` +
+    # ``publishing/platform_status.PLATFORM_ID_MAP``), while the
+    # publisher-side inverse map (``publish_all_platforms.
+    # _CONFIG_PLATFORM_ALIASES``) normalizes it back to ``twitter`` for
+    # per-post analytics storage. Both conventions are load-bearing at
+    # different seams. Any pending_feedback row that happens to be
+    # written with ``x_twitter`` (empirically: 1 gaming row historically)
+    # previously fell through the dispatch, logged a warning, and
+    # returned empty metrics — silent learning-signal loss.
     fetchers = {
         "youtube": _fetch_youtube,
         "instagram": _fetch_instagram,
         "facebook": _fetch_facebook,
         "x": _fetch_x,
         "twitter": _fetch_x,
+        "x_twitter": _fetch_x,
         "tiktok": _fetch_tiktok,
         "threads": _fetch_threads,
     }
