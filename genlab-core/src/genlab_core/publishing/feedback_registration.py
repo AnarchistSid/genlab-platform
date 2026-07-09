@@ -162,7 +162,19 @@ def _parse_arm_ids_by_dimension(raw: Any) -> dict[str, str]:
 
             parsed = _json.loads(raw)
         except (ValueError, TypeError):
-            logger.debug("[publish] arm_ids_by_dimension JSON decode failed: %r", raw[:80])
+            # Task #633 (2026-07-09 late evening): elevated DEBUG →
+            # WARNING. Silent JSON-decode failure here loses arm
+            # attribution for the entire publish — same class of bug
+            # as motion_compositor's silent asset-miss (#631). If
+            # push_to_backlog serialized a malformed
+            # arm_ids_by_dimension JSON, we want to see it at ops
+            # level, not have it silently disappear at DEBUG.
+            logger.warning(
+                "[publish] arm_ids_by_dimension JSON decode failed — "
+                "transformation arm attribution will be discarded for "
+                "this publish. raw=%r",
+                raw[:80],
+            )
             return {}
         if isinstance(parsed, dict):
             return {str(k): str(v) for k, v in parsed.items() if k and v}
@@ -294,5 +306,18 @@ def _build_bandit_context(
             ctx["extra_arms"] = extra_arms
         return ctx
     except Exception as exc:
-        logger.debug("[publish] bandit_context build failed: %s", exc)
+        # Task #633 (2026-07-09 late evening): elevated DEBUG →
+        # WARNING. Bandit context includes LinUCB feature vector +
+        # extra_arms (style, hour, platform). When this build fails,
+        # PendingFeedbackTask.bandit_context stays None →
+        # IPS replay excludes the row (no reconstruction possible) →
+        # counterfactual analysis silently loses samples. Silent-fail
+        # here compounds tonight's motion_compositor lesson: any
+        # learning-signal-side failure needs operator visibility.
+        logger.warning(
+            "[publish] bandit_context build failed (%s) — this publish "
+            "will have bandit_context=None; IPS replay + counterfactual "
+            "analysis will exclude the row.",
+            exc,
+        )
         return None
