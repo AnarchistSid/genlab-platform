@@ -103,6 +103,52 @@ def check_download_failures(reports: list[dict], niche_id: str) -> list[Alert]:
     return alerts
 
 
+_QUEUE_RUNWAY_SUPPRESSION_DAYS = 5
+_QUEUE_RUNWAY_MIN_BLUEPRINTS = 3
+
+
+def _count_future_queue_blueprints(niche_id: str) -> int | None:
+    """Count blueprints for ``niche_id`` scheduled_for the next 5 days.
+
+    Task #622 (2026-07-09) helper: distinguish "pipeline broken, no
+    content" from "pipeline healthy, queue already full for the week."
+    Only counts blueprints in states that count as future-committed
+    content:
+
+    * ``VISUAL_READY`` + ``action_taken='approved'`` — the current
+      shape written by both the nightly scheduler (script #611) and
+      the auto-approver
+    * ``SCHEDULED`` / ``PUBLISHED`` — legacy shape, still counted
+
+    Returns None on DB error (caller falls through to alerting — the
+    safe default is to NOT suppress on infrastructure failure).
+    """
+    try:
+        with pg_connect(os.environ.get("DATABASE_URL", ""), niche_id=niche_id) as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*)::int AS n FROM blueprints
+                WHERE niche_id = %s
+                  AND (
+                    status IN ('SCHEDULED', 'PUBLISHED')
+                    OR (status = 'VISUAL_READY' AND action_taken = 'approved')
+                  )
+                  AND scheduled_for BETWEEN NOW()
+                    AND NOW() + INTERVAL '%s days'
+                """,
+                (niche_id, _QUEUE_RUNWAY_SUPPRESSION_DAYS),
+            ).fetchone()
+        return int(row["n"]) if row else 0
+    except Exception as exc:  # noqa: BLE001 — fail-open: alert if we can't check
+        logger.warning(
+            "[health.check_zero_blueprints] queue-depth query failed for "
+            "%s: %s — proceeding to alert without suppression check",
+            niche_id,
+            exc,
+        )
+        return None
+
+
 def check_zero_blueprints(reports: list[dict], niche_id: str) -> list[Alert]:
     """Alert on runs producing 0 blueprints.
 
@@ -112,6 +158,23 @@ def check_zero_blueprints(reports: list[dict], niche_id: str) -> list[Alert]:
         1 run  → warning (could be transient)
         2 runs → critical
         3+ runs → critical + diagnosis
+
+    2026-07-09 (task #622): SUPPRESS the alert when the niche's forward
+    queue already has ≥3 blueprints scheduled_for the next 5 days.
+    Rationale: "0 new + queue full" is a HEALTHY steady state — the
+    scheduler correctly declined to over-book because upcoming slots
+    are already covered. Sports hit this exact false positive 3× on
+    2026-07-09 because it had blueprints for 07-11 through 07-14 but
+    the pipeline ran with 0 new (dedup found no new eligible clips).
+
+    Threshold picking (3 days minimum runway):
+      * Lower (1-2) is too aggressive — misses real pipeline breakage
+        that would ALSO drain the near-term queue.
+      * Higher (5+) is too lax — 4-day drift could hide a real regression.
+      * 3 = daily-cadence + weekend buffer.
+
+    DB errors during the suppression check fail-open — we still alert
+    (safer to over-alert than to hide real content loss).
     """
     from genlab_core.monitoring import health_monitor as _facade
 
@@ -124,6 +187,22 @@ def check_zero_blueprints(reports: list[dict], niche_id: str) -> list[Alert]:
             break
 
     if consecutive_zero == 0:
+        return alerts
+
+    # Task #622 suppression: check forward queue depth BEFORE firing.
+    queue_depth = _count_future_queue_blueprints(niche_id)
+    if queue_depth is not None and queue_depth >= _QUEUE_RUNWAY_MIN_BLUEPRINTS:
+        logger.debug(
+            "[health.check_zero_blueprints] %s: %d consecutive zero-blueprint "
+            "runs BUT forward queue has %d blueprints in next %d days "
+            "(threshold %d). Suppressing alert — pipeline healthy, "
+            "queue already covered.",
+            niche_id,
+            consecutive_zero,
+            queue_depth,
+            _QUEUE_RUNWAY_SUPPRESSION_DAYS,
+            _QUEUE_RUNWAY_MIN_BLUEPRINTS,
+        )
         return alerts
 
     # Diagnose which stage lost the content
@@ -149,7 +228,11 @@ def check_zero_blueprints(reports: list[dict], niche_id: str) -> list[Alert]:
                 f"Likely: {', '.join(diagnosis) or 'unknown'}"
             ),
             niche_id=niche_id,
-            details={"consecutive_zero": consecutive_zero, "diagnosis": diagnosis},
+            details={
+                "consecutive_zero": consecutive_zero,
+                "diagnosis": diagnosis,
+                "forward_queue_depth": queue_depth,
+            },
         )
     )
     return alerts
