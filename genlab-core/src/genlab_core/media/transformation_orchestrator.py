@@ -445,8 +445,26 @@ def apply_transformations(
         # ── Stage 4: motion graphics wrap ──────────────────────
         # Wraps intro + current + outro. Runs LAST because it
         # encapsulates all prior stages.
+        #
+        # 2026-07-09 (task #620): FFmpeg concat can fail deterministically
+        # with error -22 (Invalid argument) on specific
+        # source-clip + intro + music combinations. Live-fire on 2026-07-09
+        # movies pipeline showed 2 of 3 stories failing with the same
+        # intro (``pattern_break_intro``) but on DIFFERENT output streams
+        # each time (audio in one, video in another) — the assets ffprobe
+        # cleanly but the concat filter graph interacts poorly with the
+        # composite input.
+        #
+        # Fix: on failure, retry ONCE with a different intro drawn from
+        # the config's declared templates. Bandit-picked arm is NOT
+        # credited when we fall back — the bandit did NOT actually pick
+        # that fallback and shouldn't accumulate reward for it. The
+        # original intro is skipped (not marked applied). Outro
+        # attribution follows the retry outcome so the outro arm gets
+        # credit only when it was actually applied.
         intro_choice = choices.choices.get("intro_animation")
         outro_choice = choices.choices.get("outro_cta")
+        used_intro_fallback = False
         if intro_choice or outro_choice:
             next_path = temp_dir / "04_motion.mp4"
             try:
@@ -465,6 +483,45 @@ def apply_transformations(
                     outro_asset_dir=outro_dir,
                 )
                 success = composite_for_reel(asset_choice, current_path, next_path)
+
+                # #620 retry — see stage-4 header comment for rationale.
+                if not success and intro_choice is not None:
+                    templates = list(config.dimensions.intro_animation.templates or [])
+                    alternatives = [t for t in templates if t and t != intro_choice.dimension_value]
+                    if alternatives:
+                        # Deterministic pick — first alternative
+                        # alphabetically. Rerolling randomly would make
+                        # tests + reproduction hard. Bandit will learn
+                        # over time which intros fail on which content
+                        # via ε-greedy exploration; this is just
+                        # resilience so today's reel still gets its
+                        # intro+outro even if the picked intro's
+                        # filter-chain combo happens to hit -22.
+                        fallback_intro = sorted(alternatives)[0]
+                        logger.info(
+                            "[transformation_orchestrator] motion_compositor "
+                            "failed with intro=%r; retrying with fallback "
+                            "intro=%r (task #620)",
+                            intro_choice.dimension_value,
+                            fallback_intro,
+                        )
+                        fallback_choice = MotionAssetChoice(
+                            niche_root=niche_root,
+                            intro_template=fallback_intro,
+                            intro_asset_dir=intro_dir,
+                            outro_template=(outro_choice.dimension_value if outro_choice else ""),
+                            outro_asset_dir=outro_dir,
+                        )
+                        success = composite_for_reel(fallback_choice, current_path, next_path)
+                        if success:
+                            used_intro_fallback = True
+                            logger.info(
+                                "[transformation_orchestrator] fallback intro "
+                                "%r succeeded (original intro %r skipped for "
+                                "attribution — bandit didn't pick fallback)",
+                                fallback_intro,
+                                intro_choice.dimension_value,
+                            )
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "[transformation_orchestrator] motion_compositor raised: %s",
@@ -473,8 +530,19 @@ def apply_transformations(
                 success = False
             if success:
                 current_path = next_path
-                if intro_choice:
+                # Attribution: the bandit-picked intro arm gets credit
+                # ONLY if the original attempt succeeded. Falling back
+                # to a different intro means the bandit's pick failed —
+                # don't reward it.
+                if intro_choice and not used_intro_fallback:
                     result.stages_applied.append("intro_animation")
+                elif intro_choice:
+                    # Fallback path: original intro didn't work; the
+                    # motion stage still ran, but the bandit-picked arm
+                    # gets no attribution.
+                    result.stages_skipped.append("intro_animation")
+                # Outro attribution stays clean — outro was applied
+                # regardless of which intro succeeded.
                 if outro_choice:
                     result.stages_applied.append("outro_cta")
             else:
