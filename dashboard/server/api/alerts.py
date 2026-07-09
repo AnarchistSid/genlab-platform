@@ -74,19 +74,56 @@ def publishing_alerts():
                     )
 
             # WARNING: Partial publishes pending retry
+            #
+            # 2026-07-09 (task #618): added ``updated_at >= NOW() - 7d``
+            # filter. Before this, the query counted EVERY historical
+            # partial publish since inception — 373 rows spanning
+            # 2026-03-21 → 2026-07-09 on the day the fix landed. 99% of
+            # those were archaeological failures whose platforms have
+            # long-since either succeeded on retry or been abandoned as
+            # unpublishable. Alerting on them each morning was pure
+            # noise — the operator couldn't retry a 4-month-old failure
+            # productively.
+            #
+            # The 7-day window matches operational actionability:
+            # anything failed within the last week is a candidate for
+            # manual retry or investigation; older is archaeology and
+            # belongs in a separate historical view (not on Mission
+            # Control's front page).
             partial = conn.execute(
                 "SELECT COUNT(*) as cnt FROM blueprints "
                 "WHERE status = 'PUBLISHED' "
-                "AND platform_publish_status::text LIKE '%FAILED%'"
+                "AND platform_publish_status::text LIKE '%FAILED%' "
+                "AND updated_at >= NOW() - INTERVAL '7 days'"
             ).fetchone()["cnt"]
             if partial > 0:
                 warning.append({"type": "partial_publish", "count": partial})
 
             # WARNING: Stale VISUAL_READY > 7 days
+            #
+            # 2026-07-09 (task #618): added the ``scheduled_for IS NULL
+            # OR scheduled_for < NOW()`` clause. Before this, the query
+            # counted EVERY blueprint at status VISUAL_READY older than
+            # 7 days — which included blueprints legitimately queued
+            # for FUTURE publish dates (the nightly scheduler reaches
+            # up to 14 days ahead per niche). Screenshot on the day of
+            # this fix showed 32 alerted; only 4 were actually stuck.
+            # The other 28 were healthy scheduled posts that just
+            # happened to have been created >7 days before their
+            # scheduled_for date.
+            #
+            # "Stuck" is either:
+            #   * scheduled_for IS NULL   (never scheduled — truly orphan)
+            #   * scheduled_for < NOW()   (scheduled in the past —
+            #                              publisher missed the slot)
+            #
+            # Future-scheduled blueprints don't need operator attention;
+            # they're the intended state of the queue.
             stale = conn.execute(
                 "SELECT COUNT(*) as cnt FROM blueprints "
                 "WHERE status = 'VISUAL_READY' "
-                "AND created_at < NOW() - INTERVAL '7 days'"
+                "AND created_at < NOW() - INTERVAL '7 days' "
+                "AND (scheduled_for IS NULL OR scheduled_for < NOW())"
             ).fetchone()["cnt"]
             if stale > 0:
                 warning.append({"type": "stale_visual_ready", "count": stale, "age": ">7 days"})
