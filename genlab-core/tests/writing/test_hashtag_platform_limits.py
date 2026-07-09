@@ -82,15 +82,27 @@ class TestInstagramCapEnforcement:
 
     def test_instagram_output_includes_base_tags_first(self):
         """When capped at 3, the 2 niche base tags should survive.
-        Topic tags fill the remaining slot(s)."""
+        Topic tags fill the remaining slot(s).
+
+        Task #627 (2026-07-09) — the IG gaming base pool moved from
+        the legacy ``_NICHE_BASE["gaming"]`` (``#Gaming``,
+        ``#GamingClips``) to the platform-specific IG pool in
+        ``config/platform_hashtag_pools.yaml``:
+        ``#Gaming``, ``#GamingReels``, ``#GamerLife``. Both #Gaming
+        stays as the anchor tag; #GamingClips moved to the TikTok
+        pool where the "clips" language fits better.
+        """
         story = {
             "title": "Something about gaming",
             "summary": "",
             "hook": "",
         }
         tags = generate_hashtags(story, niche_id="gaming", platform="instagram")
-        assert "#Gaming" in tags, f"Base tag #Gaming missing from IG output: {tags}"
-        assert "#GamingClips" in tags, f"Base tag #GamingClips missing from IG output: {tags}"
+        assert "#Gaming" in tags, f"Anchor tag #Gaming missing from IG output: {tags}"
+        assert "#GamingReels" in tags, (
+            f"Post-#627 IG base tag #GamingReels missing: {tags}. "
+            "If you're changing this, update config/platform_hashtag_pools.yaml AND this test."
+        )
 
     def test_twitter_output_never_exceeds_limit(self):
         """Same cap-enforcement check for Twitter (limit=2)."""

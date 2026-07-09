@@ -1,0 +1,76 @@
+# Per-platform × per-niche hashtag pools.
+#
+# Task #627 (2026-07-09, roadmap E4). Before this config existed
+# ``hashtag_generator.py`` used the same 2 base hashtags across all
+# platforms per niche (e.g. gaming always got ``#Gaming #GamingClips``).
+# But platform culture differs — Instagram Reels favours aesthetic +
+# discoverability tags, TikTok favours trend-signal tags, X favours
+# ultra-terse hashtag-lite content.
+#
+# ## Loading contract
+#
+# ``hashtag_generator._load_platform_pools()`` reads this file at
+# import time (with a fail-open safe fallback to the hardcoded
+# ``_NICHE_BASE`` dict). If a platform is present here but a niche
+# under it is missing, the generator falls back to ``_NICHE_BASE``
+# for that (niche, platform) cell.
+#
+# ## Ordering
+#
+# Order matters — the first two tags become the "always-included"
+# base per the generator's ``base[:2]`` slice. Put the most
+# niche-defining tags first, and platform-flavour tags second.
+#
+# ## Limits
+#
+# Platform hashtag limits stay in code (``_PLATFORM_LIMITS`` in
+# ``hashtag_generator.py``) — they're tuned against algorithm
+# behaviour, not editorial. Task #582 was the last tune (IG 5→3 on
+# 2026-07-08 post-2024 algo alignment).
+
+platforms:
+
+  instagram:
+    # Instagram Reels — aesthetic + discovery + niche-broad
+    gaming: ["#Gaming", "#GamingReels", "#GamerLife"]
+    sports: ["#Sports", "#SportsHighlights", "#Clutch"]
+    movies: ["#Movies", "#Cinema", "#FilmTok"]
+    anime: ["#Anime", "#AnimeReels", "#Otaku"]
+    ai_creators: ["#AI", "#AITools", "#Tech"]
+
+  tiktok:
+    # TikTok — trend signals + ForYouPage bait
+    gaming: ["#GamingTikTok", "#GamerTok", "#GameClips"]
+    sports: ["#SportsTikTok", "#SportsFYP", "#Highlights"]
+    movies: ["#FilmTok", "#MovieTok", "#Cinema"]
+    anime: ["#AnimeTikTok", "#WeebTok", "#OtakuFYP"]
+    ai_creators: ["#AITok", "#TechTok", "#AITools"]
+
+  twitter:
+    # X / Twitter — hashtag-lite; use 1-2 broad culture tags only
+    gaming: ["#Gaming", "#GamingCommunity"]
+    sports: ["#Sports", "#GameDay"]
+    movies: ["#Movies", "#FilmTwitter"]
+    anime: ["#Anime", "#AnimeTwitter"]
+    ai_creators: ["#AI", "#TechTwitter"]
+
+  facebook:
+    # Facebook — reach + broad-appeal tags
+    gaming: ["#Gaming", "#Gamers", "#VideoGames"]
+    sports: ["#Sports", "#SportsFans", "#Highlights"]
+    movies: ["#Movies", "#Films", "#Cinema"]
+    anime: ["#Anime", "#AnimeFans", "#Manga"]
+    ai_creators: ["#AI", "#Technology", "#Innovation"]
+
+  threads:
+    # Threads — Meta's Twitter-like; similar to IG but more compact
+    gaming: ["#Gaming", "#Gamers"]
+    sports: ["#Sports", "#GameDay"]
+    movies: ["#Movies", "#Cinema"]
+    anime: ["#Anime", "#Otaku"]
+    ai_creators: ["#AI", "#Tech"]
+
+  # ``youtube`` intentionally absent — YouTube uses the ``tags`` field
+  # in video metadata (comma-separated, no ``#`` prefix). See
+  # ``hashtag_generator.generate_youtube_tags()`` which reads its
+  # niche-tag pool from an in-code dict — separate concern.
