@@ -126,6 +126,48 @@ def format_youtube_attribution(blueprint: Mapping) -> str:
     return f"\n\nFootage: {url}"
 
 
+def format_source_attribution(blueprint: Mapping) -> str:
+    """Return a human-readable creator credit line, or ''.
+
+    Prefers the source uploader's channel name when known::
+
+        \U0001f3ac Original: @{channel} — {url}
+
+    Falls back to URL-only when no channel field is populated::
+
+        \U0001f3ac Original: {url}
+
+    Returns "" when no source URL is derivable.
+
+    This is the audience-facing sibling of
+    ``format_youtube_attribution``. Where that helper produces the
+    compact ``"Footage: <url>"`` line optimised for Content ID's
+    text-classifier, this one produces a viewer-readable credit line
+    intended for every platform caption (FB, IG, Threads, YT
+    description). Reads ``source_channel_title`` first, then falls
+    back to ``channel_name`` / ``channel_title`` for compatibility
+    with the fetcher's field naming.
+    """
+    if not isinstance(blueprint, Mapping):
+        return ""
+    url = derive_source_url(
+        blueprint.get("video_id"),
+        blueprint.get("source"),
+    )
+    if not url:
+        return ""
+    channel = (
+        blueprint.get("source_channel_title")
+        or blueprint.get("channel_name")
+        or blueprint.get("channel_title")
+        or ""
+    )
+    channel = str(channel).strip()
+    if channel:
+        return f"\U0001f3ac Original: @{channel} — {url}"
+    return f"\U0001f3ac Original: {url}"
+
+
 def check_copyright_attribution(
     blueprint: Mapping,
     platform: str,

@@ -770,6 +770,27 @@ def write_video_content(
                 f"Curated and produced by {channel_name} | Original commentary and analysis"
             )
 
+        # ── Source-creator credit for ALL platform captions ────
+        # PR #A (2026-07-10, Mark James Magbata / Markanimation
+        # incident): the youtube_attribution above credits the
+        # producing channel (self-attribution for fair use). It does
+        # NOT credit the original video's uploader. push_to_backlog
+        # reads this key and appends it to each platform's caption
+        # so the source creator is visibly credited on FB, IG,
+        # Threads, and the YT description — not just implicit via the
+        # Content ID text-classifier line.
+        from genlab_core.compliance.copyright_safety import (
+            format_source_attribution,
+        )
+
+        content["source_attribution"] = format_source_attribution(
+            {
+                "video_id": video.get("video_id", ""),
+                "source": video.get("source", "youtube_trending"),
+                "source_channel_title": video.get("channel_name", ""),
+            }
+        )
+
         # Mark as LLM-written for hook strategy dedup
         content["written_by"] = "llm"
 

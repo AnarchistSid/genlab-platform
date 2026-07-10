@@ -227,3 +227,113 @@ def test_source_pin_registration_in_init():
     normalised = re.sub(r"\s+", " ", src)
     assert "from genlab_core.compliance import" in normalised
     assert "copyright_safety" in normalised
+
+
+# ── format_source_attribution (PR #A, 2026-07-10) ──────────────────
+#
+# Sibling of format_youtube_attribution designed for audience-facing
+# captions on every platform (FB, IG, Threads, YT description) — not
+# just the Content ID text-classifier. Landed after the Markanimation
+# incident where a real creator DM'd asking for credit on a reposted
+# video and we discovered:
+#   (1) push_to_backlog only wired attribution into youtube_content
+#   (2) the format was URL-only ("Footage: <url>"), no channel handle
+# These tests pin the "human-readable channel handle + URL" contract
+# and the substring-idempotence needed for re-runs to not double-append.
+
+
+def test_source_attribution_includes_channel_handle_when_known():
+    from genlab_core.compliance.copyright_safety import format_source_attribution
+
+    bp = {
+        "video_id": "FW1it6lrPNQ",
+        "source": "youtube_trending",
+        "source_channel_title": "Markanimation",
+    }
+    out = format_source_attribution(bp)
+    assert "@Markanimation" in out
+    assert "youtube.com/watch?v=FW1it6lrPNQ" in out
+    # Emoji marker so viewers spot the credit line at a glance
+    assert "\U0001f3ac" in out  # 🎬
+
+
+def test_source_attribution_falls_back_to_url_only_when_no_channel():
+    from genlab_core.compliance.copyright_safety import format_source_attribution
+
+    bp = {"video_id": "abc123", "source": "youtube_trending"}
+    out = format_source_attribution(bp)
+    assert "@" not in out  # no bogus handle
+    assert "youtube.com/watch?v=abc123" in out
+
+
+def test_source_attribution_reads_channel_name_field_too():
+    """Fetcher writes ``channel_name`` on TrendingVideo; older story
+    paths may use ``channel_title``. The helper accepts any of the
+    three aliases so pipeline compat doesn't require a rename sweep."""
+    from genlab_core.compliance.copyright_safety import format_source_attribution
+
+    for key in ("source_channel_title", "channel_name", "channel_title"):
+        out = format_source_attribution(
+            {
+                "video_id": "x",
+                "source": "youtube_trending",
+                key: "MAKI",
+            }
+        )
+        assert "@MAKI" in out
+
+
+def test_source_attribution_returns_empty_for_unknown_source():
+    from genlab_core.compliance.copyright_safety import format_source_attribution
+
+    bp = {
+        "video_id": "abc",
+        "source": "twitch_trending",
+        "source_channel_title": "someone",
+    }
+    assert format_source_attribution(bp) == ""
+
+
+def test_source_attribution_returns_empty_for_missing_video_id():
+    from genlab_core.compliance.copyright_safety import format_source_attribution
+
+    bp = {"video_id": "", "source": "youtube_trending", "source_channel_title": "x"}
+    assert format_source_attribution(bp) == ""
+
+
+def test_source_attribution_strips_channel_whitespace():
+    from genlab_core.compliance.copyright_safety import format_source_attribution
+
+    bp = {
+        "video_id": "y",
+        "source": "youtube_trending",
+        "source_channel_title": "  MAKI  ",
+    }
+    out = format_source_attribution(bp)
+    assert "@MAKI —" in out  # trimmed, no leading/trailing spaces
+
+
+def test_source_attribution_substring_idempotent():
+    """push_to_backlog appends this line to captions with an
+    ``if credit not in text`` guard. This test pins the fixed
+    string shape the guard depends on — if the format ever
+    changes, the guard becomes silently ineffective and captions
+    would double-append on re-runs."""
+    from genlab_core.compliance.copyright_safety import format_source_attribution
+
+    bp = {
+        "video_id": "abc",
+        "source": "youtube_trending",
+        "source_channel_title": "MAKI",
+    }
+    out = format_source_attribution(bp)
+    # If someone changes the format to include a timestamp or nonce,
+    # this test fires and forces them to reconsider idempotence.
+    assert out == "\U0001f3ac Original: @MAKI — https://youtube.com/watch?v=abc"
+
+
+def test_source_attribution_returns_empty_for_non_mapping():
+    from genlab_core.compliance.copyright_safety import format_source_attribution
+
+    assert format_source_attribution(None) == ""  # type: ignore[arg-type]
+    assert format_source_attribution("not a dict") == ""  # type: ignore[arg-type]
