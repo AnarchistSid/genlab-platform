@@ -24,7 +24,10 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from genlab_core.compliance.copyright_safety import format_youtube_attribution
+from genlab_core.compliance.copyright_safety import (
+    format_source_attribution,
+    format_youtube_attribution,
+)
 from genlab_core.compliance.disclosure import apply_ai_disclosure
 from genlab_core.platforms.models import (
     FacebookSpecific,
@@ -249,6 +252,40 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
         niche_id=niche_id,
         blueprint_id=fields.get("id"),
     )
+
+    # PR #Layer-Publisher (2026-07-10, Markanimation incident):
+    # publish-time source-creator attribution backstop for FB / IG /
+    # Threads. YouTube already has ``format_youtube_attribution`` wired
+    # into ``build_platform_specific`` below; this block extends the
+    # same guarantee to Meta platforms so credit lands even when the
+    # writer-side ``content["source_attribution"]`` wasn't populated
+    # (LLM refusal, empty channel_name at write time, pre-fix legacy
+    # blueprints from the 90-day retroactive audit window).
+    #
+    # Twitter is excluded — its 280-char budget is enforced separately
+    # in the platform-specific branch and can't absorb the credit line
+    # without truncating the take itself.
+    #
+    # Idempotent via substring guard so re-publish doesn't double-
+    # append. Reads ``source_channel_title`` from top-level fields
+    # OR from ``extra`` JSONB (Postgres SplitPromoted pattern).
+    if platform in ("facebook", "instagram", "threads"):
+        _extra_container = fields.get("extra") or {}
+        if not isinstance(_extra_container, dict):
+            _extra_container = {}
+        _src_attr = format_source_attribution(
+            {
+                "video_id": fields.get("video_id"),
+                "source": fields.get("source") or "youtube_trending",
+                "source_channel_title": (
+                    fields.get("source_channel_title")
+                    or _extra_container.get("source_channel_title")
+                    or fields.get("channel_name")
+                ),
+            }
+        )
+        if _src_attr and _src_attr.strip() and _src_attr.strip() not in caption:
+            caption = caption.rstrip() + "\n\n" + _src_attr
 
     # Hashtags — accept either a list or a space-separated string.
     hashtags_raw = fields.get("hashtags", "") or ""
