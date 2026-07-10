@@ -308,6 +308,14 @@ class TrendingVideo:
 
         This is the key bridge: a TrendingVideo becomes a "story" that
         downstream stages (writing, hooks, render) can consume.
+
+        PR #B (2026-07-10, Markanimation incident): emits both
+        ``channel_name`` AND ``channel_id`` so source-creator credit
+        survives through StoryCandidate → stories.extra JSONB →
+        push_to_backlog. Before this PR, ``channel_id`` was in
+        ``to_dict()`` but silently omitted here — the asymmetry
+        broke source_channel_id persistence on 282/282 published
+        blueprints over 90 days.
         """
         from genlab_core.cache.stable_ids import generate_story_id
 
@@ -324,6 +332,7 @@ class TrendingVideo:
             "fetched_at": now_iso,
             "summary": self.description_snippet,
             "channel_name": self.channel_name,
+            "channel_id": self.channel_id,
             "view_count": self.view_count,
             "view_velocity": self.view_velocity,
             "duration_seconds": self.duration_seconds,
@@ -611,6 +620,12 @@ class TrendingVideoFetcher:
                 title_el = entry.find(f"{{{ATOM_NS}}}title")
                 pub_el = entry.find(f"{{{ATOM_NS}}}published")
                 author_el = entry.find(f"{{{ATOM_NS}}}author/{{{ATOM_NS}}}name")
+                # PR #B (2026-07-10): capture yt:channelId per entry so
+                # source-creator credit survives when the trending pipeline
+                # falls back to RSS (YouTube quota exhausted). YT's RSS
+                # schema emits this field on every video entry — cheap
+                # win for attribution.
+                chan_el = entry.find(f"{{{YT_NS}}}channelId")
                 # media:group/media:description for snippet
                 media_group = entry.find(f"{{{MEDIA_NS}}}group")
                 desc_el = (
@@ -628,6 +643,7 @@ class TrendingVideoFetcher:
                         "title": title_el.text if title_el is not None else "",
                         "published_at": pub_el.text if pub_el is not None else None,
                         "channel_name": author_el.text if author_el is not None else "",
+                        "channel_id": chan_el.text if chan_el is not None else "",
                         "description_snippet": (desc_el.text or "")[:200]
                         if desc_el is not None
                         else "",
@@ -796,6 +812,12 @@ class TrendingVideoFetcher:
             meta = video_metadata.get(v.video_id, {})
             if not v.channel_name and meta.get("channel_name"):
                 v.channel_name = meta["channel_name"]
+            # PR #B (2026-07-10): mirror channel_name's meta-fallback pattern
+            # for channel_id — the videos.list enrichment normally populates
+            # it, but if the API returned an item without channelId we can
+            # still recover from the RSS/playlist item that captured it.
+            if not v.channel_id and meta.get("channel_id"):
+                v.channel_id = meta["channel_id"]
             v.search_query = meta.get("source", "channel_subscription")
 
         # Fallback: create stub TrendingVideos for RSS videos that
@@ -835,7 +857,11 @@ class TrendingVideoFetcher:
                         video_id=vid_id,
                         title=meta.get("title", ""),
                         channel_name=meta.get("channel_name", ""),
-                        channel_id="",
+                        # PR #B (2026-07-10): read channel_id from meta if
+                        # upstream populated it. Was hardcoded ""; now defers
+                        # to whatever RSS / playlistItems provided. Falls back
+                        # to "" for backward-compat when meta lacks the field.
+                        channel_id=meta.get("channel_id", ""),
                         published_at=pub,
                         view_count=0,
                         like_count=0,

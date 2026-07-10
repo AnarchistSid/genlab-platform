@@ -81,6 +81,17 @@ class StoryCandidate(BaseModel):
     video_id: str | None = None
     story_id: str | None = None
 
+    # Source channel — populated by YouTube-based fetchers (trending, RSS,
+    # keyword search). PR #B (2026-07-10, Markanimation incident): declared
+    # as first-class fields so they survive round-trip through model_dump()
+    # into stories.extra JSONB. Before this PR, `channel_name` was passed
+    # as an unstructured extra and `channel_id` was silently dropped at
+    # TrendingVideo.to_story() — the resulting NULL source_channel_id on
+    # blueprints broke source-discovery + made source-creator credit
+    # impossible. Non-YouTube sources leave these None.
+    channel_id: str | None = None
+    channel_name: str | None = None
+
     # Gaming-specific enrichment (set by EnrichWithIGDB / SteamSpikeFetcher).
     # Optional everywhere; non-gaming pipelines simply leave them None.
     steam_app_id: int | None = None

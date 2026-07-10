@@ -1917,6 +1917,15 @@ class PushToBacklog:
                     source_channel_id = (
                         story.get("source_channel_id") or story.get("channel_id") or None
                     )
+                    # PR #B (2026-07-10): also carry the source uploader's
+                    # channel name from the story so downstream retroactive-
+                    # credit scripts + attribution helpers don't have to hit
+                    # the YouTube API. Lands in ``extra`` JSONB (not a
+                    # promoted column) because the source-discovery proposer
+                    # only queries channel_id — channel_name is display-only.
+                    source_channel_title = (
+                        story.get("channel_name") or story.get("source_channel_title") or None
+                    )
                     fields: dict[str, Any] = {
                         "candidate_id": candidate_id,
                         "story": [story_record_id],
@@ -1924,6 +1933,7 @@ class PushToBacklog:
                         "video_id": video_id,
                         "video_url": story.get("source_url", ""),
                         "source_channel_id": source_channel_id,
+                        "source_channel_title": source_channel_title,
                         "hook": hook,
                         "hook_text": hook,
                         "title": title,
