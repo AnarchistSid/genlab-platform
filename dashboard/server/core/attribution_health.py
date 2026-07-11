@@ -69,7 +69,15 @@ def compute_stats(
 
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
-            # We use ILIKE with '%%mark%%' escaped for psycopg's %s binding.
+            # Fourth attribution signal (PR #TwitchAttribution, 2026-07-11):
+            # Twitch-sourced blueprints carry the credit URL in ``video_url``,
+            # not in a caption marker, because Twitch clip URLs contain the
+            # broadcaster + clip slug (not derivable from a single ID like
+            # YouTube). The gaming pipeline sources from Twitch, so counting
+            # only YouTube-style markers made Layer 5 read 0% attribution
+            # on 2026-07-11 despite Twitch attribution being structurally
+            # correct. Recognise ``source LIKE '%twitch%'`` blueprints with
+            # a populated ``video_url`` as attribution-present.
             cur.execute(
                 """
                 SELECT
@@ -77,6 +85,11 @@ def compute_stats(
                     COUNT(*) AS total,
                     COUNT(*) FILTER (
                         WHERE source_channel_id IS NOT NULL
+                           OR (
+                                COALESCE(source, '') ILIKE '%%twitch%%'
+                                AND video_url IS NOT NULL
+                                AND video_url != ''
+                           )
                            OR COALESCE(caption, '') LIKE %s
                            OR COALESCE(caption, '') LIKE %s
                            OR COALESCE(extra->>'facebook_content', '') LIKE %s
