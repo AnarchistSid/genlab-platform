@@ -337,3 +337,70 @@ def test_source_attribution_returns_empty_for_non_mapping():
 
     assert format_source_attribution(None) == ""  # type: ignore[arg-type]
     assert format_source_attribution("not a dict") == ""  # type: ignore[arg-type]
+
+
+# ── Layer 3 (PR #Layer3, 2026-07-11) ───────────────────────────────
+#
+# check_copyright_attribution can now escalate from 'warn' to 'block'
+# via GENLAB_ATTRIBUTION_LAYER3_ENFORCE=1. YouTube-only. Default off so
+# shipping this PR is a no-op until an operator flips the flag.
+
+
+def test_layer3_default_is_warn_not_block(monkeypatch):
+    """Ship-day contract: without the env flag, the gate stays 'warn'
+    (observation-only). Any regression that flips the default silently
+    would block every YT publish that has no derivable source URL."""
+    from genlab_core.compliance.copyright_safety import check_copyright_attribution
+
+    monkeypatch.delenv("GENLAB_ATTRIBUTION_LAYER3_ENFORCE", raising=False)
+    bp = {"video_id": "", "source": "operator_upload"}
+    result = check_copyright_attribution(bp, "youtube", "gaming")
+    assert result.decision == "warn"
+    assert "missing_source_attribution" in result.reasons
+    assert result.metadata["layer3_enforce"] is False
+
+
+def test_layer3_flip_returns_block_for_youtube(monkeypatch):
+    """With GENLAB_ATTRIBUTION_LAYER3_ENFORCE=1 the gate escalates
+    to 'block' for YouTube publishes missing source attribution.
+    This is the load-bearing behaviour operators toggle after the
+    Layer 5 attribution_present_pct card holds ≥98% for 1-2 weeks."""
+    from genlab_core.compliance.copyright_safety import check_copyright_attribution
+
+    monkeypatch.setenv("GENLAB_ATTRIBUTION_LAYER3_ENFORCE", "1")
+    bp = {"video_id": "", "source": "operator_upload"}
+    result = check_copyright_attribution(bp, "youtube", "gaming")
+    assert result.decision == "block"
+    assert "missing_source_attribution" in result.reasons
+    assert result.metadata["layer3_enforce"] is True
+
+
+def test_layer3_flip_does_not_affect_meta_platforms(monkeypatch):
+    """Even with the flag set, non-YouTube platforms return 'allow'
+    unchanged. Meta enforcement is a 24h Rights Manager sweep — covered
+    by fb_survival_check, not this gate. Extending Layer 3 to Meta
+    platforms is a deliberate follow-up decision, not an accidental
+    side-effect of flipping one env var."""
+    from genlab_core.compliance.copyright_safety import check_copyright_attribution
+
+    monkeypatch.setenv("GENLAB_ATTRIBUTION_LAYER3_ENFORCE", "1")
+    bp = {"video_id": "", "source": "operator_upload"}
+    for platform in ("facebook", "instagram", "threads", "tiktok"):
+        result = check_copyright_attribution(bp, platform, "gaming")
+        assert result.decision == "allow", (
+            f"{platform} must stay 'allow' under Layer 3 — "
+            "Meta-platform enforcement is a separate PR"
+        )
+
+
+def test_layer3_does_not_block_youtube_with_derivable_url(monkeypatch):
+    """The block should only fire when attribution is genuinely missing.
+    A blueprint with a derivable source URL (video_id + youtube source)
+    stays 'allow' even under enforcement — the fair-use posture is
+    intact."""
+    from genlab_core.compliance.copyright_safety import check_copyright_attribution
+
+    monkeypatch.setenv("GENLAB_ATTRIBUTION_LAYER3_ENFORCE", "1")
+    bp = {"video_id": "abc123", "source": "youtube_trending"}
+    result = check_copyright_attribution(bp, "youtube", "gaming")
+    assert result.decision == "allow"

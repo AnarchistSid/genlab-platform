@@ -60,6 +60,7 @@ this check + log copyright_flag events to compliance_events.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Mapping
 
 from genlab_core.compliance.events import ComplianceDecision
@@ -206,12 +207,28 @@ def check_copyright_attribution(
     if derived or explicit:
         return ComplianceDecision(decision="allow")
 
+    # PR #Layer3 (2026-07-11, post-Markanimation): the policy gate can
+    # now escalate from 'warn' to 'block' via an env-flag opt-in. Default
+    # remains 'warn' so shipping this PR is a no-op until an operator
+    # sets ``GENLAB_ATTRIBUTION_LAYER3_ENFORCE=1``. YouTube is the only
+    # platform that flips today because Content ID enforces at upload
+    # time (instant strike risk); Meta's 24h Rights Manager sweeps are
+    # slower and covered separately by fb_survival_check monitoring.
+    #
+    # Rollout gate: enable after 1-2 weeks of observation via the Layer 5
+    # attribution_health dashboard card, once ``attribution_present_pct``
+    # holds ≥98% per niche. Setting the flag before then risks blocking
+    # the daily YT publish if any Layer 1/2 escape hatch fires.
+    _enforce_layer3 = os.environ.get("GENLAB_ATTRIBUTION_LAYER3_ENFORCE", "0") == "1"
+    _decision = "block" if _enforce_layer3 else "warn"
+
     return ComplianceDecision(
-        decision="warn",
+        decision=_decision,
         reasons=["missing_source_attribution"],
         metadata={
             "video_id_present": bool(blueprint.get("video_id")),
             "source": blueprint.get("source") or "",
+            "layer3_enforce": _enforce_layer3,
         },
     )
 
