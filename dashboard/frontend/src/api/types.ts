@@ -1387,6 +1387,37 @@ export interface CounterfactualReplayArm {
   dr_note?: string;
 }
 
+// Layer 5 attribution health (PR #Layer5, 2026-07-11) — post-Markanimation
+// observability. Mirrors ``server.core.attribution_health.compute_stats``.
+export type AttributionStatus =
+  | "healthy" // pct ≥ threshold_healthy_pct
+  | "caution" // pct ≥ threshold_caution_pct
+  | "critical" // pct < threshold_caution_pct
+  | "no_data" // total_published = 0 in window
+  | "unknown"; // DB error / fail-open path
+
+export interface AttributionNicheRow {
+  niche_id: string;
+  total_published: number;
+  with_attribution: number;
+  attribution_pct: number;
+  status: AttributionStatus;
+}
+
+export interface AttributionHealthResponse {
+  window_hours: number;
+  generated_at: string;
+  threshold_healthy_pct: number;
+  threshold_caution_pct: number;
+  niches: AttributionNicheRow[];
+  overall: {
+    total_published: number;
+    with_attribution: number;
+    attribution_pct: number;
+    status: AttributionStatus;
+  };
+}
+
 export interface CounterfactualReplayArtifact {
   generated_at: string;
   niche: string;

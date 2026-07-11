@@ -46,6 +46,7 @@ import { TransformationBanditCard } from "./TransformationBanditCard";
 import { BanditHourHeatmap } from "./BanditHourHeatmap";
 import { NichePauseBanner } from "./NichePauseBanner";
 import { NichePauseCard } from "./NichePauseCard";
+import { AttributionHealthCard } from "./AttributionHealthCard";
 import { ComplianceStatsCard } from "./ComplianceStatsCard";
 import { PerPlatformHealthCard } from "./PerPlatformHealthCard";
 import { BanditPlatformDivergenceCard } from "./BanditPlatformDivergenceCard";
@@ -398,6 +399,14 @@ export default function MissionControl() {
                 complements the daily bandit_arms view with a
                 counterfactual overlay. */}
             <CounterfactualReplayCard />
+            {/* PR #Layer5 (2026-07-11): post-Markanimation attribution
+                observability. Shows per-niche attribution_present_pct
+                over a rolling 24h window. Server-computed status
+                thresholds drive per-row colouring so the operator can
+                spot pipeline gaps at a glance. Complements the ~350
+                retroactive credit ops + fb_survival_check detection
+                fix shipped the same day. */}
+            <AttributionHealthCard />
             {/* PR 14 (2026-07-05): intelligent transformation sprint
                 observability. Shows top arm per (niche × dimension)
                 so operator eyeballs whether the bandit is learning
