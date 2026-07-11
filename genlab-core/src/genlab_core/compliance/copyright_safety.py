@@ -155,12 +155,41 @@ def format_source_attribution(blueprint: Mapping) -> str:
         blueprint.get("video_id"),
         blueprint.get("source"),
     )
+
+    # PR #TwitchAttribution (2026-07-11, post-Markanimation Layer 5
+    # finding): the Twitch fetcher emits source="twitch_clips" with
+    # a pre-formed ``source_url`` / ``video_url`` field (Twitch clip
+    # URLs contain the broadcaster slug + clip slug — not derivable
+    # from a single ID like YouTube). The YouTube-family template
+    # dispatcher returns None for twitch_clips, which used to zero
+    # the credit line for the entire gaming niche (Layer 5 showed
+    # 0% attribution on 2026-07-11 despite gaming publishing 8 posts
+    # from Twitch). This fallback reads the pre-formed URL directly
+    # so Twitch-sourced posts get "\U0001F3AC Original: @broadcaster
+    # — {clip_url}" without needing per-broadcaster URL templates.
+    if not url:
+        source = (blueprint.get("source") or "").lower()
+        if "twitch" in source:
+            candidate = (
+                blueprint.get("video_url")
+                or blueprint.get("source_url")
+                or blueprint.get("canonical_url")
+                or ""
+            )
+            candidate = str(candidate).strip()
+            if candidate and candidate.startswith(("http://", "https://")):
+                url = candidate
+
     if not url:
         return ""
     channel = (
         blueprint.get("source_channel_title")
         or blueprint.get("channel_name")
         or blueprint.get("channel_title")
+        # Twitch fetcher uses "broadcaster" — same intent, different name.
+        # Ordered last so YouTube's source_channel_title still wins when
+        # both fields are somehow populated on the same blueprint.
+        or blueprint.get("broadcaster")
         or ""
     )
     channel = str(channel).strip()

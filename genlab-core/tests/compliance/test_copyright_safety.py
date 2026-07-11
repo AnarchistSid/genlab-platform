@@ -339,6 +339,92 @@ def test_source_attribution_returns_empty_for_non_mapping():
     assert format_source_attribution("not a dict") == ""  # type: ignore[arg-type]
 
 
+# ── Twitch attribution fallback (PR #TwitchAttribution, 2026-07-11) ─
+#
+# Layer 5 revealed that gaming had 0% attribution because the Twitch
+# source path emits ``source="twitch_clips"`` — not in
+# ``_SOURCE_URL_TEMPLATES``, so ``derive_source_url`` returned None.
+# The fallback now uses the pre-formed ``video_url`` / ``source_url``
+# / ``canonical_url`` field directly for Twitch-sourced blueprints and
+# reads the creator handle from ``broadcaster``.
+
+
+def test_source_attribution_twitch_uses_video_url_directly():
+    """Twitch clip URLs contain broadcaster + clip slugs (not derivable
+    from a single ID). The fallback reads the pre-formed URL directly."""
+    from genlab_core.compliance.copyright_safety import format_source_attribution
+
+    bp = {
+        "source": "twitch_clips",
+        "video_url": "https://clips.twitch.tv/AmazedTiredStorkFUNgineer",
+        "broadcaster": "streamerX",
+    }
+    out = format_source_attribution(bp)
+    assert "@streamerX" in out
+    assert "https://clips.twitch.tv/AmazedTiredStorkFUNgineer" in out
+
+
+def test_source_attribution_twitch_falls_back_to_source_url():
+    """Some story shapes carry the URL as ``source_url`` instead of
+    ``video_url`` — the fallback should try both."""
+    from genlab_core.compliance.copyright_safety import format_source_attribution
+
+    bp = {
+        "source": "twitch_clips",
+        "source_url": "https://www.twitch.tv/streamer/clip/abc",
+        "broadcaster": "streamer",
+    }
+    out = format_source_attribution(bp)
+    assert "@streamer" in out
+    assert "https://www.twitch.tv/streamer/clip/abc" in out
+
+
+def test_source_attribution_twitch_rejects_non_url_video_url():
+    """Defence against garbage ``video_url`` values (empty string,
+    non-URL text) that could result in a bogus attribution line."""
+    from genlab_core.compliance.copyright_safety import format_source_attribution
+
+    for bad in ("", "not_a_url", "   ", "clip123"):
+        bp = {
+            "source": "twitch_clips",
+            "video_url": bad,
+            "broadcaster": "streamer",
+        }
+        assert format_source_attribution(bp) == ""
+
+
+def test_source_attribution_broadcaster_used_only_when_channel_missing():
+    """YouTube's source_channel_title / channel_name / channel_title
+    still win over Twitch's broadcaster field when both are present.
+    Ordering pin — swapping the order would silently prefer
+    broadcaster for YouTube-sourced content, which is wrong."""
+    from genlab_core.compliance.copyright_safety import format_source_attribution
+
+    bp = {
+        "video_id": "abc",
+        "source": "youtube_trending",
+        "source_channel_title": "YT_channel",
+        "broadcaster": "twitch_streamer",  # should not be used
+    }
+    out = format_source_attribution(bp)
+    assert "@YT_channel" in out
+    assert "twitch_streamer" not in out
+
+
+def test_source_attribution_twitch_url_only_when_no_broadcaster():
+    """Twitch clip URL is enough on its own — even without a
+    broadcaster field, the URL alone anchors the attribution."""
+    from genlab_core.compliance.copyright_safety import format_source_attribution
+
+    bp = {
+        "source": "twitch_clips",
+        "video_url": "https://clips.twitch.tv/xyz",
+    }
+    out = format_source_attribution(bp)
+    assert "@" not in out
+    assert "https://clips.twitch.tv/xyz" in out
+
+
 # ── Layer 3 (PR #Layer3, 2026-07-11) ───────────────────────────────
 #
 # check_copyright_attribution can now escalate from 'warn' to 'block'
