@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from datetime import UTC
 from pathlib import Path
@@ -1148,8 +1149,6 @@ class PushToBacklog:
         if not stories:
             logger.info("[PUSH] No stories to push")
             return context
-
-        import os
 
         _use_postgres = os.getenv("GENLAB_USE_POSTGRES", "").lower() == "true"
         if not _use_postgres and not all(
@@ -2305,6 +2304,49 @@ class PushToBacklog:
                                 "[PUSH] auto-approval confidence calc failed: %s",
                                 exc,
                             )
+
+                        # PR #Layer2 (2026-07-10, post-Markanimation):
+                        # persist-side attribution gate. Refuse to write a
+                        # YouTube-sourced blueprint without source_channel_id.
+                        # Complements Layer 1 (fetcher gate — PR #763) as
+                        # a defense-in-depth: even if a fetcher path
+                        # bypasses Layer 1 or synthesizes a story with
+                        # missing channel data, this gate catches it at
+                        # persistence.
+                        #
+                        # Non-YouTube sources (twitch, reddit) are exempt
+                        # because ``derive_source_url`` returns None for
+                        # them today — no URL means no credit line means
+                        # the gate would misfire. Once per-platform
+                        # attribution ships, the exemption narrows.
+                        #
+                        # Operator opt-out:
+                        #   GENLAB_ATTRIBUTION_LAYER2_ALLOW_MISSING=1
+                        _source = (story.get("source") or story.get("source_type") or "").lower()
+                        _yt_sourced = "youtube" in _source
+                        _layer2_allow_missing = (
+                            os.environ.get(
+                                "GENLAB_ATTRIBUTION_LAYER2_ALLOW_MISSING",
+                                "0",
+                            )
+                            == "1"
+                        )
+                        if (
+                            _yt_sourced
+                            and not _layer2_allow_missing
+                            and not fields.get("source_channel_id")
+                        ):
+                            logger.warning(
+                                "[PUSH] Layer 2 attribution gate refusing "
+                                "blueprint '%s' (niche=%s): YouTube source "
+                                "'%s' but no source_channel_id. Set "
+                                "GENLAB_ATTRIBUTION_LAYER2_ALLOW_MISSING=1 "
+                                "to bypass.",
+                                title,
+                                niche_id,
+                                _source,
+                            )
+                            continue
 
                         client.blueprints.create(fields, typecast=True)
                         blueprints_pushed += 1
