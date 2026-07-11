@@ -411,6 +411,35 @@ def test_source_attribution_broadcaster_used_only_when_channel_missing():
     assert "twitch_streamer" not in out
 
 
+def test_check_copyright_attribution_allows_twitch_with_video_url():
+    """Parity with format_source_attribution's Twitch fallback. A
+    YouTube publish of a Twitch-sourced blueprint (source=
+    twitch_trending, video_url populated) must return 'allow' — the
+    URL IS the attribution. Log evidence: 2026-07-09 compliance_events
+    showed 5 of these warns fire against Twitch content that already
+    had valid attribution."""
+    from genlab_core.compliance.copyright_safety import check_copyright_attribution
+
+    bp = {
+        "source": "twitch_trending",
+        "video_url": "https://www.twitch.tv/directory/game/Something",
+    }
+    result = check_copyright_attribution(bp, "youtube", "gaming")
+    assert result.decision == "allow"
+
+
+def test_check_copyright_attribution_still_warns_on_bad_twitch_url():
+    """Defensive parity — an empty video_url or non-URL value must
+    NOT bypass the check. Ordering pin: same URL-shape defence as
+    format_source_attribution."""
+    from genlab_core.compliance.copyright_safety import check_copyright_attribution
+
+    for bad in ("", "not_a_url", "   "):
+        bp = {"source": "twitch_trending", "video_url": bad}
+        result = check_copyright_attribution(bp, "youtube", "gaming")
+        assert result.decision == "warn"
+
+
 def test_source_attribution_twitch_url_only_when_no_broadcaster():
     """Twitch clip URL is enough on its own — even without a
     broadcaster field, the URL alone anchors the attribution."""

@@ -233,7 +233,29 @@ def check_copyright_attribution(
     )
     explicit = (blueprint.get("source_url") or "").strip()
 
-    if derived or explicit:
+    # PR #TwitchAttribution (2026-07-11): parity with
+    # ``format_source_attribution``'s Twitch fallback. Twitch-sourced
+    # blueprints carry their credit URL in ``video_url`` (not derivable
+    # from a single ID). Without this branch, a YouTube publish of a
+    # Twitch-sourced blueprint would fire ``warn`` — and if the operator
+    # later flips ``GENLAB_ATTRIBUTION_LAYER3_ENFORCE=1`` the same
+    # blueprint would get blocked, taking gaming's daily YT publish
+    # offline. Log evidence: 2026-07-09 compliance_events showed 5
+    # of these warns fire against Twitch-sourced content that was
+    # already carrying valid attribution.
+    twitch_url = ""
+    if "twitch" in (blueprint.get("source") or "").lower():
+        candidate = (
+            blueprint.get("video_url")
+            or blueprint.get("source_url")
+            or blueprint.get("canonical_url")
+            or ""
+        )
+        candidate = str(candidate).strip()
+        if candidate.startswith(("http://", "https://")):
+            twitch_url = candidate
+
+    if derived or explicit or twitch_url:
         return ComplianceDecision(decision="allow")
 
     # PR #Layer3 (2026-07-11, post-Markanimation): the policy gate can
