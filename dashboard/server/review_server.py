@@ -802,6 +802,7 @@ from server.api.overview import bp as overview_bp
 from server.api.pipeline import bp as pipeline_bp
 from server.api.platform_posts import bp as platform_posts_bp
 from server.api.product_bandit import bp as product_bandit_bp
+from server.api.attribution_health import bp as attribution_health_bp
 from server.api.publishing_health import bp as publishing_health_bp
 from server.api.publishing_queue import bp as queue_bp
 from server.api.revenue import bp as revenue_bp
@@ -897,6 +898,7 @@ app.register_blueprint(revenue_bp)
 app.register_blueprint(alerts_bp)
 app.register_blueprint(metrics_bp)
 app.register_blueprint(publishing_health_bp)  # PR B: /api/v1/publishing/per-niche-platform-health
+app.register_blueprint(attribution_health_bp)  # PR #Layer5: /api/v1/attribution-health/stats
 app.register_blueprint(audience_bp)
 app.register_blueprint(bandit_hour_posteriors_bp)
 app.register_blueprint(
