@@ -1,0 +1,15 @@
+[Unit]
+Description=Fire GenLab Attribution Health Monitor every 30 min
+Requires=genlab-attribution-health-monitor.service
+
+[Timer]
+# Every 30 min. The underlying data changes only on publisher fires
+# (5x/day at 06:30 UTC), so 30 min is plenty of resolution. Aligned
+# with same cadence as other observability sweepers.
+OnBootSec=5min
+OnUnitActiveSec=30min
+Persistent=true
+Unit=genlab-attribution-health-monitor.service
+
+[Install]
+WantedBy=timers.target
