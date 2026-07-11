@@ -490,6 +490,42 @@ class TrendingVideoFetcher:
                 continue
             results.append(video)
 
+        # PR #Layer1 (2026-07-10, post-Markanimation): fetcher-side gate
+        # that refuses to emit candidates missing channel_id or channel_name.
+        # Post-PR-#B, both fields should be populated on every YouTube-sourced
+        # TrendingVideo — the RSS parser now captures ``yt:channelId`` and
+        # the fallback path reads it from meta. A candidate arriving here
+        # with either field empty indicates a broken source path (RSS
+        # element missing, API partial response). Dropping prevents null
+        # source_channel_id from reaching the story-persistence layer.
+        #
+        # Operator opt-out: set GENLAB_ATTRIBUTION_LAYER1_ALLOW_MISSING=1
+        # for edge cases where a source legitimately lacks channel data
+        # (e.g. archive footage without upstream channel metadata). Default
+        # is enforce — the safer posture given the 90-day incident scope.
+        _layer1_allow_missing = (
+            os.environ.get("GENLAB_ATTRIBUTION_LAYER1_ALLOW_MISSING", "0") == "1"
+        )
+        if not _layer1_allow_missing:
+            _pre_gate_count = len(results)
+            _dropped: list[tuple[str, str]] = [
+                (v.video_id, v.title[:60])
+                for v in results
+                if not v.channel_id or not v.channel_name
+            ]
+            results = [v for v in results if v.channel_id and v.channel_name]
+            if _dropped:
+                logger.warning(
+                    "[%s] Layer 1 attribution gate dropped %d/%d candidates "
+                    "with missing channel metadata. Set "
+                    "GENLAB_ATTRIBUTION_LAYER1_ALLOW_MISSING=1 to bypass. "
+                    "Samples: %s",
+                    niche_id,
+                    len(_dropped),
+                    _pre_gate_count,
+                    _dropped[:3],
+                )
+
         results.sort(key=lambda v: v.view_velocity, reverse=True)
 
         # 2026-06-22 — opt-in LLM-judge re-ranking for niche fit. When
