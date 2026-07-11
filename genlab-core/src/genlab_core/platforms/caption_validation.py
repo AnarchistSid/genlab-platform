@@ -29,21 +29,33 @@ publish request hits the platform API.
   can be tightened per-platform in a follow-up once operator has
   seen the warn-mode compliance events in prod.
 
-## The validation contract
+## The validation contract (post-2026-07-11 audit — TIGHTENED)
 
-``validate_caption_has_attribution(caption, source_url=None)`` returns
-``(True, None)`` when the caption OR an explicit ``source_url`` field
-carries a recognisable credit signal. The recognised signals are:
+``validate_caption_has_attribution(caption, source_url=None)`` now
+requires the CAPTION ITSELF to carry a credit marker. Recognised
+markers in the caption are:
 
-  * ``"🎬 Original:"`` — the format_source_attribution marker
-    (PR #761 writer wire + PR #764 publisher backstop)
-  * ``"Footage:"`` — the format_youtube_attribution marker
-    (PR #568, YouTube description)
-  * Any non-empty ``source_url`` string — operator override
-    (blueprint-level ``source_url`` field is a manual escape hatch)
+  * ``"🎬 Original:"`` — format_source_attribution marker (writer
+    wire + publisher backstop output)
+  * ``"Footage:"`` — format_youtube_attribution marker (YouTube
+    description path)
 
-Returns ``(False, "missing_attribution_line")`` when none of the
-above are present. Substring-based on purpose so operator-formatted
+The ``source_url`` parameter is retained for backward compatibility
+but **no longer satisfies validation on its own**. Rationale: today's
+gaming publish demonstrated the audience-facing failure mode of the
+old behaviour — the blueprint had ``video_url`` populated (Twitch
+directory URL), so the old ``source_url`` escape hatch marked the
+caption as "valid attribution" and the publish went out. Users saw
+no credit line at all. Internal metric (Layer 5) said "attributed"
+but real audiences saw nothing.
+
+Fix: audience-facing validation must be strict about the CAPTION
+content. ``source_url`` becomes secondary — used only when the
+caller wants to ALSO log that a source URL is available, not as
+a bypass path.
+
+Returns ``(False, "missing_attribution_line")`` when the caption
+lacks a marker. Substring-based on purpose so operator-formatted
 credit variants ("🎬 Original creator: @X", "🎬 Original: URL") both
 match without a brittle regex.
 """
@@ -59,16 +71,19 @@ _MARKER_FOOTAGE = "footage:"
 def validate_caption_has_attribution(
     caption: str,
     *,
-    source_url: str | None = None,
+    source_url: str | None = None,  # noqa: ARG001 — reserved for future
 ) -> tuple[bool, str | None]:
     """Return (is_valid, error_reason).
 
-    is_valid is True when the caption OR source_url signals attribution.
+    is_valid is True ONLY when the CAPTION contains a credit marker.
+    ``source_url`` is kept in the signature for backward compat but
+    no longer satisfies validation on its own (post-2026-07-11
+    audit — Twitch directory URLs were satisfying the old check
+    while shipping empty-of-credit captions to users).
+
     error_reason is None on valid; otherwise a short machine-readable
     string suitable for logging into compliance_events.
     """
-    if source_url and str(source_url).strip():
-        return (True, None)
     lowered = (caption or "").lower()
     if _MARKER_ORIGINAL in lowered or _MARKER_FOOTAGE in lowered:
         return (True, None)

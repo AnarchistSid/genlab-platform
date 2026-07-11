@@ -47,7 +47,15 @@ logger = logging.getLogger(__name__)
 # Kept in sync with dashboard's Layer 5 module. If these drift, the
 # alert threshold and the dashboard's "critical" pill would show
 # different things and confuse the operator.
-CRITICAL_PCT = 90.0
+#
+# Post-2026-07-11 audit tightening: threshold raised from 90 → 99.
+# The 2026-07-11 gaming case demonstrated that even a single
+# uncredited publish is a real audience-facing failure — we already
+# retroactively fix them by hand. So the alert should page on
+# ANY single miss (99% out of the minimum 3 = 3/3 required for
+# healthy). The old 90% threshold allowed 1 in 10 uncredited before
+# anyone was told, which defeats the alert's purpose.
+CRITICAL_PCT = 99.0
 MIN_PUBLISHES_FOR_ALERT = 3
 
 CHECK_NAME = "attribution_health_below_threshold"
@@ -78,13 +86,7 @@ def compute_health(
                     niche_id,
                     COUNT(*) AS total,
                     COUNT(*) FILTER (
-                        WHERE source_channel_id IS NOT NULL
-                           OR (
-                                COALESCE(source, '') ILIKE '%%twitch%%'
-                                AND video_url IS NOT NULL
-                                AND video_url != ''
-                           )
-                           OR COALESCE(caption, '') LIKE %s
+                        WHERE COALESCE(caption, '') LIKE %s
                            OR COALESCE(caption, '') LIKE %s
                            OR COALESCE(extra->>'facebook_content', '') LIKE %s
                            OR COALESCE(extra->>'facebook_content', '') LIKE %s

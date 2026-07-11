@@ -31,9 +31,11 @@ logger = logging.getLogger(__name__)
 
 _NICHE_IDS = ("ai_creators", "anime", "gaming", "movies", "sports")
 
-# Kept in sync with dashboard/server/api/attribution_health.py
-_HEALTHY_PCT = 95.0
-_CAUTION_PCT = 90.0
+# Kept in sync with dashboard/server/api/attribution_health.py.
+# Post-2026-07-11 audit: 100/99 instead of 95/90. Any single miss
+# is a real audience-facing failure.
+_HEALTHY_PCT = 100.0
+_CAUTION_PCT = 99.0
 
 
 def _classify(pct: float) -> str:
@@ -69,28 +71,29 @@ def compute_stats(
 
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
-            # Fourth attribution signal (PR #TwitchAttribution, 2026-07-11):
-            # Twitch-sourced blueprints carry the credit URL in ``video_url``,
-            # not in a caption marker, because Twitch clip URLs contain the
-            # broadcaster + clip slug (not derivable from a single ID like
-            # YouTube). The gaming pipeline sources from Twitch, so counting
-            # only YouTube-style markers made Layer 5 read 0% attribution
-            # on 2026-07-11 despite Twitch attribution being structurally
-            # correct. Recognise ``source LIKE '%twitch%'`` blueprints with
-            # a populated ``video_url`` as attribution-present.
+            # Post-2026-07-11 audit tightening: the metric now requires
+            # a credit marker to be present in AT LEAST ONE caption/
+            # description field. Previously the "source LIKE '%twitch%' +
+            # video_url populated" clause counted a blueprint as
+            # attributed even when its caption shipped empty of visible
+            # credit — which is exactly what happened to today's gaming
+            # publish. Internal metric said "100%", real users saw a
+            # blank caption. That failure mode is now impossible.
+            #
+            # ``source_channel_id IS NOT NULL`` is also removed as a
+            # standalone signal for the same reason — the ID may be
+            # persisted while the caption ships without the credit
+            # line (writer wire silently failed, publisher backstop
+            # skipped because caption already had "🎬 Original:" from
+            # an unrelated match, etc.). Only the CAPTION MARKER
+            # counts now.
             cur.execute(
                 """
                 SELECT
                     niche_id,
                     COUNT(*) AS total,
                     COUNT(*) FILTER (
-                        WHERE source_channel_id IS NOT NULL
-                           OR (
-                                COALESCE(source, '') ILIKE '%%twitch%%'
-                                AND video_url IS NOT NULL
-                                AND video_url != ''
-                           )
-                           OR COALESCE(caption, '') LIKE %s
+                        WHERE COALESCE(caption, '') LIKE %s
                            OR COALESCE(caption, '') LIKE %s
                            OR COALESCE(extra->>'facebook_content', '') LIKE %s
                            OR COALESCE(extra->>'facebook_content', '') LIKE %s
