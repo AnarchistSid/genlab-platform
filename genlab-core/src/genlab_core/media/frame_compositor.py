@@ -941,8 +941,21 @@ class FrameCompositor:
             [
                 "-c:a",
                 "aac",
+                # PR #FrameCompositorAudio (2026-07-11, post-Markanimation
+                # audit): audio bitrate lowered from 320k → 192k to match
+                # Meta Instagram Reels' total-bitrate budget. Meta error
+                # 2207082 ("reduce data" / container processing) fired on
+                # 3 of 5 niches today (anime + movies + sports) because
+                # the 320k audio + longer-duration video pushed total
+                # bitrate past IG's ~4M ceiling. 192k matches
+                # PLATFORM_SPECS[Instagram/TikTok/Facebook/Threads] and
+                # is 8k above what YouTube's PLATFORM_SPECS asks for
+                # video content (128k). YouTube accepts up to 320k but
+                # doesn't require it — 192k is well within their
+                # acceptable range for AAC voice + music mix at the
+                # bitrates our reels ship at.
                 "-b:a",
-                "320k",
+                "192k",
                 "-ar",
                 "48000",
                 "-ac",
