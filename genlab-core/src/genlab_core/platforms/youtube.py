@@ -316,6 +316,45 @@ class YouTubeClient:
                 error="No media paths provided — video is required for YouTube upload",
             )
 
+        # PR #Layer4 (2026-07-11): publisher-side attribution validation.
+        # The YouTube-specific description already gets a Footage: line
+        # appended by format_youtube_attribution in payload_builder, so
+        # this is mostly a safety net. Validates ``payload.caption``
+        # (the general caption used across platforms) since that's what
+        # a compliance auditor would inspect.
+        from genlab_core.platforms.caption_validation import (
+            layer4_block_enabled,
+            validate_caption_has_attribution,
+        )
+
+        # Prefer the YT-specific description for the validation check
+        # when available, since format_youtube_attribution wires the
+        # Footage: line there — otherwise fall back to the caption.
+        _yt_desc = ""
+        if payload.platform_specific and hasattr(payload.platform_specific, "community_post_text"):
+            _yt_desc = (payload.platform_specific.community_post_text or "").strip()
+        _l4_target = _yt_desc or payload.caption
+
+        _l4_ok, _l4_reason = validate_caption_has_attribution(
+            _l4_target,
+            source_url=getattr(payload, "source_url", None),
+        )
+        if not _l4_ok:
+            self._log.warning(
+                "[layer4] YouTube publish: description missing attribution (niche=%s) — %s",
+                payload.niche_id,
+                _l4_reason,
+            )
+            if layer4_block_enabled():
+                return PublishResult(
+                    platform=self.platform_id,
+                    success=False,
+                    error=(
+                        "Layer 4 attribution gate: description missing credit line "
+                        "(set GENLAB_ATTRIBUTION_LAYER4_BLOCK=0 to bypass)"
+                    ),
+                )
+
         # R-30: refuse to upload if the OAuth token resolves to a different
         # channel than expected — the one code-level guard against the
         # cross-brand mis-publish (2026-05-18). verify_channel() is a no-op

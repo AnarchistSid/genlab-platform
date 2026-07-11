@@ -137,6 +137,37 @@ class FacebookClient:
                 error="Facebook token invalid or missing — skipped publish",
             )
 
+        # PR #Layer4 (2026-07-11, post-Markanimation): publisher-side
+        # attribution validation. Sits at the API-POST boundary as the
+        # last line of defense for the attribution-safety stack. If
+        # the caption reaches here without a recognisable credit
+        # signal, log a compliance event; if enforcement is on
+        # (``GENLAB_ATTRIBUTION_LAYER4_BLOCK=1``), refuse to publish.
+        from genlab_core.platforms.caption_validation import (
+            layer4_block_enabled,
+            validate_caption_has_attribution,
+        )
+
+        _l4_ok, _l4_reason = validate_caption_has_attribution(
+            payload.caption,
+            source_url=getattr(payload, "source_url", None),
+        )
+        if not _l4_ok:
+            self._log.warning(
+                "[layer4] Facebook publish: caption missing attribution (niche=%s) — %s",
+                payload.niche_id,
+                _l4_reason,
+            )
+            if layer4_block_enabled():
+                return PublishResult(
+                    platform=self.platform_id,
+                    success=False,
+                    error=(
+                        "Layer 4 attribution gate: caption missing credit line "
+                        "(set GENLAB_ATTRIBUTION_LAYER4_BLOCK=0 to bypass)"
+                    ),
+                )
+
         # Build caption + hashtags
         hashtags_str = " ".join(payload.hashtags) if payload.hashtags else ""
         message = payload.caption

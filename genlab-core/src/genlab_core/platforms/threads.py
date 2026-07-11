@@ -153,6 +153,35 @@ class ThreadsClient:
                 error="No media and no caption — nothing to publish to Threads",
             )
 
+        # PR #Layer4 (2026-07-11): publisher-side attribution validation.
+        # Threads has a 500-char cap which pushes captions to the edge —
+        # if the credit line ever got truncated off by the disclosure
+        # appender, this catches it before the platform API call.
+        from genlab_core.platforms.caption_validation import (
+            layer4_block_enabled,
+            validate_caption_has_attribution,
+        )
+
+        _l4_ok, _l4_reason = validate_caption_has_attribution(
+            caption,
+            source_url=getattr(payload, "source_url", None),
+        )
+        if not _l4_ok:
+            self._log.warning(
+                "[layer4] Threads publish: caption missing attribution (niche=%s) — %s",
+                payload.niche_id,
+                _l4_reason,
+            )
+            if layer4_block_enabled():
+                return PublishResult(
+                    platform=self.platform_id,
+                    success=False,
+                    error=(
+                        "Layer 4 attribution gate: caption missing credit line "
+                        "(set GENLAB_ATTRIBUTION_LAYER4_BLOCK=0 to bypass)"
+                    ),
+                )
+
         # Build hashtags into caption
         if payload.hashtags:
             hashtags_str = " ".join(payload.hashtags)

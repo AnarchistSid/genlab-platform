@@ -179,6 +179,34 @@ class InstagramClient:
                 error="No media paths provided — video is required for Instagram Reels",
             )
 
+        # PR #Layer4 (2026-07-11): publisher-side attribution validation.
+        # See platforms/caption_validation.py + facebook.py for the pattern
+        # and rationale — this is the API-POST boundary backstop.
+        from genlab_core.platforms.caption_validation import (
+            layer4_block_enabled,
+            validate_caption_has_attribution,
+        )
+
+        _l4_ok, _l4_reason = validate_caption_has_attribution(
+            payload.caption,
+            source_url=getattr(payload, "source_url", None),
+        )
+        if not _l4_ok:
+            self._log.warning(
+                "[layer4] Instagram publish: caption missing attribution (niche=%s) — %s",
+                payload.niche_id,
+                _l4_reason,
+            )
+            if layer4_block_enabled():
+                return PublishResult(
+                    platform=self.platform_id,
+                    success=False,
+                    error=(
+                        "Layer 4 attribution gate: caption missing credit line "
+                        "(set GENLAB_ATTRIBUTION_LAYER4_BLOCK=0 to bypass)"
+                    ),
+                )
+
         # Resolve the video URL. Instagram requires a public HTTPS URL.
         # If the path is a local file, upload to temp CDN first.
         first_path = payload.media_paths[0]
