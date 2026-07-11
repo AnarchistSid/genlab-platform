@@ -1,0 +1,22 @@
+[Unit]
+Description=GenLab Attribution Health Monitor — surface low attribution_present_pct as a CRITICAL alert
+Documentation=https://github.com/AnarchistSid/genlab-platform/blob/main/genlab-core/src/genlab_core/monitoring/attribution_health_monitor.py
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/attribution_health_monitor.py
+# Same contract as anthropic-credit-monitor — exit 0 always so a
+# transient DB blip doesn't cascade into systemd_unit_failed noise
+# on Mission Control's CRITICAL banner.
+SuccessExitStatus=0 1
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
