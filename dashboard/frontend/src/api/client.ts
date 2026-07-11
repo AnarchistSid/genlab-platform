@@ -1241,9 +1241,9 @@ export const ensembleVotes = {
    *  DB (endpoint's fail-open path — see `test_query_failure_returns_
    *  pending_migration_message`). */
   summary: (params: { nicheId?: string; windowDays?: number } = {}) => {
-    const query: Record<string, string | number> = {};
+    const query: Record<string, string> = {};
     if (params.nicheId) query.niche_id = params.nicheId;
-    if (params.windowDays) query.window_days = params.windowDays;
+    if (params.windowDays) query.window_days = String(params.windowDays);
     return get<{
       data: import("./types").EnsembleVotesSummaryPayload | null;
     }>("/ensemble-votes/summary", query).then((d) =>
@@ -1265,10 +1265,10 @@ export const driftSignals = {
     windowDays?: number;
     minAbsZ?: number;
   } = {}) => {
-    const query: Record<string, string | number> = {};
+    const query: Record<string, string> = {};
     if (params.nicheId) query.niche_id = params.nicheId;
-    if (params.windowDays) query.window_days = params.windowDays;
-    if (params.minAbsZ !== undefined) query.min_abs_z = params.minAbsZ;
+    if (params.windowDays) query.window_days = String(params.windowDays);
+    if (params.minAbsZ !== undefined) query.min_abs_z = String(params.minAbsZ);
     return get<{
       data: import("./types").DriftSignalsSummaryPayload | null;
     }>("/drift-signals/summary", query).then((d) =>
