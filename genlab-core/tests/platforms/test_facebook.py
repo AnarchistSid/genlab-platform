@@ -622,3 +622,116 @@ class TestCheckPostAlive:
         assert args[0].endswith("/1234")
         assert kwargs["params"]["fields"] == "id"
         assert kwargs["params"]["access_token"] == "EAAtest_fb_token"
+
+    # ── PR #FB-Survival-Detect (2026-07-11) ────────────────────────
+    # Live probe of 5 known-deleted post_ids from the 2026-03-17
+    # mass-takedown event confirmed Meta returns HTTP 400 code=100
+    # subcode=33 message "…does not exist…". Previously this shape
+    # was treated as ambiguous (returned None), causing 4 months of
+    # zero takedown detection. The precise triple check narrows the
+    # False branch to only Meta's confirmed-deletion shape while
+    # keeping ambiguous responses (permission errors, malformed IDs)
+    # at None.
+
+    def test_returns_false_on_meta_confirmed_deletion_shape(self, fb_client):
+        """The exact shape Meta returns for a deleted post — live-probed
+        against 5 known-deleted post_ids from 2026-03-17 event."""
+        body = {
+            "error": {
+                "code": 100,
+                "error_subcode": 33,
+                "message": (
+                    "Unsupported get request. Object with ID '852436037816438' "
+                    "does not exist, cannot be loaded due to missing permissions, "
+                    "or does not support this operation"
+                ),
+            }
+        }
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(400, body),
+        ):
+            assert fb_client.check_post_alive("852436037816438") is False
+
+    def test_returns_none_when_subcode_missing(self, fb_client):
+        """Precise triple check — no subcode field means we can't
+        distinguish confirmed removal from other code=100 cases.
+        Keep the conservative ``None`` verdict."""
+        body = {
+            "error": {
+                "code": 100,
+                "message": "Object with ID does not exist",
+            }
+        }
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(400, body),
+        ):
+            assert fb_client.check_post_alive("1234") is None
+
+    def test_returns_none_when_subcode_different(self, fb_client):
+        """A code=100 with a NON-33 subcode is a different Meta error
+        class (permissions, wrong API surface, etc.) — must stay
+        ambiguous."""
+        body = {
+            "error": {
+                "code": 100,
+                "error_subcode": 2069000,  # some other subcode
+                "message": "Object with ID does not exist",
+            }
+        }
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(400, body),
+        ):
+            assert fb_client.check_post_alive("1234") is None
+
+    def test_returns_none_when_status_code_not_400(self, fb_client):
+        """The precise triple requires HTTP 400 (not 404, not 403).
+        Live-probe confirmed Meta returns 400 for deleted objects;
+        any other status code is a different failure class."""
+        body = {
+            "error": {
+                "code": 100,
+                "error_subcode": 33,
+                "message": "does not exist",
+            }
+        }
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(403, body),
+        ):
+            assert fb_client.check_post_alive("1234") is None
+
+    def test_returns_none_when_message_lacks_does_not_exist(self, fb_client):
+        """Even the exact code+subcode+status triple must ALSO carry
+        the ``does not exist`` message — protects against future Meta
+        error-response overloading of the same code triple."""
+        body = {
+            "error": {
+                "code": 100,
+                "error_subcode": 33,
+                "message": "Some other error condition entirely",
+            }
+        }
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(400, body),
+        ):
+            assert fb_client.check_post_alive("1234") is None
+
+    def test_case_insensitive_does_not_exist_match(self, fb_client):
+        """Meta's actual message uses lowercase; be defensive against
+        future casing changes by matching case-insensitively."""
+        body = {
+            "error": {
+                "code": 100,
+                "error_subcode": 33,
+                "message": "Object DOES NOT EXIST on this page",
+            }
+        }
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(400, body),
+        ):
+            assert fb_client.check_post_alive("1234") is False

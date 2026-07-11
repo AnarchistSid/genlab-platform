@@ -513,21 +513,31 @@ class FacebookClient:
 
         Returns:
             * ``True``  — the post exists (HTTP 200, ``id`` present).
-            * ``False`` — only on HTTP 410 (Gone), the one unambiguous
-              "this resource was explicitly retired" signal. Caller
-              may flip the row to ``REMOVED_BY_META``.
-            * ``None``  — everything else: HTTP 4xx with code 100/33
-              (ambiguous), 5xx, OAuth errors (102/190), network
-              exceptions, anything we can't interpret as a CONFIRMED
-              removal. Caller MUST NOT mark removed.
+            * ``False`` — HTTP 410 (Gone) OR HTTP 400 with
+              ``code=100 subcode=33`` and message containing
+              "does not exist". The latter is Meta's response shape
+              for a deleted post — live-probe of 5 known-deleted
+              post_ids from the 2026-03-17 event confirmed all
+              return this exact triple. Caller may flip the row to
+              ``REMOVED_BY_META``.
+            * ``None``  — everything else: HTTP 5xx, OAuth errors
+              (102/190), network exceptions, code=100 with a
+              different subcode/message, anything we can't
+              interpret as a CONFIRMED removal. Caller MUST NOT
+              mark removed.
 
-        Originally the False branch fired on any ``code 100`` /
-        "does not exist" payload, but a prod backfill (2026-06-10)
-        showed 352/404 rows misclassified as removed because legacy
-        post_ids carry a ``facebook:`` prefix the Graph API rejects.
-        The conservative contract guarantees a misclassified ID type
-        cannot mass-flip rows; the downstream ``run_check``
-        ``max_removal_rate`` guard adds a second layer.
+        Historical note: originally the False branch fired on ANY
+        ``code 100`` payload, but a prod backfill (2026-06-10)
+        misclassified 352/404 legacy ``facebook:``-prefixed IDs.
+        The prefix strip at line 537 fixes the root cause; the
+        precise triple check above further narrows the False branch
+        to only Meta's confirmed-deletion shape. The downstream
+        ``run_check`` ``max_removal_rate`` guard is defense in
+        depth against any residual false positives.
+
+        PR #FB-Survival-Detect (2026-07-11): tightened conservatism
+        after 4 months of zero takedown detection (post-Markanimation
+        audit surfaced the gap).
 
         Also strips a ``platform:`` prefix (e.g. ``facebook:NNN``)
         before the request — see the legacy post_id note above.
@@ -552,21 +562,55 @@ class FacebookClient:
         if resp.status_code == 200 and data.get("id"):
             return True
 
-        # Only HTTP 410 Gone is treated as a confirmed removal.
-        # Everything else — including 4xx + code 100 "does not exist"
-        # — is ambiguous (see docstring).
+        # HTTP 410 Gone remains an unambiguous confirmed-removal signal.
         if resp.status_code == 410:
             return False
 
         err_msg = _extract_error_message(data)
-        err_code = (
-            data.get("error", {}).get("code") if isinstance(data.get("error"), dict) else None
-        )
+        err_obj = data.get("error", {}) if isinstance(data.get("error"), dict) else {}
+        err_code = err_obj.get("code") if isinstance(err_obj, dict) else None
+        err_subcode = err_obj.get("error_subcode") if isinstance(err_obj, dict) else None
+
+        # PR #FB-Survival-Detect (2026-07-11, post-Markanimation audit):
+        # Meta's Graph API returns HTTP 400 code=100 subcode=33 with
+        # message "Object with ID X does not exist…" for deleted posts.
+        # The prior implementation treated this as ambiguous because a
+        # 2026-06-10 backfill misclassified 352/404 legacy ``facebook:``-
+        # prefixed IDs. That prefix bug is now fixed at line 537 (strip
+        # runs before the request), so the ONLY remaining false-positive
+        # class is: page-permission drift (token lost access) or malformed
+        # post_id shape. We rule out permission drift by only firing the
+        # False on this specific error triple (code=100 subcode=33 +
+        # "does not exist" substring); permission errors return code=200/
+        # 190/10 with different messages. The ``run_check`` orchestrator
+        # also has a ``max_removal_rate`` guard that aborts on abnormally
+        # high removal counts per run — belt-and-suspenders.
+        #
+        # Root cause of the 4-month blind spot on takedowns: the previous
+        # ``return None`` on code=100 meant every genuine removal looked
+        # ambiguous → mark_removed never fired → REMOVED_BY_META count
+        # stayed at 0. Live-probe of 5 known-deleted post_ids from the
+        # 2026-03-17 mass-takedown event confirmed all return this exact
+        # error shape.
+        if (
+            resp.status_code == 400
+            and err_code == 100
+            and err_subcode == 33
+            and "does not exist" in (err_msg or "").lower()
+        ):
+            self._log.info(
+                "Facebook: survival check CONFIRMED removal for %s "
+                "(HTTP 400 code=100 subcode=33 'does not exist')",
+                clean_id,
+            )
+            return False
+
         self._log.debug(
-            "Facebook: survival check ambiguous for %s (HTTP %d, code=%s): %s",
+            "Facebook: survival check ambiguous for %s (HTTP %d, code=%s, subcode=%s): %s",
             clean_id,
             resp.status_code,
             err_code,
+            err_subcode,
             err_msg,
         )
         return None
