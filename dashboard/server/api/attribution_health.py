@@ -42,9 +42,14 @@ bp = Blueprint(
 _MIN_WINDOW = 1
 _MAX_WINDOW = 168  # 1 week — matches fb_survival_check upper bound
 
-# Attribution health thresholds — tune once real data arrives.
-_HEALTHY_PCT = 95.0
-_CAUTION_PCT = 90.0
+# Attribution health thresholds. Post-2026-07-11 audit tightening:
+# raised from 95/90 → 100/99. Any single miss is a real audience-
+# facing failure — we already retroactively fix them by hand, so
+# the operator needs to see the miss BEFORE they'd otherwise notice.
+# Old thresholds tolerated 1 in 20 uncredited before turning amber
+# which defeats the purpose.
+_HEALTHY_PCT = 100.0
+_CAUTION_PCT = 99.0
 
 
 @bp.route("/stats", methods=["GET"])

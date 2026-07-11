@@ -113,7 +113,9 @@ def test_core_module_status_thresholds_kept_in_sync_with_endpoint():
 
     api_src = _normalise(Path(api_mod.__file__).read_text())
     core_src = _normalise(Path(core_mod.__file__).read_text())
-    assert "_HEALTHY_PCT = 95.0" in api_src
-    assert "_HEALTHY_PCT = 95.0" in core_src
-    assert "_CAUTION_PCT = 90.0" in api_src
-    assert "_CAUTION_PCT = 90.0" in core_src
+    # Post-2026-07-11 audit: 100/99 instead of 95/90. Any single miss
+    # is a real audience-facing failure — the operator needs to see it.
+    assert "_HEALTHY_PCT = 100.0" in api_src
+    assert "_HEALTHY_PCT = 100.0" in core_src
+    assert "_CAUTION_PCT = 99.0" in api_src
+    assert "_CAUTION_PCT = 99.0" in core_src

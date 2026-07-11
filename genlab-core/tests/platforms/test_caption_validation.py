@@ -10,9 +10,12 @@ Default off — shipping is a no-op until deliberately flipped.
 
 Tests here pin:
 
-  1. ``validate_caption_has_attribution`` correctness on the 3 recognised
-     signals (🎬 Original marker, Footage marker, explicit source_url)
-  2. Rejection of captions lacking all 3
+  1. ``validate_caption_has_attribution`` correctness on the 2 recognised
+     caption markers (🎬 Original, Footage) — post-2026-07-11 audit
+     the source_url escape hatch was REMOVED because Twitch directory
+     URLs were satisfying the check while shipping empty-of-credit
+     captions to real audiences
+  2. Rejection of captions lacking a marker
   3. ``layer4_block_enabled`` env-flag semantics (default off)
   4. Source-pin on the 4 platform clients — each wires the validator
      before its API call, in warn mode by default
@@ -56,10 +59,12 @@ def test_validate_accepts_footage_marker():
     assert reason is None
 
 
-def test_validate_accepts_explicit_source_url():
-    """Blueprint-level source_url is an operator escape hatch — the
-    caption itself doesn't need a credit marker as long as source_url
-    is populated."""
+def test_validate_rejects_source_url_alone_after_2026_07_11_tightening():
+    """Post-2026-07-11 audit: source_url no longer satisfies the
+    validation on its own. The gaming case demonstrated the failure
+    mode — video_url populated, caption empty of credit line, users
+    saw nothing. The escape hatch is gone; caption must carry the
+    marker."""
     from genlab_core.platforms.caption_validation import (
         validate_caption_has_attribution,
     )
@@ -69,8 +74,8 @@ def test_validate_accepts_explicit_source_url():
         cap,
         source_url="https://youtube.com/watch?v=custom",
     )
-    assert ok is True
-    assert reason is None
+    assert ok is False
+    assert reason == "missing_attribution_line"
 
 
 def test_validate_rejects_missing_all_signals():
@@ -96,16 +101,19 @@ def test_validate_marker_match_is_case_insensitive():
     assert ok is True
 
 
-def test_validate_treats_empty_source_url_as_missing():
-    """Whitespace-only source_url must not count as a valid escape
-    hatch. Otherwise a blank field in the blueprint would bypass
-    Layer 4 entirely."""
+def test_validate_ignores_source_url_after_2026_07_11_tightening():
+    """Sibling to the tightening pin — even a well-formed source_url
+    is now insufficient without a caption marker. Pin the contract
+    strictly."""
     from genlab_core.platforms.caption_validation import (
         validate_caption_has_attribution,
     )
 
     cap = "No credit line"
-    ok, _ = validate_caption_has_attribution(cap, source_url="   ")
+    ok, _ = validate_caption_has_attribution(
+        cap,
+        source_url="https://twitch.tv/directory/game/xyz",
+    )
     assert ok is False
 
 
@@ -117,6 +125,38 @@ def test_validate_returns_missing_on_empty_caption_no_url():
     ok, reason = validate_caption_has_attribution("")
     assert ok is False
     assert reason == "missing_attribution_line"
+
+
+# ── Audience-facing invariant pin (post-2026-07-11) ────────────────
+
+
+def test_source_url_no_longer_bypasses_validation():
+    """Load-bearing pin for the whole attribution stack. This
+    behaviour changed on 2026-07-11 after today's gaming case
+    demonstrated the previous escape hatch shipping empty-of-credit
+    captions to real audiences.
+
+    If a future refactor re-introduces the source_url short-circuit,
+    this test fires. Do NOT delete this test to make it pass — the
+    old behaviour is what let the failure through in the first
+    place."""
+    from genlab_core.platforms.caption_validation import (
+        validate_caption_has_attribution,
+    )
+
+    # Every realistic source_url form should NOT bypass an empty
+    # caption. Belt-and-suspenders on the tightening.
+    for url in (
+        "https://youtube.com/watch?v=abc",
+        "https://clips.twitch.tv/abc",
+        "https://www.twitch.tv/directory/game/xyz",  # today's gaming case
+        "https://www.facebook.com/share/r/abc/",
+        "http://example.com/",
+    ):
+        ok, _ = validate_caption_has_attribution("empty caption", source_url=url)
+        assert ok is False, (
+            f"source_url {url!r} must not bypass validation — audience would see an uncredited post"
+        )
 
 
 # ── layer4_block_enabled ───────────────────────────────────────────
