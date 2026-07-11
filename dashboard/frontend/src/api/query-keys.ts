@@ -144,6 +144,13 @@ export const queryKeys = {
     divergenceStats: (nicheId: string, windowDays: number) =>
       ["product-bandit", "divergence-stats", nicheId, windowDays] as const,
   },
+  attributionHealth: {
+    /** Layer 5 attribution health (PR #Layer5, 2026-07-11) cache key.
+     *  Backend query is a single window-scoped aggregation — cache
+     *  by window_hours so different window selectors don't collide. */
+    stats: (windowHours: number) =>
+      ["attribution-health", "stats", windowHours] as const,
+  },
   counterfactualReplay: {
     /** Intervention 7 observability (2026-07-01) — per-niche latest
      *  replay artifact. Monthly rewrite; daily poll is plenty. */

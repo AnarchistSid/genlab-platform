@@ -1111,6 +1111,22 @@ function unwrapEnvelope<T>(response: unknown): T | null {
 // Intervention 5 Session 3 (2026-07-01) — Trend Anticipation client.
 // ───────────────────────────────────────────────────────────────
 
+// ───────────────────────────────────────────────────────────────
+// Layer 5 attribution health (PR #Layer5, 2026-07-11) client.
+// ───────────────────────────────────────────────────────────────
+
+export const attributionHealth = {
+  /** Fetch per-niche attribution stats over a rolling window.
+   *  Ships observation-only — response drives the AttributionHealthCard's
+   *  status colours + operator eyeball on ``attribution_present_pct``. */
+  stats: (windowHours: number = 24) =>
+    get<{
+      data: import("./types").AttributionHealthResponse;
+    }>("/attribution-health/stats", { window_hours: String(windowHours) }).then(
+      (d) => unwrapEnvelope<import("./types").AttributionHealthResponse>(d),
+    ),
+};
+
 export const counterfactualReplay = {
   /** Fetch the latest replay artifact for one niche. Returns null
    *  when the monthly runner hasn't fired yet (first-of-month
