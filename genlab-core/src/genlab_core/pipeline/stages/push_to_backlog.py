@@ -1917,6 +1917,29 @@ class PushToBacklog:
                     source_channel_id = (
                         story.get("source_channel_id") or story.get("channel_id") or None
                     )
+                    # PR #A (2026-07-10, Mark James Magbata / Markanimation
+                    # incident): source-creator credit appended to every
+                    # platform's caption. The writer populated
+                    # ``content["source_attribution"]`` with a viewer-readable
+                    # line ("\U0001F3AC Original: @channel — url") when the
+                    # source video has a known uploader. Idempotent via
+                    # substring check so re-runs don't double-append.
+                    # Twitter is skipped — 280-char limit means captions
+                    # rarely have room for a credit line without truncating
+                    # the take itself.
+                    _src_attr = content.get("source_attribution", "") or ""
+
+                    def _credit(text: str, _src_attr: str = _src_attr) -> str:
+                        # Default-arg binding: closes over the current
+                        # iteration's _src_attr value, satisfying ruff B023
+                        # and preventing late-binding surprises if this
+                        # helper were ever accidentally captured outside
+                        # the loop iteration.
+                        text = text or ""
+                        if not _src_attr or _src_attr in text:
+                            return text
+                        return text.rstrip() + "\n\n" + _src_attr
+
                     fields: dict[str, Any] = {
                         "candidate_id": candidate_id,
                         "story": [story_record_id],
@@ -1927,7 +1950,7 @@ class PushToBacklog:
                         "hook": hook,
                         "hook_text": hook,
                         "title": title,
-                        "caption": ig.get("caption", ""),
+                        "caption": _credit(ig.get("caption", "")),
                         "hashtags": " ".join(
                             ig.get("hashtags", []) or re.findall(r"#\w+", ig.get("caption", ""))
                         ),
@@ -1937,7 +1960,7 @@ class PushToBacklog:
                         # disclosure-append produces a well-formed value, not a
                         # mangled JSON document.
                         "youtube_content": (
-                            yt.get("description", "")
+                            _credit(yt.get("description", ""))
                             + (
                                 "\n\n" + content.get("youtube_attribution", "")
                                 if content.get("youtube_attribution")
@@ -1952,8 +1975,8 @@ class PushToBacklog:
                                 "routing": tw.get("routing", "single"),
                             }
                         ),
-                        "facebook_content": fb.get("caption", ""),
-                        "threads_content": content.get("threads", {}).get("caption", ""),
+                        "facebook_content": _credit(fb.get("caption", "")),
+                        "threads_content": _credit(content.get("threads", {}).get("caption", "")),
                         "priority_score": _apply_engagement_boost(
                             story.get("final_score")
                             if story.get("final_score") is not None
