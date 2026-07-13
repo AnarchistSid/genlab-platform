@@ -141,6 +141,12 @@ def _query_uncredited(dsn: str, days: int) -> list[TargetPost]:
     tuple."""
     import psycopg
 
+    # Pass the emoji marker as a parameter — psycopg's query-splitter
+    # trips on emoji bytes when they sit inside the query string near
+    # a ``%s`` marker. Passing as a parameter avoids the parser path
+    # that walks the SQL bytes looking for placeholders.
+    marker_like = f"%{MARKER}%"
+    footage_like = "%Footage:%"
     sql = """
         SELECT b.id::text, b.niche_id,
                COALESCE(b.video_url, '') AS video_url,
@@ -152,21 +158,31 @@ def _query_uncredited(dsn: str, days: int) -> list[TargetPost]:
           AND b.updated_at > NOW() - (%s || ' days')::interval
           AND pa.status IN ('SUCCESS','INSIGHTS_6H','INSIGHTS_24H','INSIGHTS_48H','INSIGHTS_168H')
           AND pa.post_id IS NOT NULL AND pa.post_id != ''
-          -- Exclude already-credited (any caption field carries marker)
           AND NOT (
-              COALESCE(b.caption, '') LIKE '%🎬 Original:%'
-              OR COALESCE(b.caption, '') LIKE '%Footage:%'
-              OR COALESCE(b.extra->>'facebook_content', '') LIKE '%🎬 Original:%'
-              OR COALESCE(b.extra->>'twitter_content', '') LIKE '%🎬 Original:%'
-              OR COALESCE(b.extra->>'threads_content', '') LIKE '%🎬 Original:%'
-              OR COALESCE(b.extra->>'youtube_content', '') LIKE '%🎬 Original:%'
+              COALESCE(b.caption, '') LIKE %s
+              OR COALESCE(b.caption, '') LIKE %s
+              OR COALESCE(b.extra->>'facebook_content', '') LIKE %s
+              OR COALESCE(b.extra->>'twitter_content', '') LIKE %s
+              OR COALESCE(b.extra->>'threads_content', '') LIKE %s
+              OR COALESCE(b.extra->>'youtube_content', '') LIKE %s
           )
         ORDER BY b.updated_at DESC, pa.platform
     """
     out: list[TargetPost] = []
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (str(days),))
+            cur.execute(
+                sql,
+                (
+                    str(days),
+                    marker_like,
+                    footage_like,
+                    marker_like,
+                    marker_like,
+                    marker_like,
+                    marker_like,
+                ),
+            )
             for row in cur.fetchall():
                 bp_id, niche, url, ch, plat, raw_post = row
                 out.append(
