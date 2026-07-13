@@ -123,6 +123,19 @@ def _fetch_observed_peak(
     try:
         from pytrends.request import TrendReq
     except ImportError:
+        # 2026-07-13 audit follow-up: pytrends was previously an
+        # UNDECLARED dep. Silent ImportError meant this fn returned
+        # None for every topic; correlation validation never became
+        # "ready" so ``GENLAB_TREND_ANTICIPATION_ENABLED`` stayed
+        # dormant indefinitely. pytrends now declared in
+        # genlab-core/pyproject.toml. If this ImportError still fires,
+        # it means the venv sync didn't pick it up — WARN-level so
+        # operator sees the misconfiguration in the journal.
+        logger.warning(
+            "[anticipation_accuracy] pytrends not installed — "
+            "add to genlab-core dependencies + uv sync. All peak "
+            "fetches will return None until fixed."
+        )
         return None
 
     try:
@@ -132,7 +145,12 @@ def _fetch_observed_peak(
         pt.build_payload([topic], timeframe=tf, geo="US")
         df = pt.interest_over_time()
     except Exception as exc:
-        logger.debug("[anticipation_accuracy] peak fetch failed for %r: %s", topic, exc)
+        # 2026-07-13 audit follow-up: was DEBUG, so 429s + timeouts
+        # were invisible in prod journal. Bumped to INFO so the
+        # operator can see the fetch-failure rate + decide whether
+        # pytrends is being rate-limited too aggressively to be
+        # useful (adjust polling cadence + retry backoff if so).
+        logger.info("[anticipation_accuracy] peak fetch failed for %r: %s", topic, exc)
         return None
 
     if df is None or df.empty or topic not in df.columns:
