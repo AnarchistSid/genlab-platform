@@ -128,7 +128,18 @@ class BaseWritingStrategy(WritingStrategy):
 
         raw_title = story.get("title", "")
         raw_summary = story.get("summary", "")
-        raw_channel = story.get("source", "")
+        # Bug A fix (2026-07-13 audit W1 trace): previously read
+        # ``story.get("source")`` — but ``source`` is the source TYPE
+        # (``"youtube_trending"``, ``"twitch_trending"``, etc.), NOT
+        # the creator's channel name. The bug meant every reel shipped
+        # with the writer's ``format_source_attribution`` receiving
+        # ``source_channel_title="youtube_trending"``, producing garbage
+        # like "🎬 Original: @youtube_trending" — or nothing at all
+        # when Bug C (below) dropped it on the floor. Reads
+        # ``channel_name`` (populated by TrendingVideoFetcher.to_story
+        # + RSS/Twitch/Reddit fetchers) with source_channel_title as
+        # secondary fallback for any legacy paths that use that name.
+        raw_channel = story.get("channel_name") or story.get("source_channel_title") or ""
         raw_tags = story.get("tags", []) or []
 
         # Sanitize: strip HTML, collapse whitespace, drop control chars
@@ -286,6 +297,22 @@ class BaseWritingStrategy(WritingStrategy):
         content["caption"] = result.get("instagram_caption", "")
         content["written"] = True
         content["written_by"] = "llm"
+
+        # Bug C fix (2026-07-13 audit W1 trace): the writer sets
+        # ``result["source_attribution"]`` with the audience-facing credit
+        # line ("🎬 Original: @channel — url"), but this propagator only
+        # cherry-picks specific fields into ``story["content"]`` — the
+        # attribution string was falling on the floor here. push_to_backlog
+        # then reads ``story["content"]["source_attribution"]`` (empty),
+        # ``_credit`` helper no-ops, and every published caption ships
+        # without a visible credit line. Layer 4 warned but didn't block
+        # (until the 2026-07-13 flip); Layer 5 metric masked this for
+        # weeks by counting ``source_channel_id IS NOT NULL`` as
+        # attribution — a signal that IS populated regardless of
+        # this bug. Removed by PR #776 audit tightening; that made this
+        # long-standing failure visible for the first time.
+        if result.get("source_attribution"):
+            content["source_attribution"] = result["source_attribution"]
 
         # Carry the bandit-picked hook style up to story level so
         # push_to_backlog can promote it into the blueprint's extra
