@@ -242,7 +242,21 @@ def check_tiktok() -> dict:
 
 
 def check_threads() -> dict:
-    """Check Threads token health (60-day expiry)."""
+    """Check Threads token health via live API probe (60-day expiry).
+
+    Post-2026-07-13 audit follow-up (proxy-signal masking class-of-bug):
+    the previous implementation used ``THREADS_TOKEN_ISSUED_AT`` as a
+    proxy for token validity — a stale timestamp reported "healthy"
+    even if the token was revoked server-side or rotated without the
+    env var being updated. Mirrors the pattern already used by
+    ``check_meta_token`` + ``check_anthropic`` + ``check_openai``:
+    hit the API, treat 200 with expected shape as healthy.
+
+    ``THREADS_TOKEN_ISSUED_AT`` is still consulted as a SECONDARY
+    signal to surface "expiring soon" warnings, but the primary
+    invariant (does the token succeed on a real call?) is now
+    verified directly.
+    """
     token = os.getenv("THREADS_ACCESS_TOKEN", "").strip()
     if not token:
         return {
@@ -251,44 +265,83 @@ def check_threads() -> dict:
             "message": "THREADS_ACCESS_TOKEN not set",
         }
 
-    issued_str = os.getenv("THREADS_TOKEN_ISSUED_AT", "").strip()
-    if not issued_str:
-        return {"platform": "threads", "status": "healthy", "message": "Token set but age unknown"}
-
+    # ── Primary: live API probe (audience-facing invariant) ────────
     try:
-        issued_at = datetime.fromisoformat(issued_str)
-        if issued_at.tzinfo is None:
-            issued_at = issued_at.replace(tzinfo=UTC)
-        age_days = (datetime.now(UTC) - issued_at).days
-        remaining = 60 - age_days
+        probe = requests.get(
+            "https://graph.threads.net/v1.0/me",
+            params={"access_token": token},
+            timeout=15,
+        )
+        if not probe.ok:
+            err = (
+                probe.json().get("error", {})
+                if probe.headers.get("content-type", "").startswith("application/json")
+                else {}
+            )
+            err_code = err.get("code", 0)
+            err_msg = (err.get("message") or probe.text)[:200]
+            if err_code == 190 or "expired" in err_msg.lower() or "invalid" in err_msg.lower():
+                return {
+                    "platform": "threads",
+                    "status": "expired",
+                    "message": f"Token rejected by API: {err_msg}",
+                }
+            return {"platform": "threads", "status": "error", "message": err_msg}
+        me = probe.json()
+        if "id" not in me:
+            return {
+                "platform": "threads",
+                "status": "error",
+                "message": f"Unexpected /me response shape: {str(me)[:150]}",
+            }
+        username = me.get("username") or me.get("name") or "unknown"
+    except requests.exceptions.RequestException as e:
+        return {"platform": "threads", "status": "error", "message": f"Network error: {e}"}
+    except Exception as e:  # noqa: BLE001 — fail-open with informative message
+        return {"platform": "threads", "status": "error", "message": str(e)[:200]}
 
-        if remaining > 15:
+    # ── Secondary: age-based expiry warning ───────────────────────
+    # Live probe passed, but Threads tokens hard-expire at 60 days
+    # regardless of live-probe success at day 59. If ISSUED_AT is
+    # present + we're inside the warning window, surface it so the
+    # operator has time to rotate before the next publish fails.
+    issued_str = os.getenv("THREADS_TOKEN_ISSUED_AT", "").strip()
+    if issued_str:
+        try:
+            issued_at = datetime.fromisoformat(issued_str)
+            if issued_at.tzinfo is None:
+                issued_at = issued_at.replace(tzinfo=UTC)
+            age_days = (datetime.now(UTC) - issued_at).days
+            remaining = 60 - age_days
+            if remaining > 15:
+                return {
+                    "platform": "threads",
+                    "status": "healthy",
+                    "message": f"@{username} — token valid ({remaining} days remaining)",
+                    "days_remaining": remaining,
+                }
+            if remaining > 2:
+                return {
+                    "platform": "threads",
+                    "status": "healthy",
+                    "message": f"@{username} — token expiring soon ({remaining} days) — refresh recommended",
+                    "days_remaining": remaining,
+                }
             return {
                 "platform": "threads",
-                "status": "healthy",
-                "message": f"Token valid ({remaining} days remaining)",
+                "status": "expiring",
+                "message": f"@{username} — token critical ({remaining} days) — refresh immediately",
                 "days_remaining": remaining,
             }
-        elif remaining > 2:
-            return {
-                "platform": "threads",
-                "status": "healthy",
-                "message": f"Token expiring soon ({remaining} days remaining) — refresh recommended",
-                "days_remaining": remaining,
-            }
-        else:
-            return {
-                "platform": "threads",
-                "status": "expired",
-                "message": f"Token critical ({remaining} days remaining) — refresh immediately",
-                "days_remaining": remaining,
-            }
-    except (ValueError, TypeError) as e:
-        return {
-            "platform": "threads",
-            "status": "error",
-            "message": f"Cannot parse THREADS_TOKEN_ISSUED_AT: {e}",
-        }
+        except (ValueError, TypeError):
+            pass  # Fall through to healthy — live probe already passed
+
+    # Live probe passed + no ISSUED_AT to compute expiry countdown
+    return {
+        "platform": "threads",
+        "status": "healthy",
+        "message": f"@{username} — live probe OK (age unknown, THREADS_TOKEN_ISSUED_AT missing)",
+    }
 
 
 # ══════════════════════════════════════════════════════════════
