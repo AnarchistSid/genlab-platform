@@ -33,6 +33,27 @@ import pytest
 from genlab_core.strategies.base_visual_render import BaseVisualRenderStrategy
 
 
+@pytest.fixture(autouse=True)
+def _bypass_pre_render_quality_gate():
+    """Improvement B (2026-07-13): the pre-render quality gate now
+    runs inside ``_compose_frame`` before the compositor. Every test
+    in this file is asserting compositor behavior, not the gate — so
+    bypass the gate here to preserve their intent. The gate itself
+    has dedicated coverage in
+    ``tests/rendering/test_pre_render_quality.py``.
+
+    Individual tests that WANT to exercise the gate can override the
+    fixture by patching ``check_pre_render_quality`` explicitly.
+    """
+    from genlab_core.rendering.pre_render_quality import QualityCheck
+
+    with patch(
+        "genlab_core.strategies.base_visual_render.check_pre_render_quality",
+        return_value=QualityCheck(ok=True, reason="", detail=""),
+    ):
+        yield
+
+
 class _StubVisualRender(BaseVisualRenderStrategy):
     """Concrete subclass with every remaining abstract method stubbed
     for tests. PR 4 removed ``_compose_frame`` from the abstract list
