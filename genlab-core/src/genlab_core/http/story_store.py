@@ -72,6 +72,35 @@ class StoryStore:
         }
         if story.get("niche_id"):
             fields["niche_id"] = story["niche_id"]
+        # Bug B fix (2026-07-13 W1 audit trace): the video-source
+        # attribution fields emitted by TrendingVideoFetcher.to_story
+        # (+ Twitch/RSS/Reddit fetchers) were silently dropped here.
+        # The live pipeline uses in-memory ``context["stories"]`` so
+        # this didn't break caption attribution — but retroactive-
+        # credit scripts, the source-discovery proposer, and any
+        # future feature that queries ``stories.extra`` for creator
+        # info were reading NULL for weeks. Backend auto-routes
+        # unknown fields to ``extra`` JSONB (see
+        # ``PostgresBackend._split_fields`` — no schema change
+        # required). Guarded per-field so we don't stamp None over
+        # legitimately-absent values.
+        _extra_fields = (
+            "channel_name",
+            "channel_id",
+            "video_id",
+            "source_url",
+            "canonical_url",
+            "view_count",
+            "view_velocity",
+            "duration_seconds",
+            "thumbnail_url",
+            "video_source",
+            "is_official_channel",
+        )
+        for _f in _extra_fields:
+            _v = story.get(_f)
+            if _v is not None and _v != "":
+                fields[_f] = _v
         # PR #528 (2026-06-24, SR-C tenant binding): pass niche_id
         # through to backend's SET LOCAL app.niche_id. Mirrors PR #526
         # (BlueprintStore single-row). The story dict already carries
@@ -151,6 +180,25 @@ class StoryStore:
         the rationale and trade-offs on heterogeneous batches.
         """
         records = []
+        # Bug B fix (2026-07-13 W1 audit trace): mirror the single-row
+        # path's field enrichment so bulk-created stories also carry
+        # the video-source attribution fields into ``extra`` JSONB.
+        # Without this, batch_create_stories was silently dropping
+        # channel_name/channel_id/video_id — same failure as
+        # ``create_story`` above.
+        _extra_fields = (
+            "channel_name",
+            "channel_id",
+            "video_id",
+            "source_url",
+            "canonical_url",
+            "view_count",
+            "view_velocity",
+            "duration_seconds",
+            "thumbnail_url",
+            "video_source",
+            "is_official_channel",
+        )
         for story in stories:
             scores = story.get("scores", {})
             record = {
@@ -171,6 +219,10 @@ class StoryStore:
             # bulk-path SR-C data gap — same shape as PR #527).
             if story.get("niche_id"):
                 record["niche_id"] = story["niche_id"]
+            for _f in _extra_fields:
+                _v = story.get(_f)
+                if _v is not None and _v != "":
+                    record[_f] = _v
             records.append(record)
 
         # PR #528: unique-niche dispatch — pass kwarg only when all
