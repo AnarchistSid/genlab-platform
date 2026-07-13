@@ -66,6 +66,15 @@ class TestPostDeployVerifyScript:
             "compliance/stats",  # check #4 — compliance stats endpoint path
             "scheduling/pauses",  # check #4 — niche-pauses endpoint path
             "source-discovery/proposals",  # check #4 — source discovery endpoint
+            # Check #8 (2026-07-13 W1 audit follow-up): the writer wire
+            # smoke check — queries recent captions for credit markers.
+            # Deletion of this check would let a writer-wire class-of-bug
+            # regression ship silently again (as it did for weeks before
+            # the tightening exposed it). Reference multiple invariants
+            # so a partial refactor still fires.
+            "writer wire",  # the section note
+            "🎬 Original:",  # the marker being queried
+            "Footage:",  # the alternate marker
         ]
         missing = [r for r in required if r not in content]
         assert not missing, (
