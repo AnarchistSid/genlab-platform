@@ -1549,6 +1549,40 @@ def update_content(record_id):
     if not updates:
         return api_error(error="No valid fields to update")
 
+    # Post-2026-07-13 audit follow-up (G7): manual edits to the caption
+    # field bypass the Layer 4 validator that runs at publish time.
+    # Operator can save a caption without a credit line, and Layer 4
+    # only fires at the next publish attempt — after retry / scheduling
+    # tooling has already committed to the payload. Re-run the same
+    # validator here so the operator learns at edit time, not at
+    # publish time. Only applies when caption is actually being
+    # changed (hook + hashtags don't carry the attribution marker).
+    if "caption" in updates:
+        try:
+            from genlab_core.platforms.caption_validation import (
+                validate_caption_has_attribution,
+            )
+
+            _l4_ok, _l4_reason = validate_caption_has_attribution(
+                updates["caption"] or "",
+            )
+            if not _l4_ok:
+                logger.warning(
+                    "[layer4] Dashboard edit rejected — caption missing "
+                    "attribution marker (record_id=%s)",
+                    record_id,
+                )
+                return api_error(
+                    error=(
+                        "Caption missing attribution marker "
+                        "(🎬 Original: or Footage:). Please add a credit "
+                        "line before saving."
+                    ),
+                    code=400,
+                )
+        except ImportError as exc:  # noqa: F841 — fail-open on missing import
+            logger.debug("[layer4] validator unavailable, skipping edit check: %s", exc)
+
     # 2026-06-22 — capture BEFORE values so we can compute the edit diff
     # AFTER a successful update + emit EVENT_OPERATOR_EDIT to episodic
     # memory. Operator edits are the strongest taste signal in the

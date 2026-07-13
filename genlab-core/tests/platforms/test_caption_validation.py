@@ -226,3 +226,214 @@ def test_threads_client_wires_layer4_validator():
     assert "validate_caption_has_attribution" in src
     assert "layer4_block_enabled" in src
     assert "[layer4] Threads" in src
+
+
+def test_twitter_client_wires_layer4_validator():
+    """Post-2026-07-13 audit follow-up (G1). X/Twitter was the last
+    ships-real-content client without Layer 4 — reference wire pattern
+    mirrors the 4 pre-existing clients."""
+    import genlab_core.platforms.x_twitter as mod
+
+    src = _normalise(Path(mod.__file__).read_text())
+    assert "from genlab_core.platforms.caption_validation import" in src
+    assert "validate_caption_has_attribution" in src
+    assert "layer4_block_enabled" in src
+    assert "[layer4] Twitter" in src
+
+
+def test_tiktok_client_wires_layer4_validator():
+    """Post-2026-07-13 audit follow-up (G2). TikTok's real publisher
+    lives in ``genlab_core.publishing.tiktok_client`` (the
+    ``platforms/tiktok.py`` module is a stub that returns error until
+    ``TIKTOK_AUDIT_APPROVED=true``). Layer 4 wire lives in the REAL
+    publisher so that when the audit lands and audiences see content,
+    the backstop is already in place."""
+    import genlab_core.publishing.tiktok_client as mod
+
+    src = _normalise(Path(mod.__file__).read_text())
+    assert "from genlab_core.platforms.caption_validation import" in src
+    assert "validate_caption_has_attribution" in src
+    assert "layer4_block_enabled" in src
+    assert "[layer4] TikTok" in src
+
+
+# ── Behavioural pin: block-branch must actually short-circuit ──────
+#
+# Post-2026-07-13 audit follow-up (G8). Source pins above catch
+# refactors that remove the import or the validator call, but they do
+# NOT catch a refactor that deletes the ``if not _l4_ok:`` guard
+# block itself. The adversarial-audit call-out was concrete: someone
+# could keep the validator invocation for optics + delete the return-
+# on-failure branch, and every source pin still passes. These
+# behavioural tests exercise the actual short-circuit — with the
+# block flag ON + a caption lacking any marker, publish() must return
+# ``success=False`` with a "Layer 4" error string, WITHOUT calling
+# the platform's HTTP layer.
+
+
+class _NoHTTPRaise(AssertionError):
+    """Raised when a Layer 4 block-behavioural test's platform client
+    reaches the HTTP layer despite the block being on. If you see
+    this, the ``if not _l4_ok:`` guard was silently deleted."""
+
+
+def _make_no_marker_payload():
+    """Standard test payload with no attribution marker in caption."""
+    from pathlib import Path as _P
+
+    from genlab_core.platforms.models import PublishPayload
+
+    return PublishPayload(
+        caption="Just a plain caption. No credit line at all.",
+        media_paths=[_P("/tmp/test-l4-block.mp4")],
+        media_type="video",
+        hashtags=["#test"],
+        hook="Watch this",
+        niche_id="gaming",
+    )
+
+
+def test_facebook_block_branch_short_circuits(monkeypatch):
+    from genlab_core.platforms.facebook import FacebookClient
+
+    monkeypatch.setenv("GENLAB_ATTRIBUTION_LAYER4_BLOCK", "1")
+    client = FacebookClient(page_id="0", access_token="test_token", api_version="v21.0")
+
+    # Facebook does a token pre-flight BEFORE Layer 4; force it to
+    # pass so we exercise the L4 branch. Any HTTP call after that is
+    # a bug — L4 block must fire BEFORE the API.
+    from unittest.mock import patch as _patch
+
+    with (
+        _patch.object(client, "_validate_token_preflight", return_value=True),
+        _patch(
+            "genlab_core.platforms.facebook.requests.post",
+            side_effect=_NoHTTPRaise("Layer 4 block failed to short-circuit"),
+        ),
+    ):
+        result = client.publish(_make_no_marker_payload())
+    assert result.success is False
+    assert "Layer 4" in result.error
+
+
+def test_instagram_block_branch_short_circuits(monkeypatch):
+    from genlab_core.platforms.instagram import InstagramClient
+
+    monkeypatch.setenv("GENLAB_ATTRIBUTION_LAYER4_BLOCK", "1")
+    client = InstagramClient(access_token="test_token", ig_user_id="0", api_version="v21.0")
+    from unittest.mock import patch as _patch
+
+    with (
+        _patch.object(client, "_validate_token_preflight", return_value=True, create=True),
+        _patch(
+            "genlab_core.platforms.cdn_upload.upload_to_cdn",
+            side_effect=_NoHTTPRaise("L4 block failed"),
+        ),
+        _patch(
+            "genlab_core.platforms.instagram.requests.post",
+            side_effect=_NoHTTPRaise("L4 block failed"),
+        ),
+    ):
+        result = client.publish(_make_no_marker_payload())
+    assert result.success is False
+    assert "Layer 4" in result.error
+
+
+def test_youtube_block_branch_short_circuits(monkeypatch):
+    from genlab_core.platforms.youtube import YouTubeClient
+
+    monkeypatch.setenv("GENLAB_ATTRIBUTION_LAYER4_BLOCK", "1")
+    client = YouTubeClient(
+        client_id="test",
+        client_secret="test",
+        refresh_token="test",
+    )
+    from unittest.mock import patch as _patch
+
+    with (
+        _patch.object(client, "_validate_token_preflight", return_value=True, create=True),
+        _patch(
+            "genlab_core.platforms.youtube.requests.post",
+            side_effect=_NoHTTPRaise("L4 block failed"),
+        ),
+    ):
+        result = client.publish(_make_no_marker_payload())
+    assert result.success is False
+    assert "Layer 4" in result.error
+
+
+def test_threads_block_branch_short_circuits(monkeypatch):
+    from genlab_core.platforms.threads import ThreadsClient
+
+    monkeypatch.setenv("GENLAB_ATTRIBUTION_LAYER4_BLOCK", "1")
+    client = ThreadsClient(access_token="test_token", user_id="0")
+    from unittest.mock import patch as _patch
+
+    with (
+        _patch.object(client, "_validate_token_preflight", return_value=True, create=True),
+        _patch(
+            "genlab_core.platforms.threads.requests.post",
+            side_effect=_NoHTTPRaise("L4 block failed"),
+        ),
+    ):
+        result = client.publish(_make_no_marker_payload())
+    assert result.success is False
+    assert "Layer 4" in result.error
+
+
+def test_twitter_block_branch_short_circuits(monkeypatch):
+    from genlab_core.platforms.x_twitter import XTwitterClient
+
+    monkeypatch.setenv("GENLAB_ATTRIBUTION_LAYER4_BLOCK", "1")
+    client = XTwitterClient(
+        api_key="test",
+        api_secret="test",
+        access_token="test",
+        access_secret="test",
+    )
+    from unittest.mock import patch as _patch
+
+    # X/Twitter goes through tweepy's Client — patch the internal
+    # single-tweet helper so any escape from the L4 gate raises. Also
+    # force the rate-limit precheck to pass.
+    with (
+        _patch.object(client, "_is_currently_rate_limited", return_value=False),
+        _patch.object(
+            client,
+            "_post_single_tweet",
+            side_effect=_NoHTTPRaise("L4 block failed"),
+        ),
+    ):
+        result = client.publish(_make_no_marker_payload())
+    assert result.success is False
+    assert "Layer 4" in result.error
+
+
+def test_tiktok_block_branch_raises(monkeypatch):
+    """TikTok's real publisher raises ValueError from Layer 4 rather
+    than returning a PublishResult (the ``publish_video`` signature
+    returns a dict, not a Result object). Same short-circuit contract:
+    no HTTP call after the block."""
+    from genlab_core.publishing.tiktok_client import TikTokClient
+
+    monkeypatch.setenv("GENLAB_ATTRIBUTION_LAYER4_BLOCK", "1")
+    client = TikTokClient(
+        client_key="test",
+        client_secret="test",
+        access_token="test",
+        refresh_token="test",
+        audit_approved=True,
+    )
+    from unittest.mock import patch as _patch
+
+    import pytest as _pytest
+
+    with _patch(
+        "genlab_core.publishing.tiktok_client.requests.post",
+        side_effect=_NoHTTPRaise("L4 block failed"),
+    ):
+        with _pytest.raises(ValueError, match="Layer 4"):
+            client.publish_video(
+                "/tmp/test-l4-block.mp4",
+                "Just a plain caption. No credit line at all.",
+            )
