@@ -1,0 +1,14 @@
+[Unit]
+Description=Timer for GenLab retro-credit uncredited posts
+
+[Timer]
+# Fire every 90 minutes — matches Meta's app-scope rate-limit
+# reset window (~1 hour) with 30min buffer for safety.
+# Persistent=true means missed fires get caught up after reboot.
+OnBootSec=15min
+OnUnitActiveSec=90min
+Persistent=true
+Unit=genlab-retro-credit.service
+
+[Install]
+WantedBy=timers.target

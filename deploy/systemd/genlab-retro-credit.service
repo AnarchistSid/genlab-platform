@@ -1,0 +1,22 @@
+[Unit]
+Description=GenLab retro-credit uncredited posts (rate-limit-safe, state-file-backed)
+After=network-online.target
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+# Runs the retro-credit script with 3s pacing + state-file skip.
+# Idempotent: state file survives across runs, Meta rate-limit hits
+# just cause early-exit + retry next fire. Fresh publishes get
+# credited on tomorrow's fire onwards natively so this timer is
+# purely for the ~180 historical uncredited posts.
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/retro_credit_uncredited_posts.py --apply --days 30 --sleep 3.0
+TimeoutSec=1200
+
+[Install]
+WantedBy=multi-user.target
