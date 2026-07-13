@@ -122,6 +122,71 @@ class TestCreateStory:
         store.create_story({"story_id": "s1", "title": "t", "url": "u"})
         assert backend.create.call_args[0][1]["priority"] == 0.5
 
+    def test_source_attribution_fields_forwarded_to_backend(self) -> None:
+        """Bug B fix (2026-07-13 W1 audit trace): the video-source
+        attribution fields emitted by ``TrendingVideoFetcher.to_story``
+        must reach the backend so they land in ``stories.extra``
+        JSONB (backend routes non-promoted-column fields there
+        automatically). Previously these were silently dropped —
+        which broke retroactive-credit scripts + source-discovery
+        proposer + any DB-backed feature that reads
+        ``stories.extra`` for creator info."""
+        store, backend = _make_store()
+        story = self._full_story()
+        story.update(
+            {
+                "channel_name": "MAKI",
+                "channel_id": "UC1234567890",
+                "video_id": "abc123",
+                "source_url": "https://youtube.com/watch?v=abc123",
+                "canonical_url": "https://youtube.com/watch?v=abc123",
+                "view_count": 50000,
+                "view_velocity": 1200.5,
+                "duration_seconds": 45,
+                "thumbnail_url": "https://i.ytimg.com/abc123.jpg",
+                "video_source": "trending",
+                "is_official_channel": True,
+            }
+        )
+        store.create_story(story)
+        fields = backend.create.call_args[0][1]
+        # Every field above must reach the backend (which routes
+        # non-promoted fields to extra JSONB per PostgresBackend
+        # ._split_fields).
+        assert fields["channel_name"] == "MAKI"
+        assert fields["channel_id"] == "UC1234567890"
+        assert fields["video_id"] == "abc123"
+        assert fields["source_url"] == "https://youtube.com/watch?v=abc123"
+        assert fields["canonical_url"] == "https://youtube.com/watch?v=abc123"
+        assert fields["view_count"] == 50000
+        assert fields["view_velocity"] == 1200.5
+        assert fields["duration_seconds"] == 45
+        assert fields["thumbnail_url"] == "https://i.ytimg.com/abc123.jpg"
+        assert fields["video_source"] == "trending"
+        assert fields["is_official_channel"] is True
+
+    def test_empty_or_missing_attribution_fields_not_forwarded(self) -> None:
+        """Empty string / None values must not be forwarded — otherwise
+        a fetcher that didn't populate the field would stamp NULL over
+        a legitimately-absent field in ``extra``, which is subtly
+        different from leaving the key out entirely (JSONB path
+        expressions treat them differently)."""
+        store, backend = _make_store()
+        story = self._full_story()
+        story.update(
+            {
+                "channel_name": "",  # empty string — sentinel for "unknown"
+                "channel_id": None,  # None — sentinel for "not populated"
+                # video_id absent entirely
+            }
+        )
+        store.create_story(story)
+        fields = backend.create.call_args[0][1]
+        # None of the three should reach the backend.
+        assert "channel_name" not in fields
+        assert "channel_id" not in fields
+        assert "video_id" not in fields
+
 
 # ---------------------------------------------------------------------------
 # find_story_by_story_id
@@ -277,3 +342,37 @@ class TestBatchCreateStories:
         assert row["authority_score"] == 0.9
         assert row["recency_score"] == 0.5
         assert row["novelty_score"] == 0.1
+
+    def test_bulk_path_forwards_source_attribution_fields_per_row(self) -> None:
+        """Bug B fix (2026-07-13 W1 audit trace): bulk path must
+        mirror the single-row path's field enrichment. Otherwise
+        batches of stories from a single fetcher poll would silently
+        strip channel data. Same rows per row as the single-row test."""
+        store, backend = _make_store()
+        store.batch_create_stories(
+            [
+                {
+                    "story_id": "s1",
+                    "title": "t1",
+                    "url": "u1",
+                    "channel_name": "Creator1",
+                    "channel_id": "UC1",
+                    "video_id": "v1",
+                },
+                {
+                    "story_id": "s2",
+                    "title": "t2",
+                    "url": "u2",
+                    "channel_name": "Creator2",
+                    # no channel_id or video_id on this row
+                },
+            ]
+        )
+        rows = backend.batch_create.call_args[0][1]
+        assert rows[0]["channel_name"] == "Creator1"
+        assert rows[0]["channel_id"] == "UC1"
+        assert rows[0]["video_id"] == "v1"
+        assert rows[1]["channel_name"] == "Creator2"
+        # Row 2 didn't populate these — must not appear
+        assert "channel_id" not in rows[1]
+        assert "video_id" not in rows[1]
