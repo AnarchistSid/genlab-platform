@@ -519,3 +519,89 @@ def test_layer3_does_not_block_youtube_with_derivable_url(monkeypatch):
     bp = {"video_id": "abc123", "source": "youtube_trending"}
     result = check_copyright_attribution(bp, "youtube", "gaming")
     assert result.decision == "allow"
+
+
+class TestAudit20260714AllSourcesGetVideoUrlFallback:
+    """Post-2026-07-14 audit: format_source_attribution now falls back
+    to video_url for ANY source, not just Twitch. The previous
+    Twitch-only guard shipped scorebat/tmdb/RSS blueprints uncredited
+    despite having video_url populated.
+    """
+
+    def test_scorebat_source_gets_credit_from_video_url(self):
+        from genlab_core.compliance.copyright_safety import (
+            format_source_attribution,
+        )
+
+        # Simulates a sports blueprint from fetch_scorebat.py
+        result = format_source_attribution(
+            {
+                "source": "scorebat",
+                "video_id": "",  # scorebat doesn't emit YT-style video_ids
+                "video_url": "https://www.scorebat.com/arsenal-vs-newcastle-united-live-stream/",
+                "source_channel_title": "",
+            }
+        )
+        assert result != "", (
+            "scorebat blueprint with populated video_url must produce "
+            "a credit line — the empirical case from 2026-07-14 DRAFTED "
+            "queue that would otherwise ship uncredited to real audiences."
+        )
+        assert "\U0001f3ac Original:" in result
+        assert "scorebat.com" in result
+
+    def test_tmdb_trailer_gets_credit_from_video_url(self):
+        from genlab_core.compliance.copyright_safety import (
+            format_source_attribution,
+        )
+
+        result = format_source_attribution(
+            {
+                "source": "tmdb_trailer",
+                "video_id": "",
+                "video_url": "https://www.youtube.com/watch?v=abc123",
+                "source_channel_title": "",
+            }
+        )
+        assert "\U0001f3ac Original:" in result
+
+    def test_channel_name_still_takes_precedence(self):
+        """The video_url fallback runs ONLY when derive_source_url
+        returns None AND we have a URL to use. When channel_name is
+        populated the credit line uses @handle format regardless of
+        source."""
+        from genlab_core.compliance.copyright_safety import (
+            format_source_attribution,
+        )
+
+        result = format_source_attribution(
+            {
+                "source": "scorebat",
+                "video_id": "",
+                "video_url": "https://www.scorebat.com/some-match/",
+                "source_channel_title": "Sky Sports",
+            }
+        )
+        # Uses @Sky Sports format because channel is present
+        assert "@Sky Sports" in result
+
+    def test_youtube_source_still_uses_template(self):
+        """Regression pin: YouTube sources still use derive_source_url
+        (template lookup) not the video_url fallback. Otherwise we'd
+        double-credit when video_id AND video_url both exist."""
+        from genlab_core.compliance.copyright_safety import (
+            format_source_attribution,
+        )
+
+        result = format_source_attribution(
+            {
+                "source": "youtube_trending",
+                "video_id": "rKV5JcALQoQ",
+                "video_url": "https://different.url/should-not-be-used",
+                "source_channel_title": "OpenAI",
+            }
+        )
+        # Should use derive_source_url output (youtube.com/watch?v=rKV5JcALQoQ)
+        # NOT video_url. Pin that the template-based URL wins.
+        assert "youtube.com/watch?v=rKV5JcALQoQ" in result
+        assert "different.url" not in result

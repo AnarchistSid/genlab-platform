@@ -160,25 +160,24 @@ def format_source_attribution(blueprint: Mapping) -> str:
     # finding): the Twitch fetcher emits source="twitch_clips" with
     # a pre-formed ``source_url`` / ``video_url`` field (Twitch clip
     # URLs contain the broadcaster slug + clip slug — not derivable
-    # from a single ID like YouTube). The YouTube-family template
-    # dispatcher returns None for twitch_clips, which used to zero
-    # the credit line for the entire gaming niche (Layer 5 showed
-    # 0% attribution on 2026-07-11 despite gaming publishing 8 posts
-    # from Twitch). This fallback reads the pre-formed URL directly
-    # so Twitch-sourced posts get "\U0001F3AC Original: @broadcaster
-    # — {clip_url}" without needing per-broadcaster URL templates.
+    # from a single ID like YouTube). Extended 2026-07-14 audit
+    # follow-up: the fallback now runs for ANY source (scorebat,
+    # tmdb_trailer, RSS, reddit, etc.), not just Twitch. Empirical
+    # trigger: a scorebat sports blueprint sitting DRAFTED with
+    # video_url populated but empty credit line — would ship
+    # uncredited on today's fire despite the writer wire being
+    # "fixed." Any pre-formed URL is a better credit anchor than
+    # returning empty.
     if not url:
-        source = (blueprint.get("source") or "").lower()
-        if "twitch" in source:
-            candidate = (
-                blueprint.get("video_url")
-                or blueprint.get("source_url")
-                or blueprint.get("canonical_url")
-                or ""
-            )
-            candidate = str(candidate).strip()
-            if candidate and candidate.startswith(("http://", "https://")):
-                url = candidate
+        candidate = (
+            blueprint.get("video_url")
+            or blueprint.get("source_url")
+            or blueprint.get("canonical_url")
+            or ""
+        )
+        candidate = str(candidate).strip()
+        if candidate and candidate.startswith(("http://", "https://")):
+            url = candidate
 
     if not url:
         return ""
