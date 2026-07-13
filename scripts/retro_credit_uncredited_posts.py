@@ -264,6 +264,18 @@ def _current_ig_caption(media_id: str, token: str) -> str:
     return ""
 
 
+# Meta's app-scoped rate limit fires with error code=4. A ``True``
+# sentinel here interrupts the outer loop so we don't waste API budget
+# on remaining rows once the app is throttled. Reset window is
+# typically ~1 hour, so re-runs the next hour pick up cleanly (the
+# script is idempotent).
+_RATE_LIMIT_HIT = False
+
+
+def _is_rate_limit(reason: str) -> bool:
+    return '"code":4' in reason or "Application request limit reached" in reason
+
+
 def _edit_fb_message(
     post_id: str, new_message: str, token: str, dry_run: bool
 ) -> tuple[bool, str]:
@@ -315,12 +327,15 @@ def _append_credit(current: str, credit_line: str) -> str:
     return credit_line
 
 
-def run(dsn: str, days: int, dry_run: bool) -> int:
+def run(dsn: str, days: int, dry_run: bool, sleep_seconds: float = 3.0) -> int:
+    global _RATE_LIMIT_HIT
+    _RATE_LIMIT_HIT = False
     targets = _query_uncredited(dsn, days=days)
     log.info(
-        "Found %d target (blueprint, platform) rows across last %d days",
+        "Found %d target (blueprint, platform) rows across last %d days (pacing %.1fs)",
         len(targets),
         days,
+        sleep_seconds,
     )
     stats = {
         "attempted_fb": 0, "attempted_ig": 0,
@@ -376,7 +391,11 @@ def run(dsn: str, days: int, dry_run: bool) -> int:
                 stats["failed"] += 1
                 failures.append(f"fb {t.normalised_post_id}: {reason}")
                 log.warning("[fb %s] FAILED — %s", t.normalised_post_id[-8:], reason)
-            time.sleep(0.5)  # gentle pacing
+            if _is_rate_limit(reason if not ok else ""):
+                _RATE_LIMIT_HIT = True
+                log.warning("[rate-limit] Meta app-scoped limit — stopping early")
+                break
+            time.sleep(sleep_seconds)
 
         elif t.platform == "instagram":
             stats["attempted_ig"] += 1
@@ -438,12 +457,24 @@ def main() -> int:
     ap.add_argument("--days", type=int, default=7)
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--dry-run", action="store_true", default=True)
+    ap.add_argument(
+        "--sleep",
+        type=float,
+        default=3.0,
+        help="Seconds to pace between API calls (default 3.0). Lower "
+        "risks Meta's app-scoped #4 rate limit; higher smooths out.",
+    )
     args = ap.parse_args()
     dry_run = not args.apply
 
     dsn = os.environ.get("DATABASE_URL", "").strip() or "dbname=genlab"
-    log.info("Mode: %s  window: last %d days", "APPLY" if not dry_run else "DRY-RUN", args.days)
-    return run(dsn=dsn, days=args.days, dry_run=dry_run)
+    log.info(
+        "Mode: %s  window: %dd  pacing: %.1fs",
+        "APPLY" if not dry_run else "DRY-RUN",
+        args.days,
+        args.sleep,
+    )
+    return run(dsn=dsn, days=args.days, dry_run=dry_run, sleep_seconds=args.sleep)
 
 
 if __name__ == "__main__":
