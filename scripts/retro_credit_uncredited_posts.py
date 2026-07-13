@@ -49,7 +49,6 @@ import argparse
 import json
 import logging
 import os
-import re
 import sys
 import time
 from dataclasses import dataclass
@@ -156,7 +155,22 @@ def _stamp_state(key: str) -> None:
                 indent=2,
             )
         )
-    except Exception as exc:  # noqa: BLE001 — fail-open
+    except PermissionError as exc:
+        # 2026-07-14 audit follow-up: this specific class was hidden for
+        # 6+ hours overnight because the state file got created as root
+        # (via ssh root@ during pre-populate) + systemd runs as genlab.
+        # Silent PermissionError → stamp fail → every 90-min timer
+        # re-attempted 100+ posts → wasted API budget + rate limits.
+        # Elevate PermissionError specifically to ERROR so it surfaces
+        # on the next journalctl -p err scan.
+        log.error(
+            "state file stamp DENIED — check ownership (chown genlab:genlab %s). "
+            "Silent PermissionError means every timer fire re-attempts "
+            "already-credited posts, wasting API budget. Exception: %s",
+            _STATE_PATH,
+            exc,
+        )
+    except Exception as exc:  # noqa: BLE001 — fail-open on other errors
         log.warning("state file stamp failed (%s) — will re-attempt next run", exc)
 
 
