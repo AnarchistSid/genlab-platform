@@ -142,6 +142,76 @@ else
     pass "auto-reset $(echo "$failed_alert_instances" | wc -w | tr -d ' ') failed alert instance(s)"
 fi
 
+note "8. Writer wire — recent captions carry credit marker"
+# Added 2026-07-13 after the W1 audit trace caught the writer wire
+# silently broken for weeks. Old Layer 5 metric masked the failure
+# by counting source_channel_id (populated via a DIFFERENT path) as
+# attribution — even though the caption itself shipped without a
+# visible credit line. This check queries the SAME signal Layer 5
+# uses today (caption marker only) so a broken writer wire fires
+# within one publish cycle instead of surfacing via DMCA notice.
+#
+# Deliberately permissive on total_published: publish frequency is
+# 5-15/day and the 24h window may catch a lull. If no publishes have
+# happened, we can't judge — pass with a note. Below-threshold
+# fires only when there ARE publishes AND >20% lack the marker.
+attribution_check=$(sudo -u genlab $VENV - <<'PY' 2>&1 || echo "PY_ERROR"
+import os, psycopg
+dsn = os.environ.get("DATABASE_URL") or "dbname=genlab"
+try:
+    with psycopg.connect(dsn) as c:
+        with c.cursor() as cur:
+            cur.execute("""
+                SELECT COUNT(*), COUNT(*) FILTER (
+                    WHERE COALESCE(caption,'') LIKE '%🎬 Original:%'
+                       OR COALESCE(caption,'') LIKE '%Footage:%'
+                       OR COALESCE(extra->>'facebook_content','') LIKE '%🎬 Original:%'
+                       OR COALESCE(extra->>'facebook_content','') LIKE '%Footage:%'
+                       OR COALESCE(extra->>'threads_content','') LIKE '%🎬 Original:%'
+                       OR COALESCE(extra->>'threads_content','') LIKE '%Footage:%'
+                       OR COALESCE(extra->>'youtube_content','') LIKE '%🎬 Original:%'
+                       OR COALESCE(extra->>'youtube_content','') LIKE '%Footage:%'
+                       OR COALESCE(extra->>'twitter_content','') LIKE '%🎬 Original:%'
+                       OR COALESCE(extra->>'twitter_content','') LIKE '%Footage:%'
+                )
+                FROM blueprints
+                WHERE status = 'PUBLISHED'
+                  AND updated_at > NOW() - INTERVAL '24 hours'
+            """)
+            total, with_credit = cur.fetchone()
+    print(f"{total}:{with_credit}")
+except Exception as e:
+    print(f"ERR:{e}")
+PY
+)
+if [[ "$attribution_check" == "PY_ERROR" ]] || [[ "$attribution_check" == ERR:* ]]; then
+    # DB unreachable — not a deploy failure, just a check we can't
+    # run. Skip rather than false-fail. The dedicated
+    # attribution_health_monitor.timer runs every 30m and will
+    # cover the gap.
+    pass "writer wire check skipped (DB unreachable: ${attribution_check#ERR:})"
+else
+    total="${attribution_check%%:*}"
+    with_credit="${attribution_check##*:}"
+    if [ "$total" -eq 0 ]; then
+        pass "writer wire check: no recent publishes in 24h window"
+    else
+        # Percentage arithmetic in bash requires integer math tricks
+        pct=$(( with_credit * 100 / total ))
+        # 80% threshold — some fetchers (steam_spike, anilist) legitimately
+        # can't populate channel_name, so 100% is unrealistic. Alert
+        # threshold in the sibling monitor is 99% (single-miss visible);
+        # deploy-verify uses 80% to catch class-of-bug regressions like
+        # the 2026-07-13 W1 (which showed 0%) rather than page on a
+        # single degraded niche.
+        if [ "$pct" -ge 80 ]; then
+            pass "writer wire: ${with_credit}/${total} recent publishes carry credit marker (${pct}%)"
+        else
+            fail "writer wire BROKEN: only ${with_credit}/${total} recent publishes carry credit marker (${pct}%, threshold 80%) — check base_writing._write_story_llm + _story_to_video_dict"
+        fi
+    fi
+fi
+
 note ""
 if [ $EXITCODE -eq 0 ]; then
     note "ALL CHECKS PASSED ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
