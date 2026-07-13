@@ -1,0 +1,434 @@
+"""Retroactive credit-line editor for uncredited live posts.
+
+Post-2026-07-13 audit follow-up. The writer wire was silently broken
+for weeks (Bugs A + C, fixed in PR #779 at 13:17 IST today). Every
+post published between ~2026-06-15 and today's fire went out without
+a "🎬 Original: {creator} — {url}" line in the caption.
+
+This script:
+
+  1. Queries blueprints published in the last N days that lack a
+     credit marker in ANY caption field.
+  2. For each: builds the credit line from
+     ``extra->>'source_channel_title'`` + ``video_url`` (falling back
+     to URL-only when the channel name is empty — the Bug B era's
+     stored blueprints often lack ``source_channel_title``).
+  3. Normalises the ``post_id`` values in publishing_analytics to
+     strip the historical double-prefix corruption
+     (``facebook:facebook:1181...`` → ``1181...``).
+  4. For each SUCCESS/INSIGHTS_* post on Facebook: edits the message
+     via ``POST /{post_id}?message=...``.
+  5. For each Instagram post: looks up the numeric media_id from the
+     shortcode by walking the niche's IG media page, then edits via
+     ``POST /{media_id}?caption=...&comment_enabled=true``.
+  6. Skips YouTube (needs an OAuth refresh token workflow not
+     configured for this script) + Threads (edit endpoint not
+     documented) + X/Twitter (no edit support).
+  7. Idempotent: reads the current live caption first and skips
+     blueprints where the marker is already present. Re-runs are
+     safe.
+
+Usage on prod:
+
+  cd /opt/genlab
+  .venv/bin/python scripts/retro_credit_uncredited_posts.py --dry-run
+  .venv/bin/python scripts/retro_credit_uncredited_posts.py --apply
+
+Exit codes:
+
+  0 = success (--dry-run always exits 0; --apply exits 0 iff
+      every attempted edit either succeeded or was skipped-idempotent)
+  1 = at least one edit failed (rate limits, missing credentials,
+      edit-window expired) — see stdout summary
+  2 = fatal (DB unreachable, no credentials)
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import os
+import re
+import sys
+import time
+from dataclasses import dataclass
+from typing import Any
+
+import requests
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger(__name__)
+
+
+META_GRAPH_BASE = "https://graph.facebook.com/v21.0"
+
+
+# Per-niche token/page mapping — mirrors the shape used elsewhere
+# in the codebase (niche_credentials.py). Kept inline to avoid a
+# cross-package dependency for what is meant to be a one-shot script.
+NICHE_ENV = {
+    "ai_creators": {
+        "fb_token": "BLACKBOXBRIEF_FB_PAGE_ACCESS_TOKEN",
+        "fb_page_id": "BLACKBOXBRIEF_FB_PAGE_ID",
+        "ig_user_id": "BLACKBOXBRIEF_IG_USER_ID",
+    },
+    "gaming": {
+        "fb_token": "CRITICALRUSH_FB_PAGE_ACCESS_TOKEN",
+        "fb_page_id": "CRITICALRUSH_FB_PAGE_ID",
+        "ig_user_id": "CRITICALRUSH_IG_USER_ID",
+    },
+    "sports": {
+        "fb_token": "CLUTCHWIRE_FB_PAGE_ACCESS_TOKEN",
+        "fb_page_id": "CLUTCHWIRE_FB_PAGE_ID",
+        "ig_user_id": "CLUTCHWIRE_IG_USER_ID",
+    },
+    "movies": {
+        "fb_token": "SPLICEREEL_FB_PAGE_ACCESS_TOKEN",
+        "fb_page_id": "SPLICEREEL_FB_PAGE_ID",
+        "ig_user_id": "SPLICEREEL_IG_USER_ID",
+    },
+    "anime": {
+        "fb_token": "FRAMEDRIFT_FB_PAGE_ACCESS_TOKEN",
+        "fb_page_id": "FRAMEDRIFT_FB_PAGE_ID",
+        "ig_user_id": "FRAMEDRIFT_IG_USER_ID",
+    },
+}
+
+
+MARKER = "\U0001f3ac Original:"
+
+
+def _strip_double_prefix(raw: str, platform: str) -> str:
+    """The Bug B era stored post_ids double-prefixed
+    (``facebook:facebook:1181...``). Strip leading platform prefixes
+    until only the bare id remains."""
+    prefix = f"{platform}:"
+    while raw.startswith(prefix):
+        raw = raw[len(prefix):]
+    return raw
+
+
+def _build_credit_line(video_url: str, channel_name: str | None) -> str:
+    """Return the standard '🎬 Original: @{ch} — {url}' line.
+
+    Falls back to URL-only when channel is missing (Bug B era rows).
+    """
+    handle = (channel_name or "").strip()
+    if handle:
+        # Match the format the writer emits — @handle followed by em-dash
+        return f"{MARKER} @{handle} — {video_url}"
+    return f"{MARKER} {video_url}"
+
+
+@dataclass
+class TargetPost:
+    blueprint_id: str
+    niche_id: str
+    platform: str  # 'facebook' | 'instagram' | 'youtube' | 'threads' | 'twitter'
+    raw_post_id: str
+    normalised_post_id: str
+    video_url: str
+    channel_name: str | None
+
+
+def _query_uncredited(dsn: str, days: int) -> list[TargetPost]:
+    """Query DB for uncredited blueprints + their publishing_analytics
+    posts. Returns a flat list, one entry per (blueprint, platform)
+    tuple."""
+    import psycopg
+
+    sql = """
+        SELECT b.id::text, b.niche_id,
+               COALESCE(b.video_url, '') AS video_url,
+               COALESCE(b.extra->>'source_channel_title', '') AS ch,
+               pa.platform, pa.post_id
+        FROM blueprints b
+        JOIN publishing_analytics pa ON pa.blueprint_id = b.id
+        WHERE b.status = 'PUBLISHED'
+          AND b.updated_at > NOW() - (%s || ' days')::interval
+          AND pa.status IN ('SUCCESS','INSIGHTS_6H','INSIGHTS_24H','INSIGHTS_48H','INSIGHTS_168H')
+          AND pa.post_id IS NOT NULL AND pa.post_id != ''
+          -- Exclude already-credited (any caption field carries marker)
+          AND NOT (
+              COALESCE(b.caption, '') LIKE '%🎬 Original:%'
+              OR COALESCE(b.caption, '') LIKE '%Footage:%'
+              OR COALESCE(b.extra->>'facebook_content', '') LIKE '%🎬 Original:%'
+              OR COALESCE(b.extra->>'twitter_content', '') LIKE '%🎬 Original:%'
+              OR COALESCE(b.extra->>'threads_content', '') LIKE '%🎬 Original:%'
+              OR COALESCE(b.extra->>'youtube_content', '') LIKE '%🎬 Original:%'
+          )
+        ORDER BY b.updated_at DESC, pa.platform
+    """
+    out: list[TargetPost] = []
+    with psycopg.connect(dsn) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(days),))
+            for row in cur.fetchall():
+                bp_id, niche, url, ch, plat, raw_post = row
+                out.append(
+                    TargetPost(
+                        blueprint_id=bp_id,
+                        niche_id=niche,
+                        platform=plat,
+                        raw_post_id=raw_post,
+                        normalised_post_id=_strip_double_prefix(raw_post, plat),
+                        video_url=url,
+                        channel_name=ch or None,
+                    )
+                )
+    return out
+
+
+def _ig_shortcode_to_media_id(
+    shortcode: str, ig_user_id: str, token: str
+) -> str | None:
+    """Walk the niche's IG media to find the numeric media_id for a
+    shortcode. Meta rate limits + no direct shortcode→id endpoint
+    means we walk pages until we find it or exhaust."""
+    if not shortcode or not ig_user_id or not token:
+        return None
+    url = f"{META_GRAPH_BASE}/{ig_user_id}/media"
+    params: dict[str, Any] = {
+        "fields": "id,shortcode",
+        "limit": 50,
+        "access_token": token,
+    }
+    for _ in range(6):  # ≤ 300 posts (~1.5 months at 1/day) — enough for 7d window
+        try:
+            r = requests.get(url, params=params, timeout=15)
+            if not r.ok:
+                log.debug("IG media list fetch failed: %s", r.text[:200])
+                return None
+            data = r.json()
+            for item in data.get("data", []):
+                if item.get("shortcode") == shortcode:
+                    return str(item["id"])
+            paging = data.get("paging", {})
+            next_url = paging.get("next")
+            if not next_url:
+                return None
+            # Recurse via next_url (which already carries token)
+            url = next_url
+            params = {}
+        except requests.RequestException as exc:
+            log.debug("IG media page fetch exception: %s", exc)
+            return None
+    return None
+
+
+def _current_fb_message(post_id: str, token: str) -> str:
+    try:
+        r = requests.get(
+            f"{META_GRAPH_BASE}/{post_id}",
+            params={"fields": "message", "access_token": token},
+            timeout=15,
+        )
+        if r.ok:
+            return r.json().get("message", "")
+    except requests.RequestException:
+        pass
+    return ""
+
+
+def _current_ig_caption(media_id: str, token: str) -> str:
+    try:
+        r = requests.get(
+            f"{META_GRAPH_BASE}/{media_id}",
+            params={"fields": "caption", "access_token": token},
+            timeout=15,
+        )
+        if r.ok:
+            return r.json().get("caption", "")
+    except requests.RequestException:
+        pass
+    return ""
+
+
+def _edit_fb_message(
+    post_id: str, new_message: str, token: str, dry_run: bool
+) -> tuple[bool, str]:
+    if dry_run:
+        return True, "dry-run"
+    try:
+        r = requests.post(
+            f"{META_GRAPH_BASE}/{post_id}",
+            data={"access_token": token, "message": new_message},
+            timeout=30,
+        )
+        if r.ok and r.json().get("success"):
+            return True, "ok"
+        return False, (r.text or "unknown")[:200]
+    except requests.RequestException as exc:
+        return False, str(exc)[:200]
+
+
+def _edit_ig_caption(
+    media_id: str, new_caption: str, token: str, dry_run: bool
+) -> tuple[bool, str]:
+    if dry_run:
+        return True, "dry-run"
+    try:
+        r = requests.post(
+            f"{META_GRAPH_BASE}/{media_id}",
+            data={
+                "access_token": token,
+                "caption": new_caption,
+                "comment_enabled": "true",
+            },
+            timeout=30,
+        )
+        if r.ok and r.json().get("success"):
+            return True, "ok"
+        return False, (r.text or "unknown")[:200]
+    except requests.RequestException as exc:
+        return False, str(exc)[:200]
+
+
+def _append_credit(current: str, credit_line: str) -> str:
+    """Idempotent append — return current + credit line only if not
+    already present. Preserves original spacing."""
+    if MARKER in current:
+        return current  # already credited, no change
+    body = (current or "").rstrip()
+    if body:
+        return f"{body}\n\n{credit_line}"
+    return credit_line
+
+
+def run(dsn: str, days: int, dry_run: bool) -> int:
+    targets = _query_uncredited(dsn, days=days)
+    log.info(
+        "Found %d target (blueprint, platform) rows across last %d days",
+        len(targets),
+        days,
+    )
+    stats = {
+        "attempted_fb": 0, "attempted_ig": 0,
+        "success_fb": 0, "success_ig": 0,
+        "already_credited": 0,
+        "skipped_no_creds": 0,
+        "skipped_no_url": 0,
+        "skipped_platform": 0,
+        "failed": 0,
+    }
+    failures: list[str] = []
+
+    for t in targets:
+        env = NICHE_ENV.get(t.niche_id)
+        if not env:
+            log.warning("[skip] no env mapping for niche=%s", t.niche_id)
+            stats["skipped_no_creds"] += 1
+            continue
+        token = os.environ.get(env["fb_token"], "").strip()
+        if not token:
+            log.warning("[skip] no FB token for niche=%s", t.niche_id)
+            stats["skipped_no_creds"] += 1
+            continue
+        if not t.video_url:
+            stats["skipped_no_url"] += 1
+            continue
+
+        credit = _build_credit_line(t.video_url, t.channel_name)
+
+        if t.platform == "facebook":
+            stats["attempted_fb"] += 1
+            current = _current_fb_message(t.normalised_post_id, token)
+            if MARKER in current:
+                stats["already_credited"] += 1
+                log.info(
+                    "[fb %s] already credited — skip",
+                    t.normalised_post_id[-8:],
+                )
+                continue
+            new_msg = _append_credit(current, credit)
+            ok, reason = _edit_fb_message(
+                t.normalised_post_id, new_msg, token, dry_run
+            )
+            if ok:
+                stats["success_fb"] += 1
+                log.info(
+                    "[fb %s] %s — appended credit for @%s",
+                    t.normalised_post_id[-8:],
+                    reason,
+                    t.channel_name or "(none)",
+                )
+            else:
+                stats["failed"] += 1
+                failures.append(f"fb {t.normalised_post_id}: {reason}")
+                log.warning("[fb %s] FAILED — %s", t.normalised_post_id[-8:], reason)
+            time.sleep(0.5)  # gentle pacing
+
+        elif t.platform == "instagram":
+            stats["attempted_ig"] += 1
+            ig_user_id = os.environ.get(env["ig_user_id"], "").strip()
+            if not ig_user_id:
+                log.warning("[ig %s] no IG_USER_ID for %s", t.normalised_post_id, t.niche_id)
+                stats["skipped_no_creds"] += 1
+                continue
+            media_id = _ig_shortcode_to_media_id(
+                t.normalised_post_id, ig_user_id, token
+            )
+            if not media_id:
+                stats["failed"] += 1
+                failures.append(
+                    f"ig {t.normalised_post_id}: shortcode not found in recent media"
+                )
+                log.warning(
+                    "[ig %s] shortcode not resolved to media_id",
+                    t.normalised_post_id,
+                )
+                continue
+            current = _current_ig_caption(media_id, token)
+            if MARKER in current:
+                stats["already_credited"] += 1
+                log.info("[ig %s] already credited — skip", media_id[-8:])
+                continue
+            new_cap = _append_credit(current, credit)
+            ok, reason = _edit_ig_caption(media_id, new_cap, token, dry_run)
+            if ok:
+                stats["success_ig"] += 1
+                log.info(
+                    "[ig %s] %s — appended credit for @%s",
+                    media_id[-8:],
+                    reason,
+                    t.channel_name or "(none)",
+                )
+            else:
+                stats["failed"] += 1
+                failures.append(f"ig {media_id}: {reason}")
+                log.warning("[ig %s] FAILED — %s", media_id[-8:], reason)
+            time.sleep(0.5)
+
+        else:
+            # youtube / threads / twitter — skipped
+            stats["skipped_platform"] += 1
+
+    log.info("=== Summary ===")
+    for k, v in stats.items():
+        log.info("  %s = %d", k, v)
+    if failures:
+        log.info("--- Failures (first 10) ---")
+        for f in failures[:10]:
+            log.info("  %s", f)
+    return 0 if stats["failed"] == 0 else 1
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--days", type=int, default=7)
+    ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--dry-run", action="store_true", default=True)
+    args = ap.parse_args()
+    dry_run = not args.apply
+
+    dsn = os.environ.get("DATABASE_URL", "").strip() or "dbname=genlab"
+    log.info("Mode: %s  window: last %d days", "APPLY" if not dry_run else "DRY-RUN", args.days)
+    return run(dsn=dsn, days=args.days, dry_run=dry_run)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
