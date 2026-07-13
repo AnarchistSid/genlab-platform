@@ -75,6 +75,50 @@ def _build_extra_instructions(writing_cfg: dict) -> str:
     return "\n\n".join(parts)
 
 
+# Improvement A (2026-07-13 audit follow-up): stories that reach the
+# writer with thin context (empty summary + no descriptive fields)
+# reliably trigger LLM refusal preambles like "I need the Story
+# Summary to write a hook for Moana. The...". Historical evidence
+# (30-day query 2026-07-13): 10 refusal-hook blueprints, 5 from
+# tmdb_trailer with ``summary=""`` overview, 5 from youtube_trending
+# with terse descriptions.
+#
+# ``_MIN_WRITABLE_CONTEXT_CHARS`` is the character-count floor for
+# the CONCATENATED context signal — summary OR description_snippet
+# is enough; either field alone below this threshold means we skip.
+# 40 chars picked because a typical TMDB overview like "Moana sets
+# sail on a wayfinding voyage" clears 30 chars, and shorter than
+# that offers nothing for the LLM to react to.
+_MIN_WRITABLE_CONTEXT_CHARS = 40
+
+
+def _has_writable_context(story: dict) -> bool:
+    """True if the story dict has enough content for the LLM to write about.
+
+    Signals (any of these individually meeting the floor is enough):
+
+      * ``summary`` — the primary field, populated by TMDB.overview,
+        YouTube description_snippet, RSS content:encoded, etc.
+      * ``description_snippet`` — sometimes populated by fetchers as an
+        alternative name for the summary.
+      * ``description`` — Reddit / niche-specific fetchers.
+
+    Returns False if ALL relevant fields are empty or below the
+    minimum-context floor. The writer is then instructed to skip the
+    story rather than call the LLM (which reliably refuses).
+    """
+    if not isinstance(story, dict):
+        return False
+    # Rank fields by likely richness — the writer's actual prompt reads
+    # ``summary`` first (see video_content_writer.py:546); the others
+    # are fallbacks the fetcher layer sometimes uses.
+    for field in ("summary", "description_snippet", "description"):
+        value = story.get(field, "") or ""
+        if isinstance(value, str) and len(value.strip()) >= _MIN_WRITABLE_CONTEXT_CHARS:
+            return True
+    return False
+
+
 class BaseWritingStrategy(WritingStrategy):
     """Shared writing logic for all video-first channels.
 
@@ -517,6 +561,24 @@ class BaseWritingStrategy(WritingStrategy):
                     self._niche_id,
                     story.get("title", "")[:40],
                 )
+                continue
+
+            # Improvement A (2026-07-13 audit follow-up): skip stories with
+            # thin writable context before the LLM burns tokens on them.
+            # 30-day query surfaced 10 blueprints with "I need the Story
+            # Summary..." refusal hooks — 5 from tmdb_trailer with empty
+            # overview, 5 from youtube_trending with terse descriptions.
+            # The pre-render gate (PR #784) catches the resulting bad
+            # hooks at render time, but that still costs LLM calls and
+            # puts rejected blueprints on the operator's Focus Review.
+            # Filter here to skip the whole class before writing.
+            if not _has_writable_context(story):
+                logger.info(
+                    "[%s] Skipping story with thin context (no writable summary/description): %s",
+                    self._niche_id,
+                    story.get("title", "")[:60],
+                )
+                story["_skip_llm"] = True
                 continue
 
             try:
