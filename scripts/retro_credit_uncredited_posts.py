@@ -46,12 +46,14 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import re
 import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -100,6 +102,62 @@ NICHE_ENV = {
 
 
 MARKER = "\U0001f3ac Original:"
+
+
+# ── State-tracking (rate-limit-resilient re-runs) ──────────────────
+#
+# Meta's write-then-immediate-read API is cache-lagged, so the "read
+# current caption + skip if already contains marker" idempotency
+# check can't distinguish "already-credited" from "cache lag." A local
+# state file solves this reliably: after every successful edit, stamp
+# ``{blueprint_id}:{platform}`` in the file; on next run, skip anything
+# in it BEFORE hitting the API.
+#
+# File shape:
+#   .retro_credit_state.json = {
+#     "credited": ["<blueprint_id>:<platform>", ...],
+#     "last_run": "2026-07-13T18:07:00Z"
+#   }
+#
+# On prod: /opt/genlab/.runtime/retro_credit_state.json (runtime dir
+# is already writable by the genlab user + persists across deploys).
+
+_STATE_PATH = Path("/opt/genlab/.runtime/retro_credit_state.json")
+
+
+def _load_state() -> set[str]:
+    """Load the set of already-credited ``{bp}:{platform}`` keys."""
+    try:
+        if _STATE_PATH.exists():
+            data = json.loads(_STATE_PATH.read_text())
+            return set(data.get("credited", []))
+    except Exception as exc:  # noqa: BLE001 — fail-open on state read
+        log.warning("state file read failed (%s) — treating as empty", exc)
+    return set()
+
+
+def _stamp_state(key: str) -> None:
+    """Append ``{bp}:{platform}`` to state file after successful edit.
+
+    Best-effort: if the state file can't be written, log + continue.
+    A failed stamp means the next run may re-attempt this specific
+    edit — Meta will still see it as an edit-with-same-content
+    (idempotent-ish) but wastes budget."""
+    try:
+        _STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        existing = _load_state()
+        existing.add(key)
+        _STATE_PATH.write_text(
+            json.dumps(
+                {
+                    "credited": sorted(existing),
+                    "last_run": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                },
+                indent=2,
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        log.warning("state file stamp failed (%s) — will re-attempt next run", exc)
 
 
 def _strip_double_prefix(raw: str, platform: str) -> str:
@@ -331,12 +389,22 @@ def run(dsn: str, days: int, dry_run: bool, sleep_seconds: float = 3.0) -> int:
     global _RATE_LIMIT_HIT
     _RATE_LIMIT_HIT = False
     targets = _query_uncredited(dsn, days=days)
+    state = _load_state()
     log.info(
-        "Found %d target (blueprint, platform) rows across last %d days (pacing %.1fs)",
+        "Found %d target (blueprint, platform) rows across last %d days (pacing %.1fs). "
+        "State file has %d already-credited keys.",
         len(targets),
         days,
         sleep_seconds,
+        len(state),
     )
+    # Filter out state-known-credited targets BEFORE hitting Meta APIs.
+    # These wasted API budget on the earlier run (each attempt = read
+    # + write) — state-tracking avoids that.
+    _pre = len(targets)
+    targets = [t for t in targets if f"{t.blueprint_id}:{t.platform}" not in state]
+    if _pre > len(targets):
+        log.info("Skipped %d state-known-credited targets", _pre - len(targets))
     stats = {
         "attempted_fb": 0, "attempted_ig": 0,
         "success_fb": 0, "success_ig": 0,
@@ -381,6 +449,8 @@ def run(dsn: str, days: int, dry_run: bool, sleep_seconds: float = 3.0) -> int:
             )
             if ok:
                 stats["success_fb"] += 1
+                if not dry_run:
+                    _stamp_state(f"{t.blueprint_id}:facebook")
                 log.info(
                     "[fb %s] %s — appended credit for @%s",
                     t.normalised_post_id[-8:],
@@ -426,6 +496,8 @@ def run(dsn: str, days: int, dry_run: bool, sleep_seconds: float = 3.0) -> int:
             ok, reason = _edit_ig_caption(media_id, new_cap, token, dry_run)
             if ok:
                 stats["success_ig"] += 1
+                if not dry_run:
+                    _stamp_state(f"{t.blueprint_id}:instagram")
                 log.info(
                     "[ig %s] %s — appended credit for @%s",
                     media_id[-8:],
