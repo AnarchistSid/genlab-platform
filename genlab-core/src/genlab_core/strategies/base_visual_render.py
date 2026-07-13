@@ -162,11 +162,24 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                 dur = min(info.duration_seconds, 60) if info.duration_seconds > 0 else 55
             except Exception:
                 dur = 55
+            # G9 audit follow-up (2026-07-13): burn a small "Original:
+            # @creator" watermark into the video canvas — survives
+            # platform-side caption edits that strip attribution. Prefer
+            # the source channel handle (short, brand-oriented) over the
+            # full channel_name; fall back to the latter when handle
+            # isn't populated. Empty string skips the watermark entirely.
+            _source_credit = (
+                story.get("source_channel_handle")
+                or story.get("channel_name")
+                or story.get("source_channel_title")
+                or ""
+            )
             composite_path = compositor.compose(
                 source_video_path=str(clip_path),
                 hook_text=hook_text,
                 output_path=output_path,
                 duration_seconds=dur,
+                source_credit=_source_credit,
             )
             if not composite_path:
                 return ""
