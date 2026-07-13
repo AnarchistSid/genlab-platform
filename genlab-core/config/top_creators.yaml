@@ -87,7 +87,10 @@ niches:
         notes: >-
           Honest Trailers + reaction to trailers. Trailers-side is
           reactive within a day of studio release.
-      - channel_id: UCatt7TBjfBkiJWx8khav_Gg
+      # 2026-07-14 audit follow-up: previous ID UCatt7TBjfBkiJWx8khav_Gg
+      # was invalid — the poll runner returned 0 uploads. Corrected via
+      # Social Blade lookup.
+      - channel_id: UCrTNhL_yO3tPTdQ5XgmmWjA
         label: RedLetterMedia
         notes: >-
           Long-form reviews; use as QUALITY signal (topics they cover
@@ -95,12 +98,17 @@ niches:
 
   anime:
     channels:
-      - channel_id: UC5Ugo9WCYt_5-lIiybOSyeg
+      # 2026-07-14 audit follow-up: both anime IDs (UC5Ugo9WCYt_5-lIiybOSyeg
+      # and UC7TsvhZ2q0AoI-M46K5QDpg) were invalid — the poll runner
+      # returned 0 uploads for BOTH → anime niche contributed no
+      # top-creator signal. Corrected via Social Blade lookup for
+      # Gigguk and Wikidata for The Anime Man.
+      - channel_id: UC7dF9qfBMXrSlaaFFDvV_Yg
         label: Gigguk
         notes: >-
           Seasonal reviews + reaction. Publishes within a week of
           major anime episode drops.
-      - channel_id: UC7TsvhZ2q0AoI-M46K5QDpg
+      - channel_id: UC3ETCazlHenpXEsrEJH-k5A
         label: The Anime Man
         notes: >-
           Japan-based, catches trends 12-24h before English-language
