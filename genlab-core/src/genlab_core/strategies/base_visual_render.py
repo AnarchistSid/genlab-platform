@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any
 
 from genlab_core.media.frame_compositor import FrameCompositor
+from genlab_core.rendering.pre_render_quality import check_pre_render_quality
 from genlab_core.strategies.interfaces import VisualRenderStrategy
 
 logger = logging.getLogger(__name__)
@@ -148,6 +149,42 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
 
         hook_text = (story.get("content") or {}).get("hook", story.get("title", ""))
         sid = story.get("story_id", "unknown")
+
+        # Improvement B (2026-07-13 audit follow-up): pre-render quality
+        # gate — the last check before FFmpeg burns the hook into the
+        # video. Catches the 2 recurring failure classes today's fire
+        # exposed:
+        #   - LLM refusal preambles ("I need the Story Summary...")
+        #   - Bare title hooks ("Grand Theft Auto V")
+        # These slipped through the writer's own gates because the
+        # writer's fallback path repopulates the hook from
+        # ``video["title"]`` when the LLM fails, which itself may
+        # BE the failure. See genlab_core/rendering/pre_render_quality.py
+        # for the rule inventory + rationale.
+        #
+        # ``check_pre_render_quality`` is imported at module top-level
+        # so ``patch("...base_visual_render.check_pre_render_quality")``
+        # works for tests that want to bypass the gate.
+
+        # ``_niche_id`` is a concrete-subclass attribute (each niche
+        # sets it in __init__). Base + stub tests may not have it — use
+        # a defensive fetch so the gate stays niche-agnostic. The value
+        # only enriches the log line; it has no effect on the outcome.
+        _qc = check_pre_render_quality(hook_text, niche_id=getattr(self, "_niche_id", ""))
+        if not _qc.ok:
+            logger.warning(
+                "%s pre-render quality gate rejected story %s (%s): %s",
+                self._log_prefix,
+                sid[:16],
+                _qc.reason,
+                _qc.detail,
+            )
+            # Return empty path → base_visual_render caller treats this
+            # as "no render" → blueprint stays at DRAFTED, operator
+            # reviews in Focus Review with the log line as context.
+            story.setdefault("media", {})["render_error"] = f"pre_render_quality:{_qc.reason}"
+            return ""
+
         output_dir = Path(run_dir) / "visuals" / sid
         output_dir.mkdir(parents=True, exist_ok=True)
         output_path = str(output_dir / f"{sid[:16]}_reel.mp4")
