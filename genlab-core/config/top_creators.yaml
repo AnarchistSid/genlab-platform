@@ -82,7 +82,10 @@ niches:
 
   movies:
     channels:
-      - channel_id: UC1EQPq_ZLXfDCA9WjPmcCyw
+      # 2026-07-14 audit follow-up: previous ID UC1EQPq_ZLXfDCA9WjPmcCyw
+      # returned 0 items from YT Data API — invalid. Correct ID looked
+      # up via YouTube channels.list forUsername=screenjunkies.
+      - channel_id: UCOpcACMWblDls9Z6GERVi1A
         label: Screen Junkies
         notes: >-
           Honest Trailers + reaction to trailers. Trailers-side is
