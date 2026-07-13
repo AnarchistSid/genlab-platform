@@ -192,53 +192,113 @@ def refresh_meta_token(current_token: str) -> dict:
 
 
 def check_tiktok() -> dict:
-    """Check TikTok access token health (24hr expiry)."""
+    """Check TikTok access token health via live API probe (24hr expiry).
+
+    Post-2026-07-13 audit follow-up (proxy-signal masking class-of-bug —
+    sibling to PR #782's check_threads fix). Previous implementation
+    used ``TIKTOK_TOKEN_ISSUED_AT`` as a proxy for token validity:
+    "recent timestamp = healthy" without ever hitting TikTok's API.
+    Same class as today's Layer 5 attribution masking.
+
+    TikTok is stub-only in prod today (returns error until
+    ``TIKTOK_AUDIT_APPROVED=true``), so a bad token wouldn't cause
+    audience-facing failures YET. But when the audit lands and TikTok
+    starts publishing, an already-expired token silently reporting
+    "healthy" would surface as publishing failures at the worst
+    possible moment. Fix it now while it's cheap.
+
+    Mirrors the ``check_meta_token`` / ``check_threads`` pattern:
+
+      1. Primary: live probe via ``GET /v2/user/info/`` (public API).
+      2. Secondary: consult ``TIKTOK_TOKEN_ISSUED_AT`` only for
+         "expiring soon" hints after the primary passed.
+    """
     token = os.getenv("TIKTOK_ACCESS_TOKEN", "").strip()
     if not token:
         return {"platform": "tiktok", "status": "missing", "message": "TIKTOK_ACCESS_TOKEN not set"}
 
-    issued_str = os.getenv("TIKTOK_TOKEN_ISSUED_AT", "").strip()
-    if not issued_str:
-        return {
-            "platform": "tiktok",
-            "status": "healthy",
-            "message": "Token set but age unknown (TIKTOK_TOKEN_ISSUED_AT missing)",
-        }
+    audit = os.getenv("TIKTOK_AUDIT_APPROVED", "false").lower() == "true"
+    audit_note = "" if audit else " (SELF_ONLY until audit approved)"
 
+    # ── Primary: live API probe ────────────────────────────────────
     try:
-        issued_at = datetime.fromisoformat(issued_str)
-        if issued_at.tzinfo is None:
-            issued_at = issued_at.replace(tzinfo=UTC)
-        age_hours = (datetime.now(UTC) - issued_at).total_seconds() / 3600
-        remaining = max(0, 24 - age_hours)
-
-        audit = os.getenv("TIKTOK_AUDIT_APPROVED", "false").lower() == "true"
-        audit_note = "" if audit else " (SELF_ONLY until audit approved)"
-
-        if remaining > 6:
-            return {
-                "platform": "tiktok",
-                "status": "healthy",
-                "message": f"Token valid ({remaining:.0f}h remaining){audit_note}",
-            }
-        elif remaining > 1:
-            return {
-                "platform": "tiktok",
-                "status": "healthy",
-                "message": f"Token expires soon ({remaining:.1f}h remaining){audit_note}",
-            }
-        else:
-            return {
-                "platform": "tiktok",
-                "status": "expired",
-                "message": f"Token expired or expiring ({remaining:.1f}h remaining) — needs refresh{audit_note}",
-            }
-    except (ValueError, TypeError) as e:
+        probe = requests.get(
+            "https://open.tiktokapis.com/v2/user/info/",
+            params={"fields": "open_id,display_name"},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=15,
+        )
+        if not probe.ok:
+            # TikTok returns 401 with a JSON error on invalid tokens.
+            # Any non-2xx here means the token can't authenticate —
+            # regardless of what the local timestamp says.
+            try:
+                err = probe.json().get("error", {})
+                code = err.get("code", "")
+                msg = err.get("message", probe.text)[:200]
+            except (ValueError, KeyError):
+                code = probe.status_code
+                msg = probe.text[:200]
+            if (
+                probe.status_code == 401
+                or "expired" in str(msg).lower()
+                or "invalid" in str(msg).lower()
+            ):
+                return {
+                    "platform": "tiktok",
+                    "status": "expired",
+                    "message": f"Token rejected by API (code={code}): {msg}{audit_note}",
+                }
+            return {"platform": "tiktok", "status": "error", "message": f"{msg}{audit_note}"}
+        data = probe.json().get("data", {}).get("user", {})
+        open_id = data.get("open_id", "unknown")
+    except requests.exceptions.RequestException as e:
         return {
             "platform": "tiktok",
             "status": "error",
-            "message": f"Cannot parse TIKTOK_TOKEN_ISSUED_AT: {e}",
+            "message": f"Network error: {e}{audit_note}",
         }
+    except Exception as e:  # noqa: BLE001 — fail-open with informative message
+        return {"platform": "tiktok", "status": "error", "message": f"{str(e)[:200]}{audit_note}"}
+
+    # ── Secondary: age-based expiry warning ───────────────────────
+    # TikTok tokens hard-expire at 24h. Live probe passing at hour 23
+    # doesn't help you at hour 25 — surface the countdown so the
+    # operator has time to refresh.
+    issued_str = os.getenv("TIKTOK_TOKEN_ISSUED_AT", "").strip()
+    if issued_str:
+        try:
+            issued_at = datetime.fromisoformat(issued_str)
+            if issued_at.tzinfo is None:
+                issued_at = issued_at.replace(tzinfo=UTC)
+            age_hours = (datetime.now(UTC) - issued_at).total_seconds() / 3600
+            remaining = max(0, 24 - age_hours)
+            if remaining > 6:
+                return {
+                    "platform": "tiktok",
+                    "status": "healthy",
+                    "message": f"{open_id} — token valid ({remaining:.0f}h remaining){audit_note}",
+                }
+            if remaining > 1:
+                return {
+                    "platform": "tiktok",
+                    "status": "healthy",
+                    "message": f"{open_id} — token expires soon ({remaining:.1f}h remaining){audit_note}",
+                }
+            return {
+                "platform": "tiktok",
+                "status": "expiring",
+                "message": f"{open_id} — token critical ({remaining:.1f}h) — refresh now{audit_note}",
+            }
+        except (ValueError, TypeError):
+            pass  # Fall through — live probe already passed
+
+    # Live probe passed + no ISSUED_AT to compute countdown
+    return {
+        "platform": "tiktok",
+        "status": "healthy",
+        "message": f"{open_id} — live probe OK (age unknown, TIKTOK_TOKEN_ISSUED_AT missing){audit_note}",
+    }
 
 
 def check_threads() -> dict:
