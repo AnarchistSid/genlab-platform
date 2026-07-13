@@ -112,6 +112,25 @@ SHADOW_OPACITY = 0.50
 
 HOOK_MAX_CHARS = 60  # enforced upstream, checked here too
 
+# ── G9 attribution watermark (2026-07-13 audit follow-up) ───────
+# Bottom-right of the video canvas area (NOT in the pillarbox) so
+# the credit is edit-proof: caption edits on Meta / X / YouTube
+# strip attribution, but a burned-in drawtext survives to the
+# viewer. Small + semi-transparent so it doesn't compete with the
+# content. Only drawn when the caller passes ``source_credit`` to
+# ``compose()``; empty string skips it entirely.
+WATERMARK_FONT_SIZE = 18
+WATERMARK_OPACITY = 0.55
+WATERMARK_SHADOW_OPACITY = 0.60
+WATERMARK_RIGHT_PADDING = 30  # px from right edge of canvas
+WATERMARK_BOTTOM_INSET = 30  # px above bottom of video area
+# Landscape: bottom of video area is L_VIDEO_Y + L_VIDEO_H.
+L_WATERMARK_Y = L_VIDEO_Y + L_VIDEO_H - WATERMARK_BOTTOM_INSET
+# Square: same shape.
+S_WATERMARK_Y = S_VIDEO_Y + S_VIDEO_H - WATERMARK_BOTTOM_INSET
+# Portrait: full-bleed, so use canvas height.
+P_WATERMARK_Y = CANVAS_H - WATERMARK_BOTTOM_INSET - WATERMARK_FONT_SIZE - 10
+
 
 # -------------------------------------------------------------
 # Config
@@ -413,6 +432,7 @@ class FrameCompositor:
         crf: int = 20,
         preset: str | None = None,
         force_fps: int = 30,
+        source_credit: str = "",
     ) -> str:
         """Render a reel with the canonical frame layout.
 
@@ -428,6 +448,12 @@ class FrameCompositor:
                  broke downstream IG/Threads upload.)
             preset: FFmpeg preset. Defaults to visuals.yaml ffmpeg.preset.
             force_fps: Output frame rate.
+            source_credit: G9 audit follow-up (2026-07-13). If non-empty,
+                 draws a small ``Original: {source_credit}`` watermark
+                 bottom-right of the video canvas area — burned into the
+                 video, so it survives platform caption edits. Empty
+                 string (default) skips the watermark entirely so
+                 existing callers work unchanged.
 
         Returns:
             output_path on success.
@@ -507,6 +533,7 @@ class FrameCompositor:
             crf,
             preset,
             force_fps,
+            source_credit,
         )
 
         logger.info(
@@ -581,6 +608,41 @@ class FrameCompositor:
 
     # --- Shared: build branding filters (logo + name + handle) ------------
 
+    # --- G9 attribution watermark ------------------------------------------
+
+    def _build_watermark_filter(
+        self,
+        source_credit: str,
+        y: int,
+        font_reg: str,
+        in_label: str,
+        out_label: str,
+    ) -> str:
+        """Return a drawtext filter drawing ``Original: {source_credit}``
+        bottom-right at height ``y``. Empty string if no credit provided.
+
+        Positioned inside the video canvas area (not the pillarbox) so
+        the credit survives platform-side crops. Semi-transparent with
+        a shadow for legibility over both dark and bright frames.
+        """
+        if not source_credit:
+            return ""
+        text = f"Original: {source_credit}"
+        safe_text = self._escape_drawtext(text)
+        # x = right edge minus text width minus padding — ``text_w`` is
+        # a runtime expression FFmpeg evaluates from the actual glyph
+        # metrics, so this stays correct across handles of varying
+        # length.
+        return (
+            f"[{in_label}]drawtext=fontfile='{font_reg}':text='{safe_text}':"
+            f"fontsize={WATERMARK_FONT_SIZE}:"
+            f"fontcolor=white@{WATERMARK_OPACITY}:"
+            f"x=w-text_w-{WATERMARK_RIGHT_PADDING}:y={y}:"
+            f"shadowcolor=black@{WATERMARK_SHADOW_OPACITY}:"
+            f"shadowx=1:shadowy=1"
+            f"[{out_label}];"
+        )
+
     def _build_branding_filters(
         self, font_bold: str, font_reg: str, logo_y: int, base_label: str
     ) -> tuple[str, str]:
@@ -624,7 +686,7 @@ class FrameCompositor:
     # --- Layout A: Landscape (ar >= 1.33) ---------------------------------
 
     def _build_cmd_landscape(
-        self, src, hook, out, info, duration, trim_start, crf, preset, fps
+        self, src, hook, out, info, duration, trim_start, crf, preset, fps, source_credit=""
     ) -> list[str]:
         """Landscape clip: branding header + center-aligned hook + flush video."""
         dur_flags = self._duration_flags(duration)
@@ -643,9 +705,15 @@ class FrameCompositor:
         branding, _ = self._build_branding_filters(font_bold, font_reg, L_LOGO_Y, "base")
         hooks, _ = self._build_hook_filters(hook, L_HOOK_Y, font_hook, "withhandle")
 
+        # G9: watermark inserted after hook, before final flash. If no
+        # credit, produces "" and the flash reads [withhook] directly.
+        watermark = self._build_watermark_filter(
+            source_credit, L_WATERMARK_Y, font_reg, "withhook", "withwm"
+        )
+        flash_input = "withwm" if watermark else "withhook"
         # Sub-item C: Subtle brightness flash in first 0.07s (pattern interrupt)
-        flash = "[withhook]eq=brightness='if(lt(t,0.07),0.08,0)':eval=frame[out]"
-        filtergraph = f"{video_filter}{branding}{hooks}{flash}"
+        flash = f"[{flash_input}]eq=brightness='if(lt(t,0.07),0.08,0)':eval=frame[out]"
+        filtergraph = f"{video_filter}{branding}{hooks}{watermark}{flash}"
         inputs = ["-i", src] + (["-i", self.branding.logo_path] if has_logo else [])
 
         return (
@@ -661,7 +729,7 @@ class FrameCompositor:
     # --- Layout B: Portrait (ar <= 0.75) ----------------------------------
 
     def _build_cmd_portrait(
-        self, src, hook, out, info, duration, trim_start, crf, preset, fps
+        self, src, hook, out, info, duration, trim_start, crf, preset, fps, source_credit=""
     ) -> list[str]:
         """Portrait clip: full-screen video with the channel logo overlaid.
 
@@ -758,6 +826,15 @@ class FrameCompositor:
                 )
                 current_label = next_label
 
+        # G9: watermark drawn last, just before the [out] label. If no
+        # credit provided, the copy relabel below is unaffected.
+        watermark = self._build_watermark_filter(
+            source_credit, P_WATERMARK_Y, font_reg, current_label, "withwm"
+        )
+        if watermark:
+            filtergraph += watermark
+            current_label = "withwm"
+
         # Re-label the final node as [out] — the rest of compose() expects
         # that name. Using copy keeps it filter-graph-valid without
         # producing a re-encoded extra pass.
@@ -776,7 +853,7 @@ class FrameCompositor:
     # --- Layout C: Square (0.75 < ar < 1.33) ------------------------------
 
     def _build_cmd_square(
-        self, src, hook, out, info, duration, trim_start, crf, preset, fps
+        self, src, hook, out, info, duration, trim_start, crf, preset, fps, source_credit=""
     ) -> list[str]:
         """Square clip: same branding header as landscape, 1080x1080 video below."""
         dur_flags = self._duration_flags(duration)
@@ -794,9 +871,14 @@ class FrameCompositor:
         branding, _ = self._build_branding_filters(font_bold, font_reg, S_LOGO_Y, "base")
         hooks, _ = self._build_hook_filters(hook, S_HOOK_Y, font_hook, "withhandle")
 
+        # G9: watermark before final brightness flash (see landscape).
+        watermark = self._build_watermark_filter(
+            source_credit, S_WATERMARK_Y, font_reg, "withhook", "withwm"
+        )
+        flash_input = "withwm" if watermark else "withhook"
         # Sub-item C: Subtle brightness flash in first 0.07s (pattern interrupt)
-        flash = "[withhook]eq=brightness='if(lt(t,0.07),0.08,0)':eval=frame[out]"
-        filtergraph = f"{video_filter}{branding}{hooks}{flash}"
+        flash = f"[{flash_input}]eq=brightness='if(lt(t,0.07),0.08,0)':eval=frame[out]"
+        filtergraph = f"{video_filter}{branding}{hooks}{watermark}{flash}"
         inputs = ["-i", src] + (["-i", self.branding.logo_path] if has_logo else [])
 
         return (
