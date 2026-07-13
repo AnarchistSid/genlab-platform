@@ -128,14 +128,7 @@ SPEC = {
     "audio_codec": "aac",
     "audio_sample_rate": 48000,
     "audio_channels": 2,
-    # TEMP 2026-07-14: lowered from 15.0 → 14.0 for one-shot rescue of
-    # blueprint c07ca605-7b49 (sports "Magpies couldn't stop the Gunners'
-    # midfield press"). Its scorebat clip rendered at 14.4s, below the
-    # 15s floor, causing sports to have NO post for today's fire.
-    # Reverting to 15.0 in a follow-up commit after the rescue lands.
-    # Note: this is intentionally an emergency-window operation, NOT a
-    # policy change. 15s remains the correct floor for regular ops.
-    "min_duration": 14.0,
+    "min_duration": 15.0,
     "max_duration": 60.0,
     "max_file_size_mb": 100,
 }
