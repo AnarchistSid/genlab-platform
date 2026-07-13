@@ -2,7 +2,12 @@
 Description=GenLab Movies Pipeline Timer
 
 [Timer]
-OnCalendar=*-*-* 08:00:00 UTC
+# 2026-07-14 audit follow-up: was 08:00 UTC (13:30 IST), which runs
+# AFTER the publisher fires at 06:35 UTC (12:05 IST). That meant
+# movies published TODAY were written YESTERDAY — stale, and any
+# tmdb URLs might be expired. New slot 03:30 UTC (09:00 IST) puts
+# fresh content in the queue ~3 hours before publisher checks.
+OnCalendar=*-*-* 03:30:00 UTC
 Persistent=true
 
 [Install]

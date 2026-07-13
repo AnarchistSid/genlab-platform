@@ -2,7 +2,13 @@
 Description=GenLab Sports Pipeline Timer
 
 [Timer]
-OnCalendar=*-*-* 10:00:00 UTC
+# 2026-07-14 audit follow-up: was 10:00 UTC (15:30 IST), which runs
+# AFTER the publisher fires at 06:35 UTC. Sports had 0 posts today
+# because yesterday's 15:30 IST fetch → today's DRAFTED queue never
+# got rendered into VISUAL_READY in time. New slot 05:00 UTC
+# (10:30 IST) puts fresh scorebat content in the queue ~1h35m before
+# publisher checks — enough runtime for fetch + write + render.
+OnCalendar=*-*-* 05:00:00 UTC
 Persistent=true
 
 [Install]
