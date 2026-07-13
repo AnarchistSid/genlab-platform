@@ -87,6 +87,18 @@ def compute_stats(
             # skipped because caption already had "🎬 Original:" from
             # an unrelated match, etc.). Only the CAPTION MARKER
             # counts now.
+            # Post-2026-07-13 audit follow-up: union ALL platform-content
+            # fields that carry per-platform caption text. Previously the
+            # SQL only checked 4 fields (caption, facebook_content,
+            # threads_content, youtube_content). Missing: twitter_content
+            # (present on 131/131 recent blueprints) and tiktok_content
+            # (future-proof — TikTok publisher activates on audit
+            # approval). Without the twitter_content clause, any
+            # blueprint where the writer put the credit line into the
+            # tweet-specific field but not into the main caption would
+            # silently drop out of the "with_attribution" count. IG uses
+            # the top-level ``caption`` field (no separate
+            # instagram_content key) so it's already covered.
             cur.execute(
                 """
                 SELECT
@@ -101,6 +113,10 @@ def compute_stats(
                            OR COALESCE(extra->>'threads_content', '') LIKE %s
                            OR COALESCE(extra->>'youtube_content', '') LIKE %s
                            OR COALESCE(extra->>'youtube_content', '') LIKE %s
+                           OR COALESCE(extra->>'twitter_content', '') LIKE %s
+                           OR COALESCE(extra->>'twitter_content', '') LIKE %s
+                           OR COALESCE(extra->>'tiktok_content', '') LIKE %s
+                           OR COALESCE(extra->>'tiktok_content', '') LIKE %s
                     ) AS with_attribution
                 FROM blueprints
                 WHERE status = 'PUBLISHED'
@@ -109,6 +125,10 @@ def compute_stats(
                 ORDER BY niche_id
                 """,
                 (
+                    f"%{original_mark}%",
+                    "%Footage:%",
+                    f"%{original_mark}%",
+                    "%Footage:%",
                     f"%{original_mark}%",
                     "%Footage:%",
                     f"%{original_mark}%",

@@ -103,6 +103,31 @@ class TikTokClient:
 
         Returns {"publish_id": str, "status": str}.
         """
+        # PR #Layer4 audit follow-up (2026-07-13): publisher-side
+        # attribution validation. When TikTok audit lands and
+        # ``TIKTOK_AUDIT_APPROVED=true`` flips this out of self-only
+        # mode, real-audience posts must pass through the same Layer 4
+        # backstop as Facebook / Instagram / YouTube / Threads. Runs
+        # BEFORE the multi-hour chunked upload so we don't burn the
+        # upload budget on a caption that would be blocked at the API
+        # boundary.
+        from genlab_core.platforms.caption_validation import (
+            layer4_block_enabled,
+            validate_caption_has_attribution,
+        )
+
+        _l4_ok, _l4_reason = validate_caption_has_attribution(caption)
+        if not _l4_ok:
+            logger.warning(
+                "[layer4] TikTok publish: caption missing attribution — %s",
+                _l4_reason,
+            )
+            if layer4_block_enabled():
+                raise ValueError(
+                    "Layer 4 attribution gate: caption missing credit line "
+                    "(set GENLAB_ATTRIBUTION_LAYER4_BLOCK=0 to bypass)"
+                )
+
         # Step 1: Ensure access token is fresh
         self._ensure_token_fresh()
 

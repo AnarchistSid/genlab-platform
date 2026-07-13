@@ -80,6 +80,16 @@ def compute_health(
 
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
+            # Post-2026-07-13 audit follow-up: kept in lockstep with
+            # dashboard/server/core/attribution_health.py. Previous
+            # version only queried 2 fields (caption + facebook_content),
+            # which made the monitor even more permissive than the
+            # dashboard metric it mirrors — a niche publishing on
+            # threads / youtube / twitter with credit in those fields
+            # (but no main caption + no fb content) would show 0%
+            # attribution and page the operator falsely. Union all 6
+            # platform-content fields so the two metrics report the
+            # same reality.
             cur.execute(
                 """
                 SELECT
@@ -90,6 +100,14 @@ def compute_health(
                            OR COALESCE(caption, '') LIKE %s
                            OR COALESCE(extra->>'facebook_content', '') LIKE %s
                            OR COALESCE(extra->>'facebook_content', '') LIKE %s
+                           OR COALESCE(extra->>'threads_content', '') LIKE %s
+                           OR COALESCE(extra->>'threads_content', '') LIKE %s
+                           OR COALESCE(extra->>'youtube_content', '') LIKE %s
+                           OR COALESCE(extra->>'youtube_content', '') LIKE %s
+                           OR COALESCE(extra->>'twitter_content', '') LIKE %s
+                           OR COALESCE(extra->>'twitter_content', '') LIKE %s
+                           OR COALESCE(extra->>'tiktok_content', '') LIKE %s
+                           OR COALESCE(extra->>'tiktok_content', '') LIKE %s
                     ) AS with_attribution
                 FROM blueprints
                 WHERE status = 'PUBLISHED'
@@ -98,6 +116,14 @@ def compute_health(
                 ORDER BY niche_id
                 """,
                 (
+                    f"%{original_mark}%",
+                    "%Footage:%",
+                    f"%{original_mark}%",
+                    "%Footage:%",
+                    f"%{original_mark}%",
+                    "%Footage:%",
+                    f"%{original_mark}%",
+                    "%Footage:%",
                     f"%{original_mark}%",
                     "%Footage:%",
                     f"%{original_mark}%",

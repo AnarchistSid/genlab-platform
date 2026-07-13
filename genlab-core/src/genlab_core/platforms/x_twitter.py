@@ -384,6 +384,44 @@ class XTwitterClient:
                 tweet_text = tw_specific.tweet_text
             thread_tweets = tw_specific.thread_tweets or []
 
+        # PR #Layer4 (post-Markanimation follow-up, 2026-07-13):
+        # publisher-side attribution validation. Sits at the API-POST
+        # boundary as the last line of defense for the attribution-safety
+        # stack. If the tweet_text (or first thread entry) reaches here
+        # without a recognisable credit marker, log a compliance event;
+        # if enforcement is on (``GENLAB_ATTRIBUTION_LAYER4_BLOCK=1``),
+        # refuse to publish. Mirrors the Facebook / Instagram / YouTube /
+        # Threads wire — G1 audit follow-up: X/Twitter was the last
+        # ships-real-content client without this backstop.
+        from genlab_core.platforms.caption_validation import (
+            layer4_block_enabled,
+            validate_caption_has_attribution,
+        )
+
+        # For threads, validate the FIRST tweet's text — that's the one
+        # audiences see in the timeline. Subsequent thread replies are
+        # opt-in follow-up context.
+        _l4_text = (
+            (thread_tweets[0] or {}).get("content", "")
+            if routing == "thread" and thread_tweets
+            else tweet_text
+        )
+        _l4_ok, _l4_reason = validate_caption_has_attribution(
+            _l4_text,
+            source_url=getattr(payload, "source_url", None),
+        )
+        if not _l4_ok:
+            self._log.warning(
+                "[layer4] Twitter publish: tweet text missing attribution (niche=%s) — %s",
+                getattr(payload, "niche_id", "unknown"),
+                _l4_reason,
+            )
+            if layer4_block_enabled():
+                return _fail(
+                    "Layer 4 attribution gate: tweet text missing credit line "
+                    "(set GENLAB_ATTRIBUTION_LAYER4_BLOCK=0 to bypass)"
+                )
+
         if routing == "thread":
             return self._publish_thread(payload, thread_tweets)
 

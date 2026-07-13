@@ -624,6 +624,36 @@ def write_video_content(
             val = content.get(field_name, "")
             if not isinstance(val, str) or not val:
                 continue
+            # Post-2026-07-13 audit follow-up (G4): the LLM refusal check
+            # previously ran only on ``hook``. Today's movies fire showed
+            # a caption with "I need the Story Summary to write a hook for
+            # Moana. The..." shipping to a live audience because that
+            # field wasn't in the refusal-check loop. Refusal preambles
+            # can slip into ANY generated text field — checking here
+            # closes the class. On any refusal detected in any field,
+            # blank the whole content dict so downstream fallback fills
+            # from safer defaults — a partial-refusal caption paired
+            # with a good hook still exposes the failure to users.
+            if _is_llm_refusal(val):
+                logger.warning(
+                    "[%s] LLM-refusal preamble in %s — rejecting entire content: %s",
+                    niche_id,
+                    field_name,
+                    val[:80],
+                )
+                # Blank every text field so the exception fallback path
+                # (line ~865) takes over cleanly. Leaving good fields
+                # alongside bad ones is the failure mode Moana exposed.
+                for f in (
+                    "hook",
+                    "instagram_caption",
+                    "twitter_content",
+                    "youtube_content",
+                    "facebook_content",
+                    "threads_content",
+                ):
+                    content[f] = ""
+                break
             hits = check_for_injection(val)
             if hits:
                 logger.warning(
@@ -872,13 +902,45 @@ def write_video_content(
             niche_id,
             platform="instagram",
         )
+
+        # Post-2026-07-13 audit follow-up (G5): degraded fallback caption
+        # must still carry a credit line. Today's gaming fire shipped
+        # ``Grand Theft Auto V\n\nVia twitch_trending\n\n#Gaming...`` —
+        # the "Via {channel}" prefix reads as attribution but isn't a
+        # recognised credit marker, so Layer 4 rejects it AND real
+        # audiences see no explicit source. Prepending the standard
+        # 🎬 Original: marker here means the fallback path satisfies
+        # both Layer 4 validation AND audience expectations.
+        from genlab_core.compliance.copyright_safety import (
+            format_source_attribution,
+        )
+
+        _credit_line = format_source_attribution(
+            {
+                "video_id": video.get("video_id", ""),
+                "source": video.get("source", ""),
+                "source_channel_title": channel,
+                "video_url": video.get("video_url", ""),
+            }
+        )
+
+        def _with_credit(body: str) -> str:
+            """Append credit line if present + not already there."""
+            if not _credit_line:
+                return body
+            if _credit_line in body:
+                return body
+            return f"{body}\n\n{_credit_line}" if body else _credit_line
+
         fallback = {
             "hook": title[:57] + "..." if len(title) > 60 else title,
-            "instagram_caption": (f"{title}\n\nVia {channel}\n\n{' '.join(fallback_tags)}"),
-            "twitter_content": title[:280],
-            "youtube_content": title[:40],
-            "facebook_content": f"{title} — what do you think?",
-            "threads_content": title[:300],
+            "instagram_caption": _with_credit(
+                f"{title}\n\nVia {channel}\n\n{' '.join(fallback_tags)}"
+            ),
+            "twitter_content": _with_credit(title[:200])[:280],
+            "youtube_content": title[:40],  # YT title format — no credit here
+            "facebook_content": _with_credit(f"{title} — what do you think?"),
+            "threads_content": _with_credit(title[:200])[:300],
         }
         # The degraded path ships too — sentence-case it (R-50) so a lowercase
         # source title doesn't read as a shitpost.
