@@ -417,11 +417,14 @@ class TestPolicyLoading:
             )
         # The other two fields must be loaded from the yaml — if they're
         # at AutoApprovalPolicy() defaults, the yaml wasn't found.
-        # 0.85 + 3 are also the dataclass defaults so this isn't a
-        # bulletproof check, but a future operator who tunes the yaml
-        # to non-default values would break this pin if the load path
-        # regressed.
-        assert policy.min_confidence == 0.85
+        # 2026-07-13: threshold lowered from 0.85 (dataclass default)
+        # to 0.80 after diagnosis found the original value silently
+        # disabled auto-approvals for 14 days (see
+        # test_ai_creators_min_confidence_pin.py + session-2026-07-13
+        # memory). Because 0.80 is NOT the dataclass default, this
+        # assertion now doubles as a load-path pin: if the yaml isn't
+        # found, policy falls back to 0.85 default and this fails.
+        assert policy.min_confidence == 0.80
         assert policy.max_approvals_per_pass == 3
 
 
