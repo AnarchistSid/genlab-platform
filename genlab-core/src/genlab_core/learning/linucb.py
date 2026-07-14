@@ -106,6 +106,15 @@ def _temporal_context_enabled() -> bool:
     LinUCB-v2 rollout: when a follow-up PR is ready to retrain LinUCB
     on the v2 vector, it flips this flag AND updates ``CONTEXT_DIM``
     together.
+
+    Strictness NOTE (2026-07-14 audit-verified): only literal
+    ``"true"``/``"TRUE"``/``"True"`` enable. ``"1"`` / ``"yes"`` / ``"on"``
+    do NOT enable — this is pinned by
+    ``test_linucb_context_v2.py::TestTemporalContextFlag.
+    test_non_exact_true_stays_off``. Matches the same strict pattern
+    as sibling ``_stochastic_mode_enabled`` (line 140 comment: "the
+    env-string ambiguity that bit the AUTO #2 rollout"). Do NOT
+    migrate to ``env_true`` — that would break the pin.
     """
     return os.environ.get("GENLAB_TEMPORAL_CONTEXT_ENABLED", "") in ("true", "TRUE", "True")
 

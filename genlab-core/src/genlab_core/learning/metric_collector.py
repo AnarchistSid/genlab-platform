@@ -515,9 +515,14 @@ def _check_post_bomb_signal(
     # Opt-in env flag check. post_rca.analyze_post has the same check
     # inline (for direct callers), but we duplicate it here so we don't
     # even pay the is_underperforming computation when disabled.
-    import os
+    # 2026-07-14 audit fix: migrated from strict ``=="1"`` to canonical
+    # ``env_true`` so ``=true``/``=yes``/``=on`` also enable, matching
+    # the rest of the codebase's flag semantics. Prior behavior meant
+    # an operator setting ``GENLAB_POST_RCA_ENABLED=true`` (natural
+    # first attempt) silently got a no-op.
+    from genlab_core.settings import env_true
 
-    if os.environ.get("GENLAB_POST_RCA_ENABLED", "0") != "1":
+    if not env_true("GENLAB_POST_RCA_ENABLED"):
         return False
 
     threshold = _get_reward_bomb_threshold(niche_id)

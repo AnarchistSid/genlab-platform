@@ -337,7 +337,15 @@ class RewardShaper:
                 If None and channel_metrics_fn was provided, it's called automatically.
 
         Returns:
-            Reward in [0, 1].
+            Reward in [0, 1] on success. ``None`` when the shaper's
+            monetisation-boost component raises internally (see
+            ``MonetisationRewardShaper.compute``) — 2026-07-14 change,
+            preferable to the prior 0.0 fallback which poisoned the
+            bandit posterior with synthetic zeros. All external
+            callers MUST null-check the return before feeding it to
+            downstream float ops. Verified pin: ``late_reward.py:252``,
+            ``metric_collector.py:1033``, and (2026-07-14)
+            ``backfill_bandit_from_history.py:300``.
         """
         weights = self.get_adjusted_weights(platform, channel_metrics)
 

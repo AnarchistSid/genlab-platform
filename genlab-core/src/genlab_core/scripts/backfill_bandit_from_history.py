@@ -298,6 +298,21 @@ def _process_rows(
             errors += 1
             continue
 
+        # 2026-07-14: RewardShaper.compute_reward now returns None on
+        # its own internal exception (was: silently returning 0.0
+        # which trained the bandit on synthetic zeros). Skip cleanly
+        # here so backfill doesn't feed None → downstream float ops.
+        if reward is None:
+            logger.warning(
+                "[backfill] compute_reward returned None pa_id=%s niche=%s "
+                "source=%s — skipping (shaper couldn't produce a real reward)",
+                row["pa_id"],
+                niche_id,
+                source,
+            )
+            errors += 1
+            continue
+
         # In per-platform mode the arm grouping key includes platform
         # so the printout shows YouTube/Facebook/etc as distinct rows
         # even when they share the same (niche, source). In legacy
