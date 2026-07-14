@@ -30,8 +30,24 @@ from genlab_core.platforms.models import (
 logger = logging.getLogger(__name__)
 
 # Facebook Graph API post insight metric names
+#
+# 2026-07-14 (X audit F3): added ``fb_reels_total_plays`` alongside
+# ``post_video_views``. Per meta_metric_deprecation registry,
+# ``post_video_views`` is RETIRED for FB Reels in Graph API v23.0
+# (replaced by ``fb_reels_total_plays``). We're on v22.0 today;
+# the moment Meta cuts over, post_video_views returns 0 for Reels →
+# reward=0 → bandit death spiral (identical shape to the YT #578
+# class-of-bug). Requesting BOTH is migration-friendly:
+#   - v22: post_video_views returns; fb_reels_total_plays may also
+#     return for Reels. Parsing prefers fb_reels_total_plays when
+#     present (see :500) so migration is gradual.
+#   - v23+: post_video_views returns 0; fb_reels_total_plays is the
+#     only signal. Cutover is seamless.
+# Non-Reels videos return fb_reels_total_plays=0 → falls back to
+# post_video_views correctly for feed videos.
 _VIDEO_INSIGHTS_METRICS = [
     "post_video_views",
+    "fb_reels_total_plays",
     "post_video_views_organic",
     "post_reactions_like_total",
     "post_comments",
@@ -496,9 +512,13 @@ class FacebookClient:
                     # Use the most recent value
                     metric_lookup[name] = int(values[-1].get("value", 0))
 
-            # Map to PlatformMetrics fields
+            # Map to PlatformMetrics fields.
+            # 2026-07-14 (X audit F3): prefer fb_reels_total_plays
+            # over post_video_views. See _VIDEO_INSIGHTS_METRICS
+            # comment above for v22→v23 cutover rationale.
             views = (
-                metric_lookup.get("post_video_views")
+                metric_lookup.get("fb_reels_total_plays")
+                or metric_lookup.get("post_video_views")
                 or metric_lookup.get("post_video_views_organic")
                 or metric_lookup.get("post_impressions")
                 or 0
