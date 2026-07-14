@@ -115,20 +115,39 @@ def _connect():
     return psycopg.connect(url, row_factory=psycopg.rows.dict_row)
 
 
-def query_recent(window_hours: int) -> list[dict]:
-    """Fetch pending_feedback rows created in the window with arm assignments."""
+def query_recent(window_hours: int, min_build_date: str | None = None) -> list[dict]:
+    """Fetch pending_feedback rows created in the window with arm assignments.
+
+    2026-07-14: added ``min_build_date`` filter. The intelligent-
+    transformation pipeline (Task #581) landed 2026-07-08; blueprints
+    BUILT before that date never had arm_ids_by_dimension populated
+    by design. But those pre-fix blueprints continue to PUBLISH for
+    weeks (VISUAL_READY queue drains slowly), so their pending_feedback
+    rows keep showing 0/3 attribution — creating false-positive
+    regression alerts.
+
+    Filter joins pending_feedback → publishing_analytics → blueprints
+    to get the ORIGINAL build date and excludes anything built before
+    min_build_date. Default 2026-07-08 (Task #581 landing).
+    """
+    if min_build_date is None:
+        min_build_date = "2026-07-08"
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(
             """
             SELECT
-              niche_id,
-              arm_ids_by_dimension,
-              created_at
-            FROM pending_feedback
-            WHERE created_at > now() - make_interval(hours => %s)
-            ORDER BY niche_id, created_at
+              pf.niche_id,
+              pf.arm_ids_by_dimension,
+              pf.created_at
+            FROM pending_feedback pf
+            LEFT JOIN publishing_analytics pa ON pa.post_id = pf.post_id
+              AND pa.platform = pf.platform
+            LEFT JOIN blueprints b ON b.id = pa.blueprint_id
+            WHERE pf.created_at > now() - make_interval(hours => %s)
+              AND (b.created_at IS NULL OR b.created_at >= %s::timestamptz)
+            ORDER BY pf.niche_id, pf.created_at
             """,
-            (window_hours,),
+            (window_hours, min_build_date),
         )
         return list(cur.fetchall())
 
@@ -202,11 +221,22 @@ def main() -> int:
         default="/opt/genlab/.env",
         help="Path to .env file to source (default /opt/genlab/.env)",
     )
+    ap.add_argument(
+        "--min-build-date",
+        default="2026-07-08",
+        help=(
+            "Only consider pending_feedback rows whose source blueprint "
+            "was BUILT on or after this date. Default 2026-07-08 = "
+            "Task #581 landing (transformation wire attribution). "
+            "Prevents false-positive alerts from pre-fix blueprints "
+            "that continue publishing weeks after they were built."
+        ),
+    )
     args = ap.parse_args()
 
     _load_env_file(Path(args.env_file))
 
-    rows = query_recent(args.window_hours)
+    rows = query_recent(args.window_hours, min_build_date=args.min_build_date)
     agg = aggregate(rows)
 
     if args.format == "json":
