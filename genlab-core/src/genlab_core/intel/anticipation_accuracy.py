@@ -213,7 +213,16 @@ def spearman_rank_correlation(
             return None, None
         return r, None
     except Exception as exc:
-        logger.debug("[anticipation_accuracy] correlation failed: %s", exc)
+        # WARNING (not DEBUG): silent failure here masks numpy/scipy
+        # regressions as "insufficient data" → `ready` badge never
+        # fires → GENLAB_TREND_ANTICIPATION_ENABLED stays off forever.
+        # Same class-of-bug as the pytrends silent-ImportError episode.
+        logger.warning(
+            "[anticipation_accuracy] correlation failed (n_predicted=%d, n_observed=%d): %s",
+            len(predicted) if predicted is not None else -1,
+            len(observed) if observed is not None else -1,
+            exc,
+        )
         return None, None
 
 

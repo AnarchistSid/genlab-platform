@@ -244,7 +244,12 @@ def resolve_stale_alerts() -> int:
         conn.commit()
         conn.close()
         return resolved
-    except Exception:
+    except Exception as exc:
+        # WARNING (not silent 0): silent failure here makes stale
+        # alerts accumulate forever → dashboard shows permanent red →
+        # operator ignores real alerts as noise. Distinguish "0 to
+        # resolve" (healthy) from "DB write failed" (broken).
+        logger.warning("resolve_stale_alerts failed: %s", exc, exc_info=True)
         return 0
 
 

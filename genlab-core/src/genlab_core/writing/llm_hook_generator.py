@@ -137,7 +137,15 @@ def pick_hook_style(niche_id: str) -> str | None:
 
     try:
         client = BacklogClient()
-    except Exception:
+    except Exception as exc:
+        # WARNING: silent None on DB failure hid outages behind
+        # "cold-start" appearance. Same class as optimal_time_learner.
+        logger.warning(
+            "[llm_hook_generator] BacklogClient failed for niche=%s: %s — "
+            "no style steer, proceeding with vanilla prompt",
+            niche_id,
+            exc,
+        )
         return None
 
     proxy = getattr(client, "bandit_arms", None)

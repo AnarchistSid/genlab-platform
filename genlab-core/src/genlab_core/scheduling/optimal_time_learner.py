@@ -229,7 +229,16 @@ def sample_optimal_hours_from_bandit(
 
     try:
         client = BacklogClient()
-    except Exception:  # noqa: BLE001 — bandit sampling is optional
+    except Exception as exc:  # noqa: BLE001 — bandit sampling is optional
+        # WARNING (not silent): distinguishes DATABASE_URL misconfig
+        # from real cold-start. Silent [] here made every niche revert
+        # to heuristic hours invisibly on prod DB outage.
+        logger.warning(
+            "[optimal_time] BacklogClient construction failed for niche=%s: %s — "
+            "reverting to heuristic hours",
+            niche_id,
+            exc,
+        )
         return []
 
     proxy = getattr(client, "bandit_arms", None)

@@ -765,7 +765,13 @@ class InstagramClient:
         try:
             resp = requests.get(url, params=all_params, timeout=15)
             return _safe_json(resp)
-        except Exception:
+        except Exception as exc:
+            # WARNING (not silent {}): callers (token verify, media
+            # status poll, insights) currently can't distinguish
+            # "Meta returned no data" from "network / DNS / timeout".
+            # Publish-time media polls loop against {} instead of
+            # backing off on transient network flakes.
+            self._log.warning("_graph_get failed for %s: %s", path, exc)
             return {}
 
 

@@ -90,7 +90,11 @@ def get_lifecycle_data(post_id: str) -> list[dict[str, Any]]:
                 (post_id,),
             ).fetchall()
             return [dict(r) for r in rows]
-    except Exception:
+    except Exception as exc:
+        # WARNING: silent [] made DB failure look like "no snapshots yet"
+        # (a real state for posts <6h old). Downstream analyze_velocity
+        # then returns wrong classification → wrong learning signal.
+        logger.warning("get_lifecycle_data failed for post_id=%s: %s", post_id, exc)
         return []
 
 

@@ -146,7 +146,14 @@ def pick_content_type_hint(niche_id: str) -> str | None:
 
     try:
         client = BacklogClient()
-    except Exception:
+    except Exception as exc:
+        # WARNING: same class as llm_hook_generator + optimal_time.
+        logger.warning(
+            "[content_type_hint] BacklogClient failed for niche=%s: %s — "
+            "no bandit steer",
+            niche_id,
+            exc,
+        )
         return None
 
     proxy = getattr(client, "bandit_arms", None)
@@ -156,7 +163,7 @@ def pick_content_type_hint(niche_id: str) -> str | None:
     try:
         arms = load_all_arms(proxy, niche_id)
     except Exception as exc:
-        logger.debug("[content_type_hint] arm load failed: %s", exc)
+        logger.warning("[content_type_hint] arm load failed for niche=%s: %s", niche_id, exc)
         return None
 
     # Per-platform arms come through as ``content_type__platform``

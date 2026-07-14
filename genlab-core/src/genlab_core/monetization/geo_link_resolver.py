@@ -110,7 +110,12 @@ def _compute_dynamic_geo(niche_id: str) -> str | None:
                 )
                 rows = cur.fetchall()
     except Exception as exc:
-        logger.debug(
+        # WARNING (not DEBUG): fallback to hardcoded geo silently ships
+        # wrong-country affiliate URLs → wrong Amazon domain → wrong
+        # commission rate. Silent monetization revenue leak. If this
+        # fires often for one niche, either RLS is misconfigured or
+        # affiliate_clicks isn't being populated for that tenant.
+        logger.warning(
             "[GeoResolver] dynamic geo query failed for niche=%s: %s — falling back to hardcoded",
             niche_id,
             exc,
@@ -208,7 +213,12 @@ def _is_url_healthy(url: str) -> bool:
             healthy = resp.status in _HEALTHY_CODES
     except urllib.error.HTTPError as exc:
         healthy = exc.code in _HEALTHY_CODES
-    except Exception:
+    except Exception as exc:
+        # Distinguish network/timeout failure from HTTP-status failure —
+        # both mark the URL unhealthy but for different reasons. The
+        # generic warning at :217 fires either way; this info-level log
+        # captures the exception surface for diagnosis.
+        logger.info("[GeoResolver] link health check exception for %s: %s", url[:120], exc)
         healthy = False
 
     with _health_lock:

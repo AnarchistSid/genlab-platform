@@ -73,7 +73,9 @@ def _fetch_facebook_reel_insights(reel_id: str, token: str) -> dict:
             return {}
         body = resp.json()
     except Exception as exc:
-        logger.debug(
+        # WARNING (not DEBUG) — silent failure here becomes a synthetic
+        # zero reward for the bandit. Same class-of-bug as YT #578.
+        logger.warning(
             "[metric_collector] fb reel insights fetch failed for %s: %s",
             reel_id,
             exc,
@@ -135,7 +137,10 @@ def _fetch_facebook_video_object(post_id: str, token: str) -> dict:
             return {}
         body = resp.json()
     except Exception as exc:
-        logger.debug("[metric_collector] fb video object fetch failed for %s: %s", post_id, exc)
+        # WARNING (not DEBUG) — synthetic-zero risk. See reel insights above.
+        logger.warning(
+            "[metric_collector] fb video object fetch failed for %s: %s", post_id, exc
+        )
         return {}
 
     likes_block = body.get("likes") or {}
@@ -243,7 +248,12 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
                 post_id,
             )
     except Exception as exc:
-        logger.debug("[metric_collector] fb insights fetch failed for %s: %s", post_id, exc)
+        # WARNING (not DEBUG) — insights failure produces synthetic-zero
+        # metrics{"impressions"/"reach"/"minutes_viewed"} → reward_shaper
+        # trains bandit on false-negative. Same class-of-bug as YT #578.
+        logger.warning(
+            "[metric_collector] fb insights fetch failed for %s: %s", post_id, exc
+        )
 
     # PR #518: prefer fb_reels_total_plays over post_video_views when
     # the post IS a Reel. Migration-friendly: works on both v22 (both

@@ -606,8 +606,10 @@ def _llm_judge_borderline(
             reasons=[*rule_decision.reasons, audit_entry],
         )
     except Exception as exc:
-        # Any failure (API error, JSON parse, etc.) → return None so
-        # the caller uses the unchanged rule-based decision. Logged
-        # at debug so a flaky judge doesn't drown logs.
-        logger.debug("[gate] LLM judge failed (using rule-based): %s", exc)
+        # WARNING (not DEBUG): AUTO #2 enforcement now depends on the
+        # LLM judge for borderline cases; chronic silent failure would
+        # invisibly shift the enforcement mix back to rule-only. Any
+        # failure (API error, JSON parse, etc.) → return None so the
+        # caller uses the unchanged rule-based decision.
+        logger.warning("[gate] LLM judge failed (using rule-based): %s", exc)
         return None

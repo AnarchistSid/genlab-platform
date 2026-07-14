@@ -108,7 +108,17 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
             # -0.05 weight share becomes a permanent dead zone in the IG
             # reward signal.
             return metrics
-        except Exception:
+        except Exception as exc:
+            # Per-set failure gets a WARNING so a Meta metric deprecation
+            # mid-fallback surfaces before the whole cascade exhausts.
+            # Prior state (bare `continue`) silently absorbed permission,
+            # deprecation, and network failures into the same "no data" tail.
+            logger.warning(
+                "[metric_collector] IG metric-set '%s' failed for %s: %s",
+                metric_set,
+                post_id,
+                exc,
+            )
             continue
 
     logger.warning("[metric_collector] All IG metric sets failed for %s", post_id)
