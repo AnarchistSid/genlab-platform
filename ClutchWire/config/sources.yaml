@@ -161,7 +161,19 @@ youtube_channels:
     # handle: @SkySports
 
 scorebat:
-  enabled: true
+  # 2026-07-14 audit: disabled. Scorebat emits URLs of the form
+  # https://www.scorebat.com/<match-slug>-live-stream/ which are
+  # embed pages, not downloadable video URLs. yt-dlp fails on them
+  # → sports pipeline stalls with NO SCHEDULE 2 consecutive runs
+  # (Mission Control alerts NIGHTLY_SCHEDULE_MISSING_SLOT +
+  # QC_COLLAPSE). Meanwhile the 12+ YouTube RSS channels above
+  # (NBA, NFL, EPL, House of Highlights, ESPN, MLB, NHL, F1, UFC,
+  # WWE, ICC, Sky Sports) provide plenty of downloadable clips.
+  #
+  # Re-enable IF scorebat starts emitting yt-dlp-compatible URLs,
+  # OR if we add a scorebat-specific downloader that scrapes the
+  # embed page for the real video source.
+  enabled: false
   max_highlights: 10
   competitions: ["Premier League", "Champions League", "La Liga"]
 
