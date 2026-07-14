@@ -39,12 +39,18 @@ _ENABLE_ENV_VAR = "GENLAB_DRIFT_PERSIST_ENABLED"
 
 
 def _persist_enabled() -> bool:
-    """Strict "1" match — matches sibling `_ensemble_persist` guard.
+    """Return True iff drift persistence is opt-in.
 
-    A `"true"` typo silently no-ops; the L11 flag-state endpoint
-    surfaces that as `mis_set` in the operator's card.
+    2026-07-14: migrated to canonical env_true helper matching the
+    ensemble_persist fix earlier this session. Prior strict-'1' was
+    the exact class-of-bug the memory
+    `[[class-of-bug-metric-proxies-mask-audience-facing-failures]]`
+    codifies — operator setting =true silently no-op'd the whole
+    drift-persistence layer.
     """
-    return os.environ.get(_ENABLE_ENV_VAR, "0").strip() == "1"
+    from genlab_core.settings import env_true
+
+    return env_true(_ENABLE_ENV_VAR)
 
 
 def _parse_computed_at(raw: str) -> datetime | None:

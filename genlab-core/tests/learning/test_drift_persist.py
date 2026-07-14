@@ -45,15 +45,18 @@ class TestPersistEnabled:
         monkeypatch.delenv(_ENABLE_ENV_VAR, raising=False)
         assert _persist_enabled() is False
 
-    def test_one_is_enabled(self, monkeypatch):
-        monkeypatch.setenv(_ENABLE_ENV_VAR, "1")
-        assert _persist_enabled() is True
-
-    @pytest.mark.parametrize("value", ["true", "yes", "on", "TRUE"])
-    def test_typo_variants_are_disabled(self, monkeypatch, value):
-        """Strict "1" match — matches sibling ensemble_persist guard."""
+    @pytest.mark.parametrize("value", ["1", "true", "yes", "on", "TRUE", "y", "t"])
+    def test_env_true_values_enable(self, monkeypatch, value):
+        """2026-07-14: migrated to env_true (accepts 1|true|yes|on|y|t).
+        Prior strict-'1' was inconsistent with the rest of the codebase
+        — matching class-of-bug fix from ensemble_persist migration."""
         monkeypatch.setenv(_ENABLE_ENV_VAR, value)
-        assert _persist_enabled() is False
+        assert _persist_enabled() is True, f"{value!r} should enable"
+
+    @pytest.mark.parametrize("value", ["0", "false", "no", "off", ""])
+    def test_falsy_values_disable(self, monkeypatch, value):
+        monkeypatch.setenv(_ENABLE_ENV_VAR, value)
+        assert _persist_enabled() is False, f"{value!r} should disable"
 
 
 class TestRecordSignalsEarlyExits:
