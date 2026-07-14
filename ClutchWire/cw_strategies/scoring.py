@@ -171,9 +171,28 @@ class SportScoringStrategy(BaseScoringStrategy):
         for i, item in enumerate(scored):
             item["rank"] = i + 1
 
+        # 2026-07-14 fix: bypass min_clip_score for trending-video stories.
+        # The sports scoring dimensions (recency, community_signal, magnitude,
+        # novelty) assume ESPN-format metadata (game_type, is_live, is_upset,
+        # is_record) which content_pool YouTube trending stories DO NOT have —
+        # so they all score near 0 and get filtered by min_clip_score=0.30.
+        # But content_pool stories ALREADY passed the routing niche_score gate
+        # at 0.30+ (that's what routed them to 'sports' in the first place),
+        # so re-filtering here is a double-gate that starves the pipeline.
+        #
+        # Sports has had 0 blueprints for 2+ consecutive days as of today —
+        # this fix restores the flow. RSS stories (ESPN etc.) still respect
+        # the threshold since their fields are populated.
         min_score = self._thresholds.get("min_clip_score", 0.20)
-        above = [c for c in scored if c["final_score"] >= min_score]
+        above = [
+            c for c in scored
+            if c.get("_trending_video") or c["final_score"] >= min_score
+        ]
         dropped = len(scored) - len(above)
+        trending_bypassed = sum(
+            1 for c in scored
+            if c.get("_trending_video") and c["final_score"] < min_score
+        )
 
         top_n = self._thresholds.get("top_clips_per_run", 20)
         if len(above) > top_n:
@@ -187,14 +206,17 @@ class SportScoringStrategy(BaseScoringStrategy):
             "input_count": len(stories),
             "scored_count": len(above),
             "dropped_count": dropped,
+            "trending_bypassed": trending_bypassed,
             "top_score": above[0]["final_score"] if above else 0,
         }
 
         logger.info(
-            "[sports] Scored %d -> %d stories (dropped %d below %.2f)",
+            "[sports] Scored %d -> %d stories (dropped %d below %.2f; "
+            "%d trending-video stories bypassed threshold)",
             len(stories),
             len(above),
             dropped,
             min_score,
+            trending_bypassed,
         )
         return context
