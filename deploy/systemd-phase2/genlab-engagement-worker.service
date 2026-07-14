@@ -3,6 +3,11 @@ Description=GenLab Engagement Worker (Dramatiq)
 After=network-online.target docker.service
 Requires=docker.service
 
+# 2026-07-14: mass OnFailure coverage — every genlab service
+# should route failures to the shared failure-alert template so
+# systemd_unit_failed critical alerts land in pipeline_alerts.
+OnFailure=genlab-service-failure-alert@%n.service
+
 [Service]
 Type=exec
 User=genlab

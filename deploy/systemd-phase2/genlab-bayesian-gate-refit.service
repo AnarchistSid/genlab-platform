@@ -2,6 +2,11 @@
 Description=GenLab Bayesian Gate Refit — nightly per-niche LR posterior recomputation
 After=network-online.target postgresql.service
 
+# 2026-07-14: mass OnFailure coverage — every genlab service
+# should route failures to the shared failure-alert template so
+# systemd_unit_failed critical alerts land in pipeline_alerts.
+OnFailure=genlab-service-failure-alert@%n.service
+
 [Service]
 Type=oneshot
 User=genlab
