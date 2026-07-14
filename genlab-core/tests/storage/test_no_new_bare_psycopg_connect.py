@@ -58,7 +58,8 @@ _ALLOWLIST: frozenset[str] = frozenset(
         # Migration script + scripts that connect with explicit niche_id
         # context. These pre-date the shim; migration is pending.
         "genlab-core/src/genlab_core/storage/migrate_table.py",
-        "genlab-core/src/genlab_core/storage/disk_quota.py",
+        # (disk_quota.py migrated to pg_connect on 2026-07-14 —
+        # see test_pg_connect_caller_migration._MIGRATED_SITES.)
         # Backfill scripts run with explicit niche_id loops + manually
         # set the GUC inside the loop. Migration is pending.
         "genlab-core/src/genlab_core/scripts/backfill_insights.py",
@@ -132,6 +133,28 @@ _ALLOWLIST: frozenset[str] = frozenset(
         # bulk-runner / verify-script category as the entries above.
         "scripts/verify_intelligent_transform.py",
         "scripts/nightly_schedule_top_per_niche.py",
+        #
+        # ── Attribution defense stack (PRs #775, #777; 2026-07-13/14) ──
+        # attribution_health_monitor writes CRITICAL alerts on the
+        # audience-facing invariant across ALL niches simultaneously
+        # — pg_connect(niche_id="all") would work but the monitor
+        # runs as a systemd oneshot (no ContextVar setup around it),
+        # so the raw psycopg.connect matches its "connect once, scan
+        # cross-niche, exit" shape. Dashboard's sibling reads the
+        # same invariant for the health card.
+        "genlab-core/src/genlab_core/monitoring/attribution_health_monitor.py",
+        "dashboard/server/core/attribution_health.py",
+        #
+        # ── Retro-credit + backfill scripts (2026-07-14) ─────────────
+        # One-shot operator-driven scripts that iterate all niches
+        # explicitly in SQL. Same bulk-runner category as
+        # register_click_rewards.py, backfill_product_slug.py above.
+        "scripts/retro_credit_uncredited_posts.py",
+        "scripts/backfill_analytics_double_prefix.py",
+        # ── Nightly schedule remediation (2026-07-09) ───────────────
+        # Nightly-scheduled remediation of scheduler idempotency.
+        # Cross-niche scan; matches the "connect once, scan all" shape.
+        "scripts/nightly_schedule_remediate.py",
     }
 )
 

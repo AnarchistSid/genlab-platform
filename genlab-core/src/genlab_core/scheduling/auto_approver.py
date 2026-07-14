@@ -201,9 +201,16 @@ def _lookup_bandit_arm(niche_id: str, arm_id: str) -> dict | None:
     except ImportError:
         return None
     try:
-        with pg_connect(dsn, connect_timeout=5, niche_id=niche_id) as conn:
+        # 2026-07-14: was `pg_connect(niche_id=niche_id)` followed by
+        # `SET app.niche_id = ''` (session-scoped, no LOCAL). The
+        # session-scoped SET could leak if this connection were ever
+        # pooled — the next borrower would inherit admin mode. Fixed
+        # by opening the connection in admin mode directly with
+        # niche_id="all" (the canonical admin-scope value in
+        # tenant_context.py:157). RLS bypass is now the transaction-
+        # local GUC set by pg_connect itself, not a follow-up SET.
+        with pg_connect(dsn, connect_timeout=5, niche_id="all") as conn:
             with conn.cursor() as cur:
-                cur.execute("SET app.niche_id = ''")  # bypass RLS — arms are global
                 cur.execute(
                     "SELECT alpha, beta, n_plays FROM bandit_arms "
                     "WHERE niche_id = %s AND arm_id = %s",

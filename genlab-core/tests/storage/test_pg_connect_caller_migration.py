@@ -129,6 +129,8 @@ _MIGRATED_SITES = (
     ("genlab-core/src/genlab_core/learning/bandit_residual.py", "bandit_residual"),
     ("genlab-core/src/genlab_core/monitoring/health_monitor.py", "health_monitor"),
     ("genlab-core/src/genlab_core/pipeline/shared_ingestion.py", "shared_ingestion"),
+    # Tier-6 (2026-07-14 storage audit follow-up)
+    ("genlab-core/src/genlab_core/storage/disk_quota.py", "disk_quota"),
 )
 
 

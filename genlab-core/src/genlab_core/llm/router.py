@@ -52,11 +52,22 @@ TASK_TIER: dict[str, str] = {
 }
 
 # Tier → model config
+#
+# NOTE (2026-07-14 audit F2): `input_cost_per_m` / `output_cost_per_m`
+# fields below are INFORMATIONAL DOCUMENTATION ONLY — they are read
+# nowhere in the module. Actual per-call cost accounting lives in
+# `genlab_core.intelligence.cost_accumulator.MODEL_COSTS` (single source
+# of truth) via `record_anthropic_usage`. Keep these values in sync
+# with MODEL_COSTS on any pricing change, but the accumulator is what
+# populates ledger totals — this is a comment-in-code, not a wire.
 TIER_CONFIG: dict[str, dict[str, Any]] = {
     "creative": {
         "provider": "anthropic",
         "model": "claude-haiku-4-5-20251001",
         "env_key": "ANTHROPIC_API_KEY",
+        # 2026-07-14: was $1.00/$5.00 mismatch vs cost_accumulator's
+        # $0.80/$4.00. Aligned both to $1.00/$5.00 in this pass —
+        # cost_accumulator.MODEL_COSTS is the source of truth.
         "input_cost_per_m": 1.00,
         "output_cost_per_m": 5.00,
     },

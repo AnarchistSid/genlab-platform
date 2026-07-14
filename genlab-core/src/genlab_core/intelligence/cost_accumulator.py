@@ -10,17 +10,31 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Cost rates per 1M tokens (as of 2026-03)
+# Cost rates per 1M tokens.
+#
+# 2026-07-14 reconciliation with router.py TIER_CONFIG (single source
+# of truth for model IDs). Prior state: Haiku 4.5 listed as $0.80/$4.00
+# here vs $1.00/$5.00 in router.py — 25% drift. Aligned to router.py's
+# rates so both files agree.
+#
+# Added `claude-opus-4-7` entry (referenced by decision_router.py).
+# Prior state: Opus 4.7 calls fell through to the prefix-match branch
+# which greedy-matched `claude-opus-4-6` — right pricing by luck
+# rather than by declaration. Now explicit.
+#
+# Removed stale `claude-sonnet-4-5-20250514` (2025 dated ID no longer
+# in use; Sonnet 4.6 is current).
 MODEL_COSTS: dict[str, dict[str, float]] = {
-    # Anthropic
-    "claude-haiku-4-5-20251001": {"input": 0.80, "output": 4.00},
-    "claude-haiku-4-5": {"input": 0.80, "output": 4.00},
-    "claude-sonnet-4-5-20250514": {"input": 3.00, "output": 15.00},
+    # Anthropic — Claude 4.X family (env context: Opus 4.7, Sonnet 4.6, Haiku 4.5)
+    "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
+    "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
     "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
     "claude-opus-4-6": {"input": 15.00, "output": 75.00},
+    "claude-opus-4-7": {"input": 15.00, "output": 75.00},
     # OpenAI
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4o": {"input": 2.50, "output": 10.00},
+    "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
     "gpt-image-1": {"per_image": 0.04},  # varies by quality/size; 0.04 is mid estimate
 }
 
@@ -62,8 +76,23 @@ def _compute_cost(model: str, input_tokens: int, output_tokens: int) -> float:
                 rates = r
                 break
     if not rates:
-        logger.warning("[cost] unknown model '%s' — using gpt-4o-mini rates", model)
-        rates = MODEL_COSTS.get("gpt-4o-mini", {"input": 0.15, "output": 0.60})
+        # 2026-07-14 safety fix (F6 audit): fall back to OPUS rates,
+        # not gpt-4o-mini. Prior state silently applied 100× cheaper
+        # gpt-4o-mini rates to unknown models — a typo in a model ID
+        # (e.g. "claude-opus-4-7" if the entry were missing) produced
+        # a $0.15/$0.60 undercount vs actual $15/$75. Overcounting on
+        # unknown models is safer: it surfaces on the dashboard as a
+        # visible cost spike, prompting a fix, rather than silently
+        # under-attributing spend.
+        logger.warning(
+            "[cost] unknown model '%s' — using OPUS rates as safety "
+            "fallback (overcount preferred over undercount); ADD the "
+            "model to MODEL_COSTS to fix",
+            model,
+        )
+        rates = MODEL_COSTS.get(
+            "claude-opus-4-7", {"input": 15.00, "output": 75.00}
+        )
 
     return (
         input_tokens * rates.get("input", 0) + output_tokens * rates.get("output", 0)

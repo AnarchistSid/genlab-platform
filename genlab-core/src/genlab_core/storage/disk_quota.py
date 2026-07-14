@@ -167,11 +167,21 @@ def _get_pending_publish_run_ids() -> set[str]:
     if not db_url:
         return set()
     try:
-        import psycopg
+        from genlab_core.storage.tenant_context import pg_connect
     except ImportError:
         return set()
     try:
-        with psycopg.connect(db_url, connect_timeout=5) as conn:
+        # 2026-07-14 audit fix: use pg_connect with `niche_id="all"`
+        # (admin intent) instead of raw psycopg.connect. Bare-connect
+        # leaves `app.niche_id` GUC unset → today's RLS policy
+        # `USING (niche_id = current_setting('app.niche_id') OR
+        # current_setting('app.niche_id') = '')` treats unset as
+        # admin. But any future RLS tightening (removing the empty-
+        # string escape) would silently reduce this cross-niche
+        # protection query to zero rows → cleanup evicts pending-
+        # scheduled media (2026-04-29 incident this function was
+        # written to prevent). Explicit admin intent survives that.
+        with pg_connect(db_url, niche_id="all", connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
