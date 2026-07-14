@@ -1029,12 +1029,19 @@ def _cli() -> int:
     exit_code = 0
     for niche_id in niches:
         result = run_pass(niche_id, dry_run=args.dry_run)
+        # 2026-07-14: added rollout + compliance counters. Without them
+        # examined=9 minus (approved+low_conf+rejected+idempotent) leaves
+        # a silent gap; operators can't tell if the auto-approver produced
+        # zero approvals because of gate quality or because rollout dice
+        # deferred everything. The two counters close the audit loop.
         print(
             f"[{niche_id}] examined={result.candidates_examined} "
             f"approved={len(result.auto_approved)} "
             f"low_conf={len(result.skipped_low_confidence)} "
             f"rejected={len(result.skipped_gate_rejected)} "
             f"idempotent={len(result.skipped_idempotent)} "
+            f"rollout_deferred={len(result.skipped_rollout)} "
+            f"compliance_blocked={len(result.skipped_compliance_block)} "
             f"errors={len(result.errors)} "
             f"dry_run={result.dry_run} disabled={result.policy_disabled} "
             f"kill={result.kill_switch_active} paused={result.niche_paused} "
