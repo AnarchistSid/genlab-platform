@@ -435,6 +435,26 @@ class PostgresBackend:
         for k, v in record.items():
             if k in promoted:
                 if isinstance(v, dict):
+                    # 2026-07-14 (backlog audit F10): WARNING elevates
+                    # a latent-becomes-active class-of-bug. Promoted
+                    # columns are typed SQL scalars — landing a dict
+                    # via json.dumps silently stringifies WITHOUT a
+                    # symmetric json.loads at read time (_row_to_record
+                    # returns the string as-is for promoted columns).
+                    # No caller passes dicts today for these columns,
+                    # so this is latent. If a future caller does
+                    # (e.g. passes structured error info as
+                    # `status={"nested": "dict"}`), the write side
+                    # stringifies but the read side returns the text
+                    # → subtle downstream shape drift.
+                    logger.warning(
+                        "[postgres] dict value on promoted column %r.%r — "
+                        "stringifying via json.dumps but read side WILL "
+                        "NOT parse. Consider using extra JSONB instead "
+                        "of a promoted column.",
+                        table,
+                        k,
+                    )
                     cols[k] = json.dumps(v)
                 else:
                     cols[k] = self._coerce_value(v)
