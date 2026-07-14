@@ -1243,11 +1243,60 @@ def _classify_arm_with_propensity(
 
     if not matches:
         return _NICHE_ARM_DEFAULTS.get(niche_id, "default"), None
+
+    # 2026-07-14: bandit was descriptive, not prescriptive.
+    # ----------------------------------------------------
+    # Pre-fix: `len(matches) == 1` returned (arm, 1.0) — a deterministic
+    # short-circuit that ran BEFORE LinUCB / Thompson-boost. 92% of prod
+    # picks hit this branch. Bandit posteriors correctly identified that
+    # some arms (e.g. ai_creators.comparison_test with n=31, avg_r=0.143)
+    # substantially outperformed the default arm (tool_demo n=32, avg_r=
+    # 0.082), yet those higher-reward arms were picked ~0 times because
+    # keyword-matched single-arm bypassed the picker entirely.
+    #
+    # Fix: when there's exactly ONE keyword match AND we have Thompson
+    # boost data indicating an alternative arm has a materially higher
+    # posterior mean, promote the case to multi-match by adding the
+    # top-2 higher-boost alternatives. The existing LinUCB→Thompson→
+    # first-match chain then arbitrates. The keyword-matched arm is
+    # always a candidate — if it's actually best under LinUCB context
+    # + arm_boosts, it still wins. If a genuinely better arm exists,
+    # the bandit gets to explore/exploit it.
+    #
+    # Bounded exploration: only add top-2 alternatives (not all arms)
+    # so we preserve keyword semantics as the dominant signal. Threshold
+    # of 1.10× multiplicative gap on the boost avoids adding
+    # marginal-difference alternatives (α=β=1 cold arms hover at ~1.0).
+    if len(matches) == 1 and arm_boosts:
+        matched_boost = arm_boosts.get(matches[0], 1.0)
+        alternatives = sorted(
+            [
+                (arm_id, boost)
+                for arm_id, boost in arm_boosts.items()
+                if arm_id != matches[0] and boost > matched_boost * 1.10
+            ],
+            key=lambda kv: kv[1],
+            reverse=True,
+        )[:2]
+        if alternatives:
+            matches = matches + [arm_id for arm_id, _ in alternatives]
+            logger.info(
+                "[classify_arm] single-match arm %s (boost=%.2f) — "
+                "promoted to multi-match with alternatives %s (boosts %s) "
+                "so LinUCB/Thompson can arbitrate",
+                matches[0],
+                matched_boost,
+                [arm_id for arm_id, _ in alternatives],
+                [f"{b:.2f}" for _, b in alternatives],
+            )
+            # Fall through to multi-match branch below — LinUCB/Thompson
+            # sees the expanded candidate set.
+
     if len(matches) == 1:
-        # Single-candidate short-circuit. Propensity = 1.0 because the
-        # selection is trivially deterministic regardless of which
-        # policy was active. Mirrors pick_best_arm_with_propensity's
-        # convention.
+        # Single-candidate short-circuit. Reached only when arm_boosts
+        # is None/empty (cold-start pre-any-reward) OR no alternative
+        # crossed the 1.10× promotion threshold. Propensity = 1.0
+        # because the selection is trivially deterministic.
         return matches[0], 1.0
 
     # Compute the bandit pick. The three-path structure (LinUCB →
