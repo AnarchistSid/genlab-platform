@@ -191,6 +191,19 @@ class GoogleTrendsIntel:
     # ``metric_collector._PG_POOL`` uses for its psycopg_pool init.
     _PYTRENDS_UNAVAILABLE = False
 
+    # 2026-07-14: per-niche cooldown after pytrends failure. 5 pipeline
+    # niches run in parallel and each hits pytrends when Tier-1 RSS is
+    # niche-mismatched (returns 0 filtered topics). All 5 simultaneous
+    # requests to pytrends trigger 429 rate-limits on Google's side +
+    # bounce to Tier-4 stale cache. This cooldown remembers "pytrends
+    # failed for this niche recently" and skips Tier-2/3 for
+    # ``_PYTRENDS_COOLDOWN_S`` seconds — falls straight through to
+    # Tier-4/5 instead of burning another 429. Process-local (dict) so
+    # each pipeline's fresh process starts clean; the disk cache
+    # (6h TTL) is the persistent layer.
+    _pytrends_failure_cooldown: dict[str, float] = {}
+    _PYTRENDS_COOLDOWN_S = 1800  # 30 min — matches typical rate-limit windows
+
     def _get_client(self):
         if self._pytrends is None:
             try:
@@ -244,27 +257,46 @@ class GoogleTrendsIntel:
         except Exception as e:
             logger.warning("[%s] Trends RSS failed: %s", niche_id, e)
 
+        # 2026-07-14: pytrends cooldown check. If Tier-2/3 failed for
+        # this niche within the last 30 min, skip them entirely to
+        # avoid burning another 429 on Google's side + the 5-way
+        # concurrent stampede when all niche pipelines fire.
+        cooldown_until = self._pytrends_failure_cooldown.get(niche_id, 0)
+        now = time.time()
+        pytrends_in_cooldown = now < cooldown_until
+        if pytrends_in_cooldown:
+            logger.debug(
+                "[%s] pytrends in cooldown (%.0fs remaining) — "
+                "skipping Tier-2/3 attempts",
+                niche_id,
+                cooldown_until - now,
+            )
+
         # Tier 2: pytrends real-time (often rate-limited)
-        try:
-            realtime = self._get_realtime_trending(niche_id)
-            realtime = [t for t in realtime if t and t.strip()] if realtime else []
-            if realtime:
-                _write_cache(niche_id, realtime)
-                logger.info("[%s] Google Trends real-time: %s", niche_id, realtime[:3])
-                return realtime[:top_n]
-        except Exception as e:
-            logger.warning("[%s] Real-time trends failed: %s", niche_id, e)
+        if not pytrends_in_cooldown:
+            try:
+                realtime = self._get_realtime_trending(niche_id)
+                realtime = [t for t in realtime if t and t.strip()] if realtime else []
+                if realtime:
+                    _write_cache(niche_id, realtime)
+                    logger.info("[%s] Google Trends real-time: %s", niche_id, realtime[:3])
+                    return realtime[:top_n]
+            except Exception as e:
+                logger.warning("[%s] Real-time trends failed: %s", niche_id, e)
+                self._pytrends_failure_cooldown[niche_id] = now + self._PYTRENDS_COOLDOWN_S
 
         # Tier 3: pytrends daily (also often rate-limited)
-        try:
-            daily = self._get_daily_trending(niche_id)
-            daily = [t for t in daily if t and t.strip()] if daily else []
-            if daily:
-                _write_cache(niche_id, daily)
-                logger.info("[%s] Google Trends daily: %s", niche_id, daily[:3])
-                return daily[:top_n]
-        except Exception as e:
-            logger.warning("[%s] Daily trends failed: %s", niche_id, e)
+        if not pytrends_in_cooldown:
+            try:
+                daily = self._get_daily_trending(niche_id)
+                daily = [t for t in daily if t and t.strip()] if daily else []
+                if daily:
+                    _write_cache(niche_id, daily)
+                    logger.info("[%s] Google Trends daily: %s", niche_id, daily[:3])
+                    return daily[:top_n]
+            except Exception as e:
+                logger.warning("[%s] Daily trends failed: %s", niche_id, e)
+                self._pytrends_failure_cooldown[niche_id] = now + self._PYTRENDS_COOLDOWN_S
 
         # Tier 4: Stale cache (expired but better than nothing)
         stale = _read_stale_cache(niche_id)
