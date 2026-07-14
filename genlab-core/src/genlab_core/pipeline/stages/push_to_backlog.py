@@ -716,7 +716,19 @@ def _get_engagement_arm_boost(client, niche_id: str) -> dict[str, float]:
             else:
                 boosts[arm] = 1.0
         return boosts
-    except Exception:
+    except Exception as exc:
+        # 2026-07-14 audit: was silent `return {}`. When this legacy
+        # historical-priority-score fallback fails, callers assume no
+        # arms have boost data → treat every arm as boost=1.0 → mask
+        # the failure. Elevate to WARNING so operators see when the
+        # bandit-posterior-unavailable path is silently degrading.
+        logger.warning(
+            "[PUSH] _get_engagement_arm_boost failed for niche=%s (%s) — "
+            "returning empty boosts; blueprints will rank without "
+            "historical priority signal",
+            niche_id,
+            exc,
+        )
         return {}
 
 
@@ -1585,7 +1597,21 @@ class PushToBacklog:
             preloaded_extended: dict[str, dict[str, Any]] | None = (
                 load_all_arms_extended(_arm_proxy, niche_id) if _arm_proxy is not None else None
             )
-        except Exception:
+        except Exception as exc:
+            # 2026-07-14 audit: was silent `preloaded_extended = None`.
+            # When PR #400's single-scan bandit-arm load fails, downstream
+            # falls back to per-arm queries (3× the DB hits). More
+            # importantly, if the failure is a schema/permission drift,
+            # per-arm queries will also fail and blueprints get scored
+            # without ANY bandit signal — but operators see nothing.
+            # Elevate to WARNING so class-of-bug surfaces.
+            logger.warning(
+                "[PUSH] load_all_arms_extended failed for niche=%s (%s) — "
+                "falling back to per-arm queries (3× DB cost); if downstream "
+                "loaders also fail, blueprints will rank without bandit signal",
+                niche_id,
+                exc,
+            )
             preloaded_extended = None
 
         # Derive the legacy ``{arm_id: (alpha, beta)}`` tuple shape that

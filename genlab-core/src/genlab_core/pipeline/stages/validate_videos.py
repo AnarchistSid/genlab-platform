@@ -241,12 +241,23 @@ class ValidateVideos:
                     media["video_validation"] = {"valid": False, "issues": issues}
                     failed += 1
 
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "[ValidateVideos] Error validating %s",
                     story.get("story_id", "unknown"),
                 )
-                media["video_validation"] = {"valid": False, "error": "exception"}
+                # 2026-07-14 audit: prior value ``"error": "exception"``
+                # was a generic string that lost the actual failure
+                # detail. Dashboard operators saw "validation failed"
+                # with no root cause. Persist exception type + message
+                # so ``blueprints.error_message`` (populated downstream
+                # from this dict) carries diagnostic info.
+                media["video_validation"] = {
+                    "valid": False,
+                    "error": "exception",
+                    "error_type": exc.__class__.__name__,
+                    "error_message": str(exc)[:500],
+                }
                 failed += 1
 
         logger.info(

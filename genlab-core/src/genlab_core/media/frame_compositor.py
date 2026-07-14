@@ -626,6 +626,20 @@ class FrameCompositor:
         a shadow for legibility over both dark and bright frames.
         """
         if not source_credit:
+            # 2026-07-14 audit: skip is legitimate when the source has
+            # no derivable credit (e.g. RSS with no channel). But it's
+            # ALSO the split-signal failure mode where the caption
+            # carries "🎬 Original: @X" but the frame does NOT — L5
+            # metric reads DB captions (100%) while L6 watermark shows
+            # nothing. Log at INFO so operators grep-detecting the
+            # split-signal class can compute the delta.
+            logger.info(
+                "[%s] watermark skipped: source_credit empty. "
+                "If the caption has an Original: line this is a "
+                "split-signal signal — check base_visual_render.py:219 "
+                "source_credit derivation.",
+                self.branding.niche_id,
+            )
             return ""
         text = f"Original: {source_credit}"
         safe_text = self._escape_drawtext(text)

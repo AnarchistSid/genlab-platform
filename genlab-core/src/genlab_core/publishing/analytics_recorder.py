@@ -59,6 +59,33 @@ def record_publish(
         else:
             post_id = post_url.rstrip("/").split("/")[-1]
 
+        # 2026-07-14 audit: URL-tail extraction fails silently when
+        # post_url is malformed (e.g. ``https://instagram.com`` with
+        # no reel/post path). The tail becomes the domain itself
+        # (``"instagram.com"``) which normalize_post_id then prefixes
+        # to ``"instagram:instagram.com"`` — join with
+        # pending_feedback.post_id silently fails at reward-fetch time.
+        # Reject bare-domain tails so the failure surfaces at write
+        # time (WARNING log) instead of silently corrupting analytics.
+        if post_id and (
+            post_id.endswith(".com")
+            or post_id.endswith(".net")
+            or post_id.endswith(".org")
+            or "/" not in post_url.rstrip("/")[len("https://") :]
+        ):
+            logger.warning(
+                "[analytics_recorder] malformed post_url=%r derived "
+                "post_id=%r (looks like bare domain) — clearing to "
+                "empty string; downstream reward-fetch will skip this "
+                "record. niche=%s platform=%s bp=%s",
+                post_url,
+                post_id,
+                niche_id,
+                platform,
+                blueprint_id,
+            )
+            post_id = ""
+
     fields = {
         "Title": f"{niche_id}:{platform}:{published_at[:10]}",
         "niche_id": niche_id,
