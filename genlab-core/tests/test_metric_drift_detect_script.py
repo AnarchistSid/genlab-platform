@@ -72,6 +72,33 @@ class TestScript:
                 f"must be present in the WARN log lines."
             )
 
+    def test_no_invalid_psql_csv_arg(self):
+        """Pin the 2026-07-14 regression fix.
+
+        The prior script used ``--csv=off`` which was accepted by older
+        psql versions but errors under PostgreSQL 18 (prod's version):
+        ``option '--csv' doesn't allow an argument``. psql errored
+        before running the query; the ``2>/dev/null`` in the
+        ``run_query_for_niche`` invocation swallowed the error, and
+        the empty stdout triggered ``"no data (skipping)"`` for all 5
+        niches. Analytics had 2184 composite rows but the drift
+        detector was blind to them for weeks.
+
+        Never re-add ``--csv=off`` (or ``--csv=<anything>``). The
+        default is off — no flag needed.
+        """
+        # Match only non-comment lines (a leading # is a shell comment).
+        # This lets the docstring/history comment reference the flag
+        # without tripping the pin.
+        offending_lines = [
+            line for line in _SCRIPT.read_text().splitlines()
+            if "--csv=" in line and not line.lstrip().startswith("#")
+        ]
+        assert not offending_lines, (
+            f"Script has active `--csv=<value>` invocation (breaks under "
+            f"PG18): {offending_lines}. The default is off — drop the flag."
+        )
+
 
 class TestServiceUnit:
     def test_service_file_exists(self):

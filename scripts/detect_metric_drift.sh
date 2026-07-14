@@ -89,8 +89,16 @@ export PGPASSWORD=$(echo "$DATABASE_URL" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|
 
 run_query_for_niche() {
     local niche="$1"
+    # 2026-07-14: dropped `--csv=off` — invalid in PostgreSQL 18 (prod's
+    # version). Under PG18, psql errors with "option '--csv' doesn't
+    # allow an argument" before running the query; the `2>/dev/null`
+    # below swallowed the error and the empty stdout triggered "no
+    # data (skipping)" for all 5 niches. Analytics had 2184 composite
+    # rows but the drift detector was blind to them for weeks. `--csv`
+    # defaults to off; dropping the flag is a no-op on older versions
+    # that accepted the argument form.
     psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
-        -X -A -t -F '|' --csv=off -v ON_ERROR_STOP=1 \
+        -X -A -t -F '|' -v ON_ERROR_STOP=1 \
         -v niche="$niche" <<'SQL' 2>/dev/null
 WITH recent AS (
   SELECT (extra->>'engagement_rate')::numeric AS rate
