@@ -22,21 +22,27 @@ Review with a rejection reason, no reel ships.
 
 ## What we check
 
-Three rules, ordered by severity of the failure they catch:
+Three rules, in short-circuit evaluation order (most-severe first):
 
   1. ``no_llm_refusal_preamble`` — reuses ``_is_llm_refusal`` from the
      writer. Catches "I need the Story Summary...", "I cannot write...",
      "I don't have enough context...". 5/7 of the last 30 days of
      production failures were this shape.
-  2. ``has_verb_signal`` — bare proper-noun hooks like "Grand Theft
+  2. ``min_length_15`` — hooks shorter than 15 chars have no room for
+     a take. Cheap check that catches truncation bugs + placeholder
+     leftovers.
+  3. ``has_verb_signal`` — bare proper-noun hooks like "Grand Theft
      Auto V" ship with no take, no reaction, no story-specificity.
      Verb signal = at least one token matching a common English verb
      shape (ends in -s/-ed/-ing OR in a small imperative-verb list OR
      a lowercase-starting token that isn't a stopword). 1/7 of the
      last 30 days.
-  3. ``min_length_15`` — hooks shorter than 15 chars have no room for
-     a take. Cheap check that catches truncation bugs + placeholder
-     leftovers.
+
+Order rationale: min-length fires before bare-title so a super-short
+hook is reported as truncation (hook_too_short) rather than a stylistic
+issue (hook_bare_title). A hook that is BOTH short AND bare-title is
+almost certainly a truncation bug — reporting the length is more
+useful to the operator.
 
 ## What we don't check here
 

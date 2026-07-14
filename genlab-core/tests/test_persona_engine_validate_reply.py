@@ -139,12 +139,15 @@ class TestCommentProcessorIntegration:
             / "comment_processor.py"
         )
         content = src.read_text()
-        # Source-level pin: the env-gate must be present and check
-        # for "1" specifically (not just "truthy") — pattern matches
-        # GENLAB_HOOK_CRITIC_ENABLED, GENLAB_LLM_JUDGE_ENABLED.
-        assert 'os.environ.get("GENLAB_REPLY_CRITIC_ENABLED", "0") == "1"' in content, (
+        # Source-level pin: the env-gate must be present via the
+        # canonical env_true() helper (rolled out in commit aa11be6d
+        # replacing the direct os.environ.get(...) == "1" pattern).
+        # The gate remains opt-in — env_true() returns True only for
+        # {"1", "true", "yes", "on"} (case-insensitive).
+        assert 'env_true("GENLAB_REPLY_CRITIC_ENABLED")' in content, (
             "comment_processor.py is missing the GENLAB_REPLY_CRITIC_ENABLED "
-            "env gate around the judge call. Critic must be opt-in."
+            "env gate around the judge call (env_true helper form). "
+            "Critic must be opt-in."
         )
 
     def test_judge_failure_does_not_crash_pipeline(self):

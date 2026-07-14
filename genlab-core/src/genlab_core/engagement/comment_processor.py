@@ -523,6 +523,19 @@ def process_reply_event(event: dict) -> None:
         )
         return
 
+    # 2026-07-14: same idempotency for comments whose reply POST failed
+    # earlier in the same day-file. Prior state: no mark on failed post
+    # → same comment burned LLM budget on every poll cycle. The
+    # `failed:` prefix key rolls over daily with the state file, so a
+    # persistent platform issue retries at most once per day.
+    if _has_replied(f"failed:{comment_id}", platform):
+        logger.debug(
+            "Engagement: reply to %s on %s failed earlier — waiting for next-day roll",
+            comment_id,
+            platform,
+        )
+        return
+
     # Record to SharePoint (optional — fails gracefully)
     bl = _get_backlog_client()
     sp_item_id = None
@@ -730,8 +743,20 @@ def process_reply_event(event: dict) -> None:
         if bl and sp_item_id:
             bl.update_engagement_status(sp_item_id, "replied", reply_text=reply)
     else:
+        # 2026-07-14: mark with `failed:{comment_id}` short-circuit key
+        # so same-day poll cycles don't burn LLM budget re-processing
+        # the same comment on persistent platform failure. Prior state:
+        # no mark → every 15-30min poll cycle re-generated the reply
+        # (~$0.001/cycle × 48 cycles/day × N candidates). The
+        # `failed:` prefix key still allows next-day retry (state
+        # file is per-day rolled; see _replied_set_path). Skip is
+        # already handled at :507 `_has_replied(f"skip:{comment_id}",…)`
+        # so this mirrors that pattern.
+        _mark_replied(f"failed:{comment_id}", platform)
         logger.warning(
-            "Engagement: reply to %s on %s failed — NOT marking as replied", comment_id, platform
+            "Engagement: reply to %s on %s failed — marked as failed for the day",
+            comment_id,
+            platform,
         )
         if bl and sp_item_id:
             bl.update_engagement_status(sp_item_id, "failed", error_msg="Platform API call failed")
