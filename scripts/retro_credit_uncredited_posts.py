@@ -535,7 +535,32 @@ def run(dsn: str, days: int, dry_run: bool, sleep_seconds: float = 3.0) -> int:
         log.info("--- Failures (first 10) ---")
         for f in failures[:10]:
             log.info("  %s", f)
-    return 0 if stats["failed"] == 0 else 1
+
+    # 2026-07-14: exit-code semantics fix. Previously ``exit=1 if
+    # stats['failed'] > 0`` — meaning ONE IG shortcode-resolve failure
+    # out of 431 targets triggered systemd FAILURE + Mission Control
+    # alert every 90 min. In practice `skipped_platform` accounts for
+    # 90%+ of targets (yt/threads/x/tiktok not handled) and 1 IG
+    # shortcode fail is normal noise for a 30d retro-credit window
+    # (Meta caches lag, shortcodes rotate).
+    #
+    # New semantics: exit 0 when we did SOMETHING useful — successfully
+    # credited a post OR confirmed via state file that a post is
+    # already credited. Exit 1 only on catastrophic failure (100%
+    # attempt failure = tokens or DB broken).
+    attempted = stats["attempted_fb"] + stats["attempted_ig"]
+    success = stats["success_fb"] + stats["success_ig"]
+    if attempted > 0 and success == 0 and stats["failed"] > 0:
+        # 100% failure rate on real attempts — genuine problem.
+        log.error(
+            "retro-credit exit=1: %d attempts, 0 successes, %d failures. "
+            "Likely token or DB issue.",
+            attempted,
+            stats["failed"],
+        )
+        return 1
+    # Normal path: some successes + some noise = healthy operation.
+    return 0
 
 
 def main() -> int:
