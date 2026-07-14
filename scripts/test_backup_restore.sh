@@ -162,7 +162,24 @@ fi
 # invoking host, not inside the postgres container.
 RESTORE_COUNT=$(psql "$DATABASE_URL" -t -A -v ON_ERROR_STOP=1 <<SQL
 BEGIN;
-CREATE TEMP TABLE _backup_restore_test (LIKE public.blueprints INCLUDING ALL);
+-- 2026-07-14 fix: INCLUDING ALL inherits CHECK constraints from
+-- ``public.blueprints`` — including the recent
+-- ``chk_approve_requires_visual_paths`` (task #577, migration
+-- d0z1a2b3c4d5). Rows from BEFORE that constraint existed have empty
+-- visual_paths, so any backup containing pre-constraint approved rows
+-- fails to load — which is exactly what happened on 2026-07-13 and
+-- silently marked the weekly validation as FAILED.
+--
+-- Backup validation cares about the DATA being COPYable + countable,
+-- NOT about forward-going invariants. EXCLUDING CONSTRAINTS +
+-- EXCLUDING INDEXES gives us a bare data mirror without silently
+-- rejecting historical rows.
+CREATE TEMP TABLE _backup_restore_test (
+    LIKE public.blueprints
+    INCLUDING DEFAULTS
+    EXCLUDING CONSTRAINTS
+    EXCLUDING INDEXES
+);
 \copy _backup_restore_test FROM '$EXTRACT';
 SELECT count(*) FROM _backup_restore_test;
 ROLLBACK;
