@@ -131,11 +131,21 @@ def _enforce_length(content: str, platform: str, cta_len: int, disclosure_len: i
 def _product_slug(name: str) -> str:
     """Slugify a product name to match the affiliate catalog's slug.
 
-    Mirrors dashboard ``links._product_slug`` — replicated here (not imported)
-    because genlab-core must not depend on the dashboard package.
+    2026-07-14 (monetization audit F1): delegate to the canonical
+    :func:`slugify_product_name` in ``affiliate_matcher`` so both
+    sides of the click→blueprint JOIN produce the same slug. Prior
+    state was a simpler `.lower().replace(" ", "-")` — diverged on
+    double-spaces, underscores, and leading/trailing hyphens. A name
+    like ``"Xbox Game Pass  Ultimate"`` (double-space) or
+    ``"Prime_Video"`` produced different slugs on the two sides →
+    silently 0-attributed every click for those products.
+
+    Same class-of-bug as writer-wire attribution + IG cross-channel
+    leak: same invariant, two paths, divergent conventions.
     """
-    slug = (name or "").lower().replace(" ", "-")
-    return re.sub(r"[^a-z0-9-]", "", slug)
+    from genlab_core.monetization.affiliate_matcher import slugify_product_name
+
+    return slugify_product_name(name)
 
 
 _TRACKING_DOMAIN_WARNING_EMITTED = False

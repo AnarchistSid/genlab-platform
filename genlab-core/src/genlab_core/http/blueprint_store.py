@@ -261,6 +261,22 @@ class BlueprintStore:
             raise ValueError(f"Blueprint {candidate_id} not found")
         if not force:
             self._assert_not_scheduled(blueprint, status)
+        # 2026-07-14 (backlog audit F9): short-circuit on same-state
+        # transition to avoid spurious UPDATE round-trips + invalidated
+        # updated_at ordering on Mission Control. `PUBLISHED → PUBLISHED`
+        # with no extra kwargs is a no-op — skip the UPDATE, log DEBUG
+        # for traceability. Callers relying on the write side-effect
+        # (very rare) can pass `force=True` (existing param) to bypass.
+        current_status = (
+            blueprint.get("fields", blueprint).get("status") if isinstance(blueprint, dict) else None
+        )
+        if not force and not kwargs and current_status == status:
+            logger.debug(
+                "[blueprint_store] update_blueprint_status same-state no-op: %s → %s (skipping UPDATE)",
+                candidate_id,
+                status,
+            )
+            return
         # PR #533 (2026-06-24, SR-A tenant binding): pass niche_id to
         # backend.update so SET LOCAL app.niche_id fires before the
         # UPDATE. Without this, a malicious caller (or buggy code)

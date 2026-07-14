@@ -140,11 +140,20 @@ class ViralityScoring:
                 scored += 1
                 total_score += score
             except Exception:
+                # 2026-07-14 (scoring audit F1): set None instead of 0.0.
+                # auto_approval_gate treats missing/None as "unknown"
+                # (cold-start tolerance) but 0.0 as "failed virality
+                # gate" — a broken regex compile / KeyError distorted
+                # the gate verdict as "high confidence reject" instead
+                # of "unknown, defer." Same YT #578 class-of-bug: silent
+                # sentinel indistinguishable from real signal. Also
+                # unify virality_features to [] (list) so downstream
+                # json.dumps sees a stable shape.
                 logger.exception(
-                    "[ViralityScoring] Error scoring %s",
+                    "[ViralityScoring] Error scoring %s — setting virality_score=None (defer)",
                     bp.get("candidate_id", "unknown"),
                 )
-                bp["virality_score"] = 0.0
+                bp["virality_score"] = None
                 bp["virality_features"] = []
 
         avg = total_score / scored if scored else 0
