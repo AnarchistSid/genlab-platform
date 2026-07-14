@@ -606,3 +606,37 @@ content_filter:
     - game studio
     - gamescom
     - esports
+
+    # 2026-07-14 audit: content_pool query surfaced Tennis TV, House of
+    # the Dragon, Avengers Doomsday, and movie-roast channels routing
+    # to anime with score=0.36. Root cause: anime's positive keyword
+    # list includes generic English words (season, episode, arc,
+    # opening, ending, movie, special) that appear in ANY TV/movie
+    # video. Three ambiguous hits → 3/5 * 0.6 = 0.36 → crosses the
+    # 0.35 anime threshold. Hard-rejecting these franchises + terms
+    # via negatives keeps them out of anime regardless of ambiguous
+    # positive hits.
+    - marvel
+    - avengers
+    - avengers doomsday
+    - mcu
+    - dc comics
+    - superhero
+    - hbo
+    - house of the dragon
+    - hotd
+    - game of thrones
+    - got
+    - westeros
+    - targaryen
+    - disney+
+    - artemis fowl
+    - tennis
+    - atp
+    - wta
+    - grand slam
+    - wimbledon
+    - us open
+    - stephen king
+    - the wrap
+    - screen rant
