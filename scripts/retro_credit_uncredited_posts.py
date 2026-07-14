@@ -557,18 +557,33 @@ def run(dsn: str, days: int, dry_run: bool, sleep_seconds: float = 3.0) -> int:
     # credited a post OR confirmed via state file that a post is
     # already credited. Exit 1 only on catastrophic failure (100%
     # attempt failure = tokens or DB broken).
+    #
+    # 2026-07-14 (second fix): `already_credited` was excluded from the
+    # "did something useful" check by mistake. Observed live: run with
+    # attempted=2, success=0, already_credited=1, failed=1 exited 1
+    # despite doing genuine idempotency work (the durable state file
+    # is the WHOLE POINT of this script). The intended semantics is
+    # "no useful action AND had failures" — treating already_credited
+    # as a real success case.
     attempted = stats["attempted_fb"] + stats["attempted_ig"]
     success = stats["success_fb"] + stats["success_ig"]
-    if attempted > 0 and success == 0 and stats["failed"] > 0:
+    already_credited = stats["already_credited"]
+    if (
+        attempted > 0
+        and success == 0
+        and already_credited == 0
+        and stats["failed"] > 0
+    ):
         # 100% failure rate on real attempts — genuine problem.
         log.error(
-            "retro-credit exit=1: %d attempts, 0 successes, %d failures. "
-            "Likely token or DB issue.",
+            "retro-credit exit=1: %d attempts, 0 successes, "
+            "%d already-credited, %d failures. Likely token or DB issue.",
             attempted,
+            already_credited,
             stats["failed"],
         )
         return 1
-    # Normal path: some successes + some noise = healthy operation.
+    # Normal path: some successes/already-credited + some noise = healthy.
     return 0
 
 
