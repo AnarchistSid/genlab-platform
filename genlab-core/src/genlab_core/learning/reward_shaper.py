@@ -172,7 +172,10 @@ class RewardShaper:
     """Compute monetisation-aware rewards for bandit updates.
 
     Usage:
-        shaper = RewardShaper(channel_metrics_fn=get_channel_metrics)
+        shaper = RewardShaper(
+            channel_metrics_fn=get_channel_metrics,  # takes (niche_id, platform)
+            niche_id="ai_creators",
+        )
         reward = shaper.compute_reward(
             platform="youtube",
             metrics={"views": 10000, "avg_view_duration": 45.0},
@@ -180,9 +183,20 @@ class RewardShaper:
         bandit.update(arm=selected_arm, reward=reward)
 
     Args:
-        channel_metrics_fn: Callable that takes a platform name and returns
-            a dict of channel-level metrics (subscriber_count, watch_hours, etc.).
-            If None, no threshold boosting is applied (base weights only).
+        channel_metrics_fn: Callable that takes ``(niche_id, platform)`` and
+            returns a dict of channel-level metrics (subscriber_count,
+            watch_hours, etc.). If None, no threshold boosting is applied
+            (base weights only).
+
+            2026-07-14: signature changed from single-arg ``(platform)`` to
+            two-arg ``(niche_id, platform)`` to match the prod
+            ``get_channel_metrics`` function, which requires both to query
+            the ``monetisationprogress`` table (rows are keyed by both).
+            Prior to this fix, injecting the real fn produced
+            ``TypeError: get_channel_metrics() missing 1 required
+            positional argument: 'platform'`` on every reward compute —
+            caught + logged as WARNING, silently disabling the
+            monetisation-threshold boost across all niches.
         percentile_targets_fn: Callable that takes (niche_id, platform, metric)
             and returns the 70th-percentile value of the most-recent N posts
             for that pair, or None to skip percentile-relative normalisation.
@@ -194,7 +208,9 @@ class RewardShaper:
             avg_reward ≈ 0.06 even on signal-rich data. Falls back to
             the hardcoded _METRIC_TARGETS when the fn returns None or
             during cold start.
-        niche_id: Niche identifier used by percentile_targets_fn lookups.
+        niche_id: Niche identifier used by percentile_targets_fn lookups
+            AND (as of 2026-07-14) passed to channel_metrics_fn for the
+            monetisation-threshold boost lookup.
     """
 
     THRESHOLD_PROXIMITY = 0.20  # Within 20% triggers boost
@@ -202,7 +218,7 @@ class RewardShaper:
 
     def __init__(
         self,
-        channel_metrics_fn: Callable[[str], dict[str, float]] | None = None,
+        channel_metrics_fn: Callable[[str, str], dict[str, float]] | None = None,
         percentile_targets_fn: Callable[[str, str, str], float | None] | None = None,
         niche_id: str = "",
     ) -> None:
@@ -261,10 +277,16 @@ class RewardShaper:
 
         if channel_metrics is None and self._channel_metrics_fn is not None:
             try:
-                channel_metrics = self._channel_metrics_fn(platform)
+                # 2026-07-14: pass (niche_id, platform) — prod
+                # get_channel_metrics requires both to query
+                # monetisationprogress rows (keyed by both). Empty
+                # niche_id returns {} (harmless) — same fallback as
+                # the pre-fix silent-failure path.
+                channel_metrics = self._channel_metrics_fn(self._niche_id, platform)
             except Exception as e:
                 logger.warning(
-                    "[REWARD] Channel metrics fetch failed for %s: %s",
+                    "[REWARD] Channel metrics fetch failed for %s/%s: %s",
+                    self._niche_id or "<no-niche>",
                     platform,
                     e,
                 )

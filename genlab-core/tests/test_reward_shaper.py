@@ -184,15 +184,41 @@ class TestNormaliseMetric:
 
 class TestChannelMetricsFn:
     def test_callback_used_when_no_explicit_channel_metrics(self):
+        """2026-07-14: signature changed from (platform) → (niche_id, platform).
+
+        Prior single-arg contract silently failed against the prod
+        ``get_channel_metrics`` fn (which takes 2 args), producing a
+        WARNING on every reward compute and disabling the monetisation-
+        threshold boost across all niches for months.
+        """
         called_with = {}
 
-        def mock_fn(platform: str) -> dict:
+        def mock_fn(niche_id: str, platform: str) -> dict:
+            called_with["niche_id"] = niche_id
             called_with["platform"] = platform
             return {"subscriber_count": 900.0}  # 90% — triggers boost
 
-        shaper = RewardShaper(channel_metrics_fn=mock_fn)
+        shaper = RewardShaper(channel_metrics_fn=mock_fn, niche_id="ai_creators")
         weights = shaper.get_adjusted_weights("youtube")
+        assert called_with["niche_id"] == "ai_creators"
         assert called_with["platform"] == "youtube"
         # Should have boosted subscriber_gained
         base_normalised = _normalise_weights(dict(BASE_WEIGHTS["youtube"]))
         assert weights["subscriber_gained"] > base_normalised["subscriber_gained"]
+
+    def test_empty_niche_id_still_calls_fn_with_two_args(self):
+        """Callers that don't pass niche_id get an empty-string first arg —
+        the fn's decision to return {} on empty is its own contract, not
+        RewardShaper's responsibility. This pin catches regressions where
+        someone conditionally omits the arg based on niche_id truthiness."""
+        called_with = {}
+
+        def mock_fn(niche_id: str, platform: str) -> dict:
+            called_with["niche_id"] = niche_id
+            called_with["platform"] = platform
+            return {}  # empty niche → nothing to boost against
+
+        shaper = RewardShaper(channel_metrics_fn=mock_fn)  # niche_id defaults to ""
+        _ = shaper.get_adjusted_weights("youtube")
+        assert called_with["niche_id"] == ""
+        assert called_with["platform"] == "youtube"

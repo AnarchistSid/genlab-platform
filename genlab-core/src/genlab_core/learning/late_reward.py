@@ -60,6 +60,38 @@ class LateRewardDelta:
     measured_at: datetime
 
 
+# Absolute-delta threshold for significance when reward_48h == 0.
+# Rationale: reward is in [0, 1]; a 0.05 late reward from a zero base
+# means the post accumulated 5% of "top-tier" engagement in the late
+# window despite bombing at 48h. That's a real signal the bandit
+# would miss if we only gated on delta_pct (which is 0 when base=0).
+# Threshold picked to match the ~20% relative-lift signal magnitude
+# (0.05 absolute out of ~0.25 typical top-tier reward ≈ 20%).
+_SIGNIFICANT_ABSOLUTE_LIFT_FROM_ZERO_BASE = 0.05
+
+
+def _is_significant_lift(delta: LateRewardDelta) -> bool:
+    """Return True iff the late-reward measurement crosses the "worth
+    pushing to bandit" bar.
+
+    Two signals:
+      * ``abs(delta_pct) > 0.20`` — the primary criterion. 20% relative
+        lift (positive or negative) is material.
+      * ``reward_48h == 0`` AND ``abs(delta) >= 0.05`` — the base-zero
+        fallback. When the 48h reward is 0, delta_pct is defined as 0
+        (division by zero), so the primary criterion is blind. Every
+        bombed-at-48h-recovered-at-7d post falls into this bucket —
+        prior to 2026-07-14 the gate NEVER triggered for these posts,
+        even though they carry the strongest late-tail-lift signal in
+        the dataset.
+    """
+    if abs(delta.delta_pct) > 0.20:
+        return True
+    if delta.reward_48h == 0.0 and abs(delta.delta) >= _SIGNIFICANT_ABSOLUTE_LIFT_FROM_ZERO_BASE:
+        return True
+    return False
+
+
 def recompute_late_reward(
     blueprint_id: str,
     window_days: int = 7,
@@ -309,12 +341,13 @@ def process_late_reward_batch(
         if delta is None:
             continue
         counters["measured"] += 1
-        if abs(delta.delta_pct) > 0.20:
+        is_significant = _is_significant_lift(delta)
+        if is_significant:
             counters["significant_lift"] += 1
         # Persist audit row unconditionally so the operator can measure.
         _persist_delta_row(conn, delta)
         # Only push to bandit when flag is on AND lift is material.
-        if push_to_bandit and abs(delta.delta_pct) > 0.20:
+        if push_to_bandit and is_significant:
             _push_delta_to_bandit(conn, delta)
 
     if own_conn:
