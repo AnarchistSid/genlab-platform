@@ -22,4 +22,16 @@ Environment=GENLAB_PROJECT_ROOT=/opt/genlab
 Environment=BACKLOG_CONFIG_PATH=/opt/genlab/genlab-core/config/lists_config.yaml
 Environment=HOME=/opt/genlab
 ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.publishing.publish_all_platforms --niche all --retry-only
-TimeoutSec=1800
+
+# Same exit-code semantics as genlab-publisher.service (R-83 contract):
+#   0 = SUCCESS  1 = NO_BLUEPRINTS  2 = ALL_FAILED  3 = DAILY_CAP  4 = LOCK_HELD
+# Without this allowlist, the benign 1/3/4 exits fire OnFailure noise
+# → operator alert fatigue → the L4 OnFailure value collapses.
+SuccessExitStatus=0 1 3 4
+
+# 2026-07-14: TimeoutSec bumped 1800 → 3600 to match main publisher
+# (bumped 2026-07-08). Retry path processes the SAME 5 niches
+# sequentially with the same DEFAULT_PUBLISH_TIMEOUT_SECONDS=600 per-
+# platform budget → same 5 × 600 = 3000s worst case + IG-stuck-hang
+# class. The original 1800s covered only ~3 niches of hangs.
+TimeoutSec=3600
