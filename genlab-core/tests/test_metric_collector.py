@@ -1109,12 +1109,19 @@ class TestMultiArmUpdate:
     extra_arms. This is how hook-style arms receive feedback."""
 
     def _proxy_with_arms(self, *arms):
-        """Build a proxy whose .all() returns one row per arm spec.
+        """Build a proxy whose .all() returns one row per arm spec,
+        with formula-aware filtering to match prod's (niche_id, arm_id)
+        indexed lookup.
 
         Each arm spec is (arm_id, niche_id, alpha, beta, n_plays).
+
+        2026-07-14: formula filtering added because ``save_arm`` (called
+        by the new "create missing arms" code path) does its own
+        formula-scoped lookup. Without filtering, a MagicMock returning
+        the FULL list would match a wrong-niche row, violating the
+        niche isolation invariant that prod's SQL formula enforces.
         """
-        proxy = MagicMock()
-        proxy.all.return_value = [
+        rows = [
             {
                 "id": f"row_{i}",
                 "fields": {
@@ -1127,6 +1134,32 @@ class TestMultiArmUpdate:
             }
             for i, (arm_id, niche, a, b, n) in enumerate(arms)
         ]
+
+        def _all_side_effect(*args, **kwargs):
+            formula = kwargs.get("formula", "")
+            if not formula:
+                return rows
+            # Naive parser: extract arm_id + niche_id literals from
+            # the formula string and filter accordingly. Matches the
+            # shapes save_arm actually emits:
+            #   "AND({arm_id}='X',{niche_id}='Y')"
+            #   "{arm_id}='X'"
+            import re as _re
+
+            arm_match = _re.search(r"\{arm_id\}='([^']*)'", formula)
+            niche_match = _re.search(r"\{niche_id\}='([^']*)'", formula)
+            filtered = []
+            for row in rows:
+                fields = row["fields"]
+                if arm_match and fields.get("arm_id") != arm_match.group(1):
+                    continue
+                if niche_match and fields.get("niche_id") != niche_match.group(1):
+                    continue
+                filtered.append(row)
+            return filtered
+
+        proxy = MagicMock()
+        proxy.all.side_effect = _all_side_effect
         return proxy
 
     def test_extra_arms_get_same_reward_applied(self):
@@ -1205,13 +1238,52 @@ class TestMultiArmUpdate:
         assert primary_linucb is not None, "Primary arm should have LinUCB state written"
         assert style_linucb is None, "Style arm must NOT receive LinUCB state"
 
-    def test_missing_extra_arm_logs_warning_but_does_not_fail(self):
+    def test_missing_extra_arm_gets_created_not_just_warned(self):
+        """2026-07-14: bandit_updater must CREATE missing extra_arms via
+        save_arm, not just log a warning.
+
+        Prior behaviour: the loop only iterated ``existing`` arms; any
+        arm in ``target_arms`` but not in ``existing`` got logged as
+        WARNING ``arm(s) requested but not found`` and never persisted.
+        The consequence was 0 rows with ``arm_type='hour'`` in
+        bandit_arms after 14+ days of publishes (100% of pending_
+        feedback rows carried ``hour:H:platform:niche`` in extra_arms
+        but nothing consumed them).
+
+        Fix: for each missing arm, call ``save_arm`` with initial state
+        α=1+reward, β=1+(1-reward), n_plays=1. save_arm upserts via
+        the (niche_id, arm_id) UNIQUE constraint.
+        """
         from genlab_core.learning.metric_collector import _default_bandit_updater
 
-        proxy = self._proxy_with_arms(
-            ("gameplay_clip", "gaming", 1.0, 1.0, 0),
-            # No style arm row — represents not-yet-seeded scenario
-        )
+        # save_arm's inner formula-scoped proxy.all lookup returns
+        # nothing for the new arm → save_arm calls proxy.create.
+        # For 'gameplay_clip' we want the update path, so we make the
+        # inner lookup return the existing row when formula filters
+        # match it. Using side_effect for accurate simulation.
+        gameplay_row = {
+            "id": "row_gameplay",
+            "fields": {
+                "arm_id": "gameplay_clip",
+                "niche_id": "gaming",
+                "alpha": 1.0,
+                "beta": 1.0,
+                "n_plays": 0,
+            },
+        }
+        outer_rows = [gameplay_row]
+
+        def _all_side_effect(*args, **kwargs):
+            formula = kwargs.get("formula", "")
+            if not formula:
+                return outer_rows  # outer bandit_updater loop
+            # save_arm inner lookup: return row only for matching arm
+            if "gameplay_clip" in formula and "gaming" in formula:
+                return [gameplay_row]
+            return []
+
+        proxy = MagicMock()
+        proxy.all.side_effect = _all_side_effect
         client = MagicMock()
         client.bandit_arms = proxy
 
@@ -1219,18 +1291,72 @@ class TestMultiArmUpdate:
             "genlab_core.http.backlog_client.BacklogClient",
             return_value=client,
         ):
-            # Should not raise even though style arm is missing
             _default_bandit_updater(
                 niche_id="gaming",
                 content_type="gameplay_clip",
                 platform="youtube",
                 reward=0.3,
-                bandit_context={"extra_arms": ["style:gaming:bold_claim"]},
+                bandit_context={
+                    "extra_arms": [
+                        "style:gaming:bold_claim",
+                        "hour:14:youtube:gaming",
+                    ]
+                },
             )
 
-        # Primary arm still updated
-        assert proxy.update.call_count == 1
-        assert proxy.update.call_args.args[1]["arm_id"] == "gameplay_clip"
+        # Primary arm was updated (existing row → proxy.update)
+        update_arms = [c.args[1]["arm_id"] for c in proxy.update.call_args_list]
+        assert "gameplay_clip" in update_arms
+
+        # NEW: both missing arms were created (not just warned about)
+        create_arms = [c.args[0]["arm_id"] for c in proxy.create.call_args_list]
+        assert "style:gaming:bold_claim" in create_arms, (
+            f"style arm should be created, got: {create_arms}"
+        )
+        assert "hour:14:youtube:gaming" in create_arms, (
+            f"hour arm should be created, got: {create_arms}"
+        )
+
+    def test_created_arm_has_correct_initial_state(self):
+        """Pin: new arm α=1+reward, β=1+(1-reward), n_plays=1.
+        Matches the single-observation Beta update math."""
+        from genlab_core.learning.metric_collector import _default_bandit_updater
+
+        # No existing arms — everything is missing
+        def _all_side_effect(*args, **kwargs):
+            return []
+
+        proxy = MagicMock()
+        proxy.all.side_effect = _all_side_effect
+        client = MagicMock()
+        client.bandit_arms = proxy
+
+        with patch(
+            "genlab_core.http.backlog_client.BacklogClient",
+            return_value=client,
+        ):
+            _default_bandit_updater(
+                niche_id="anime",
+                content_type="episode_moment",
+                platform="facebook",
+                reward=0.4,
+                bandit_context={"extra_arms": ["hour:6:facebook:anime"]},
+            )
+
+        creates_by_arm = {
+            c.args[0]["arm_id"]: c.args[0] for c in proxy.create.call_args_list
+        }
+        # Both primary + extra arm should be created (both missing)
+        assert "episode_moment" in creates_by_arm
+        assert "hour:6:facebook:anime" in creates_by_arm
+
+        # Check hour arm initial state
+        hour_fields = creates_by_arm["hour:6:facebook:anime"]
+        assert abs(hour_fields["alpha"] - 1.4) < 1e-9, hour_fields
+        assert abs(hour_fields["beta"] - 1.6) < 1e-9, hour_fields
+        assert hour_fields["n_plays"] == 1
+        # arm_type should be classified as 'hour' from the arm_id prefix
+        assert hour_fields.get("arm_type") == "hour"
 
     def test_no_extra_arms_still_works_legacy(self):
         """Backwards-compat: bandit_context without extra_arms still

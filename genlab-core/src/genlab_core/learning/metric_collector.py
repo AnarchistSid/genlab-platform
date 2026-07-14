@@ -1570,17 +1570,66 @@ def _default_bandit_updater(
                 n_plays,
             )
 
-        # Sanity log: if we asked for N arms but updated fewer, surface
-        # the gap. Common cause: the arm doesn't exist in bandit_arms
-        # (e.g. style not yet seeded for this niche).
+        # 2026-07-14: CREATE arms that don't exist yet instead of just
+        # warning about them. Prior behaviour surfaced the gap via
+        # WARNING but never inserted the row — a brand-new arm class
+        # (like the ``hour:6:facebook:anime`` optimal-time-bandit arm
+        # from PR Z, 2026-06-23) sat at n_plays=0 forever because it
+        # was never in ``existing`` on the very first reward window.
+        # Result: bandit_arms had 0 rows with arm_type='hour' after
+        # 14+ days of publishes, despite ``GENLAB_OPTIMAL_TIME_BANDIT_
+        # ENABLED=1`` and 100% of pending_feedback carrying the hour
+        # arm in extra_arms. Sibling ``style:{niche}:{name}`` arms had
+        # the same silent regression before manual seeding filled them.
+        #
+        # New behaviour: for each missing arm, initialise with the
+        # reward observed on this window — same math as the update
+        # path (α += reward, β += 1 - reward, n_plays = 1). ``save_arm``
+        # upserts, so a race where two workers see the arm missing
+        # simultaneously resolves via the ``UNIQUE (niche_id, arm_id)``
+        # constraint on the second write.
+        #
+        # LinUCB state is NOT populated on first-touch — LinUCB lives
+        # only on the primary content_type arm (see the guard at
+        # line ~1514), and new hour/style arms don't have enough
+        # observations to warm-start a LinUCB model anyway.
         missing = target_arms - set(updated)
-        if missing:
-            logger.warning(
-                "[bandit_updater] %d arm(s) requested but not found in bandit_arms (niche=%s): %s",
-                len(missing),
-                niche_id,
-                sorted(missing),
-            )
+        for arm_id in sorted(missing):
+            try:
+                arm_type_for_new = ""
+                if arm_id.startswith("hour:"):
+                    arm_type_for_new = "hour"
+                elif arm_id.startswith("style:"):
+                    arm_type_for_new = "style"
+                elif arm_id.startswith("source:"):
+                    arm_type_for_new = "source"
+                save_arm(
+                    proxy,
+                    arm_id=arm_id,
+                    alpha=1.0 + reward_clipped,
+                    beta=1.0 + (1.0 - reward_clipped),
+                    linucb_state=None,
+                    n_plays=1,
+                    niche_id=niche_id,
+                    arm_type=arm_type_for_new,
+                )
+                logger.info(
+                    "[bandit_updater] created new arm %s/%s (type=%s) with "
+                    "first observation: reward=%.3f -> a=%.2f b=%.2f n_plays=1",
+                    niche_id,
+                    arm_id,
+                    arm_type_for_new or "content",
+                    reward_clipped,
+                    1.0 + reward_clipped,
+                    1.0 + (1.0 - reward_clipped),
+                )
+            except Exception as create_exc:
+                logger.warning(
+                    "[bandit_updater] failed to create arm %s/%s: %s",
+                    niche_id,
+                    arm_id,
+                    create_exc,
+                )
     except Exception as exc:
         logger.warning("[bandit_updater] Failed: %s", exc)
 
