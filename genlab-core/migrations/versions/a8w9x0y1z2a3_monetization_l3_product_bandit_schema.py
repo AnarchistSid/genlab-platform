@@ -81,27 +81,80 @@ def upgrade() -> None:
     # the catalog would break historical reward attribution (a
     # click captured at 3% but re-scored at 4% would give the arm
     # a bogus posterior). Snapshotting protects the reward math.
-    op.add_column(
-        "affiliate_clicks",
-        sa.Column("blueprint_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=True),
+    # 2026-07-14: DuplicateColumn conflict repair. Earlier migration
+    # l2g3h4i5j6k7 (adopt_handcreated_tables) already creates
+    # affiliate_clicks with blueprint_id TEXT column. This migration
+    # was trying to ADD it as UUID → fails "column blueprint_id of
+    # relation affiliate_clicks already exists" on any fresh CI/dev
+    # DB that runs the migration chain end-to-end. Prod escaped by
+    # having the column pre-existing (l2g3... adopts an already-
+    # extant table). Fix: DROP + re-ADD (TEXT → UUID) if the
+    # existing column is TEXT; skip if already UUID.
+    op.execute(
+        """
+        DO $$
+        DECLARE
+            col_type TEXT;
+        BEGIN
+            SELECT data_type INTO col_type
+              FROM information_schema.columns
+              WHERE table_name = 'affiliate_clicks' AND column_name = 'blueprint_id';
+            IF col_type IS NULL THEN
+                ALTER TABLE affiliate_clicks
+                  ADD COLUMN blueprint_id UUID;
+            ELSIF col_type = 'text' THEN
+                -- Existing TEXT column stores heterogeneous shapes
+                -- (SHA256 candidate_ids + empty strings). Cannot cast
+                -- to UUID safely — drop + re-add as UUID (nullable).
+                -- Existing data is lost by design; the column was
+                -- never usable as FK anyway due to the shape drift.
+                ALTER TABLE affiliate_clicks DROP COLUMN blueprint_id;
+                ALTER TABLE affiliate_clicks
+                  ADD COLUMN blueprint_id UUID;
+            END IF;
+        END $$;
+        """
     )
-    op.add_column(
-        "affiliate_clicks",
-        sa.Column("commission_pct", sa.Float(), nullable=True),
+    # commission_pct — only add if not present
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'affiliate_clicks'
+                  AND column_name = 'commission_pct'
+            ) THEN
+                ALTER TABLE affiliate_clicks
+                  ADD COLUMN commission_pct DOUBLE PRECISION;
+            END IF;
+        END $$;
+        """
     )
-    op.create_foreign_key(
-        "fk_affiliate_clicks_blueprint_id",
-        "affiliate_clicks",
-        "blueprints",
-        ["blueprint_id"],
-        ["id"],
-        ondelete="SET NULL",  # if a blueprint gets deleted, don't lose the click
+    # Idempotent FK + index: if migration is re-run against a DB that
+    # already has them (e.g., partial-apply recovery), skip cleanly.
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'fk_affiliate_clicks_blueprint_id'
+            ) THEN
+                ALTER TABLE affiliate_clicks
+                  ADD CONSTRAINT fk_affiliate_clicks_blueprint_id
+                  FOREIGN KEY (blueprint_id) REFERENCES blueprints(id)
+                  ON DELETE SET NULL;
+            END IF;
+        END $$;
+        """
     )
-    op.create_index(
-        "idx_affiliate_clicks_blueprint_id",
-        "affiliate_clicks",
-        ["blueprint_id"],
-        postgresql_where=sa.text("blueprint_id IS NOT NULL"),
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_affiliate_clicks_blueprint_id
+          ON affiliate_clicks(blueprint_id)
+          WHERE blueprint_id IS NOT NULL;
+        """
     )
 
 
