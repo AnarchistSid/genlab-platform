@@ -215,8 +215,16 @@ def _probe_duration(path: str) -> float:
         )
         if result.returncode == 0 and result.stdout.strip():
             return float(result.stdout.strip())
-    except (subprocess.TimeoutExpired, FileNotFoundError, ValueError, Exception) as exc:
-        logger.debug("ffprobe failed for %s: %s", path, exc)
+    except (subprocess.TimeoutExpired, FileNotFoundError, ValueError) as exc:
+        # 2026-07-14 (video audit F6): dropped bare `Exception` from
+        # the tuple. Bare-Exception plus specific parent exceptions
+        # was redundant AND, per audit, could swallow non-Exception
+        # BaseException on some Python versions. Kept specific-only
+        # + elevated to WARNING (was DEBUG). A ffprobe failure on
+        # a downloaded video is real — either infra broken (missing
+        # binary, PATH issue) or the download is corrupt (yt-dlp
+        # wrote to unexpected extension). Silent 0.0 masked both.
+        logger.warning("ffprobe failed for %s: %s", path, exc)
     return 0.0
 
 
@@ -242,7 +250,12 @@ def _has_video_stream(path: str) -> bool:
             timeout=15,
         )
         return result.returncode == 0 and "video" in (result.stdout or "").lower()
-    except Exception:
+    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+        # 2026-07-14 (video audit F6): specific catches + WARNING.
+        # Silent False on ffprobe failure masked infra bugs as
+        # content bugs — the download appeared to have "no video
+        # stream" when ffprobe itself was broken.
+        logger.warning("_has_video_stream ffprobe failed for %s: %s", path, exc)
         return False
 
 
