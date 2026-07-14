@@ -633,7 +633,9 @@ def process_reply_event(event: dict) -> None:
     # of auto-posting. Default off for safe shadow rollout per the
     # established opt-in pattern (Levers C, K).
     judge_reason = ""
-    if os.environ.get("GENLAB_REPLY_CRITIC_ENABLED", "0") == "1":
+    from genlab_core.settings import env_true
+
+    if env_true("GENLAB_REPLY_CRITIC_ENABLED"):
         try:
             judge_score, judge_reason = engine.validate_reply(
                 comment=comment_text,

@@ -86,7 +86,9 @@ class RenderQCReport:
 
 def is_enabled() -> bool:
     """Single source of truth for the opt-in flag."""
-    return os.environ.get("GENLAB_RENDER_QC_ENABLED", "0") == "1"
+    from genlab_core.settings import env_true
+
+    return env_true("GENLAB_RENDER_QC_ENABLED")
 
 
 def extract_frame(

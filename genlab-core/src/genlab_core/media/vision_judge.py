@@ -100,7 +100,9 @@ def is_enabled() -> bool:
     "0"/"1" check. Tests that toggle the flag only need to mock this
     one function via monkeypatch.
     """
-    return os.environ.get("GENLAB_VISION_JUDGE_ENABLED", "0") == "1"
+    from genlab_core.settings import env_true
+
+    return env_true("GENLAB_VISION_JUDGE_ENABLED")
 
 
 def load_frame_bytes(frame_path: str | Path) -> bytes | None:

@@ -296,7 +296,9 @@ if __name__ == "__main__":
     )
 
     if args.enabled_check:
-        enabled = os.environ.get("GENLAB_POST_RCA_ENABLED", "0") == "1"
+        from genlab_core.settings import env_true
+
+        enabled = env_true("GENLAB_POST_RCA_ENABLED")
         print(f"GENLAB_POST_RCA_ENABLED: {enabled}")
         if not enabled:
             print("Set GENLAB_POST_RCA_ENABLED=1 to activate the RCA layer.")

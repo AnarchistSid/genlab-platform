@@ -78,7 +78,9 @@ _NICHE_FIT_BRIEF: dict[str, str] = {
 
 def _is_enabled() -> bool:
     """Opt-in check — matches the Lever C/K shadow-rollout pattern."""
-    return os.environ.get("GENLAB_VIDEO_NICHE_FIT_ENABLED", "0") == "1"
+    from genlab_core.settings import env_true
+
+    return env_true("GENLAB_VIDEO_NICHE_FIT_ENABLED")
 
 
 def _build_prompt(candidates: list[Any], niche_id: str, top_k: int) -> tuple[str, str]:

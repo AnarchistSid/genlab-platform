@@ -69,7 +69,9 @@ def is_enabled() -> bool:
     (``if not is_enabled(): return base_arm_id``) without duplicating
     the check. Tests toggle via ``monkeypatch.setenv``.
     """
-    return os.environ.get("GENLAB_PER_PLATFORM_BANDIT_ENABLED", "0") == "1"
+    from genlab_core.settings import env_true
+
+    return env_true("GENLAB_PER_PLATFORM_BANDIT_ENABLED")
 
 
 def platform_arm_id(base_arm_id: str, platform: str) -> str:

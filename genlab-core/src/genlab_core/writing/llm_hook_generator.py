@@ -625,7 +625,9 @@ def generate_hook(
         # any failure returns the original ``best``.
         # Refs: SELF-REFINE (Madaan et al. 2023, arXiv 2303.17651);
         # docs/AGENT-LEARNING-ENGINES.md Engine 1.3.
-        if os.environ.get("GENLAB_HOOK_REWRITER_ENABLED", "0") == "1":
+        from genlab_core.settings import env_true
+
+        if env_true("GENLAB_HOOK_REWRITER_ENABLED"):
             try:
                 grounded, critique_reason = _critique_hook_grounded(best, story, niche_id)
                 if not grounded:

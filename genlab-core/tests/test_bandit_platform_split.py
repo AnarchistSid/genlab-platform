@@ -101,23 +101,22 @@ class TestIsEnabled:
         monkeypatch.delenv("GENLAB_PER_PLATFORM_BANDIT_ENABLED", raising=False)
         assert is_enabled() is False
 
-    def test_is_enabled_strict_1_only(self, monkeypatch):
-        """Pin: env="true" → False (matches PR #634 strict-"1" pattern).
-
-        Avoids the "user typed 'true' and thought they enabled it"
-        failure mode. Only the exact string ``"1"`` enables — same
-        convention as the AUTO #2 / linucb_picker opt-in flags.
-        """
-        for falsy_value in ("true", "yes", "on", "TRUE", "True", "0", "", "anything"):
+    def test_is_enabled_accepts_env_true_semantics(self, monkeypatch):
+        """2026-07-14: migrated to canonical env_true (accepts
+        1/true/yes/on, case-insensitive). Prior 'strict-1-only'
+        was inconsistent with the rest of the codebase — operator
+        setting =true would silently no-op. Class-of-bug from the
+        session's flag-divergence audit."""
+        for truthy_value in ("1", "true", "yes", "on", "TRUE", "True", "y", "t"):
+            monkeypatch.setenv("GENLAB_PER_PLATFORM_BANDIT_ENABLED", truthy_value)
+            assert is_enabled() is True, (
+                f"is_enabled must be True for {truthy_value!r} under env_true"
+            )
+        for falsy_value in ("0", "false", "no", "off", "", "anything"):
             monkeypatch.setenv("GENLAB_PER_PLATFORM_BANDIT_ENABLED", falsy_value)
             assert is_enabled() is False, (
-                f"is_enabled must be False for {falsy_value!r} (strict '1' only)"
+                f"is_enabled must be False for {falsy_value!r}"
             )
-
-    def test_is_enabled_env_1_true(self, monkeypatch):
-        """Pin: env="1" → True."""
-        monkeypatch.setenv("GENLAB_PER_PLATFORM_BANDIT_ENABLED", "1")
-        assert is_enabled() is True
 
 
 class TestListSplitPlatforms:

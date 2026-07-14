@@ -89,7 +89,9 @@ def is_enabled() -> bool:
     (``if not is_enabled(): return None``) without duplicating the
     "0"/"1" check. Tests toggle via monkeypatch on this one function.
     """
-    return os.environ.get("GENLAB_LINUCB_PICK_ENABLED", "0") == "1"
+    from genlab_core.settings import env_true
+
+    return env_true("GENLAB_LINUCB_PICK_ENABLED")
 
 
 def score_arm(
