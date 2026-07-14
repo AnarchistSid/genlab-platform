@@ -196,6 +196,10 @@ class TwitchTrendingFetcher:
     """
 
     TOP_GAMES_URL = "https://api.twitch.tv/helix/games/top"
+    # 2026-07-14: added streams lookup to attribute trending games to
+    # a specific live streamer instead of the meaningless
+    # ``twitch.tv/directory/game/X`` category URL.
+    STREAMS_URL = "https://api.twitch.tv/helix/streams"
 
     # Twitch category IDs for known non-game "browse categories".
     # Catches the rare case where Twitch populates igdb_id for these
@@ -221,6 +225,47 @@ class TwitchTrendingFetcher:
 
         self._client_id = settings.twitch_client_id or ""
         self._client_secret = settings.twitch_client_secret or ""
+
+    def _fetch_top_streamer(self, game_id: str, token: str) -> dict[str, Any] | None:
+        """Fetch the top LIVE streamer for a given game_id.
+
+        2026-07-14: added so twitch_trending stories can attribute to
+        a specific creator instead of ``twitch.tv/directory/game/X``.
+        Returns the top-viewer stream's user_login + user_name + title,
+        or None on any failure (fail-open — parent falls back to
+        directory URL).
+        """
+        if not game_id:
+            return None
+        try:
+            resp = requests.get(
+                self.STREAMS_URL,
+                params={"game_id": game_id, "first": 1},
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Client-Id": self._client_id,
+                },
+                timeout=10,
+            )
+            resp.raise_for_status()
+            streams = resp.json().get("data", [])
+            if not streams:
+                return None
+            top = streams[0]
+            if not top.get("user_login"):
+                return None
+            return {
+                "user_login": top["user_login"],
+                "user_name": top.get("user_name") or top["user_login"],
+                "title": (top.get("title") or "").strip()[:120],
+            }
+        except Exception as exc:
+            logger.debug(
+                "[Twitch] top-streamer lookup failed for game_id=%s: %s",
+                game_id,
+                exc,
+            )
+            return None
 
     def fetch(self) -> list[dict[str, Any]]:
         if not self._client_id or not self._client_secret:
@@ -277,18 +322,48 @@ class TwitchTrendingFetcher:
                 # PR #506 — explicit story_id (see SteamSpikeFetcher above
                 # for the full rationale; same root cause + same fix shape).
                 published_iso = _now_utc().isoformat()
-                source_url = (
-                    f"https://www.twitch.tv/directory/game/{game['name'].replace(' ', '%20')}"
+
+                # 2026-07-14: fetch the top LIVE streamer for this game
+                # so attribution points at a real human creator instead
+                # of the meaningless directory URL. Directory URLs were
+                # rejected by the compliance gate (commit 0b7a3e14) —
+                # without this fetch, Twitch trending games would fail
+                # attribution entirely + fall through to warn/block.
+                # Fail-open: if the streams API call fails, keep the
+                # directory URL as source_url so the story is still
+                # created (compliance gate will still reject it as
+                # attribution, but at least the story exists for
+                # potential clip-fetch later).
+                top_streamer = self._fetch_top_streamer(
+                    game_id=str(game.get("id", "")),
+                    token=token,
                 )
+                if top_streamer:
+                    source_url = f"https://www.twitch.tv/{top_streamer['user_login']}"
+                    source_channel_title = top_streamer.get("user_name") or top_streamer["user_login"]
+                    stream_title = top_streamer.get("title", "") or f"Live: {game['name']}"
+                else:
+                    source_url = (
+                        f"https://www.twitch.tv/directory/game/{game['name'].replace(' ', '%20')}"
+                    )
+                    source_channel_title = ""
+                    stream_title = ""
+
                 stories.append(
                     {
                         "story_id": generate_story_id(source_url, published_iso),
                         "title": game["name"],
                         "source": "twitch_trending",
                         "source_url": source_url,
+                        "video_url": source_url,  # parity with format_source_attribution's URL fallback
+                        "source_channel_title": source_channel_title,
                         "score": max(score, 0.1),
                         "published_at": published_iso,
-                        "summary": f"Twitch trending rank #{rank}",
+                        "summary": (
+                            f"{stream_title} — Twitch trending rank #{rank}"
+                            if stream_title
+                            else f"Twitch trending rank #{rank}"
+                        ),
                         "steam_app_id": None,
                         "igdb_game_id": game.get("igdb_id") or game.get("id"),
                         "developer": None,
