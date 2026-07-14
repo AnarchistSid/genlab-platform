@@ -468,8 +468,39 @@ class BaseWritingStrategy(WritingStrategy):
         _ig_raw = result.get("instagram_caption", "")
         _fb_raw = result.get("facebook_content", "")
         _yt_raw = result.get("youtube_content", "")
+        _tw_raw = result.get("twitter_content", "")
+        _th_raw = result.get("threads_content", "")
         _hook_raw = result.get("hook", "")
         _title_raw = story.get("title", "")
+
+        # 2026-07-14: hard-stop when the LLM produced a hook but ZERO
+        # platform body content. Concrete case: sports blueprint
+        # e434882d — hook="Why Barcelona couldn't break down Getafe's
+        # wall" (good) but ig/fb/tw/th/yt all empty. `_build_blueprint_
+        # fields` in push_to_backlog persisted caption="" which QCGates
+        # then rejected as "Missing required field: caption/body" —
+        # collapsing sports QC to 0% and firing the `qc_collapse`
+        # critical alert.
+        #
+        # The prior fallback chain masks this by copying the hook into
+        # ig_caption when everything else is empty — but the hook is
+        # 40-60 chars, not a real caption, and downstream platform
+        # adapters expect a body. Better to skip the story cleanly.
+        _all_platform_content_empty = not (
+            _ig_raw or _fb_raw or _yt_raw or _tw_raw or _th_raw
+        )
+        if _all_platform_content_empty:
+            story["_skip_llm"] = True
+            logger.warning(
+                "[BaseWriting] LLM returned no platform body content "
+                "(niche=%s, title=%r, hook=%r) — marking _skip_llm=True. "
+                "Consider tightening this niche's writing prompt.",
+                self._niche_id,
+                (story.get("title", "") or "")[:60],
+                _hook_raw[:60],
+            )
+            return story
+
         ig_caption = _ig_raw or _fb_raw or _yt_raw or _hook_raw or _title_raw
         if not _ig_raw:
             # Determine which fallback rung satisfied (matches the

@@ -161,6 +161,31 @@ class QCGates:
                     # Apply score penalty
                     if "priority_score" in bp:
                         bp["priority_score"] = max(0, bp["priority_score"] - self.SCORE_PENALTY)
+                    # 2026-07-14: hard-skip on "Missing required field:
+                    # caption/body" — the only failure mode that produces
+                    # a blueprint the publisher CANNOT ship (no text).
+                    # Prior behavior: penalize score only → blueprint
+                    # still reached VISUAL_READY and could be
+                    # auto-approved with an empty caption.
+                    # Concrete case: sports blueprint e434882d today —
+                    # hook present, all platform captions empty, QC
+                    # failed with this exact issue, but status advanced
+                    # to VISUAL_READY anyway. Fired qc_collapse (0% for
+                    # 2 runs) + nightly_schedule_missing_slot.
+                    # Other issues (length, word count, banned phrases)
+                    # keep the score-penalty behavior — they might
+                    # recover or be operator-fixable.
+                    if any(
+                        "Missing required field: caption/body" in str(i)
+                        for i in issues
+                    ):
+                        bp["_skip_llm"] = True
+                        logger.warning(
+                            "[QCGates] hard-skip %s: empty caption/body "
+                            "is unpublishable; marking _skip_llm=True "
+                            "so downstream stages drop the blueprint",
+                            bp.get("candidate_id", "unknown"),
+                        )
             except Exception:
                 logger.exception(
                     "[QCGates] Error validating blueprint %s",
