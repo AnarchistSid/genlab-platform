@@ -64,8 +64,14 @@ _TOP_N_PER_NICHE = 5
 
 
 def _flag_enabled() -> bool:
-    """Whether the ProductSelector consumer is currently active."""
-    return os.environ.get("GENLAB_PRODUCT_SELECTOR_ENABLED", "").strip().lower() == "true"
+    """Whether the ProductSelector consumer is currently active.
+
+    2026-07-14: env_true unifies with product_selector.py write side.
+    Prior strict-eq "true" was inconsistent with prod convention of "1".
+    """
+    from genlab_core.settings import env_true
+
+    return env_true("GENLAB_PRODUCT_SELECTOR_ENABLED")
 
 
 def _parse_slug(arm_id: str) -> str | None:

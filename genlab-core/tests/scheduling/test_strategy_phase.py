@@ -50,11 +50,14 @@ class TestFeatureFlag:
         monkeypatch.delenv("GENLAB_STRATEGIST_INTEGRATION_ENABLED", raising=False)
         assert not strategy_phase._integration_enabled()
 
-    def test_enabled_only_on_exact_true(self, monkeypatch):
-        for value in ("true", "TRUE", "True"):
+    def test_enabled_on_env_true_values(self, monkeypatch):
+        """2026-07-14: migrated to env_true — accepts 1/true/yes/on
+        (case-insensitive). Was previously strict-eq "true" which
+        silently no-op'd operator ``=1`` writes."""
+        for value in ("true", "TRUE", "True", "1", "yes", "on", "y", "t"):
             monkeypatch.setenv("GENLAB_STRATEGIST_INTEGRATION_ENABLED", value)
-            assert strategy_phase._integration_enabled()
-        for value in ("1", "yes", "on", "", "false"):
+            assert strategy_phase._integration_enabled(), f"expected truthy for {value!r}"
+        for value in ("", "false", "0", "no", "off"):
             monkeypatch.setenv("GENLAB_STRATEGIST_INTEGRATION_ENABLED", value)
             assert not strategy_phase._integration_enabled(), f"unexpected truthy for {value!r}"
 

@@ -302,7 +302,10 @@ def _check_csv_dir() -> bool:
 
 
 def _check_selector_flag() -> bool:
-    return os.environ.get("GENLAB_PRODUCT_SELECTOR_ENABLED", "").strip().lower() == "true"
+    # 2026-07-14: env_true unifies with product_selector.py + product_bandit.py.
+    from genlab_core.settings import env_true
+
+    return env_true("GENLAB_PRODUCT_SELECTOR_ENABLED")
 
 
 # ── Composition ─────────────────────────────────────────────────

@@ -40,7 +40,10 @@ logger = logging.getLogger(__name__)
 
 
 def _integration_enabled() -> bool:
-    return os.environ.get("GENLAB_STRATEGIST_INTEGRATION_ENABLED", "").lower() == "true"
+    # 2026-07-14: env_true unifies with rest of codebase (1|true|yes|on).
+    from genlab_core.settings import env_true
+
+    return env_true("GENLAB_STRATEGIST_INTEGRATION_ENABLED")
 
 
 def apply_pending_actions(niche_id: str | None = None) -> dict[str, int]:

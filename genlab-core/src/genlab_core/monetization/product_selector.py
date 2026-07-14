@@ -99,12 +99,17 @@ _VALUE_WEIGHT_FLOOR = 1.0
 def is_enabled() -> bool:
     """Single source of truth for the opt-in flag.
 
-    Uses exact-match ``"true"`` (not ``"1"``) per the convention set by
-    ``GENLAB_ENSEMBLE_DECISION_ENABLED`` — most flags in this codebase
-    still accept ``"1"``, but the intelligence sprint's flags all use
-    ``"true"`` for readability. Sticking to the newer convention.
+    2026-07-14: migrated to canonical ``env_true`` helper. Prior
+    exact-match ``"true"`` diverged from operator convention (most
+    prod flags use ``"1"``) — a real footgun that silently no-op'd
+    ``GENLAB_ENSEMBLE_PERSIST_ENABLED=true`` for weeks because THAT
+    reader wanted ``"1"`` while this reader wanted ``"true"``.
+    Consolidating on env_true's set (``1|true|yes|on``, case-
+    insensitive) removes the shape-of-truthy-value class of bug.
     """
-    return os.environ.get("GENLAB_PRODUCT_SELECTOR_ENABLED", "false") == "true"
+    from genlab_core.settings import env_true
+
+    return env_true("GENLAB_PRODUCT_SELECTOR_ENABLED")
 
 
 def _value_weight(product: dict[str, Any]) -> float:

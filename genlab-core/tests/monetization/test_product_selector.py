@@ -29,26 +29,31 @@ from genlab_core.monetization.product_selector import (
 
 
 class TestFlag:
-    """Selector is off by default and only activates on exact match ``"true"``."""
+    """Selector is off by default and activates on env_true's truthy set.
+
+    2026-07-14: migrated from strict exact-match "true" to env_true
+    (accepts 1/true/yes/on, case-insensitive). Prior strict-eq silently
+    diverged from operator convention of setting "1" — Intervention 6
+    sprint convention was reversed after the class-of-bug audit found
+    two sibling flags in the ensemble module with incompatible strict
+    values (=="1" vs =="true") silently no-op'd persist.
+    """
 
     def test_disabled_by_default(self, monkeypatch):
         monkeypatch.delenv("GENLAB_PRODUCT_SELECTOR_ENABLED", raising=False)
         assert is_enabled() is False
 
-    def test_disabled_on_common_falsy_values(self, monkeypatch):
-        for val in ("0", "false", "False", "no", ""):
-            monkeypatch.setenv("GENLAB_PRODUCT_SELECTOR_ENABLED", val)
-            assert is_enabled() is False, f"expected off for {val!r}"
+    @pytest.mark.parametrize("val", ["0", "false", "False", "no", "off", ""])
+    def test_disabled_on_falsy_values(self, monkeypatch, val):
+        monkeypatch.setenv("GENLAB_PRODUCT_SELECTOR_ENABLED", val)
+        assert is_enabled() is False, f"expected off for {val!r}"
 
-    def test_enabled_only_on_lowercase_true(self, monkeypatch):
-        monkeypatch.setenv("GENLAB_PRODUCT_SELECTOR_ENABLED", "true")
-        assert is_enabled() is True
-
-    def test_disabled_on_uppercase_true(self, monkeypatch):
-        """Sprint convention (Intervention 6) uses exact-match lowercase.
-        A ``"True"`` would silently disable — pin the strictness."""
-        monkeypatch.setenv("GENLAB_PRODUCT_SELECTOR_ENABLED", "True")
-        assert is_enabled() is False
+    @pytest.mark.parametrize(
+        "val", ["1", "true", "TRUE", "True", "yes", "on", "y", "t"]
+    )
+    def test_enabled_on_env_true_values(self, monkeypatch, val):
+        monkeypatch.setenv("GENLAB_PRODUCT_SELECTOR_ENABLED", val)
+        assert is_enabled() is True, f"expected on for {val!r}"
 
     def test_select_returns_empty_when_disabled(self, monkeypatch):
         monkeypatch.delenv("GENLAB_PRODUCT_SELECTOR_ENABLED", raising=False)

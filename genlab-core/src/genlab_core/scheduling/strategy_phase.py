@@ -56,8 +56,13 @@ _cache: dict[str, tuple[float, PhaseConfig]] = {}
 def _integration_enabled() -> bool:
     """Feature-flag check. Default OFF so ONLY explicit opt-in reads
     strategist_reports. Safe rollout path: operator watches Strategist
-    reports for 2-3 weeks, THEN sets the flag to activate integration."""
-    return os.environ.get("GENLAB_STRATEGIST_INTEGRATION_ENABLED", "").lower() == "true"
+    reports for 2-3 weeks, THEN sets the flag to activate integration.
+
+    2026-07-14: unified to env_true (accepts 1|true|yes|on).
+    """
+    from genlab_core.settings import env_true
+
+    return env_true("GENLAB_STRATEGIST_INTEGRATION_ENABLED")
 
 
 @dataclass

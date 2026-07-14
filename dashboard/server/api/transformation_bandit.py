@@ -61,13 +61,16 @@ _TOP_N_PER_DIMENSION = 3
 
 
 def _flag_enabled() -> bool:
-    """Whether the render-side transformation is currently active."""
-    return os.environ.get("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    """Whether the render-side transformation is currently active.
+
+    2026-07-14: replaced inline hardcoded truthy-set with canonical
+    env_true helper. Prior inline set duplicated env_true's contract
+    with no way to keep them synchronized; a future addition to
+    env_true (e.g. accepting "y" / "t") would have silently diverged.
+    """
+    from genlab_core.settings import env_true
+
+    return env_true("GENLAB_INTELLIGENT_TRANSFORM_ENABLED")
 
 
 def _parse_arm_id(arm_id: str) -> tuple[str, str] | None:
