@@ -133,6 +133,16 @@ def query_recent(window_hours: int, min_build_date: str | None = None) -> list[d
     if min_build_date is None:
         min_build_date = "2026-07-08"
     with _connect() as conn, conn.cursor() as cur:
+        # 2026-07-14 second pass: INNER JOIN via candidate_id (via
+        # pending_feedback.content_id → blueprints.candidate_id). The
+        # previous LEFT JOIN via post_id was fragile because
+        # publishing_analytics stores post_id in shortcode shape
+        # (e.g. ``instagram:Daw4GQNiZLJ``) while pending_feedback
+        # stores it in numeric-media-id shape (e.g.
+        # ``instagram:18121108351794421``) for the same post — the
+        # join silently fails for threads + instagram, keeping stale
+        # rows in the check. INNER JOIN via candidate_id skips rows
+        # we can't verify the build date for (safer than false-alarm).
         cur.execute(
             """
             SELECT
@@ -140,11 +150,9 @@ def query_recent(window_hours: int, min_build_date: str | None = None) -> list[d
               pf.arm_ids_by_dimension,
               pf.created_at
             FROM pending_feedback pf
-            LEFT JOIN publishing_analytics pa ON pa.post_id = pf.post_id
-              AND pa.platform = pf.platform
-            LEFT JOIN blueprints b ON b.id = pa.blueprint_id
+            INNER JOIN blueprints b ON b.candidate_id = pf.content_id
             WHERE pf.created_at > now() - make_interval(hours => %s)
-              AND (b.created_at IS NULL OR b.created_at >= %s::timestamptz)
+              AND b.created_at >= %s::timestamptz
             ORDER BY pf.niche_id, pf.created_at
             """,
             (window_hours, min_build_date),
