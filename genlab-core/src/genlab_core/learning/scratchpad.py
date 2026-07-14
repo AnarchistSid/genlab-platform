@@ -87,9 +87,46 @@ def _output_path() -> Path:
 
 
 def _build_prompt(events_summary: dict, sample_events: list[dict]) -> str:
-    """Build the LLM prompt — events summary + sample, ask for patterns."""
+    """Build the LLM prompt — events summary + sample, ask for patterns.
+
+    2026-07-14 (injection-defense audit F2): sanitize event payload
+    string fields before compacting into the prompt. Events include
+    story titles, captions, comment text — all attacker-influenceable.
+    A crafted title reaching this Opus reflection prompt could hijack
+    the "week's contract" markdown the agent uses as system-prompt
+    context for the NEXT generation — a learning-loop poisoning
+    vector amplifying prior class-of-bug patterns.
+    """
     # Compact JSON for the prompt — Opus parses well; saves tokens
     import json as _json
+
+    try:
+        from genlab_core.cache.text_sanitizer import (
+            check_for_injection,
+            sanitize_text,
+        )
+
+        def _clean(value: Any) -> Any:
+            """Recursively sanitize string values in event payloads."""
+            if isinstance(value, str):
+                cleaned = sanitize_text(value, max_length=2000)
+                if check_for_injection(cleaned):
+                    logger.warning(
+                        "[scratchpad] injection heuristic hit in event payload "
+                        "(len=%d) — dropping value",
+                        len(cleaned),
+                    )
+                    return ""
+                return cleaned
+            if isinstance(value, dict):
+                return {k: _clean(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [_clean(v) for v in value]
+            return value
+
+        sample_events = [_clean(e) for e in sample_events]
+    except Exception as exc:  # noqa: BLE001 — never break the reflection call
+        logger.warning("[scratchpad] sanitize step failed: %s", exc)
 
     sample_compact = _json.dumps(sample_events[:200], default=str, indent=None)[:50000]
     return (

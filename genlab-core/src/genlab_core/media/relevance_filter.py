@@ -57,9 +57,18 @@ class RelevanceFilter:
         """Score relevance 0.0-1.0. Returns 0.0 on negative keyword match."""
         text = f"{title} {description}".lower()
 
-        # Hard reject on negative keywords
+        # Hard reject on negative keywords.
+        # 2026-07-14 (media audit F1): `"" in text` is ALWAYS True in
+        # Python, so a stray empty-string entry (e.g. `- ""` or `- " "`
+        # from a YAML typo) in any niche's sources.yaml would 0.0-score
+        # EVERY candidate — pipeline goes empty with no clear reason.
+        # Guard with truthy-strip check + WARNING so the config error
+        # is visible.
         for neg in self.negative_keywords:
-            if neg in text:
+            neg_clean = (neg or "").strip()
+            if not neg_clean:
+                continue  # empty entry from YAML — skip, don't nuke everything
+            if neg_clean in text:
                 return 0.0
 
         # No positive keywords configured — everything passes

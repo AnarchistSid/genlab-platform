@@ -248,6 +248,22 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                 source_credit=_source_credit,
             )
             if not composite_path:
+                # 2026-07-14 (media audit F10): persist a render_error so
+                # `check_stale_drafted` + `push_to_backlog._derive_render_
+                # failure_reason` can distinguish "compositor returned
+                # empty" from "not yet attempted." Prior state left this
+                # blueprint at DRAFTED with NO render_error → recreated
+                # the 2026-05-21 "4 niches stuck since" incident that
+                # comment 313-317 below was written to prevent.
+                story.setdefault("media", {})["render_error"] = (
+                    "compositor_returned_empty"
+                )
+                logger.warning(
+                    "%s compositor returned empty path for story %s — "
+                    "render_error persisted, blueprint stays DRAFTED",
+                    self._log_prefix,
+                    sid[:16],
+                )
                 return ""
 
             # Task #466 wire (2026-07-06): run the intelligent-

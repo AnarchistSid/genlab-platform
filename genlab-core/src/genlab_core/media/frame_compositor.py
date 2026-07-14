@@ -335,7 +335,18 @@ def probe_video(path: str) -> VideoInfo:
     try:
         num, den = fps_str.split("/")
         fps = float(num) / float(den)
-    except Exception:
+    except Exception as exc:
+        # 2026-07-14 (media audit F8): WARNING (was silent). A 60fps
+        # gaming clip whose ffprobe fps string parses oddly was silently
+        # downgraded to 30fps — motion-heavy content shipped choppy
+        # without any signal. Same pattern as base_visual_render.py:206
+        # ffprobe fail elevation from the earlier session.
+        logger.warning(
+            "[frame_compositor] r_frame_rate %r unparseable (%s) — "
+            "defaulting to 30fps",
+            fps_str,
+            exc,
+        )
         fps = 30.0
 
     is_portrait = ar <= PORTRAIT_THRESHOLD

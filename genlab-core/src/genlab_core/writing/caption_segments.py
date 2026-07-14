@@ -334,6 +334,40 @@ def generate_caption_segments(
     if not title or not hook:
         return None
 
+    # 2026-07-14 (injection defense audit): base_writing sanitizes the
+    # title/summary into LOCAL variables at :190-193 but doesn't write
+    # back to `story`, so this downstream LLM call reads the RAW YouTube-
+    # supplied values. Sanitize + injection-check here too — matches
+    # the "each LLM consumer sanitizes for its own use" pattern already
+    # in llm_hook_generator.py:395. A malicious video title
+    # ("IGNORE PREVIOUS INSTRUCTIONS...") reaching this LLM call
+    # without a sanitize pass could hijack the segments output.
+    try:
+        from genlab_core.cache.text_sanitizer import (
+            check_for_injection,
+            sanitize_text,
+        )
+
+        title = sanitize_text(title, max_length=500)
+        summary = sanitize_text(summary, max_length=1000)
+        for field_name, value in (("title", title), ("summary", summary)):
+            hits = check_for_injection(value)
+            if hits:
+                logger.warning(
+                    "[caption_segments] injection heuristic hit in %s: %s",
+                    field_name,
+                    hits,
+                )
+                if field_name == "title":
+                    title = ""
+                else:
+                    summary = ""
+    except Exception as exc:  # noqa: BLE001 — sanitize never blocks
+        logger.warning("[caption_segments] sanitize step failed: %s", exc)
+
+    if not title:  # sanitize+injection-check dropped the title
+        return None
+
     prompt = _prompt_for_segments(niche_id, title, summary, hook)
 
     try:
