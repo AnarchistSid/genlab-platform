@@ -209,6 +209,11 @@ def execute_parallel_publish(
                 blueprint_id=record_id,
                 candidate_id=candidate_id,
                 error_message=result.error if not result.success else "",
+                # 2026-07-14: pass native platform ID (numeric for IG +
+                # Threads, matches pending_feedback.post_id shape).
+                # Closes multi-identifier-drift class-of-bug that broke
+                # reward-loop JOINs for those platforms.
+                post_id_override=result.post_id if result.success else "",
             )
 
     return outcome

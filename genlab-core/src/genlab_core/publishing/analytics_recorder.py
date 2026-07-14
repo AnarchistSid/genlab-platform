@@ -27,6 +27,7 @@ def record_publish(
     candidate_id: str = "",
     error_message: str = "",
     published_at: str = "",
+    post_id_override: str = "",
 ) -> None:
     """Write a publish record to the shared Publishing_Analytics list.
 
@@ -43,13 +44,32 @@ def record_publish(
         candidate_id: Stable candidate ID.
         error_message: Error details on failure.
         published_at: ISO timestamp. Defaults to now.
+        post_id_override: 2026-07-14 — if provided, use this native
+            platform ID directly instead of parsing the URL. Prefer this
+            over URL parsing for platforms with URL/ID-shape divergence
+            (Instagram: URL contains shortcode e.g. ``Daw4GQNiZLJ`` but
+            Meta returns numeric media_id ``18121108351794421``; Threads
+            has the same shape divergence). Passing the native ID here
+            makes publishing_analytics.post_id match pending_feedback.
+            post_id — closing the multi-identifier-drift class-of-bug
+            that broke reward-loop JOINs for those two platforms.
     """
     if not published_at:
         published_at = datetime.now(UTC).isoformat()
 
-    # Derive post_id from post_url (platform-specific ID extraction)
-    post_id = ""
-    if post_url:
+    # Prefer post_id_override (native platform ID from PublishResult)
+    # when provided — matches pending_feedback.post_id shape.
+    post_id = post_id_override.strip() if post_id_override else ""
+    _from_override = bool(post_id)
+    if post_id:
+        # Native platform ID provided directly — skip URL parsing.
+        pass
+    elif post_url:
+        # Fallback: derive post_id from post_url (URL-tail extraction).
+        # This is the legacy path — kept for retry_pass.py and any
+        # future caller that doesn't have the native ID handy. For IG +
+        # Threads this produces shortcode form which will NOT join to
+        # pending_feedback's numeric form.
         if "youtube.com" in post_url:
             post_id = post_url.rstrip("/").split("/")[-1]
         elif "instagram.com" in post_url:
@@ -67,7 +87,9 @@ def record_publish(
         # pending_feedback.post_id silently fails at reward-fetch time.
         # Reject bare-domain tails so the failure surfaces at write
         # time (WARNING log) instead of silently corrupting analytics.
-        if post_id and (
+        # Only applied to URL-derived post_ids (not overrides — those
+        # come from PublishResult.post_id which is trusted).
+        if not _from_override and post_id and (
             post_id.endswith(".com")
             or post_id.endswith(".net")
             or post_id.endswith(".org")
