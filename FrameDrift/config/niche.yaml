@@ -119,3 +119,9 @@ pipeline:
   # prevents true duplicates. See [[session-2026-06-12-deep-dive-findings]]
   # § B.9 — anime 0-blueprint days 2026-06-13 traced back here.
   title_dedup_days: 2
+  # 2026-07-14 (video/dedup audit F3): default 3-day TTL matching
+  # gaming/sports/movies. Prior state: absent → PreDownloadDedup
+  # blocked URLs forever. Anime episode clips are the most seasonal —
+  # a beloved episode moment can legitimately re-blueprint 3 days
+  # apart when new remix compilations trend.
+  url_dedup_ttl_days: 3

@@ -93,3 +93,8 @@ pipeline:
   max_items_per_run: 10
   min_score_threshold: 0.25
   dedup_window_days: 7  # 14d window leaves 133+ hashes blocking all new fetches
+  # 2026-07-14 (video/dedup audit F3): default 3-day TTL matching
+  # gaming/sports/movies/anime. Prior state: absent → PreDownloadDedup
+  # blocked URLs forever. AI news cycles fast — same tool announcement
+  # can legitimately re-blueprint 3 days apart when new features drop.
+  url_dedup_ttl_days: 3

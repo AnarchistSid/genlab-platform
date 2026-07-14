@@ -108,3 +108,9 @@ pipeline:
   # actual video (URL/video_id dedup handles that). See
   # [[session-2026-06-12-deep-dive-findings]] § B.9.
   title_dedup_days: 3
+  # 2026-07-14 (video/dedup audit F3): default 3-day TTL matching
+  # gaming (PR #627) + sports (line 152 in ClutchWire). Prior state:
+  # absent → PreDownloadDedup blocked URLs forever. New trailer
+  # drops for the same title within a week can now legitimately
+  # re-blueprint (2-3 unique moments per movie's press tour).
+  url_dedup_ttl_days: 3
