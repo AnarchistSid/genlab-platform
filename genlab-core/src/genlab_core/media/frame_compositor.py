@@ -106,11 +106,17 @@ HANDLE_OPACITY = 0.70
 HOOK_FONT_SIZE = 44
 HOOK_LINE_H = 52
 HOOK_MAX_LINES = 2
-HOOK_MAX_CHARS_LINE = 35
 SHADOW_OFFSET = 2
 SHADOW_OPACITY = 0.50
 
-HOOK_MAX_CHARS = 60  # enforced upstream, checked here too
+# 2026-07-14 (class-of-bug scan): import from shared constants. Prior
+# state had 3 independent hardcoded ``60`` sites for this same
+# invariant (llm_hook_generator.py, base_hooks.py, this file). Now
+# single source of truth so ceiling bumps propagate.
+from genlab_core.writing.constants import HOOK_MAX_CHARS_PER_LINE, MAX_HOOK_CHARS
+
+HOOK_MAX_CHARS_LINE = HOOK_MAX_CHARS_PER_LINE
+HOOK_MAX_CHARS = MAX_HOOK_CHARS  # kept as module-level alias for backward compat
 
 # ── G9 attribution watermark (2026-07-13 audit follow-up) ───────
 # Bottom-right of the video canvas area (NOT in the pillarbox) so

@@ -1076,7 +1076,11 @@ def _rewrite_hook(
                 )
             return None
     except Exception as exc:
-        logger.debug("[%s] Hook rewriter API call failed: %s", niche_id, exc)
+        # 2026-07-14 (class-of-bug scan): elevated to WARNING per the
+        # writer-wire discipline established 2026-07-13. Writer failures
+        # are load-bearing on hook quality — silent DEBUG made this
+        # class of failure invisible while shipping worse content.
+        logger.warning("[%s] Hook rewriter API call failed: %s", niche_id, exc)
         return None
 
     # Re-run the critic on the rewritten hook.
@@ -1183,7 +1187,10 @@ def generate_platform_hooks(
             for platform in ("instagram", "youtube", "twitter", "facebook"):
                 if line.lower().startswith(f"{platform}:"):
                     hook = line.split(":", 1)[1].strip().strip('"').strip("'")
-                    if 10 <= len(hook) <= 60:
+                    # 2026-07-14: MAX_HOOK_CHARS import — was hardcoded 60.
+                    from genlab_core.writing.constants import MAX_HOOK_CHARS
+
+                    if 10 <= len(hook) <= MAX_HOOK_CHARS:
                         result[platform] = hook
 
         # Fill missing platforms with base_hook

@@ -63,11 +63,19 @@ def compute_stats(
 
     dsn = os.environ.get("DATABASE_URL") or "dbname=genlab"
 
-    # ORIGINAL_MARK = 🎬 Original — the sentinel string emitted by
-    # both format_source_attribution and the publisher backstop's
-    # in-flight append. Substring match on the full unicode marker
-    # is portable across Postgres text fields.
-    original_mark = "\U0001f3ac Original:"
+    # 2026-07-14 (class-of-bug scan): import canonical markers +
+    # case-insensitive match. Prior state hardcoded case-sensitive
+    # "\U0001f3ac Original:" — diverged from
+    # platforms/caption_validation.py which lowercases input before
+    # comparing. Same-invariant-two-paths class-of-bug that the
+    # 2026-07-13 writer-wire session established the pattern for.
+    from genlab_core.platforms.caption_validation import (
+        _MARKER_FOOTAGE,
+        _MARKER_ORIGINAL,
+    )
+
+    original_mark = _MARKER_ORIGINAL  # already lowercase
+    footage_mark = _MARKER_FOOTAGE  # already lowercase
 
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
@@ -101,22 +109,26 @@ def compute_stats(
             # instagram_content key) so it's already covered.
             cur.execute(
                 """
+                -- 2026-07-14 (class-of-bug scan): LOWER() the columns
+                -- so LIKE matches case-insensitively against markers
+                -- (which are already lowercased). Sibling fix at
+                -- monitoring/attribution_health_monitor.py:95.
                 SELECT
                     niche_id,
                     COUNT(*) AS total,
                     COUNT(*) FILTER (
-                        WHERE COALESCE(caption, '') LIKE %s
-                           OR COALESCE(caption, '') LIKE %s
-                           OR COALESCE(extra->>'facebook_content', '') LIKE %s
-                           OR COALESCE(extra->>'facebook_content', '') LIKE %s
-                           OR COALESCE(extra->>'threads_content', '') LIKE %s
-                           OR COALESCE(extra->>'threads_content', '') LIKE %s
-                           OR COALESCE(extra->>'youtube_content', '') LIKE %s
-                           OR COALESCE(extra->>'youtube_content', '') LIKE %s
-                           OR COALESCE(extra->>'twitter_content', '') LIKE %s
-                           OR COALESCE(extra->>'twitter_content', '') LIKE %s
-                           OR COALESCE(extra->>'tiktok_content', '') LIKE %s
-                           OR COALESCE(extra->>'tiktok_content', '') LIKE %s
+                        WHERE LOWER(COALESCE(caption, '')) LIKE %s
+                           OR LOWER(COALESCE(caption, '')) LIKE %s
+                           OR LOWER(COALESCE(extra->>'facebook_content', '')) LIKE %s
+                           OR LOWER(COALESCE(extra->>'facebook_content', '')) LIKE %s
+                           OR LOWER(COALESCE(extra->>'threads_content', '')) LIKE %s
+                           OR LOWER(COALESCE(extra->>'threads_content', '')) LIKE %s
+                           OR LOWER(COALESCE(extra->>'youtube_content', '')) LIKE %s
+                           OR LOWER(COALESCE(extra->>'youtube_content', '')) LIKE %s
+                           OR LOWER(COALESCE(extra->>'twitter_content', '')) LIKE %s
+                           OR LOWER(COALESCE(extra->>'twitter_content', '')) LIKE %s
+                           OR LOWER(COALESCE(extra->>'tiktok_content', '')) LIKE %s
+                           OR LOWER(COALESCE(extra->>'tiktok_content', '')) LIKE %s
                     ) AS with_attribution
                 FROM blueprints
                 WHERE status = 'PUBLISHED'
@@ -126,17 +138,17 @@ def compute_stats(
                 """,
                 (
                     f"%{original_mark}%",
-                    "%Footage:%",
+                    f"%{footage_mark}%",
                     f"%{original_mark}%",
-                    "%Footage:%",
+                    f"%{footage_mark}%",
                     f"%{original_mark}%",
-                    "%Footage:%",
+                    f"%{footage_mark}%",
                     f"%{original_mark}%",
-                    "%Footage:%",
+                    f"%{footage_mark}%",
                     f"%{original_mark}%",
-                    "%Footage:%",
+                    f"%{footage_mark}%",
                     f"%{original_mark}%",
-                    "%Footage:%",
+                    f"%{footage_mark}%",
                     str(window_hours),
                 ),
             )

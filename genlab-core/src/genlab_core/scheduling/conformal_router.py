@@ -230,7 +230,12 @@ def _extract_features(blueprint: dict) -> list[float] | None:
         n_failed = float(len(extra.get("gate_failed_checks") or []))
         return [composite, virality, hook_clf, hook_len, n_passed, n_failed, gate_conf]
     except Exception as exc:  # noqa: BLE001
-        logger.debug("[conformal] feature extraction failed: %s", exc)
+        # 2026-07-14 (class-of-bug scan): elevated to WARNING. On L7
+        # conformal routing hot path — silent skip means the ensemble
+        # decision doesn't get calibrated confidence, and no signal
+        # reaches monitors. Same class-of-bug shape as the earlier
+        # DEBUG→WARNING sweep on learning metric fetchers.
+        logger.warning("[conformal] feature extraction failed: %s", exc)
         return None
 
 

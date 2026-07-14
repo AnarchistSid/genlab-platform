@@ -253,7 +253,16 @@ def _signal_search_velocity(topic: str, niche_id: str) -> tuple[float, int] | No
     try:
         from pytrends.request import TrendReq
     except ImportError:
-        logger.debug("[trend_anticipation] pytrends not installed — search velocity skipped")
+        # 2026-07-14 (class-of-bug scan): elevated to WARNING per
+        # CLAUDE.md rule #17. Prior state was the exact class-of-bug
+        # that made pytrends dormant for months: silent ImportError
+        # under DEBUG → operator never knew the anticipation engine
+        # was a no-op. Rule #17 mandates WARNING minimum for
+        # ImportError fail-opens.
+        logger.warning(
+            "[trend_anticipation] pytrends not installed — search velocity skipped "
+            "(install `pytrends>=4.9` to enable this signal)"
+        )
         return None
 
     try:

@@ -115,6 +115,12 @@ class AssetStore:
         # 2026-07-14 (backlog audit F1): shared helper.
         from genlab_core.storage.protocol import id_from_create_result
 
+        # 2026-07-14 (class-of-bug scan sibling of F3/F4): pass
+        # niche_id= so SET LOCAL app.niche_id fires on the create.
+        # Prior state omitted it → asset rows created in admin mode.
+        # A subsequent .get() / .update() by asset_id could succeed
+        # cross-tenant.
+        asset_niche_id = fields.get("niche_id")
         be = self._backend("Assets")
         if quality_fields:
             try:
@@ -122,6 +128,7 @@ class AssetStore:
                     "Assets",
                     {**fields, **quality_fields},
                     typecast=True,
+                    niche_id=asset_niche_id,
                 )
                 return id_from_create_result(record)
             except Exception as e:
@@ -130,7 +137,7 @@ class AssetStore:
                 if "UNKNOWN_FIELD_NAME" not in str(e) and "columnNotFound" not in str(e):
                     raise
 
-        record = be.create("Assets", fields, typecast=True)
+        record = be.create("Assets", fields, typecast=True, niche_id=asset_niche_id)
         return id_from_create_result(record)
 
     # ── Read ───────────────────────────────────────────────────────

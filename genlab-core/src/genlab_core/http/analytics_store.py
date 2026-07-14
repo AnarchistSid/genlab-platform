@@ -150,6 +150,7 @@ class AnalyticsStore:
                 "Publishing_Analytics",
                 fields,
                 typecast=True,
+                niche_id=niche_id or None,
             )
             # 2026-07-14 (backlog audit F1): shared helper.
             from genlab_core.storage.protocol import id_from_create_result
@@ -361,12 +362,16 @@ class AnalyticsStore:
                         raise
                 return existing[0]["id"]
             try:
-                record = be.create("Analytics", fields, typecast=True)
+                record = be.create(
+                    "Analytics", fields, typecast=True, niche_id=niche_id or None
+                )
             except Exception as e:
                 if "UNKNOWN_FIELD_NAME" in str(e) or "columnNotFound" in str(e):
                     for f_name in _ANALYTICS_OPTIONAL_FIELDS:
                         fields.pop(f_name, None)
-                    record = be.create("Analytics", fields, typecast=True)
+                    record = be.create(
+                        "Analytics", fields, typecast=True, niche_id=niche_id or None
+                    )
                 else:
                     raise
             # 2026-07-14 (backlog audit F1): shared helper replaces

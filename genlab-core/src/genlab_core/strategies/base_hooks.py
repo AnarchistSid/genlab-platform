@@ -209,10 +209,13 @@ class BaseHookStrategy(HookStrategy):
         base_hook = title[:57].rsplit(" ", 1)[0].rstrip(".") + "..." if len(title) > 60 else title
         if base_hook.lower() not in used_hooks:
             return base_hook
-        # Disambiguate. " (2)", " (3)"... extend within the 60-char budget.
+        # Disambiguate. " (2)", " (3)"... extend within the MAX_HOOK_CHARS budget.
+        # 2026-07-14: import shared constant instead of hardcoding 60.
+        from genlab_core.writing.constants import MAX_HOOK_CHARS
+
         for suffix_idx in range(2, 100):
             suffix = f" ({suffix_idx})"
-            max_base_len = 60 - len(suffix)
+            max_base_len = MAX_HOOK_CHARS - len(suffix)
             candidate_base = base_hook[:max_base_len].rstrip(". ")
             candidate = candidate_base + suffix
             if candidate.lower() not in used_hooks:
