@@ -117,21 +117,25 @@ class TestRecordDecisionWrites:
     """Enabled + votes present → executemany() called with row shape."""
 
     def _install_pool(self, monkeypatch, cursor):
+        """2026-07-14: switched from mocking a non-existent
+        ``genlab_core.storage.get_pool`` to mocking the real helper
+        ``pg_connect`` from ``storage.tenant_context``. Prior test
+        harness was masking that record_decision's import always
+        failed — the tests passed against a mock while prod silently
+        no-op'd every persist call as ``pool_import_failed``.
+        """
         conn = MagicMock()
         conn.cursor.return_value.__enter__.return_value = cursor
         conn.cursor.return_value.__exit__.return_value = False
-        pool = MagicMock()
-        pool.connection.return_value.__enter__.return_value = conn
-        pool.connection.return_value.__exit__.return_value = False
-
-        # Patch the lazy-import path — record_decision imports get_pool
-        # from genlab_core.storage inside the function, so patch that
-        # namespace, not the caller's.
-        get_pool = MagicMock(return_value=pool)
+        # pg_connect returns a raw psycopg connection usable as a
+        # context manager. Mock the whole call chain.
+        pg_connect = MagicMock()
+        pg_connect.return_value.__enter__.return_value = conn
+        pg_connect.return_value.__exit__.return_value = False
         monkeypatch.setattr(
-            "genlab_core.storage.get_pool", get_pool, raising=False
+            "genlab_core.storage.tenant_context.pg_connect", pg_connect
         )
-        return pool, conn, cursor
+        return pg_connect, conn, cursor
 
     def test_enabled_path_calls_executemany_with_correct_shape(
         self, monkeypatch

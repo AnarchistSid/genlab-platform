@@ -101,24 +101,22 @@ def record_decision(
         )
         return False
 
-    # Lazy imports — avoid pulling psycopg into the module init just
-    # to be able to check the flag. This matches the pattern used by
-    # `backlog_client`'s lazy-load discipline.
+    # 2026-07-14: switched from ``genlab_core.storage.get_pool`` (which
+    # doesn't exist — the import silently failed and every persist
+    # returned False as "ensemble_persist.pool_import_failed") to the
+    # canonical ``pg_connect`` helper from ``storage.tenant_context``.
+    # Same helper ips_replay uses for its persist path. Yields a raw
+    # psycopg connection with the tenant GUC already set so RLS on
+    # ensemble_votes (if added later) will filter correctly.
+    #
+    # Lazy import kept — avoids pulling psycopg into module init just
+    # to check the flag.
     try:
-        from genlab_core.storage import get_pool  # type: ignore[attr-defined]
+        from genlab_core.storage.tenant_context import pg_connect
     except Exception as exc:  # pragma: no cover — import error path
         logger.warning(
             "ensemble_persist.pool_import_failed",
             extra={"error": str(exc)},
-        )
-        return False
-
-    try:
-        pool = get_pool()
-    except Exception as exc:
-        logger.warning(
-            "ensemble_persist.pool_unavailable",
-            extra={"error": str(exc), "blueprint_id": blueprint_id},
         )
         return False
 
@@ -148,7 +146,10 @@ def record_decision(
     """
 
     try:
-        with pool.connection() as conn:
+        # pg_connect returns a raw psycopg connection; use it as a
+        # context manager so commit/rollback + close happen automatically.
+        # niche_id kwarg satisfies the RLS tenant GUC set inside pg_connect.
+        with pg_connect(niche_id=niche_id) as conn:
             with conn.cursor() as cur:
                 # executemany is exactly the shape we want here: one
                 # decision → 4-5 rows, no error-isolation branching
