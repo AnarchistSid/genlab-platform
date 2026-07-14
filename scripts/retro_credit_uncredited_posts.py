@@ -135,6 +135,61 @@ def _load_state() -> set[str]:
     return set()
 
 
+def _stamp_db_caption(blueprint_id: str, credit_line: str, dsn: str) -> None:
+    """Append ``credit_line`` to blueprints.caption + extra.facebook_content.
+
+    2026-07-14 fix: retro-credit was ONLY editing Meta captions via API.
+    ``attribution_health_monitor.py`` + ``dashboard/server/core/
+    attribution_health.py`` both query the DB caption column to measure
+    the "audience-facing invariant" — but the DB never got updated, so
+    the metric was stuck at 0.0% even after Meta was successfully
+    credited. That's the exact class-of-bug pattern: metric-proxy
+    signal masking audience-facing state.
+
+    Also update ``extra.facebook_content`` (the platform-specific
+    caption slot the monitor unions in) so both signal paths converge.
+
+    Best-effort: DB write failures don't unwind the successful Meta
+    edit; state file is the durable idempotency layer.
+    """
+    try:
+        import psycopg
+
+        with psycopg.connect(dsn, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE blueprints
+                    SET caption = CASE
+                            WHEN COALESCE(caption, '') LIKE %s THEN caption
+                            ELSE COALESCE(caption, '') || E'\n\n' || %s
+                        END,
+                        extra = jsonb_set(
+                            COALESCE(extra, '{}'::jsonb),
+                            '{facebook_content}',
+                            to_jsonb(
+                                CASE
+                                    WHEN COALESCE(extra->>'facebook_content', '') LIKE %s
+                                    THEN extra->>'facebook_content'
+                                    ELSE COALESCE(extra->>'facebook_content', '')
+                                        || E'\n\n' || %s
+                                END
+                            )
+                        )
+                    WHERE id = %s::uuid
+                    """,
+                    (f"%{MARKER}%", credit_line, f"%{MARKER}%", credit_line, blueprint_id),
+                )
+    except Exception as exc:  # noqa: BLE001 — DB write is bonus, not blocking
+        log.warning(
+            "DB caption stamp failed for bp=%s (%s) — Meta was still credited "
+            "successfully; attribution_health_monitor will lag until next fire "
+            "when the DB stamp succeeds",
+            blueprint_id,
+            exc,
+        )
+
+
 def _stamp_state(key: str) -> None:
     """Append ``{bp}:{platform}`` to state file after successful edit.
 
@@ -461,8 +516,15 @@ def run(dsn: str, days: int, dry_run: bool, sleep_seconds: float = 3.0) -> int:
             current = _current_fb_message(t.normalised_post_id, token)
             if MARKER in current:
                 stats["already_credited"] += 1
+                # 2026-07-14: Meta says credited but the DB may not
+                # reflect it (attribution_health_monitor reads DB and
+                # would still report 0%). Stamp the DB with the credit
+                # line so the metric climbs. Safe on repeat — the
+                # helper is idempotent (LIKE %MARKER% guard).
+                if not dry_run:
+                    _stamp_db_caption(t.blueprint_id, credit, dsn)
                 log.info(
-                    "[fb %s] already credited — skip",
+                    "[fb %s] already credited — skip (DB stamped)",
                     t.normalised_post_id[-8:],
                 )
                 continue
@@ -474,6 +536,7 @@ def run(dsn: str, days: int, dry_run: bool, sleep_seconds: float = 3.0) -> int:
                 stats["success_fb"] += 1
                 if not dry_run:
                     _stamp_state(f"{t.blueprint_id}:facebook")
+                    _stamp_db_caption(t.blueprint_id, credit, dsn)
                 log.info(
                     "[fb %s] %s — appended credit for @%s",
                     t.normalised_post_id[-8:],
@@ -513,7 +576,10 @@ def run(dsn: str, days: int, dry_run: bool, sleep_seconds: float = 3.0) -> int:
             current = _current_ig_caption(media_id, token)
             if MARKER in current:
                 stats["already_credited"] += 1
-                log.info("[ig %s] already credited — skip", media_id[-8:])
+                # 2026-07-14: same DB-catch-up as fb path above.
+                if not dry_run:
+                    _stamp_db_caption(t.blueprint_id, credit, dsn)
+                log.info("[ig %s] already credited — skip (DB stamped)", media_id[-8:])
                 continue
             new_cap = _append_credit(current, credit)
             ok, reason = _edit_ig_caption(media_id, new_cap, token, dry_run)
@@ -521,6 +587,7 @@ def run(dsn: str, days: int, dry_run: bool, sleep_seconds: float = 3.0) -> int:
                 stats["success_ig"] += 1
                 if not dry_run:
                     _stamp_state(f"{t.blueprint_id}:instagram")
+                    _stamp_db_caption(t.blueprint_id, credit, dsn)
                 log.info(
                     "[ig %s] %s — appended credit for @%s",
                     media_id[-8:],
