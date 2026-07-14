@@ -112,6 +112,9 @@ class AssetStore:
         if source_url and asset.get("status") == "READY":
             fields["file"] = [{"url": source_url}]
 
+        # 2026-07-14 (backlog audit F1): shared helper.
+        from genlab_core.storage.protocol import id_from_create_result
+
         be = self._backend("Assets")
         if quality_fields:
             try:
@@ -120,7 +123,7 @@ class AssetStore:
                     {**fields, **quality_fields},
                     typecast=True,
                 )
-                return record["id"]
+                return id_from_create_result(record)
             except Exception as e:
                 # Graceful fallback: old SP schemas don't know about
                 # quality columns. Retry without them.
@@ -128,7 +131,7 @@ class AssetStore:
                     raise
 
         record = be.create("Assets", fields, typecast=True)
-        return record["id"]
+        return id_from_create_result(record)
 
     # ── Read ───────────────────────────────────────────────────────
 

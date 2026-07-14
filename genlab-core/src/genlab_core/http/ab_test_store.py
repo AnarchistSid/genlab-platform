@@ -78,7 +78,10 @@ class ABTestStore:
                 typecast=True,
                 niche_id=test.get("niche_id"),
             )
-            return record["id"]
+            # 2026-07-14 (backlog audit F1): shared helper.
+            from genlab_core.storage.protocol import id_from_create_result
+
+            return id_from_create_result(record)
         except Exception as exc:
             logger.warning("Failed to create AB test: %s", exc)
             return None

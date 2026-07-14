@@ -57,6 +57,26 @@ def id_from_create_result(result: CreateResult) -> str:
     )
 
 
+def ids_from_batch_create_result(results: list) -> list[str]:
+    """Extract record ids from a ``StorageBackend.batch_create`` return.
+
+    Sibling of :func:`id_from_create_result`. PostgresBackend returns
+    ``list[str]``; SharePoint returns ``list[dict[str, Any]]``.
+    Callers that unconditionally do ``[r["id"] for r in results]``
+    blow up with TypeError on the Postgres path (str has no
+    ``__getitem__`` for str keys).
+
+    Centralized here so the union-type extraction lives in exactly
+    one place, matching the single-record shape at
+    :func:`id_from_create_result`.
+
+    Codified 2026-07-14 after backlog-audit F2 found 2 sites doing
+    the unconditional list-comp: blueprint_store.py:383 +
+    story_store.py:253.
+    """
+    return [id_from_create_result(r) for r in results]
+
+
 @runtime_checkable
 class StorageBackend(Protocol):
     """Unified CRUD interface for a single storage engine."""

@@ -111,7 +111,10 @@ class StoryStore:
             fields,
             niche_id=story.get("niche_id"),
         )
-        return record["id"]
+        # 2026-07-14 (backlog audit F1): route through shared helper.
+        from genlab_core.storage.protocol import id_from_create_result
+
+        return id_from_create_result(record)
 
     # ── Read ───────────────────────────────────────────────────────
 
@@ -250,4 +253,7 @@ class StoryStore:
             records,
             niche_id=batch_niche_id,
         )
-        return [r["id"] for r in created]
+        # 2026-07-14 (backlog audit F2): shared helper.
+        from genlab_core.storage.protocol import ids_from_batch_create_result
+
+        return ids_from_batch_create_result(created)

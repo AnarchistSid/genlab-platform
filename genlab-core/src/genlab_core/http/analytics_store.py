@@ -143,7 +143,10 @@ class AnalyticsStore:
                 fields,
                 typecast=True,
             )
-            return record["id"]
+            # 2026-07-14 (backlog audit F1): shared helper.
+            from genlab_core.storage.protocol import id_from_create_result
+
+            return id_from_create_result(record)
         except CircuitOpenError:
             logger.warning("Publishing analytics log skipped — SharePoint circuit open")
             return None
@@ -342,8 +345,12 @@ class AnalyticsStore:
                     record = be.create("Analytics", fields, typecast=True)
                 else:
                     raise
-            # Postgres create() returns a UUID string; SharePoint returns a dict.
-            return record["id"] if isinstance(record, dict) else str(record)
+            # 2026-07-14 (backlog audit F1): shared helper replaces
+            # the inline isinstance branch — same semantics but
+            # centralized.
+            from genlab_core.storage.protocol import id_from_create_result
+
+            return id_from_create_result(record)
         except Exception as exc:
             logger.warning("Analytics upsert failed for %s: %s", composite_id, exc)
             return None

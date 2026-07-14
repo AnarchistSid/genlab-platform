@@ -172,7 +172,13 @@ class BlueprintStore:
                 )
             else:
                 raise
-        return record["id"]
+        # 2026-07-14 (backlog audit F1): PostgresBackend.create returns
+        # bare str, SharePoint returns dict — route through the shared
+        # helper. Prior `record["id"]` blew up with TypeError on the
+        # Postgres path (which is prod today).
+        from genlab_core.storage.protocol import id_from_create_result
+
+        return id_from_create_result(record)
 
     # ── Read ───────────────────────────────────────────────────────
 
@@ -380,4 +386,9 @@ class BlueprintStore:
             records,
             niche_id=batch_niche_id,
         )
-        return [r["id"] for r in created]
+        # 2026-07-14 (backlog audit F2): PostgresBackend.batch_create
+        # returns list[str], SharePoint returns list[dict] — the
+        # unconditional `r["id"]` list-comp blew up under Postgres.
+        from genlab_core.storage.protocol import ids_from_batch_create_result
+
+        return ids_from_batch_create_result(created)
