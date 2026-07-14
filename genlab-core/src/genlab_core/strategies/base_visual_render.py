@@ -215,13 +215,31 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
             # platform-side caption edits that strip attribution. Prefer
             # the source channel handle (short, brand-oriented) over the
             # full channel_name; fall back to the latter when handle
-            # isn't populated. Empty string skips the watermark entirely.
+            # isn't populated.
+            #
+            # 2026-07-14 split-signal fix: as a final fallback, parse
+            # `content.source_attribution` (the writer's canonical
+            # caption credit line) for the @handle. Prior state had
+            # different data sources for caption credit vs frame
+            # watermark → same class-of-bug as the L5-attribution
+            # split-signal fixed on 2026-07-13. See
+            # [[class-of-bug-metric-proxies-mask-audience-facing-failures]].
             _source_credit = (
                 story.get("source_channel_handle")
                 or story.get("channel_name")
                 or story.get("source_channel_title")
                 or ""
             )
+            if not _source_credit:
+                _sa = (story.get("content") or {}).get("source_attribution") or ""
+                # Writer's canonical shape: "🎬 Original: @handle — url"
+                # (see writing/attribution.py format_source_attribution).
+                # Extract the @handle if present so caption + watermark
+                # cite the same creator.
+                import re as _re
+                m = _re.search(r"@([A-Za-z0-9_.\-]+)", _sa)
+                if m:
+                    _source_credit = "@" + m.group(1)
             composite_path = compositor.compose(
                 source_video_path=str(clip_path),
                 hook_text=hook_text,

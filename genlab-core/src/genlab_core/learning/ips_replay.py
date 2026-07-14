@@ -556,12 +556,44 @@ def _fit_reward_model(
 
     arm_order = sorted(all_arms)
     arm_to_idx = {a: i for i, a in enumerate(arm_order)}
-    ctx_dim = len(scored_decisions[0].context) if scored_decisions[0].context else 0
+
+    # 2026-07-14: _row_to_decision accepts BOTH v1 (13-D) and v2 (15-D)
+    # contexts from bandit_context JSONB during the LinUCB context
+    # migration. Mixing dims in the same fit corrupts the whole matrix
+    # (broadcast error at X[i, :ctx_dim] = d.context). Pick the
+    # majority ctx_dim across scored_decisions and drop the minority.
+    # Class-of-bug: dimension mismatch train/predict, same shape as
+    # the R-18 audit that landed the canonical 12→13D vector.
+    from collections import Counter
+
+    dim_counts = Counter(
+        len(d.context) for d in scored_decisions if d.context is not None
+    )
+    if not dim_counts:
+        ctx_dim = 0
+        fittable = list(scored_decisions)
+    else:
+        ctx_dim = dim_counts.most_common(1)[0][0]
+        fittable = [
+            d for d in scored_decisions
+            if d.context is None or len(d.context) == ctx_dim
+        ]
+        dropped = len(scored_decisions) - len(fittable)
+        if dropped:
+            logger.warning(
+                "[ips_replay] dropped %d/%d decisions with ctx_dim != %d "
+                "(dim_distribution=%s) — v1/v2 LinUCB context transition; "
+                "monthly DR replay uses majority dim only",
+                dropped,
+                len(scored_decisions),
+                ctx_dim,
+                dict(dim_counts),
+            )
     n_arms = len(arm_order)
 
-    X = np.zeros((len(scored_decisions), ctx_dim + n_arms), dtype=np.float64)
-    y = np.zeros(len(scored_decisions), dtype=np.float64)
-    for i, d in enumerate(scored_decisions):
+    X = np.zeros((len(fittable), ctx_dim + n_arms), dtype=np.float64)
+    y = np.zeros(len(fittable), dtype=np.float64)
+    for i, d in enumerate(fittable):
         if d.context is not None:
             X[i, :ctx_dim] = d.context
         X[i, ctx_dim + arm_to_idx[d.arm_id]] = 1.0

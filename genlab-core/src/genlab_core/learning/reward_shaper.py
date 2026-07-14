@@ -597,9 +597,11 @@ class MonetisationRewardShaper:
         return cls(config=config, niche_id=niche_id, monetisation_config=monetisation_config)
 
     def compute(self, metrics: dict, platform: str, window: str) -> float:
-        """Compute a shaped reward in [0, ~1.5] from raw platform metrics.
+        """Compute a shaped reward in [0, 1] from raw platform metrics.
 
-        Returns 0.0 on any error — never raises.
+        Returns None on any error — never raises. The [0, 1] clamp
+        matches the base RewardShaper.compute_reward invariant so the
+        bandit's Beta posterior stays well-defined.
         """
         try:
             reward_config = self._config.get("reward", {})
@@ -633,17 +635,27 @@ class MonetisationRewardShaper:
             shaped = base * (1.0 + boost)
             normalised = self._normalise(shaped, platform)
 
+            # 2026-07-14: final clamp to [0, 1]. Docstring said "[0, ~1.5]"
+            # but the base class holds a strict clamp invariant at
+            # compute_reward:426; sibling contract must match. Without
+            # this, a Monetisation-shaped reward > 1.0 reaches the
+            # bandit and skews its posterior against the [0, 1] Beta
+            # distribution assumption. WelfordNormalizer's clip=True
+            # allows some > 1 slippage under welford_zscore mode.
+            clamped = max(0.0, min(1.0, normalised))
+
             logger.debug(
                 "RewardShaper: platform=%s window=%s base=%.4f boost=%.3f "
-                "shaped=%.4f normalised=%.4f",
+                "shaped=%.4f normalised=%.4f clamped=%.4f",
                 platform,
                 window,
                 base,
                 boost,
                 shaped,
                 normalised,
+                clamped,
             )
-            return normalised
+            return clamped
 
         except Exception as e:
             # 2026-07-14 class-of-bug fix: return None on exception
