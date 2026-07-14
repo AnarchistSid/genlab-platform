@@ -193,19 +193,35 @@ def _extract_topic_hashtags(story: dict[str, Any], niche_id: str, max_tags: int 
     if not found:
         title = story.get("title", "") or ""
         # Extract capitalized words (likely proper nouns) — 3+ chars, not common words
+        # 2026-07-14 audit — expanded from 12 to ~50 stopwords + explicit
+        # contraction-stem block. Live shipped content contained
+        # ``#Anime #Manga #Nina #Couldn #Believe`` — "Couldn't Believe"
+        # was tokenized as [Couldn, Believe] before the apostrophe, so
+        # the regex captured "Couldn" and emitted `#Couldn` as a
+        # hashtag. Also `#Believe` and `#Did` shipped as hashtags from
+        # generic English verbs. Neither adds discoverability; both
+        # look like a bot-generated mistake.
         common = {
-            "the",
-            "and",
-            "for",
-            "with",
-            "from",
-            "this",
-            "that",
-            "just",
-            "new",
-            "how",
-            "why",
-            "what",
+            # articles / conjunctions / prepositions
+            "the", "and", "for", "with", "from", "into", "onto", "upon",
+            # pronouns
+            "this", "that", "these", "those", "them", "their", "they",
+            # generic verbs / auxiliaries
+            "just", "will", "would", "should", "could", "might", "must",
+            "have", "has", "had", "was", "were", "been", "being",
+            "did", "does", "get", "got", "make", "made", "take", "took",
+            "go", "goes", "went", "come", "came", "see", "saw", "seen",
+            "know", "knew", "think", "thought", "said", "say",
+            # question words / determiners
+            "how", "why", "what", "when", "where", "which", "who",
+            "some", "any", "many", "much", "most", "more", "less",
+            # generic + banned adjectives / adverbs
+            "new", "old", "big", "small", "good", "bad", "best", "worst",
+            "very", "really", "actually", "literally", "basically",
+            # contraction stems (from `Couldn't` → `Couldn`, etc.)
+            "aren", "can", "couldn", "didn", "doesn", "don", "hadn",
+            "hasn", "haven", "isn", "shouldn", "wasn", "weren", "won",
+            "wouldn",
         }
         words = re.findall(r"\b[A-Z][a-z]{2,}\b", title)
         for word in words:
