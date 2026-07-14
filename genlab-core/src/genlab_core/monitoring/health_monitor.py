@@ -75,6 +75,7 @@ from genlab_core.monitoring.checks.pipeline import (
     check_publish_silence,
     check_qc_collapse,
     check_source_starvation,
+    check_stale_drafted,
     check_stuck_publishing,
     check_zero_blueprints,
 )
@@ -107,6 +108,11 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_missing_media(nid))
         all_alerts.extend(check_stuck_publishing(nid))
         all_alerts.extend(check_content_gap(nid))
+        # 2026-07-14 (pipeline audit F3): stale-DRAFTED aging monitor.
+        # Blueprints stuck at DRAFTED for >5 days indicate an unrender-
+        # able source or a repeated write-content failure. Without this,
+        # DRAFTED accumulated silently.
+        all_alerts.extend(check_stale_drafted(nid))
         all_alerts.extend(check_publish_failures(nid))
         all_alerts.extend(check_publish_silence(nid))
         all_alerts.extend(archive_orphan_drafts(nid))
@@ -380,6 +386,7 @@ __all__ = [
     "check_qc_collapse",
     "check_services",
     "check_source_starvation",
+    "check_stale_drafted",
     "check_stuck_publishing",
     "check_swap",
     "check_warp_health",

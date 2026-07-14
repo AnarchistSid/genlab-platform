@@ -180,13 +180,24 @@ def check_zero_blueprints(reports: list[dict], niche_id: str) -> list[Alert]:
 
     alerts = []
     consecutive_zero = 0
+    consecutive_fetch_outage = 0
     for r in reports:
-        if r["metrics"]["blueprints_count"] == 0 and r["metrics"]["stories_count"] > 0:
+        bp = r["metrics"]["blueprints_count"]
+        st = r["metrics"]["stories_count"]
+        if bp == 0 and st > 0:
             consecutive_zero += 1
+        elif bp == 0 and st == 0:
+            # 2026-07-14 (pipeline audit F2): distinguish "fetch outage"
+            # (0 stories AND 0 blueprints) from "no trending today" —
+            # both look like `st == 0` but a niche should never have
+            # ZERO stories from ALL fetchers for consecutive days
+            # unless every fetcher is broken (API 500s, circuit open,
+            # missing creds). Track separately.
+            consecutive_fetch_outage += 1
         else:
             break
 
-    if consecutive_zero == 0:
+    if consecutive_zero == 0 and consecutive_fetch_outage == 0:
         return alerts
 
     # Task #622 suppression: check forward queue depth BEFORE firing.
@@ -218,23 +229,48 @@ def check_zero_blueprints(reports: list[dict], niche_id: str) -> list[Alert]:
     if m.get("stories_count", 0) > 0 and m.get("blueprints_count", 0) == 0:
         diagnosis.append("stories created but 0 blueprints (dedup?)")
 
-    severity = "warning" if consecutive_zero == 1 else "critical"
-    alerts.append(
-        Alert(
-            check="zero_blueprints",
-            severity=severity,
-            message=(
-                f"{consecutive_zero} consecutive run(s) with 0 blueprints. "
-                f"Likely: {', '.join(diagnosis) or 'unknown'}"
-            ),
-            niche_id=niche_id,
-            details={
-                "consecutive_zero": consecutive_zero,
-                "diagnosis": diagnosis,
-                "forward_queue_depth": queue_depth,
-            },
+    if consecutive_zero > 0:
+        severity = "warning" if consecutive_zero == 1 else "critical"
+        alerts.append(
+            Alert(
+                check="zero_blueprints",
+                severity=severity,
+                message=(
+                    f"{consecutive_zero} consecutive run(s) with 0 blueprints. "
+                    f"Likely: {', '.join(diagnosis) or 'unknown'}"
+                ),
+                niche_id=niche_id,
+                details={
+                    "consecutive_zero": consecutive_zero,
+                    "diagnosis": diagnosis,
+                    "forward_queue_depth": queue_depth,
+                },
+            )
         )
-    )
+
+    # 2026-07-14 (pipeline audit F2): total-fetch-outage is a distinct
+    # alert. If a niche has ZERO stories from ALL fetchers for 2+
+    # consecutive runs, every fetcher is likely broken (API 500s,
+    # circuit open, missing creds). Same forward-queue-depth
+    # suppression applies (we already have a queue).
+    if consecutive_fetch_outage >= 2:
+        severity_f = "critical" if consecutive_fetch_outage >= 3 else "warning"
+        alerts.append(
+            Alert(
+                check="fetch_outage",
+                severity=severity_f,
+                message=(
+                    f"{consecutive_fetch_outage} consecutive run(s) with 0 stories "
+                    f"AND 0 blueprints. Every fetcher likely broken (API "
+                    f"outage, circuit open, missing creds)."
+                ),
+                niche_id=niche_id,
+                details={
+                    "consecutive_fetch_outage": consecutive_fetch_outage,
+                    "forward_queue_depth": queue_depth,
+                },
+            )
+        )
     return alerts
 
 
@@ -615,6 +651,80 @@ def check_content_gap(niche_id: str) -> list[Alert]:
             )
     except Exception as e:
         logger.debug("Content gap check failed: %s", e)
+    return alerts
+
+
+def check_stale_drafted(niche_id: str) -> list[Alert]:
+    """Detect blueprints stuck at DRAFTED for >5 days.
+
+    2026-07-14 (pipeline audit F3): a story whose YouTube URL is
+    permanently unrenderable (deleted video, DRM protection, etc.)
+    retries every pipeline run forever without escalation. The
+    pre_download_dedup gate deliberately allows retries (per docstring
+    at pre_download_dedup.py:8-16 — this was the 2026 stuck-96-sports
+    fix). Without an upper bound, DRAFTED accumulates silently.
+
+    Fires at:
+      * warning at 5-14 days stale (7 recent bad candidates in one
+        niche = something's off but not urgent)
+      * critical at >14 days stale (operator action required to demote
+        or purge)
+
+    Class-of-bug: alerts must reflect current state (not just fire
+    count) — sibling to check_content_gap + check_stuck_publishing.
+    """
+    alerts = []
+    try:
+        conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id=niche_id)
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT COUNT(*) FROM blueprints "
+            "WHERE niche_id = %s AND status = 'DRAFTED' "
+            "AND updated_at < NOW() - INTERVAL '5 days'",
+            (niche_id,),
+        )
+        stale_5d = cur.fetchone()[0]
+        cur.execute(
+            "SELECT COUNT(*) FROM blueprints "
+            "WHERE niche_id = %s AND status = 'DRAFTED' "
+            "AND updated_at < NOW() - INTERVAL '14 days'",
+            (niche_id,),
+        )
+        stale_14d = cur.fetchone()[0]
+        conn.close()
+
+        if stale_14d > 0:
+            alerts.append(
+                Alert(
+                    check="stale_drafted",
+                    severity="critical",
+                    message=(
+                        f"{stale_14d} blueprint(s) stuck at DRAFTED >14 days. "
+                        f"Operator action required: demote/purge OR investigate "
+                        f"why render keeps failing (unrenderable video? DRM?)."
+                    ),
+                    niche_id=niche_id,
+                    details={"stale_14d": stale_14d, "stale_5d": stale_5d},
+                )
+            )
+        elif stale_5d > 0:
+            alerts.append(
+                Alert(
+                    check="stale_drafted",
+                    severity="warning",
+                    message=(
+                        f"{stale_5d} blueprint(s) stuck at DRAFTED >5 days — "
+                        f"render failing repeatedly. Check "
+                        f"story.media.render_error for the reason."
+                    ),
+                    niche_id=niche_id,
+                    details={"stale_5d": stale_5d},
+                )
+            )
+    except Exception as exc:
+        logger.warning(
+            "check_stale_drafted failed for niche_id=%s: %s", niche_id, exc
+        )
     return alerts
 
 
