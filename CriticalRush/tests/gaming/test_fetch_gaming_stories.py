@@ -350,6 +350,90 @@ class TestTwitchNonGameFilter:
         assert stories == []
 
 
+class TestTwitchTopStreamerAttribution:
+    """2026-07-14: Twitch trending stories now attribute to the top LIVE
+    streamer instead of the ``twitch.tv/directory/game/X`` category URL.
+    Guards commit 525f15ab. Sibling to compliance-gate rejection of
+    directory URLs (commit 0b7a3e14)."""
+
+    def _mock_response(self, data):
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        resp.json.return_value = {"data": data}
+        return resp
+
+    @patch("niches.gaming.stages.fetch_gaming_stories.requests.get")
+    def test_top_streamer_url_used_as_source(self, mock_get, monkeypatch):
+        """When /streams returns a top live streamer, use their URL +
+        user_name as attribution instead of the directory URL."""
+        from genlab_core.settings import settings
+
+        monkeypatch.setattr(settings, "twitch_client_id", "test-id")
+        monkeypatch.setattr(settings, "twitch_client_secret", "test-secret")
+
+        # First call: /games/top. Second call: /streams for that game.
+        mock_get.side_effect = [
+            self._mock_response(
+                [{"id": "1", "name": "Fortnite", "igdb_id": "100", "box_art_url": ""}]
+            ),
+            self._mock_response(
+                [
+                    {
+                        "user_login": "ninja",
+                        "user_name": "Ninja",
+                        "title": "Fortnite live grind",
+                    }
+                ]
+            ),
+        ]
+
+        from niches.gaming.stages.fetch_gaming_stories import TwitchTrendingFetcher
+
+        with patch("niches.gaming.tools._twitch_auth.TwitchTokenManager") as MockToken:
+            MockToken.return_value.get_token.return_value = "fake-token"
+            fetcher = TwitchTrendingFetcher()
+            stories = fetcher.fetch()
+
+        assert len(stories) == 1
+        s = stories[0]
+        assert s["source_url"] == "https://www.twitch.tv/ninja"
+        assert s["video_url"] == "https://www.twitch.tv/ninja"
+        assert s["source_channel_title"] == "Ninja"
+        assert "Fortnite live grind" in s["summary"]
+
+    @patch("niches.gaming.stages.fetch_gaming_stories.requests.get")
+    def test_falls_back_to_directory_url_when_no_live_streamer(
+        self, mock_get, monkeypatch
+    ):
+        """If /streams returns empty (no live stream currently), fall
+        back to the directory URL. Compliance gate will still reject
+        it as attribution (commit 0b7a3e14), but the story exists for
+        future clip-fetch stages to work with."""
+        from genlab_core.settings import settings
+
+        monkeypatch.setattr(settings, "twitch_client_id", "test-id")
+        monkeypatch.setattr(settings, "twitch_client_secret", "test-secret")
+
+        mock_get.side_effect = [
+            self._mock_response(
+                [{"id": "2", "name": "Rare Game", "igdb_id": "200", "box_art_url": ""}]
+            ),
+            self._mock_response([]),  # no live streams
+        ]
+
+        from niches.gaming.stages.fetch_gaming_stories import TwitchTrendingFetcher
+
+        with patch("niches.gaming.tools._twitch_auth.TwitchTokenManager") as MockToken:
+            MockToken.return_value.get_token.return_value = "fake-token"
+            fetcher = TwitchTrendingFetcher()
+            stories = fetcher.fetch()
+
+        assert len(stories) == 1
+        # Fell back to directory URL — compliance gate will handle it
+        assert "/directory/game/" in stories[0]["source_url"]
+        assert stories[0]["source_channel_title"] == ""
+
+
 # ---------------------------------------------------------------------------
 # Source merge — prevents 2026-06-19 regression
 # ---------------------------------------------------------------------------
