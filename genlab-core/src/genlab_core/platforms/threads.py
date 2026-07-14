@@ -51,6 +51,31 @@ _NEEDS_REFRESH_AFTER_DAYS = 50
 _VIDEO_PROCESSING_WAIT: int = get_tuning_config().threads_publish.video_processing_wait_seconds
 
 
+# Meta error signatures that indicate a CDN-fetch problem (rotating to
+# another CDN provider has a real chance of recovering the publish).
+# ``2207077`` is Meta's documented "CDN fetch failed" code. ``UNKNOWN``
+# is Meta's own error_message string when their backend can't specify
+# what went wrong — 2026-07-12/13 ai_creators Threads failures returned
+# this shape for 2 consecutive days. Treating opaque UNKNOWN as CDN-
+# worthwhile costs one extra upload (~60 s of CDN upload + container
+# poll) but gives an intermittent CDN or Meta-backend failure a chance
+# to recover, versus the previous behaviour of failing on first attempt.
+_CDN_ROTATION_ERROR_MARKERS: frozenset[str] = frozenset({"2207077", "UNKNOWN"})
+
+
+def _cdn_rotation_worthwhile(error_message: str) -> bool:
+    """True when the error is one that CDN rotation might recover from.
+
+    Called by ``_publish_with_cdn_retry`` at three sites (container
+    create, container poll, threads_publish). Case-sensitive match on
+    ``UNKNOWN`` because that's how Meta's API emits it — a lower-case
+    match would false-fire on any error message containing the word.
+    """
+    if not error_message:
+        return False
+    return any(marker in error_message for marker in _CDN_ROTATION_ERROR_MARKERS)
+
+
 # _safe_json imported from genlab_core.platforms.models
 
 
@@ -401,15 +426,17 @@ class ThreadsClient:
             container_id = self._create_container(**container_kwargs)
             if container_id is None:
                 last_failure_error = self._last_error or "container creation failed"
-                if external_url or "2207077" not in last_failure_error:
+                if external_url or not _cdn_rotation_worthwhile(last_failure_error):
                     return PublishResult(
                         platform=self.platform_id,
                         success=False,
                         error=f"Threads: {media_type.lower()} {last_failure_error}",
                     )
                 self._log.warning(
-                    "[Threads] 2207077 on container create with %s URL — rotating CDN provider",
+                    "[Threads] CDN-worthwhile error on container create with %s URL — "
+                    "rotating CDN provider (error: %s)",
                     used_provider,
+                    last_failure_error[:120],
                 )
                 excluded = excluded | {used_provider}
                 continue
@@ -418,16 +445,17 @@ class ThreadsClient:
                 container_status = self._poll_container(container_id, max_seconds=120)
                 if container_status == "ERROR":
                     last_failure_error = self._last_error or "Threads container processing error"
-                    if external_url or "2207077" not in last_failure_error:
+                    if external_url or not _cdn_rotation_worthwhile(last_failure_error):
                         return PublishResult(
                             platform=self.platform_id,
                             success=False,
                             error=last_failure_error,
                         )
                     self._log.warning(
-                        "[Threads] 2207077 on container processing with %s URL — "
-                        "rotating CDN provider",
+                        "[Threads] CDN-worthwhile error on container processing with "
+                        "%s URL — rotating CDN provider (error: %s)",
                         used_provider,
+                        last_failure_error[:120],
                     )
                     excluded = excluded | {used_provider}
                     continue
@@ -443,15 +471,17 @@ class ThreadsClient:
                 last_failure_error = (
                     self._last_error or f"Threads: {media_type.lower()} threads_publish failed"
                 )
-                if external_url or "2207077" not in last_failure_error:
+                if external_url or not _cdn_rotation_worthwhile(last_failure_error):
                     return PublishResult(
                         platform=self.platform_id,
                         success=False,
                         error=last_failure_error,
                     )
                 self._log.warning(
-                    "[Threads] 2207077 on threads_publish with %s URL — rotating CDN provider",
+                    "[Threads] CDN-worthwhile error on threads_publish with %s URL — "
+                    "rotating CDN provider (error: %s)",
                     used_provider,
+                    last_failure_error[:120],
                 )
                 excluded = excluded | {used_provider}
                 continue
@@ -462,7 +492,7 @@ class ThreadsClient:
             platform=self.platform_id,
             success=False,
             error=(
-                f"Threads: 2207077 on all CDN providers ({list(provider_order)})"
+                f"Threads: CDN-worthwhile error on all providers ({list(provider_order)})"
                 f" — last error: {last_failure_error}"
             ),
         )
