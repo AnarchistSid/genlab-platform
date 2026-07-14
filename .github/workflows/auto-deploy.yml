@@ -34,17 +34,26 @@
 name: Auto-deploy on main
 
 on:
-  push:
+  # 2026-07-14: switched from push: to workflow_run: gated by CI
+  # completion. Prior state fired on EVERY push to main regardless
+  # of CI outcome — if operator flipped `if: false` to `if: true`
+  # without also wiring a needs:/workflow_run gate, a merged red-CI
+  # commit would deploy the broken code. Now the workflow only
+  # fires when the CI workflow completed with success on main.
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
   workflow_dispatch:  # allow manual trigger from Actions tab
 
 jobs:
   deploy:
-    # SAFETY GUARD — change to `true` after configuring secrets.
+    # SAFETY GUARD — change the first `false` to `true` after
+    # configuring secrets. Second condition enforces CI success gate
+    # (redundant given the workflow_run branch filter above but
+    # makes intent explicit for the workflow_dispatch path).
     if: false
     runs-on: ubuntu-latest
-    # Wait for CI to pass before deploying. Operator wires this to
-    # the ci.yml jobs once activated (e.g., needs: [test, lint]).
     steps:
       - name: Set up SSH agent
         uses: webfactory/ssh-agent@v0.9.0

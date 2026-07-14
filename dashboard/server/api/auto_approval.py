@@ -749,6 +749,15 @@ def set_kill_switch():
     survives restarts independently. The UI must surface that if it
     is set, this endpoint cannot fully clear it.
     """
+    # 2026-07-14 (dashboard audit F10): distinguish "Content-Type
+    # missing" from "'active' missing from body". get_json(silent=True)
+    # returns None on either — but the second case is a real client
+    # error, the first is a client misconfiguration deserving a
+    # specific 415 message.
+    if not request.is_json:
+        return api_error(
+            error="Content-Type must be application/json", code=415
+        )
     body = request.get_json(silent=True) or {}
     if "active" not in body:
         return api_error(error="body must include 'active' boolean", code=400)
