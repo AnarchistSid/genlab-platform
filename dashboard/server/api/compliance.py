@@ -153,8 +153,13 @@ def list_compliance_events():
         ]
         return api_success(data=data)
     except Exception as exc:
-        logger.error("Compliance events list error: %s", exc, exc_info=True)
-        return api_error(error="Internal server error", code=500)
+        # 2026-07-14 (dashboard audit F9): degrade gracefully on cold-
+        # start / DB blip instead of 500-ing. Sibling /stats endpoint
+        # (below) already uses this pattern.
+        logger.warning("Compliance events list degraded: %s", exc)
+        return api_success(
+            data={"events": [], "reachable": False, "reason": str(exc)[:200]}
+        )
 
 
 @bp.route("/stats", methods=["GET"])
@@ -256,5 +261,15 @@ def list_registered_checks():
             }
         )
     except Exception as exc:
-        logger.error("List registered checks failed: %s", exc, exc_info=True)
-        return api_error(error="Internal server error", code=500)
+        # 2026-07-14 (dashboard audit F9): mirror the ImportError
+        # fail-open pattern above — polling clients see a degraded
+        # payload instead of a 500 during transient failures.
+        logger.warning("List registered checks degraded: %s", exc)
+        return api_success(
+            data={
+                "checks": [],
+                "count": 0,
+                "reachable": False,
+                "reason": str(exc)[:200],
+            }
+        )

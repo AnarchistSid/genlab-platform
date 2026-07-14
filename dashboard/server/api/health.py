@@ -305,21 +305,34 @@ def _get_active_backends() -> dict:
 
 @bp.route("/detailed", methods=["GET"])
 def detailed_health():
-    """Return comprehensive system health."""
-    try:
-        return api_success(
-            data={
-                "services": _check_services(),
-                "last_run": _get_last_run_per_niche(),
-                "error_rate_24h": _calculate_error_rate_24h(),
-                "disk_usage": _get_disk_usage(),
-                "engagement_pollers": _get_poller_status(),
-                "postgres": _check_postgres(),
-                "launch_agents": _get_launchagent_status(),
-                "storage_backend": _get_active_backends(),
-                "checked_at": datetime.now(UTC).isoformat(),
-            }
-        )
-    except Exception as exc:
-        logger.exception("Health check failed: %s", exc)
-        return api_error(error=str(exc), code=500)
+    """Return comprehensive system health.
+
+    2026-07-14 (dashboard audit F8): each _check_* fn is wrapped so a
+    partial failure returns a "degraded" flag per-section rather than
+    500ing the whole endpoint. The individual _check_services entries
+    already fail-open to ``{"status": "down", ...}`` (health.py:_check_
+    services); the outer wrapper used to defeat that by 500-ing on the
+    first exception. Now the aggregator matches the per-section
+    fail-open contract.
+    """
+
+    def _safe(fn, section: str):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Health section '%s' failed: %s", section, exc)
+            return {"degraded": True, "error": str(exc)[:200]}
+
+    return api_success(
+        data={
+            "services": _safe(_check_services, "services"),
+            "last_run": _safe(_get_last_run_per_niche, "last_run"),
+            "error_rate_24h": _safe(_calculate_error_rate_24h, "error_rate_24h"),
+            "disk_usage": _safe(_get_disk_usage, "disk_usage"),
+            "engagement_pollers": _safe(_get_poller_status, "engagement_pollers"),
+            "postgres": _safe(_check_postgres, "postgres"),
+            "launch_agents": _safe(_get_launchagent_status, "launch_agents"),
+            "storage_backend": _safe(_get_active_backends, "storage_backend"),
+            "checked_at": datetime.now(UTC).isoformat(),
+        }
+    )

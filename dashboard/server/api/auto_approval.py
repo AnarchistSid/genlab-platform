@@ -81,8 +81,35 @@ def calibration_stats():
 
         s = stats(niche_id=niche_id, window_days=window_days)
     except Exception as exc:
-        logger.exception("calibration-stats failed for %s", niche_id)
-        return api_error(error=f"Stats query failed: {exc}", code=500)
+        # 2026-07-14 (dashboard audit F1): return zero-filled stats
+        # instead of 500ing. The AutoApprovalCalibrationCard polls
+        # every 60s; a 500 during cold-start (table empty, DB blip)
+        # renders as error state instead of the natural "0 samples
+        # yet" state. Sibling calibration_stats_all at :152-163
+        # already uses the zero-filled pattern for cross-niche.
+        logger.warning(
+            "calibration-stats failed for %s (returning zero-filled): %s",
+            niche_id,
+            exc,
+        )
+        return api_success(
+            data={
+                "niche_id": niche_id,
+                "window_days": window_days,
+                "sample_count": 0,
+                "agreement_count": 0,
+                "agreement_rate": 0.0,
+                "confusion_matrix": {
+                    "true_positives": 0,
+                    "true_negatives": 0,
+                    "false_positives": 0,
+                    "false_negatives": 0,
+                },
+                "ready_for_enforcement": False,
+                "degraded": True,
+                "degraded_reason": str(exc)[:200],
+            }
+        )
 
     return api_success(
         data={

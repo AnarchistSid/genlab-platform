@@ -225,8 +225,22 @@ def publishing_alerts():
         )
 
     except Exception as e:
+        # 2026-07-14 (dashboard audit F2): degrade gracefully instead
+        # of 500ing. The critical-alerts banner polls this every 60s
+        # via use-critical-alerts; a 500 blanks the banner entirely
+        # on any DB blip — worse UX than showing "0 alerts, degraded".
+        # Include a degraded flag so the UI can surface the fault.
         logger.error("[Alerts] Publishing query failed: %s", e, exc_info=True)
-        return api_error(error="Internal server error", code=500)
+        return api_success(
+            data={
+                "critical": [],
+                "warning": [],
+                "info": [],
+                "total_unresolved": 0,
+                "degraded": True,
+                "degraded_reason": str(e)[:200],
+            }
+        )
 
 
 @bp.route("/system")
