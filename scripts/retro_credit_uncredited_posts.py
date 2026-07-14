@@ -219,6 +219,14 @@ def _query_uncredited(dsn: str, days: int) -> list[TargetPost]:
     # that walks the SQL bytes looking for placeholders.
     marker_like = f"%{MARKER}%"
     footage_like = "%Footage:%"
+    # 2026-07-14: platform filter added upstream. Retro-credit only
+    # handles Facebook + Instagram (Meta Graph API caption edits).
+    # Prior query fetched all platforms + then per-row `skipped_platform`
+    # skip inside the Python loop → 185/430 targets logged as
+    # skipped_platform noise on every fire. Filtering at SQL level:
+    #   * reduces target set from ~430 to ~245
+    #   * eliminates skipped_platform log noise entirely
+    #   * shrinks state-file scan time (243 fewer targets to check)
     sql = """
         SELECT b.id::text, b.niche_id,
                COALESCE(b.video_url, '') AS video_url,
@@ -230,6 +238,7 @@ def _query_uncredited(dsn: str, days: int) -> list[TargetPost]:
           AND b.updated_at > NOW() - (%s || ' days')::interval
           AND pa.status IN ('SUCCESS','INSIGHTS_6H','INSIGHTS_24H','INSIGHTS_48H','INSIGHTS_168H')
           AND pa.post_id IS NOT NULL AND pa.post_id != ''
+          AND pa.platform IN ('facebook', 'instagram')
           AND NOT (
               COALESCE(b.caption, '') LIKE %s
               OR COALESCE(b.caption, '') LIKE %s
