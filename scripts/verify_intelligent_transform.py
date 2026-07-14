@@ -133,9 +133,10 @@ def query_recent(window_hours: int, min_build_date: str | None = None) -> list[d
     if min_build_date is None:
         min_build_date = "2026-07-08"
     with _connect() as conn, conn.cursor() as cur:
-        # 2026-07-14 second pass: INNER JOIN via candidate_id (via
-        # pending_feedback.content_id → blueprints.candidate_id). The
-        # previous LEFT JOIN via post_id was fragile because
+        # 2026-07-14 second pass: INNER JOIN via candidate_id derived
+        # from pending_feedback.task_id (which is stored as
+        # ``{content_id}__{platform}`` per PendingFeedbackTask.to_dict).
+        # The previous LEFT JOIN via post_id was fragile because
         # publishing_analytics stores post_id in shortcode shape
         # (e.g. ``instagram:Daw4GQNiZLJ``) while pending_feedback
         # stores it in numeric-media-id shape (e.g.
@@ -150,7 +151,8 @@ def query_recent(window_hours: int, min_build_date: str | None = None) -> list[d
               pf.arm_ids_by_dimension,
               pf.created_at
             FROM pending_feedback pf
-            INNER JOIN blueprints b ON b.candidate_id = pf.content_id
+            INNER JOIN blueprints b
+              ON b.candidate_id = split_part(pf.task_id, '__', 1)
             WHERE pf.created_at > now() - make_interval(hours => %s)
               AND b.created_at >= %s::timestamptz
             ORDER BY pf.niche_id, pf.created_at
