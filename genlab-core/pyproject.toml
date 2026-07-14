@@ -17,7 +17,7 @@ dependencies = [
     "psycopg[binary,pool]>=3.2",
     "anthropic>=0.45",
     "openai>=1.0",
-    "requests>=2.32",
+    "requests[socks]>=2.32",  # 2026-07-14 added [socks] extra — prod .env sets GENLAB_HTTP_SOCKS_PROXY=socks5h://127.0.0.1:9050 (Tor) for Reddit fetches; without PySocks (pulled by [socks]) every Reddit RSS + JSON call fails with "Missing dependencies for SOCKS support" and 12 subreddits per sports run silently return 0 candidates.
     "pytrends>=4.9",  # Google Trends wrapper — used by intel/{google_trends,trend_anticipation,anticipation_accuracy}. Silent ImportError absent this dep = 3 dormant intelligence features + validation window never becomes "ready".
     "feedparser>=6.0",
     "python-slugify[unidecode]>=8.0",  # Override GPL text-unidecode with MIT unidecode
