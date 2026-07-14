@@ -435,7 +435,11 @@ def load_persisted_priors(
     try:
         payload = json.loads(path.read_text())
     except (json.JSONDecodeError, OSError) as exc:
-        logger.debug("[cross_niche_transfer] priors read failed: %s", exc)
+        # 2026-07-14: elevated DEBUG → WARNING. If cross-niche priors
+        # artifact is corrupt or missing, downstream bandit arms lose
+        # the transferred-prior warm-start signal — silent regression
+        # equivalent to the class-of-bug memory-noted.
+        logger.warning("[cross_niche_transfer] priors read failed: %s", exc)
         return {}
 
     raw_priors = payload.get("priors") if isinstance(payload, dict) else None

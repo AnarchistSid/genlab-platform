@@ -158,7 +158,10 @@ def record_bandit_pick(
             )
         return True
     except Exception as exc:  # noqa: BLE001 — fail-open
-        logger.debug("[trace] record_bandit_pick failed for %s: %s", blueprint_id, exc)
+        # 2026-07-14: elevated DEBUG → WARNING. Table was 0 rows for
+        # months due to the _coerce_uuid bug (fixed same session);
+        # if we regress into silent write-failures we want to see it.
+        logger.warning("[trace] record_bandit_pick failed for %s: %s", blueprint_id, exc)
         return False
 
 
@@ -212,7 +215,8 @@ def record_operator_decision(
             )
         return True
     except Exception as exc:  # noqa: BLE001 — fail-open
-        logger.debug("[trace] record_operator_decision failed for %s: %s", blueprint_id, exc)
+        # 2026-07-14: elevated DEBUG → WARNING (see record_bandit_pick).
+        logger.warning("[trace] record_operator_decision failed for %s: %s", blueprint_id, exc)
         return False
 
 
@@ -292,5 +296,6 @@ def record_engagement_window(
             )
         return True
     except Exception as exc:  # noqa: BLE001 — fail-open
-        logger.debug("[trace] record_engagement_window failed for %s: %s", blueprint_id, exc)
+        # 2026-07-14: elevated DEBUG → WARNING (see record_bandit_pick).
+        logger.warning("[trace] record_engagement_window failed for %s: %s", blueprint_id, exc)
         return False
