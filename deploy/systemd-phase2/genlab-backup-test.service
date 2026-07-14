@@ -7,6 +7,13 @@ After=network-online.target docker.service genlab-pg-backup.service
 # genlab-backup-test.service` still works even when the backup hasn't
 # run today.
 Wants=genlab-pg-backup.service
+# 2026-07-14 fix: OnFailure MUST live under [Unit], not [Service].
+# systemd was logging "Unknown key name 'OnFailure' in section
+# 'Service', ignoring." on every start — so the failure alert never
+# fired despite the script exiting non-zero. Verified in journal:
+# ``/etc/systemd/system/genlab-backup-test.service:29: Unknown key
+# name 'OnFailure' in section 'Service', ignoring.``
+OnFailure=genlab-service-failure-alert@%n.service
 
 [Service]
 Type=oneshot
@@ -20,10 +27,8 @@ ExecStart=/bin/bash /opt/genlab/scripts/test_backup_restore.sh
 # 2026-06-29-size backup (1951 blueprints) finishes in <10s. 5 minutes
 # is generous headroom for backup growth.
 TimeoutSec=300
-# A failed test fires the existing failure_alert path via the
-# OnFailure unit (set up alongside other genlab-* timer units).
-# Exit codes from the script:
+# A failed test fires the existing failure_alert path (moved to
+# [Unit] above per systemd docs). Exit codes from the script:
 #   0 = backup is valid
 #   1 = backup missing / empty / load failed
 #   2 = unexpected error
-OnFailure=genlab-service-failure-alert@%n.service
