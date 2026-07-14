@@ -283,6 +283,23 @@ class BaseWritingStrategy(WritingStrategy):
         hashtag_pool = captions_config.get("hashtag_pool", [])
         hashtags_per_post = captions_config.get("hashtags_per_post", 4)
 
+        # 2026-07-14: guard against captions with no substantive content.
+        # Prior behavior: if hook/title/summary were all empty, the caption
+        # still assembled as "{cta}\n\n{hashtags}" — pushed downstream as
+        # a "valid" caption and shipped uncredited-of-story. Observed on
+        # anime blueprint 32719aa2 today: caption was
+        # "Caught up yet?\n\n#Anime #AnimeReels\n\n🎬 Original: ..." — no
+        # story content whatsoever. Return empty string so the caller
+        # (or downstream stage) can detect the missing content and skip.
+        has_body = bool(hook) or bool(title) or bool(summary)
+        if not has_body:
+            logger.warning(
+                "[%s] _build_caption called with empty hook/title/summary — "
+                "returning empty caption so downstream can detect and skip",
+                self._niche_id,
+            )
+            return ""
+
         parts: list[str] = []
         if hook:
             parts.append(hook)
@@ -311,6 +328,17 @@ class BaseWritingStrategy(WritingStrategy):
         """Generate content for a single story using template config."""
         content = story.get("content", {})
         caption = self._build_caption(story)
+        # 2026-07-14: _build_caption returns "" when hook/title/summary
+        # are all empty. Propagate the skip signal so downstream stages
+        # don't render + push a defective blueprint.
+        if not caption:
+            story["_skip_llm"] = True
+            logger.warning(
+                "[%s] Template writer produced empty caption (thin story); "
+                "marking _skip_llm=True",
+                self._niche_id,
+            )
+            return story
         content["caption"] = caption
         content["written"] = True
 
