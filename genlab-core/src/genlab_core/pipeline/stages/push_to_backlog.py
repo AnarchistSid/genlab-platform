@@ -53,34 +53,324 @@ _NICHE_ARM_DEFAULTS: dict[str, str] = {
     "ai_creators": "tool_demo",
 }
 
+# 2026-07-14 keyword coverage expansion: measured on 100 recent production
+# hooks/titles/summaries, V1 keywords produced 67-88% no-match rates across
+# niches → propensity=None → excluded from doubly-robust replay. Only 3 of
+# 939 pending_feedback rows had usable propensity. V2 expansion (below) +
+# a new ``viral_moment`` arm per non-ai_creators niche lifted measured
+# coverage to 41-78% across the same 100-row sample. See PR notes /
+# docs/agent-vision-2026-07-10.md capability #3 for the DR-replay wire
+# rationale.
+#
+# Ship discipline: additions only broaden existing arms' semantic reach —
+# no removals from V1 lists. viral_moment is a NEW arm; arm_loader auto-
+# initialises it at first-touch with Beta(1,1) prior + any cross-niche
+# transferred prior available. Cold-start rate slightly increases the
+# first week until viral_moment accumulates n_obs≥3 per niche; after that,
+# multi-match cases involving viral_moment start producing LinUCB softmax
+# propensities (currently 0 multi-match rows exist for anime/gaming/
+# movies/sports because their V1 arm keyword sets were disjoint).
 _ARM_KEYWORDS: dict[str, list[tuple[str, list[str]]]] = {
     "gaming": [
-        ("esports_highlight", ["esports", "tournament", "championship", "league", "competitive"]),
-        ("trailer_reaction", ["trailer", "reveal", "announcement", "launch", "release"]),
-        ("patch_news", ["patch", "update", "nerf", "buff", "season", "hotfix"]),
+        (
+            "esports_highlight",
+            [
+                "esports",
+                "tournament",
+                "championship",
+                "league",
+                "competitive",
+                "clutch",
+                "pro player",
+                "match",
+            ],
+        ),
+        (
+            "trailer_reaction",
+            [
+                "trailer",
+                "reveal",
+                "announcement",
+                "launch",
+                "release",
+                "gameplay",
+                "showcase",
+                "demo",
+            ],
+        ),
+        (
+            "patch_news",
+            [
+                "patch",
+                "update",
+                "nerf",
+                "buff",
+                "season",
+                "hotfix",
+                "tier",
+                "meta",
+                "balance",
+            ],
+        ),
+        # NEW 2026-07-14: viral trending catches "hit Twitch top 3", "went
+        # viral", "everyone's playing X" — dominant pattern in production
+        # gaming hooks that had zero V1 arm match.
+        (
+            "viral_moment",
+            [
+                "viral",
+                "trending",
+                "twitch",
+                "streamed",
+                "streaming",
+                "millions",
+                "broke",
+                "top 1",
+                "top 3",
+                "#1",
+                "everyone",
+                "hit",
+                "biggest",
+            ],
+        ),
     ],
     "sports": [
-        ("breaking_trade", ["trade", "transfer", "sign", "contract", "deal", "free agent"]),
+        (
+            "breaking_trade",
+            [
+                "trade",
+                "transfer",
+                "sign",
+                "contract",
+                "deal",
+                "free agent",
+                "signing",
+                "traded",
+                "acquired",
+            ],
+        ),
         (
             "record_milestone",
-            ["record", "milestone", "history", "first ever", "youngest", "oldest"],
+            [
+                "record",
+                "milestone",
+                "history",
+                "first ever",
+                "youngest",
+                "oldest",
+                "greatest",
+                "best",
+                "worst",
+                "all-time",
+            ],
         ),
-        ("upset_reaction", ["upset", "shock", "underdog", "eliminated", "comeback"]),
+        (
+            "upset_reaction",
+            [
+                "upset",
+                "shock",
+                "underdog",
+                "eliminated",
+                "comeback",
+                "beat",
+                "defeated",
+                "loss",
+                "stunning",
+            ],
+        ),
+        (
+            "viral_moment",
+            [
+                "viral",
+                "trending",
+                "clip",
+                "highlight",
+                "moment",
+                "goal",
+                "play",
+                "buzzer",
+                "walk-off",
+                "insane",
+                "unbelievable",
+            ],
+        ),
     ],
     "movies": [
-        ("scene_reaction", ["scene", "moment", "clip", "reaction", "watch"]),
-        ("box_office_update", ["box office", "opening weekend", "gross", "million", "billion"]),
-        ("cast_reveal", ["cast", "role", "playing", "starring", "joins", "reveal"]),
+        (
+            "scene_reaction",
+            [
+                "scene",
+                "moment",
+                "clip",
+                "reaction",
+                "watch",
+                "villain",
+                "hero",
+                "iconic",
+                "backstory",
+                "shot",
+            ],
+        ),
+        (
+            "box_office_update",
+            [
+                "box office",
+                "opening weekend",
+                "gross",
+                "million",
+                "billion",
+                "flop",
+                "record-breaking",
+            ],
+        ),
+        (
+            "cast_reveal",
+            [
+                "cast",
+                "role",
+                "playing",
+                "starring",
+                "joins",
+                "reveal",
+                "origin",
+                "prequel",
+                "spinoff",
+                "sequel",
+                "returns",
+                "returning",
+                "brings back",
+                "back after",  # "bringing Woody back after 9 years" pattern
+            ],
+        ),
+        (
+            "viral_moment",
+            [
+                "viral",
+                "trending",
+                "millions",
+                "broke",
+                "everyone",
+                "nobody",
+                "shocking",
+                "insane",
+                "wild",
+            ],
+        ),
     ],
     "anime": [
-        ("season_announcement", ["season", "announced", "confirmed", "adaptation", "premiere"]),
-        ("fight_scene", ["fight", "battle", "vs", "clash", "power", "epic"]),
-        ("adaptation_news", ["manga", "light novel", "adaptation", "studio", "animated"]),
+        (
+            "season_announcement",
+            [
+                "season",
+                "announced",
+                "confirmed",
+                "adaptation",
+                "premiere",
+                "release date",
+                "arc",
+            ],
+        ),
+        (
+            "fight_scene",
+            [
+                "fight",
+                "battle",
+                "vs",
+                "clash",
+                "power",
+                "epic",
+                "attack",
+                "defeated",
+                "beat",
+                "showdown",
+            ],
+        ),
+        (
+            "adaptation_news",
+            [
+                "manga",
+                "light novel",
+                "adaptation",
+                "studio",
+                "animated",
+                "chapter",
+                "volume",
+                "novel",
+            ],
+        ),
+        (
+            "viral_moment",
+            [
+                "viral",
+                "trending",
+                "edit",
+                "shorts",
+                "millions of views",
+                "broke",
+                "everyone",
+                "iconic",
+                "moment",
+                "scene",
+            ],
+        ),
     ],
     "ai_creators": [
-        ("model_release", ["release", "launched", "model", "gpt", "claude", "gemini", "llm"]),
-        ("creative_showcase", ["created", "made", "generated", "art", "music", "video", "film"]),
-        ("comparison_test", ["vs", "compared", "better", "benchmark", "test", "which"]),
+        (
+            "model_release",
+            [
+                "release",
+                "launched",
+                "model",
+                "gpt",
+                "claude",
+                "gemini",
+                "llm",
+                "openai",
+                "anthropic",
+                "google",
+                "meta ai",
+                "xai",
+                "grok",
+                "hardware",
+                "chip",
+                "api",
+            ],
+        ),
+        (
+            "creative_showcase",
+            [
+                "created",
+                "made",
+                "generated",
+                "art",
+                "music",
+                "video",
+                "film",
+                "built",
+                "developer",
+                "coded",
+                "app",
+                "tool",
+                "prompt",
+            ],
+        ),
+        (
+            "comparison_test",
+            [
+                "vs",
+                "compared",
+                "better",
+                "benchmark",
+                "test",
+                "which",
+                "beats",
+                "outperforms",
+                "ranked",
+                "faster",
+                "smarter",
+                "wins",
+            ],
+        ),
     ],
 }
 
