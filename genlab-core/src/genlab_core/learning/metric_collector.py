@@ -895,12 +895,28 @@ def process_pending_task(
             shaper,
             niche_id=task_record.niche_id,
         )
-        logger.info(
-            "[metric_collector] 48h reward for %s/%s: %.3f",
-            task_record.platform,
-            task_record.platform_post_id,
-            reward_48h,
-        )
+        # 2026-07-14: RewardShaper.compute_reward now returns None on
+        # exception (was 0.0 — indistinguishable from real 0-engagement).
+        # Bail out of the bandit-update path so we don't train the
+        # arm's α/β on synthetic zeroes. Metric-fetch failure still
+        # advances the pending_feedback state machine below (analytics
+        # write happens regardless), but reward-shaped bandit updates
+        # skip cleanly.
+        if reward_48h is None:
+            logger.warning(
+                "[metric_collector] 48h reward computation returned None for "
+                "%s/%s — skipping bandit update to avoid training on "
+                "synthetic 0. Fetch or shaper failed; see prior WARNING.",
+                task_record.platform,
+                task_record.platform_post_id,
+            )
+        else:
+            logger.info(
+                "[metric_collector] 48h reward for %s/%s: %.3f",
+                task_record.platform,
+                task_record.platform_post_id,
+                reward_48h,
+            )
 
         # Lever R1 emit (2026-06-22): record that the 48h reward window
         # finalized for this post. Fire-and-forget — fails silently
@@ -1010,7 +1026,11 @@ def process_pending_task(
         # and won't match any row in bandit_arms.  Fall back to it only
         # if bandit_arm is missing so legacy rows still flow.
         arm_for_update = task_record.bandit_arm or task_record.content_type
-        if bandit_updater is not None and arm_for_update:
+        # 2026-07-14: also require reward_48h is not None. Prior code
+        # passed None → 0.0 conversion downstream = same synthetic-zero
+        # poison the RewardShaper fix targets. Skip cleanly when the
+        # shaper couldn't produce a real reward.
+        if bandit_updater is not None and arm_for_update and reward_48h is not None:
             bandit_update_succeeded = False
             try:
                 bandit_updater(

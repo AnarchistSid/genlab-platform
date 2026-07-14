@@ -327,7 +327,7 @@ class RewardShaper:
         platform: str,
         metrics: dict[str, float],
         channel_metrics: dict[str, float] | None = None,
-    ) -> float:
+    ) -> float | None:
         """Compute a [0, 1] reward value for a bandit update.
 
         Args:
@@ -638,8 +638,27 @@ class MonetisationRewardShaper:
             return normalised
 
         except Exception as e:
-            logger.error("RewardShaper: reward computation failed: %s", e)
-            return 0.0
+            # 2026-07-14 class-of-bug fix: return None on exception
+            # (not 0.0). Prior return-0.0 semantics were the exact
+            # anti-pattern from [[class-of-bug-metric-proxies-mask-
+            # audience-facing-failures]]: silent 0.0 is
+            # indistinguishable from a real "post got 0 views" reward.
+            # The bandit's α/β update then trained on garbage — every
+            # exception got attributed as bad content, not fetch/compute
+            # failure.
+            #
+            # Elevated to WARNING (was ERROR — good, but the sentinel
+            # 0.0 defeated observability anyway). Callers must handle
+            # None: metric_collector's caller wraps this in a
+            # ``if reward_48h is not None`` guard before bandit update.
+            logger.warning(
+                "RewardShaper: reward computation failed on platform=%s (%s) "
+                "— returning None so bandit skips this observation instead of "
+                "training on synthetic 0.0",
+                platform,
+                e,
+            )
+            return None  # type: ignore[return-value]
 
     def _compute_threshold_boost(self, metrics: dict, platform: str) -> float:
         """Compute the monetisation proximity boost.

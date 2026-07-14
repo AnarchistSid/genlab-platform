@@ -244,6 +244,22 @@ def recompute_late_reward(
             conn.close()
         return None
 
+    # 2026-07-14: RewardShaper.compute_reward can now return None
+    # (was 0.0 on exception). None means "shaper couldn't produce a
+    # reward" — skip this delta measurement rather than treating it
+    # as 0.0 late reward (which would be indistinguishable from a
+    # bombed 7d post).
+    if reward_late is None:
+        logger.warning(
+            "late_reward: shaper returned None bp=%s platform=%s — "
+            "skipping delta measurement",
+            blueprint_id,
+            platform,
+        )
+        if own_conn:
+            conn.close()
+        return None
+
     delta = float(reward_late) - float(reward_48h)
     delta_pct = (delta / float(reward_48h)) if reward_48h else 0.0
 
