@@ -417,15 +417,40 @@ def test_check_copyright_attribution_allows_twitch_with_video_url():
     twitch_trending, video_url populated) must return 'allow' — the
     URL IS the attribution. Log evidence: 2026-07-09 compliance_events
     showed 5 of these warns fire against Twitch content that already
-    had valid attribution."""
+    had valid attribution.
+
+    2026-07-14 update: directory URLs are now REJECTED as attribution
+    (see test_twitch_directory_url_not_valid_attribution below); use
+    a real streamer URL for the "allow" pin.
+    """
     from genlab_core.compliance.copyright_safety import check_copyright_attribution
 
     bp = {
         "source": "twitch_trending",
-        "video_url": "https://www.twitch.tv/directory/game/Something",
+        "video_url": "https://www.twitch.tv/somestreamer",
     }
     result = check_copyright_attribution(bp, "youtube", "gaming")
     assert result.decision == "allow"
+
+
+def test_twitch_directory_url_not_valid_attribution():
+    """2026-07-14: Twitch directory URLs (`twitch.tv/directory/game/X`)
+    are CATEGORY pages, not creators — they can't be attributed to a
+    human. Live evidence: gaming Cloudrooms reel shipped 2026-07-14
+    with `🎬 Original: twitch.tv/directory/game/Cloud` — meaningless
+    attribution to viewers. Compliance gate must reject these so they
+    fall through to the standard warn/block path (missing_source_
+    attribution)."""
+    from genlab_core.compliance.copyright_safety import check_copyright_attribution
+
+    bp = {
+        "source": "twitch_trending",
+        "video_url": "https://www.twitch.tv/directory/game/Cloud",
+    }
+    result = check_copyright_attribution(bp, "youtube", "gaming")
+    # Not "allow" — falls through to warn/block path
+    assert result.decision != "allow"
+    assert "missing_source_attribution" in (result.reasons or [])
 
 
 def test_check_copyright_attribution_still_warns_on_bad_twitch_url():

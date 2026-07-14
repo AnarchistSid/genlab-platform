@@ -251,8 +251,26 @@ def check_copyright_attribution(
             or ""
         )
         candidate = str(candidate).strip()
+        # 2026-07-14 content-quality fix: reject Twitch DIRECTORY URLs.
+        # `twitch.tv/directory/game/{game}` is a CATEGORY page, not a
+        # creator/stream — it can't be attributed to a specific human.
+        # Live evidence: Cloudrooms gaming reel shipped 2026-07-14 with
+        # `🎬 Original: https://twitch.tv/directory/game/Cloud` which is
+        # meaningless attribution to viewers. The Twitch fetcher at
+        # `CriticalRush/niches/gaming/stages/fetch_gaming_stories.py:281`
+        # emits these URLs; the fix is to reject them here at compliance
+        # time so they fall through to the standard "warn" (or "block"
+        # if L3 enforce is on) path. Real streamer URLs
+        # `twitch.tv/{username}` or `twitch.tv/videos/{id}` still pass.
         if candidate.startswith(("http://", "https://")):
-            twitch_url = candidate
+            if "/directory/" in candidate.lower():
+                logger.info(
+                    "[compliance] rejecting Twitch directory URL as "
+                    "attribution — category page, not creator: %s",
+                    candidate[:80],
+                )
+            else:
+                twitch_url = candidate
 
     if derived or explicit or twitch_url:
         return ComplianceDecision(decision="allow")
