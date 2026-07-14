@@ -43,13 +43,15 @@ platforms:
       Pending TikTok developer app approval.
       Set enabled: true and add TIKTOK_ACCESS_TOKEN to .env when approved.
   threads:
-    # Disabled 2026-06-05: Threads container creation has failed 100% on every
-    # publish attempt since 5-28 (tokens expired/invalid, no auto-refresh).
-    # Historical engagement was modest (sports avg 72 max 345; other niches
-    # single-digit). Re-enable per-niche after Threads tokens are regenerated
-    # via Meta Developer Console Token Generator.
-    enabled: false
-    account_id: null  # TODO: Generate Threads token for @theclutchwire
+    # Re-enabled 2026-07-14: token cache at /opt/genlab/.threads_tokens.json
+    # holds fresh sports token (exp 2026-08-15) and per-niche health check
+    # confirms `threads/sports` healthy against id=34601794239468255. Sports
+    # was the only niche with meaningful pre-disable engagement (avg 72,
+    # max 345 vs single-digit for gaming/movies/anime) so it's the one
+    # worth the try. Other 3 niches stay disabled — tokens work, but the
+    # engagement history doesn't justify the daily cap slot.
+    enabled: true
+    account_id: null  # Resolved at runtime via resolve_threads_credentials
     content_types: [video_post, text_post]
     aspect_ratio: "1:1"
 
