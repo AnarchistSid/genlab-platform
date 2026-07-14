@@ -251,15 +251,24 @@ class TestSharedStagesWithMockData:
         assert "express_lane" in result.get("run_stats", {})
 
     def test_qc_gates_validates_blueprints(self) -> None:
-        """QCGates produces validation_status for every blueprint."""
+        """QCGates produces validation_status for every story.
+
+        2026-07-14: was iterating ``result["blueprints"]`` — but the
+        stage reads AND writes ``context["stories"]`` (see
+        qc_gates.py:27-28 docstring + line 113/134 code). The stale
+        blueprints-key iteration was silently deselected in ci.yml
+        since PR #128 supposedly landed; audit surfaced that #128
+        landed months ago but the tests still didn't pass. Fixed to
+        iterate the correct key.
+        """
         from genlab_core.pipeline.stages.qc_gates import QCGates
 
         ctx = _build_context_after_mock_stages("sports")
         result = QCGates().execute(ctx)
 
-        for bp in result["blueprints"]:
+        for bp in result["stories"]:
             assert "validation_status" in bp, (
-                f"Blueprint '{bp.get('candidate_id')}' missing validation_status"
+                f"Story '{bp.get('candidate_id')}' missing validation_status"
             )
             vs = bp["validation_status"]
             assert "all_passed" in vs
@@ -269,15 +278,20 @@ class TestSharedStagesWithMockData:
         assert "total" in qc_stats
 
     def test_virality_scoring_scores_blueprints(self) -> None:
-        """ViralityScoring assigns virality_score to every blueprint."""
+        """ViralityScoring assigns virality_score to every story.
+
+        2026-07-14: same fix as test_qc_gates_validates_blueprints —
+        stage reads+writes ``context["stories"]`` per virality_scoring.py:
+        109-110 docstring, test was iterating stale ``blueprints`` key.
+        """
         from genlab_core.pipeline.stages.virality_scoring import ViralityScoring
 
         ctx = _build_context_after_mock_stages("movies")
         result = ViralityScoring().execute(ctx)
 
-        for bp in result["blueprints"]:
+        for bp in result["stories"]:
             assert "virality_score" in bp, (
-                f"Blueprint '{bp.get('candidate_id')}' missing virality_score"
+                f"Story '{bp.get('candidate_id')}' missing virality_score"
             )
             assert isinstance(bp["virality_score"], float)
             assert 0.0 <= bp["virality_score"] <= 1.0

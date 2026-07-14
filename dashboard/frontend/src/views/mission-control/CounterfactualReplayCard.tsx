@@ -57,11 +57,12 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.counterfactualReplay.latest(nicheId),
     queryFn: () => counterfactualReplay.latest(nicheId),
-    // Monthly artifact — daily poll is plenty. Longer than the other
-    // observability cards because the underlying data changes at most
-    // once a month.
-    refetchInterval: 24 * 60 * 60 * 1000,
-    staleTime: 6 * 60 * 60 * 1000,
+    // 2026-07-14: mount/manual-refresh only (was 24h poll). Artifact
+    // rewrites monthly (1st @ 04:30 UTC); daily poll was 30× overpoll
+    // per rewrite cycle. staleTime: Infinity — data is only stale in
+    // reality after a monthly rewrite, so trust the mount fetch.
+    refetchInterval: false,
+    staleTime: Infinity,
   });
 
   if (isLoading) {

@@ -121,7 +121,10 @@ jobs:
       - run: |
           export TMPDIR="${RUNNER_TEMP:-$HOME/tmp_ci}"
           mkdir -p "$TMPDIR"
-          uv run --package genlab-core pytest genlab-core/tests/ -x -q --ignore=genlab-core/tests/storage/ --ignore=genlab-core/tests/integration/
+          # 2026-07-14: removed -x fail-fast — masked all failures after
+          # the first when triaging batch regressions. Job cap + --timeout=120
+          # already prevent hangs.
+          uv run --package genlab-core pytest genlab-core/tests/ -q --ignore=genlab-core/tests/storage/ --ignore=genlab-core/tests/integration/
         env:
           GENLAB_USE_POSTGRES: "false"
           HF_HUB_OFFLINE: "1"
@@ -238,10 +241,16 @@ jobs:
       # ``uv run --package genlab-core`` changes CWD to ``genlab-core/`` —
       # pytest test IDs must be relative to that, not the workspace root.
       - run: |
+          # 2026-07-14: removed 2 stale --deselect entries for
+          # test_qc_gates_validates_blueprints + test_virality_scoring_
+          # scores_blueprints. Comment claimed they depended on PR #128
+          # (R-19 virality_score) landing; #128 landed months ago but
+          # the tests remained deselected — real cause was the tests
+          # were iterating the wrong context key (blueprints instead of
+          # stories after the P1 producer-registry refactor). Tests
+          # fixed in same commit as this deselect removal.
           uv run --package genlab-core pytest \
             -m integration \
-            --deselect 'tests/integration/test_pipeline_smoke.py::TestSharedStagesWithMockData::test_qc_gates_validates_blueprints' \
-            --deselect 'tests/integration/test_pipeline_smoke.py::TestSharedStagesWithMockData::test_virality_scoring_scores_blueprints' \
             genlab-core/tests/integration/ \
             --tb=short -q
         env:

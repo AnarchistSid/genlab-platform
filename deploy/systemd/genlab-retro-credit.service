@@ -10,6 +10,15 @@ Group=genlab
 WorkingDirectory=/opt/genlab
 EnvironmentFile=/opt/genlab/.env
 Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+# 2026-07-14 (scripts audit F3): ensure the .runtime state directory
+# EXISTS + is owned by genlab BEFORE the script runs. Prior state:
+# if the dir was created as root (e.g. by an operator running the
+# script manually with sudo), subsequent systemd fires got a silent
+# PermissionError under fail-open handling → 6+ hours of retro-credit
+# progress lost overnight (documented incident). ExecStartPre with
+# leading `+` runs as root so it can chown regardless of prior state.
+ExecStartPre=+/bin/bash -c 'mkdir -p /opt/genlab/.runtime && chown -R genlab:genlab /opt/genlab/.runtime'
+
 # Runs the retro-credit script with 3s pacing + state-file skip.
 # Idempotent: state file survives across runs, Meta rate-limit hits
 # just cause early-exit + retry next fire. Fresh publishes get

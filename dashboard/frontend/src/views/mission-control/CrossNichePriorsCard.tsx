@@ -68,11 +68,12 @@ export function CrossNichePriorsCard() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.crossNicheTransfer.priors(),
     queryFn: () => crossNicheTransfer.priors(),
-    // Weekly rewrite (Mon 05:30 UTC) + hourly poll = fresh state on
-    // refresh without hammering the endpoint. Matches the accuracy
-    // card's cadence.
-    refetchInterval: 60 * 60 * 1000,
-    staleTime: 30 * 60 * 1000,
+    // 2026-07-14: 6h poll (was 1h). Rewrite cadence is WEEKLY
+    // (Mon 05:30 UTC); 1h was 168× overpoll per refresh cycle. 6h
+    // still gives operators a fresh view within a workday of the
+    // Monday run without hammering the endpoint.
+    refetchInterval: 6 * 60 * 60 * 1000,
+    staleTime: 6 * 60 * 60 * 1000,
   });
 
   if (isLoading) {

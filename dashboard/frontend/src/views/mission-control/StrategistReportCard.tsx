@@ -131,11 +131,13 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.strategist.latest(nicheId),
     queryFn: () => strategist.latest(nicheId),
-    // 5-minute poll — data changes ≤ once per week (Sunday 02:00 UTC
-    // Strategist run). Any faster is wasted cycles + LLM-persister
-    // load without operator benefit.
-    refetchInterval: 5 * 60 * 1000,
-    staleTime: 5 * 60 * 1000,
+    // 2026-07-14: 30min poll (was 5min). Strategist runs weekly
+    // (Sunday 02:00 UTC); 5min was 2016× overpoll per refresh cycle
+    // + hit the LLM-persister-heavy read path on every tick. 30min
+    // is still overkill vs actual cadence but matches operator-refresh
+    // rhythm without hammering the endpoint.
+    refetchInterval: 30 * 60 * 1000,
+    staleTime: 30 * 60 * 1000,
   });
 
   const reviewMutation = useMutation({
