@@ -176,12 +176,15 @@ class TestAllNicheYAMLsHaveBlock:
     ) -> None:
         parsed = yaml.safe_load(yaml_path.read_text())
         cfg = IntelligentTransformConfig.from_visuals_dict(parsed)
-        # All 5 niches ship with enabled: false in PR 2 — activation
-        # is PR 15's job (env flag + coordinated per-niche flip).
-        assert cfg.enabled is False, (
-            f"{niche_id} shipped with enabled=True in PR 2 — that's "
-            "premature activation. Flip should happen via PR 15 + "
-            "coordinated with operator + branded asset delivery."
+        # 2026-07-14 update (PR #718 obsoleted the PR 2 strict-false
+        # pin): the repo default flipped enabled=true for 4/5 niches
+        # (anime kept false pending branded assets). The pin now
+        # verifies STRUCTURAL soundness — enabled is a bool, config
+        # parses cleanly — not the specific value, which is a per-
+        # niche operator decision. See CLAUDE.md session memory for
+        # the drift-preservation dance history.
+        assert isinstance(cfg.enabled, bool), (
+            f"{niche_id} enabled field is {type(cfg.enabled)!r}, not bool"
         )
 
     @pytest.mark.parametrize("niche_id,yaml_path", list(_NICHE_YAMLS.items()))
