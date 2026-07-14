@@ -128,6 +128,7 @@ def _process_blueprint(bp: dict, niche_id: str, backlog_client: Any, daily_cap: 
                 niche_id=niche_id,
                 record_id=record_id,
                 backlog_client=backlog_client,
+                daily_cap=daily_cap,
             )
 
         # Persist the updated status map after all platforms have been retried.
@@ -226,11 +227,19 @@ def _retry_one_platform(
     niche_id: str,
     record_id: str,
     backlog_client: Any,
+    daily_cap: Any | None = None,
 ) -> None:
     """Retry a single platform. Mutates ``pps`` in place with the result.
 
     Failures here are logged and swallowed so the next platform in the
     retry loop still gets its chance.
+
+    ``daily_cap`` (2026-07-14): mirror parallel_publish's on-success hook.
+    On retry SUCCESS, increment the daily-cap counter so a subsequent
+    same-day fresh-publish pass sees the correct count. Prior to this
+    fix, retry successes bypassed the counter — main-pass count stayed
+    at 1 while retry pushed a second publish silently through the
+    ``can_publish(plat)`` gate.
     """
     registry_id = to_registry_id(plat)
     kwargs = resolve_client_kwargs(registry_id, niche_id)
@@ -244,6 +253,20 @@ def _retry_one_platform(
 
         if result.success:
             pps[plat] = "PUBLISHED"
+            # Mirror parallel_publish._on_success:242-243. Without this,
+            # retry SUCCESS bypasses the daily-cap counter and a
+            # subsequent same-day publish pass can approve a second
+            # same-platform publish.
+            if daily_cap is not None:
+                try:
+                    daily_cap.record_publish(plat)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "[publish] daily_cap.record_publish failed on retry SUCCESS for %s/%s: %s",
+                        niche_id,
+                        plat,
+                        exc,
+                    )
             logger.info(
                 "[publish] Retry SUCCESS: %s/%s post_id=%s",
                 niche_id,
