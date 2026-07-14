@@ -19,6 +19,38 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _ensure_copyright_check_registered():
+    """2026-07-14: guard against test-order pollution. If an earlier
+    test file (from a different directory alphabetically before
+    ``compliance/``) mutates ``policy_gate._REGISTERED_CHECKS`` via
+    the ``test_policy_gate.py`` autouse fixture — which clears +
+    restores based on state observed at fixture SETUP — the copyright
+    check registration can end up missing when the alphabetical
+    order lands ``test_policy_gate.py`` before ``test_copyright_
+    safety.py`` in a sub-run of tests.
+
+    Reimport-and-re-register at every test setup: idempotent (the
+    registrator's module-level side effect is a dict[key] = fn write
+    per ``register_check``'s docstring).
+    """
+    import importlib
+
+    from genlab_core.compliance import copyright_safety, policy_gate
+
+    # Force re-registration by re-running the module's import-time
+    # register_check() call. Idempotent per the registrator contract.
+    importlib.reload(copyright_safety)
+    assert "copyright_attribution_check" in policy_gate.registered_check_names(), (
+        "copyright_attribution_check missing from registry — "
+        "compliance/__init__.py may have skipped its side-effect import"
+    )
+    yield
+
+
 # ── derive_source_url ──────────────────────────────────────────────
 
 
