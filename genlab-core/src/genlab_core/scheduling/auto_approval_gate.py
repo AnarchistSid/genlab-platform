@@ -289,9 +289,27 @@ def evaluate(
     elif virality >= min_virality_score:
         passed.append("virality_score")
         reasons.append(f"virality_score={virality:.3f} ≥ {min_virality_score:.3f}")
-        # Map [min..1.0] to [0.5..1.0]
-        span = max(0.001, 1.0 - min_virality_score)
-        confidences.append(0.5 + 0.5 * min(1.0, (virality - min_virality_score) / span))
+        # 2026-07-14 range-fix: real ai_creators virality_score
+        # distribution sits at 0.10-0.20 with 0.30 being 'strong'.
+        # Prior mapping used span=[min..1.0]=[0.05..1.0]=0.95 → good
+        # scores of 0.15 only got confidence 0.55. That structurally
+        # dragged the 6-check mean below 0.80 → auto-approver produced
+        # 0 approvals for the ai_creators niche for weeks despite
+        # PR #786 lowering the threshold from 0.85 → 0.80.
+        #
+        # New mapping uses ``virality_soft_ceiling`` (default 0.30 —
+        # the empirical top-of-distribution) as the value that maps to
+        # confidence=1.0. Scores between min and ceiling map linearly
+        # to [0.5..1.0]. Above ceiling (rare, meaningful outliers)
+        # also produce confidence=1.0 — the mapping saturates.
+        #
+        # Effect: virality=0.15 now yields conf=0.70 instead of 0.55.
+        # Combined with hook_classifier_score fix (Task #52), the
+        # 6-check mean should regularly clear 0.80 on healthy content.
+        virality_soft_ceiling = 0.30
+        span = max(0.001, virality_soft_ceiling - min_virality_score)
+        normalized = min(1.0, (virality - min_virality_score) / span)
+        confidences.append(0.5 + 0.5 * normalized)
     else:
         failed.append("virality_score")
         reasons.append(
