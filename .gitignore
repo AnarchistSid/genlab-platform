@@ -46,6 +46,11 @@ token.json
 *.log
 *.cache
 
+# Runtime state (persistent counters, state files, idempotency layers)
+# Populated by e.g. twitter_quota tracker, retro_credit state file.
+.runtime/
+**/.runtime/
+
 # Hypothesis test artifacts
 .hypothesis/
 
