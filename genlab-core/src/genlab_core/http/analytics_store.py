@@ -122,11 +122,18 @@ class AnalyticsStore:
 
         be = self._backend("Publishing_Analytics")
         try:
+            # 2026-07-14 (backlog audit F4): pass niche_id on the
+            # find/update. Prior state ran in admin mode, so a
+            # cross-niche analytics_id collision (SHA256 hash collision
+            # on candidate_id:platform — unlikely but not impossible)
+            # would let niche A's log_publish_result read + clobber
+            # niche B's row.
             existing = self._sp_call(
                 be.find,
                 "Publishing_Analytics",
                 formula=f"{{analytics_id}}='{_esc(analytics_id)}'",
                 max_records=1,
+                niche_id=niche_id or None,
             )
             if existing:
                 self._sp_call(
@@ -135,6 +142,7 @@ class AnalyticsStore:
                     existing[0]["id"],
                     fields,
                     typecast=True,
+                    niche_id=niche_id or None,
                 )
                 return existing[0]["id"]
             record = self._sp_call(
@@ -320,19 +328,35 @@ class AnalyticsStore:
 
         be = self._backend("Analytics")
         try:
+            # 2026-07-14 (backlog audit F4): pass niche_id on find/update.
+            # Prior state ran in admin mode — cross-tenant post_id
+            # collision could let one niche clobber another's row.
             existing = be.find(
                 "Analytics",
                 formula=f"{{post_id}}='{_esc(composite_id)}'",
                 max_records=1,
+                niche_id=niche_id or None,
             )
             if existing:
                 try:
-                    be.update("Analytics", existing[0]["id"], fields, typecast=True)
+                    be.update(
+                        "Analytics",
+                        existing[0]["id"],
+                        fields,
+                        typecast=True,
+                        niche_id=niche_id or None,
+                    )
                 except Exception as e:
                     if "UNKNOWN_FIELD_NAME" in str(e) or "columnNotFound" in str(e):
                         for f_name in _ANALYTICS_OPTIONAL_FIELDS:
                             fields.pop(f_name, None)
-                        be.update("Analytics", existing[0]["id"], fields, typecast=True)
+                        be.update(
+                            "Analytics",
+                            existing[0]["id"],
+                            fields,
+                            typecast=True,
+                            niche_id=niche_id or None,
+                        )
                     else:
                         raise
                 return existing[0]["id"]

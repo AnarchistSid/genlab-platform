@@ -91,7 +91,13 @@ class EngagementStore:
             "author_name": event.get("author_name", ""),
         }
         try:
-            result = self._proxy.create(fields)
+            # 2026-07-14 (backlog audit F3): pass niche_id explicitly.
+            # Prior state omitted the kwarg → PostgresBackend.create
+            # silent-creates rows with no tenant binding (SET LOCAL
+            # never fires). Fields carry niche_id so read-time RLS
+            # works, but a subsequent .get()/.update() by record_id
+            # would succeed cross-tenant.
+            result = self._proxy.create(fields, niche_id=fields.get("niche_id") or None)
             return str(result) if result else None
         except Exception as e:
             logger.warning("[engagement] write_pending_engagement failed: %s", e)
@@ -126,6 +132,8 @@ class EngagementStore:
         status: str,
         reply_text: str = "",
         error_msg: str = "",
+        *,
+        niche_id: str | None = None,
     ) -> None:
         """Update the status of a pending engagement item.
 
@@ -139,6 +147,10 @@ class EngagementStore:
                 wasn't in this set).
             reply_text: The reply that was posted (if status=replied).
             error_msg: Error message (if status=failed).
+            niche_id: 2026-07-14 (backlog audit F3): pass through to
+                the proxy.update() so SET LOCAL app.niche_id fires.
+                Prior state omitted this → RLS bypass. Optional to
+                preserve backward compat for legacy callers.
         """
         if not self._proxy:
             logger.warning(
@@ -162,7 +174,7 @@ class EngagementStore:
             fields["error_message"] = error_msg[:500]
 
         try:
-            self._proxy.update(item_id, fields)
+            self._proxy.update(item_id, fields, niche_id=niche_id)
             logger.info("BacklogClient: engagement %s → %s", item_id, status)
         except Exception as e:
             logger.warning("BacklogClient: failed to update engagement %s: %s", item_id, e)

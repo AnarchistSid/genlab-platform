@@ -1105,10 +1105,20 @@ class BacklogClient:
         status: str,
         reply_text: str = "",
         error_msg: str = "",
+        *,
+        niche_id: str | None = None,
     ) -> None:
-        """Delegates to :class:`EngagementStore.update_engagement_status`."""
+        """Delegates to :class:`EngagementStore.update_engagement_status`.
+
+        2026-07-14: added ``niche_id`` pass-through so tenant binding
+        is preserved on the .update() call (backlog audit F3 RLS bypass).
+        """
         self._engagement.update_engagement_status(
-            item_id=item_id, status=status, reply_text=reply_text, error_msg=error_msg
+            item_id=item_id,
+            status=status,
+            reply_text=reply_text,
+            error_msg=error_msg,
+            niche_id=niche_id,
         )
 
     # ===== NICHE REGISTRY =====

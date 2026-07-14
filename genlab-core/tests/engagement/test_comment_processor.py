@@ -295,8 +295,12 @@ class TestBacklogClientWiring:
             process_reply_event(_make_event(comment_id="bl_c1"))
 
         mock_bl.write_pending_engagement.assert_called_once()
+        # 2026-07-14: niche_id kwarg added for RLS-bypass fix (audit F3).
         mock_bl.update_engagement_status.assert_called_once_with(
-            "sp-42", "replied", reply_text="Thanks! Glad you enjoyed it [automated reply]"
+            "sp-42",
+            "replied",
+            reply_text="Thanks! Glad you enjoyed it [automated reply]",
+            niche_id="gaming",
         )
 
     @patch("genlab_core.engagement.comment_processor.human_delay", return_value=0)
@@ -345,6 +349,7 @@ class TestBacklogClientWiring:
             "sp-99",
             "failed",
             error_msg="Platform API call failed",
+            niche_id="gaming",
         )
 
     @patch("genlab_core.engagement.comment_processor.ToxicityGate")
@@ -367,7 +372,9 @@ class TestBacklogClientWiring:
         ):
             process_reply_event(_make_event(comment_id="spam_c1", comment_text="FREE MONEY"))
 
-        mock_bl.update_engagement_status.assert_called_once_with("sp-spam", "skipped")
+        mock_bl.update_engagement_status.assert_called_once_with(
+            "sp-spam", "skipped", niche_id="gaming"
+        )
 
     def test_pipeline_works_without_backlog_client(self, agent_root):
         """Pipeline runs normally when BacklogClient is not configured."""

@@ -556,7 +556,7 @@ def process_reply_event(event: dict) -> None:
     if is_spam(comment_text):
         logger.info("Engagement: skipping spam comment %s", comment_id)
         if bl and sp_item_id:
-            bl.update_engagement_status(sp_item_id, "skipped")
+            bl.update_engagement_status(sp_item_id, "skipped", niche_id=niche_id)
         # Record the skip so the next poller pass doesn't re-queue the
         # same comment 10 minutes from now. Without this the engagement
         # worker spins forever on the same handful of unrepliable
@@ -576,7 +576,7 @@ def process_reply_event(event: dict) -> None:
             result.max_score,
         )
         if bl and sp_item_id:
-            bl.update_engagement_status(sp_item_id, "skipped")
+            bl.update_engagement_status(sp_item_id, "skipped", niche_id=niche_id)
         _mark_replied(f"skip:{comment_id}", platform)
         return
 
@@ -589,7 +589,7 @@ def process_reply_event(event: dict) -> None:
     # 2026-05-21 forensics: 888 failures / 0 successes in 2h.
     if not _rate_limiter.acquire(platform):
         if bl and sp_item_id:
-            bl.update_engagement_status(sp_item_id, "rate_limited")
+            bl.update_engagement_status(sp_item_id, "rate_limited", niche_id=niche_id)
         backoff_ms = RATE_REFILL_MS.get(platform, 600_000)
         logger.info(
             "Engagement: rate limit reached for %s, retry in %.0fs (%s)",
@@ -615,7 +615,9 @@ def process_reply_event(event: dict) -> None:
     if reply is None:
         logger.error("Engagement: failed to generate safe reply for %s", comment_id)
         if bl and sp_item_id:
-            bl.update_engagement_status(sp_item_id, "failed", error_msg="Reply generation failed")
+            bl.update_engagement_status(
+                sp_item_id, "failed", error_msg="Reply generation failed", niche_id=niche_id
+            )
         return
 
     # 5b. Confidence heuristic (PersonaEngine doesn't return a score)
@@ -696,7 +698,7 @@ def process_reply_event(event: dict) -> None:
             comment_id,
         )
         if bl and sp_item_id:
-            bl.update_engagement_status(sp_item_id, "skipped")
+            bl.update_engagement_status(sp_item_id, "skipped", niche_id=niche_id)
         return
 
     if action == "review":
@@ -712,7 +714,9 @@ def process_reply_event(event: dict) -> None:
         )
         logger.info("Engagement: queued reply for %s to human review", comment_id)
         if bl and sp_item_id:
-            bl.update_engagement_status(sp_item_id, "pending_review", reply_text=reply)
+            bl.update_engagement_status(
+                sp_item_id, "pending_review", reply_text=reply, niche_id=niche_id
+            )
         # Mark the comment as handled so the next poller cycle doesn't
         # re-queue it and force another LLM reply generation. Without
         # this, every comment routed to "review" gets a fresh persona
@@ -741,7 +745,9 @@ def process_reply_event(event: dict) -> None:
     if posted:
         _mark_replied(comment_id, platform)
         if bl and sp_item_id:
-            bl.update_engagement_status(sp_item_id, "replied", reply_text=reply)
+            bl.update_engagement_status(
+                sp_item_id, "replied", reply_text=reply, niche_id=niche_id
+            )
     else:
         # 2026-07-14: mark with `failed:{comment_id}` short-circuit key
         # so same-day poll cycles don't burn LLM budget re-processing
@@ -759,7 +765,9 @@ def process_reply_event(event: dict) -> None:
             platform,
         )
         if bl and sp_item_id:
-            bl.update_engagement_status(sp_item_id, "failed", error_msg="Platform API call failed")
+            bl.update_engagement_status(
+                sp_item_id, "failed", error_msg="Platform API call failed", niche_id=niche_id
+            )
 
 
 def process_like_event(event: dict) -> None:
