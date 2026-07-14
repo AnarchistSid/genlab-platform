@@ -822,11 +822,22 @@ def write_video_content(
             format_source_attribution,
         )
 
+        # 2026-07-14 writer wire fix: pass ``video_url`` alongside
+        # (video_id, source, channel_name) so format_source_attribution's
+        # URL-fallback branch fires for non-YouTube sources (twitch,
+        # scorebat, tmdb_trailer, RSS) where derive_source_url returns
+        # None. Prior to this fix, non-YT stories shipped with EMPTY
+        # source_attribution → 0/6 recent posts had credit lines →
+        # Layer 5 attribution health cratered to 0.0%. Also removed
+        # the "youtube_trending" default on ``source`` — passing the
+        # actual source (or empty) is more honest and lets the URL
+        # fallback catch the empty case.
         content["source_attribution"] = format_source_attribution(
             {
                 "video_id": video.get("video_id", ""),
-                "source": video.get("source", "youtube_trending"),
+                "source": video.get("source", ""),
                 "source_channel_title": video.get("channel_name", ""),
+                "video_url": video.get("video_url", ""),
             }
         )
 

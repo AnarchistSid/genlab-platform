@@ -243,6 +243,27 @@ class BaseWritingStrategy(WritingStrategy):
             "age_hours": story.get("age_hours", 1),
             "description_snippet": clean_summary[:300],
             "tags": clean_tags,
+            # 2026-07-14 writer wire fix (attribution 0.0% regression):
+            # ``write_video_content`` calls ``format_source_attribution``
+            # with ``{video_id, source, source_channel_title}``. Prior to
+            # this fix, ``source`` defaulted to "youtube_trending"
+            # (because this dict didn't carry it) and ``video_url`` /
+            # ``source_url`` were never passed, so the fallback URL
+            # branch in copyright_safety.format_source_attribution
+            # (added b997dad2 for scorebat/tmdb/twitch) NEVER FIRED.
+            # Result: every non-YouTube story published without a
+            # credit line — 0/6 recent posts had attribution.
+            #
+            # Pass both ``source`` and ``video_url`` through so
+            # format_source_attribution can either derive from
+            # (video_id, source) template or fall back to the raw URL.
+            "source": story.get("source", ""),
+            "video_url": (
+                story.get("video_url")
+                or story.get("source_url")
+                or story.get("canonical_url")
+                or ""
+            ),
         }
 
     # ------------------------------------------------------------------
