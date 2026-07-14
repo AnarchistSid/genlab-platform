@@ -342,6 +342,39 @@ class BaseHookStrategy(HookStrategy):
                 if llm_vr.passed:
                     used_hooks.add(existing_hook.lower())
                     skipped_llm += 1
+                    # 2026-07-14 fix: score the validated LLM hook via
+                    # the hook_classifier so downstream auto-approval
+                    # gate has real signal. Prior behavior short-
+                    # circuited BEFORE classifier scoring (line 350
+                    # `continue`) — the writer-path LLM hooks never
+                    # got a hook_classifier_score set on the story,
+                    # so 0/316 blueprints had this field populated in
+                    # 30d and auto_approval_gate defaulted to 0.5
+                    # (neutral) for every one of them, dragging the
+                    # 6-check confidence mean below the 0.80 threshold.
+                    #
+                    # Fail-open: any classifier error → clf_score stays
+                    # None → gate treats as "unknown" (its documented
+                    # fallback), no regression vs pre-fix.
+                    try:
+                        from genlab_core.learning.hook_classifier import (
+                            HookClassifier,
+                        )
+
+                        clf = HookClassifier(niche_id=self._niche_id)
+                        score = clf.score_hook(existing_hook)
+                        # clf.score_hook returns 0.5 on any error (see its
+                        # docstring). 0.5 IS a legitimate neutral prediction
+                        # value, so we always persist. Downstream can
+                        # distinguish 'model unavailable' via metadata (not
+                        # via presence/absence of the field).
+                        story["hook_classifier_score"] = float(score)
+                    except Exception as exc:  # noqa: BLE001 — fail-open
+                        logger.debug(
+                            "[%s] hook_classifier scoring skipped: %s",
+                            self._niche_id,
+                            exc,
+                        )
                     logger.debug(
                         "[%s] Skipping hook generation — valid LLM hook exists: %s",
                         self._niche_id,
