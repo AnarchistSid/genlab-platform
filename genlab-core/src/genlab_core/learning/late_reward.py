@@ -319,10 +319,21 @@ def process_late_reward_batch(
 
             dsn = os.environ.get("DATABASE_URL", "").strip()
             if not dsn:
+                logger.warning(
+                    "late_reward.batch: DATABASE_URL not set — skipping batch"
+                )
                 return counters
             conn = psycopg.connect(dsn, row_factory=dict_row)
             own_conn = True
-        except Exception:
+        except Exception as exc:
+            # 2026-07-14 class-of-bug fix: was silent ``return counters``.
+            # DB connect failure is a real operational issue — must
+            # surface at WARNING minimum. Silent swallow here would
+            # mask a token/network/DB outage from the operator.
+            logger.warning(
+                "late_reward.batch: DB connect failed — skipping batch: %s",
+                exc,
+            )
             return counters
     else:
         own_conn = False
