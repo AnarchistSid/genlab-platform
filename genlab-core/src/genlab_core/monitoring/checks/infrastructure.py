@@ -589,9 +589,62 @@ def check_swap() -> list[Alert]:
                         f"genuine memory pressure",
                     )
                 )
+            else:
+                # 2026-07-14: auto-resolve stale swap_pressure alerts.
+                # Swap on shared 4 GB VPS is CHURNY — peaks to 91% for
+                # short bursts (typically warp-svc + aspirehub workers)
+                # then recovers to 70% within an hour as page cache
+                # gets reclaimed. Without auto-resolve, each transient
+                # spike leaves a stale critical row in pipeline_alerts
+                # that outlives the actual pressure by hours/days —
+                # exactly the class-of-bug from
+                # [[class-of-bug-alerts-must-reflect-current-state-not-historical-signal]].
+                # When current swap is below both critical + warning
+                # thresholds, mark any lingering swap_pressure alerts
+                # as resolved.
+                _resolve_stale_swap_alerts(
+                    current_used_mb=swap_used // (1024 * 1024),
+                    total_mb=swap_total // (1024 * 1024),
+                )
     except Exception as e:
         logger.debug("Swap check failed: %s", e)
     return alerts
+
+
+def _resolve_stale_swap_alerts(current_used_mb: int, total_mb: int) -> None:
+    """Fire-and-forget cleanup of stale swap_pressure alerts.
+
+    Fails silently on any DB error — the alert is a nice-to-have
+    cleanup, not the primary invariant.
+    """
+    try:
+        from genlab_core.storage.tenant_context import pg_connect
+
+        with pg_connect(niche_id="all") as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE pipeline_alerts
+                    SET resolved_at = NOW(),
+                        auto_fix_applied = %s
+                    WHERE check_name = 'swap_pressure'
+                      AND resolved_at IS NULL
+                    """,
+                    (
+                        f"auto-resolved: current swap {current_used_mb}MB / "
+                        f"{total_mb}MB below alert thresholds",
+                    ),
+                )
+                if cur.rowcount:
+                    logger.info(
+                        "[swap_pressure] auto-resolved %d stale alerts "
+                        "(current swap %d/%d MB)",
+                        cur.rowcount,
+                        current_used_mb,
+                        total_mb,
+                    )
+    except Exception as exc:  # noqa: BLE001 — auto-resolve is best-effort
+        logger.debug("[swap_pressure] auto-resolve skipped: %s", exc)
 
 
 def check_foreign_host_writes() -> list[Alert]:
