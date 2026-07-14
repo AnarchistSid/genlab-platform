@@ -96,6 +96,13 @@ niches:
           commission_pct: 2.0
       image_url: https://m.media-amazon.com/images/I/81yGTbk4cJL._SL1500_.jpg
       price_inr: 699
+      # 2026-07-14: evergreen fallback for gaming. Xbox Game Pass is
+      # a subscription that's relevant to ~any gaming story (has broad
+      # keyword coverage above); at ₹699 it's impulse-buy friendly for
+      # short-form video viewers. When the keyword matcher can't
+      # produce a >=2 hit, AffiliateMatch falls through to the first
+      # product marked evergreen_default: true here.
+      evergreen_default: true
     - name: Razer Gaming Headset
       keywords:
       - headset
@@ -526,6 +533,12 @@ niches:
           commission_pct: 4.0
       image_url: https://m.media-amazon.com/images/I/61A4yOWzGBL._AC_SL1500_.jpg
       price_inr: 15999
+      # 2026-07-14: evergreen fallback for sports. Sports Watch has
+      # broad appeal across all sports genres (fits marathoners,
+      # basketball fans, football fans equally). 5% commission is the
+      # highest in the sports catalog. Sports-specific keywords keep
+      # it from cross-niche polluting other niches' matcher runs.
+      evergreen_default: true
     - name: Gym Bag
       keywords:
       - gym bag
@@ -598,6 +611,11 @@ niches:
           commission_pct: 2.0
       image_url: https://m.media-amazon.com/images/I/61DUO0NqyyL._SL1000_.jpg
       price_inr: 1499
+      # 2026-07-14: evergreen fallback for movies. Amazon Prime Video
+      # is the universal movies/trailers CTA — any trailer, any film,
+      # any actor. Broadest keyword set in the movies catalog. Low
+      # commission (2%) but highest attach rate for casual viewers.
+      evergreen_default: true
     - name: JBL Cinema Soundbar
       keywords:
       - soundbar
@@ -924,6 +942,11 @@ niches:
           commission_pct: 2.0
       image_url: https://m.media-amazon.com/images/I/51hcUqEvHCL.jpg
       price_inr: 2499
+      # 2026-07-14: evergreen fallback for anime. Manga subscription
+      # box works as universal anime-fan CTA — not tied to any specific
+      # series so it doesn't feel forced on off-topic stories. Monthly
+      # subscription = recurring revenue potential.
+      evergreen_default: true
     - name: Anime Poster Set
       keywords:
       - anime poster
@@ -1075,6 +1098,12 @@ niches:
           commission_pct: 0.0
       image_url: https://claude.ai/favicon.ico
       price_inr: 1680
+      # 2026-07-14: evergreen fallback for ai_creators. Claude Pro is
+      # the honest broad CTA for AI-tool stories — no affiliate revenue
+      # (0% commission) but the referral lands somewhere useful. When
+      # Anthropic launches a public affiliate program, swap direct URL
+      # for an affiliate URL and update commission_pct.
+      evergreen_default: true
     - name: ChatGPT Plus
       enabled: true
       keywords:
