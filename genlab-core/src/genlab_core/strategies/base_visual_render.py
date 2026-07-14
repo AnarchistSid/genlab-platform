@@ -197,7 +197,18 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
             try:
                 info = probe_video(str(clip_path))
                 dur = min(info.duration_seconds, 60) if info.duration_seconds > 0 else 55
-            except Exception:
+            except Exception as exc:
+                # 2026-07-14 class-of-bug fix: was silent ``dur = 55``.
+                # ffprobe failure on the source clip is a real signal
+                # — either the download was corrupt or ffmpeg is
+                # misconfigured. Elevate to WARNING so future audits
+                # can grep journalctl for the fingerprint.
+                logger.warning(
+                    "%s ffprobe failed on %s (%s) — defaulting duration=55s",
+                    self._log_prefix,
+                    clip_path,
+                    exc,
+                )
                 dur = 55
             # G9 audit follow-up (2026-07-13): burn a small "Original:
             # @creator" watermark into the video canvas — survives
