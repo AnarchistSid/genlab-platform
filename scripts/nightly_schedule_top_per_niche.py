@@ -76,6 +76,51 @@ from pathlib import Path
 
 NICHES = ("ai_creators", "gaming", "sports", "movies", "anime")
 
+
+# 2026-07-14: single source of truth for LLM refusal prefixes.
+#
+# Pre-fix: this file had its own hardcoded list of 6 refusal prefixes
+# duplicated across two SQL blocks. `pre_render_quality._LLM_REFUSAL_
+# PREFIXES` has 15. Divergence: prod "I need the Story Summary to
+# write a hook for Moana" refusal PUBLISHED because this file's filter
+# missed 'I need the%' — the pre_render_quality gate caught it (would
+# have) but that gate was itself bypassed on ai_creators + gaming
+# (fixed commit 7da5a204).
+#
+# Now imports the canonical list. When pre_render_quality's list
+# grows, this filter grows automatically. Class-of-bug fix at the
+# source instead of the symptom.
+def _refusal_where_clause(field: str = "hook") -> str:
+    """Return a SQL fragment excluding LLM-refusal-prefix hooks.
+
+    Emits ``AND {field} NOT ILIKE 'prefix1%%' AND {field} NOT ILIKE ...``
+    for each prefix in pre_render_quality._LLM_REFUSAL_PREFIXES.
+
+    The ``%%`` (two percent signs) escapes psycopg's parameter marker —
+    what the DB sees is ``%`` (one).
+    """
+    try:
+        from genlab_core.rendering.pre_render_quality import _LLM_REFUSAL_PREFIXES
+    except ImportError:
+        # Fail-open on old prefix set — never let an import error block
+        # the whole scheduler. Better to schedule with weaker filter
+        # than to leave niches empty for a full day.
+        _LLM_REFUSAL_PREFIXES = (
+            "i need to stop",
+            "i cannot",
+            "i can't",
+            "i am unable",
+            "i'm sorry",
+            "i apologize",
+        )
+    clauses = []
+    for prefix in _LLM_REFUSAL_PREFIXES:
+        # Escape single quote by doubling per SQL convention. Prefixes
+        # are literals from the module so no injection risk.
+        escaped = prefix.replace("'", "''")
+        clauses.append(f"          AND {field} NOT ILIKE '{escaped}%%'")
+    return "\n".join(clauses)
+
 # 2026-07-09 (task #611): pull-back branch buffer.
 #
 # When the primary candidate filter (scheduled_for IS NULL) returns no
@@ -216,7 +261,7 @@ def pick_top_per_niche(
     if not needing:
         return []
     cur.execute(
-        """
+        f"""
         SELECT DISTINCT ON (niche_id)
           id, niche_id, priority_score, hook, title, created_at
         FROM blueprints
@@ -225,12 +270,7 @@ def pick_top_per_niche(
           AND scheduled_for IS NULL
           AND (action_taken IS NULL OR action_taken NOT IN ('rejected', 'archived'))
           AND hook IS NOT NULL
-          AND hook NOT ILIKE 'I need to stop%%'
-          AND hook NOT ILIKE 'I cannot%%'
-          AND hook NOT ILIKE 'I can''t%%'
-          AND hook NOT ILIKE 'I am unable%%'
-          AND hook NOT ILIKE 'I''m sorry%%'
-          AND hook NOT ILIKE 'I apologize%%'
+{_refusal_where_clause('hook')}
           AND length(hook) BETWEEN 15 AND 100
         ORDER BY niche_id, priority_score DESC NULLS LAST, created_at ASC
         """,
@@ -272,7 +312,7 @@ def _pick_pullback_candidates(
     """
     min_pullback = target_date + timedelta(days=MIN_PULLBACK_DAYS)
     cur.execute(
-        """
+        f"""
         SELECT DISTINCT ON (niche_id)
           id, niche_id, priority_score, hook, title, created_at,
           scheduled_for AS pullback_from
@@ -282,12 +322,7 @@ def _pick_pullback_candidates(
           AND scheduled_for::date >= %s
           AND (action_taken IS NULL OR action_taken NOT IN ('rejected', 'archived'))
           AND hook IS NOT NULL
-          AND hook NOT ILIKE 'I need to stop%%'
-          AND hook NOT ILIKE 'I cannot%%'
-          AND hook NOT ILIKE 'I can''t%%'
-          AND hook NOT ILIKE 'I am unable%%'
-          AND hook NOT ILIKE 'I''m sorry%%'
-          AND hook NOT ILIKE 'I apologize%%'
+{_refusal_where_clause('hook')}
           AND length(hook) BETWEEN 15 AND 100
         ORDER BY niche_id, scheduled_for ASC, priority_score DESC NULLS LAST
         """,

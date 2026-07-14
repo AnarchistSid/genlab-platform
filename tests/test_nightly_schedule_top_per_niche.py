@@ -366,29 +366,42 @@ def test_pullback_sql_orders_by_scheduled_for_ascending(script_module):
 
 
 def test_pullback_sql_shares_llm_refusal_filter(script_module):
-    """The 6 LLM-refusal patterns MUST also gate the pull-back branch.
-    If a future-committed blueprint has a Claude-refusal hook (which
-    can happen if the writer regressed and the operator hasn't yet
-    demoted the row), we still don't want to promote it. The pin
-    catches a copy-paste refactor that forgot to duplicate the filter.
-    """
+    """The pull-back SQL must call _refusal_where_clause() so the
+    canonical pre_render_quality._LLM_REFUSAL_PREFIXES list gates
+    every pull-back candidate. Prior to 2026-07-14 this was 6 inline
+    ILIKE clauses duplicated across two SQL blocks that diverged from
+    pre_render_quality's 15-prefix list — 'I need the Story Summary...'
+    published to production because 'I need the%' wasn't in the local
+    filter. The refactor + this pin prevent that drift class."""
     import inspect
 
     body = inspect.getsource(script_module._pick_pullback_candidates)
-    for pattern in [
-        "I need to stop",
-        "I cannot",
-        "I can''t",
-        "I am unable",
-        "I''m sorry",
-        "I apologize",
-    ]:
-        assert pattern in body, (
-            f"Pull-back SQL missing LLM-refusal pattern {pattern!r}. "
-            "Would auto-schedule refusal text hooks pulled from the "
-            "future queue."
-        )
+    assert "_refusal_where_clause" in body, (
+        "Pull-back SQL must call _refusal_where_clause() to inherit "
+        "the canonical LLM-refusal prefix list from pre_render_quality. "
+        "Local hardcoded prefixes are the exact drift the 2026-07-14 "
+        "audit exposed — don't reintroduce them."
+    )
     assert "length(hook) BETWEEN 15 AND 100" in body, "Pull-back SQL missing hook-length filter."
+
+
+def test_refusal_where_clause_covers_pre_render_quality_prefixes(script_module):
+    """Both SQL branches use _refusal_where_clause(). This test pins
+    that the helper covers EVERY prefix from pre_render_quality's
+    canonical list — so a future addition there automatically
+    propagates to the scheduler without hand-editing.
+    """
+    from genlab_core.rendering.pre_render_quality import _LLM_REFUSAL_PREFIXES
+
+    where_clause = script_module._refusal_where_clause("hook")
+    for prefix in _LLM_REFUSAL_PREFIXES:
+        escaped = prefix.replace("'", "''")
+        expected_pattern = f"'{escaped}%%'"
+        assert expected_pattern in where_clause, (
+            f"_refusal_where_clause missing prefix {prefix!r} "
+            f"(expected pattern {expected_pattern!r}). Would allow "
+            "hooks starting with this refusal preamble to be scheduled."
+        )
 
 
 def test_pick_top_per_niche_accepts_target_date(script_module):
