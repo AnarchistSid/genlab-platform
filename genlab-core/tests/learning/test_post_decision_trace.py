@@ -41,11 +41,27 @@ def test_coerce_uuid_passes_valid_uuid():
     )
 
 
-def test_coerce_uuid_rejects_non_uuid():
-    """SharePoint-style record IDs return None — wire skips them."""
+def test_coerce_uuid_derives_uuid5_from_non_uuid():
+    """2026-07-14 fix: non-UUID inputs (SHA256 candidate_id,
+    SharePoint record ids) now derive a stable UUID5 from the
+    genlab namespace. Empty inputs still return None. Prior
+    behavior returned None for everything non-UUID, causing
+    post_decision_trace to stay at 0 rows for months."""
     from genlab_core.learning.post_decision_trace import _coerce_uuid
+    import uuid
 
-    assert _coerce_uuid("sp-1234-5678") is None
+    # SharePoint-style id → derived UUID (was None pre-fix)
+    result = _coerce_uuid("sp-1234-5678")
+    assert result is not None
+    uuid.UUID(result)  # valid UUID string
+
+    # SHA256 candidate_id → derived UUID (was None pre-fix)
+    sha = "e70eef4332c83f8c06f7fd616ed9852ad42bcb5fe00cc81ccef2d04a118631ee"
+    result = _coerce_uuid(sha)
+    assert result is not None
+    uuid.UUID(result)
+
+    # Empty inputs still return None
     assert _coerce_uuid("") is None
     assert _coerce_uuid(None) is None
 
@@ -88,19 +104,25 @@ def test_record_bandit_pick_writes_insert(monkeypatch):
     )
 
 
-def test_record_bandit_pick_skips_non_uuid_blueprint_id(monkeypatch):
-    """SharePoint record IDs aren't UUIDs — skipped silently."""
+def test_record_bandit_pick_accepts_non_uuid_via_uuid5(monkeypatch):
+    """2026-07-14: non-UUID inputs (SharePoint ids, SHA256 candidate_ids)
+    now derive a UUID5 and proceed with the write. Prior behavior
+    skipped silently → 0-rows table for months."""
     monkeypatch.setenv("DATABASE_URL", "postgresql://test/test")
+    conn = _patch_conn()
     from genlab_core.learning.post_decision_trace import record_bandit_pick
 
-    with patch("genlab_core.learning.post_decision_trace._connect") as mock_connect:
+    with patch(
+        "genlab_core.learning.post_decision_trace._connect", return_value=conn
+    ):
         ok = record_bandit_pick(
-            blueprint_id="sp-1234-5678",  # not a UUID
+            blueprint_id="sp-1234-5678",  # not a UUID; now converted via uuid5
             niche_id="gaming",
             bandit_arm_id="source:youtube_trending",
         )
-    assert ok is False
-    mock_connect.assert_not_called()
+    # 2026-07-14 fix: write now succeeds (was False pre-fix)
+    assert ok is True
+    conn.execute.assert_called_once()
 
 
 def test_record_bandit_pick_fails_open_on_missing_dsn(monkeypatch):
@@ -255,18 +277,22 @@ def test_record_engagement_window_fails_open_on_missing_dsn(monkeypatch):
     assert ok is False
 
 
-def test_record_engagement_window_skips_non_uuid(monkeypatch):
+def test_record_engagement_window_accepts_non_uuid_via_uuid5(monkeypatch):
+    """2026-07-14: non-UUID inputs now derive UUID5 + write succeeds."""
     monkeypatch.setenv("DATABASE_URL", "postgresql://test/test")
+    conn = _patch_conn()
     from genlab_core.learning.post_decision_trace import record_engagement_window
 
-    with patch("genlab_core.learning.post_decision_trace._connect") as mock_connect:
+    with patch(
+        "genlab_core.learning.post_decision_trace._connect", return_value=conn
+    ):
         ok = record_engagement_window(
             blueprint_id="not-a-uuid",
             niche_id="gaming",
             engagement_reach_24h=100,
         )
-    assert ok is False
-    mock_connect.assert_not_called()
+    assert ok is True
+    conn.execute.assert_called_once()
 
 
 # ── UPSERT no-duplicate semantics — assert all 3 wire-points share

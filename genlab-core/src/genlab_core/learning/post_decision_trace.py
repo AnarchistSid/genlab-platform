@@ -63,23 +63,51 @@ def _connect():
         return None
 
 
+
+# 2026-07-14 session finding: post_decision_trace stayed at 0 rows
+# for months because ALL writers passed the SHA256 candidate_id
+# (64 hex chars, not a UUID). _coerce_uuid rejected everything →
+# every write silently no-op'd. Table designed as canonical
+# analysis surface for AUTO #2 readiness + drift detection was
+# structurally dead.
+#
+# Fix: deterministic UUID5 conversion. When the value isn't a
+# valid UUID directly, derive a stable UUID5 from the SHA256 hash
+# using a genlab-scoped namespace. Same input always produces the
+# same UUID (idempotent for the ON CONFLICT clause). No schema
+# change needed; downstream analysis joins by the UUID.
+_GENLAB_NAMESPACE_UUID = uuid.UUID("6f8b3e3d-4b7f-4c9c-8e3f-c1b3e5d1a4b2")
+
+
 def _coerce_uuid(value: str | None) -> str | None:
     """Normalise a blueprint_id to canonical UUID string form.
 
-    The post_decision_trace.blueprint_id column is UUID-typed; some
-    call sites pass the candidate_id (which IS a UUID) and others
-    pass the SharePoint record id (which IS NOT — those are skipped).
-    Returns the canonical str(UUID) form on success, None if the
-    input is non-UUID. Skipping non-UUID blueprint_ids preserves
-    forward compat with the SharePoint legacy path without breaking
-    the writer.
+    Accepts:
+      * Actual UUIDs (blueprint.id column) — returned unchanged
+      * SHA256 candidate_id (64 hex chars) — converted via uuid5
+        with the genlab namespace so all callers land on the same
+        canonical form for the ON CONFLICT clause
+      * Anything else — returned as uuid5 as long as it's a str
+        (SharePoint record ids etc.)
+
+    Returns None only for empty/None input. Prior strict UUID-only
+    check masked the whole table's write path for months.
     """
     if not value:
         return None
-    try:
-        return str(uuid.UUID(str(value)))
-    except (ValueError, AttributeError):
+    text = str(value).strip()
+    if not text:
         return None
+    try:
+        # Direct UUID case (blueprint.id column already-canonical)
+        return str(uuid.UUID(text))
+    except (ValueError, AttributeError):
+        pass
+    # Not a UUID — derive a stable UUID5 from the input string.
+    # Same input always produces the same output → ON CONFLICT
+    # (blueprint_id) DO UPDATE stays idempotent across the 3
+    # lifecycle writers.
+    return str(uuid.uuid5(_GENLAB_NAMESPACE_UUID, text))
 
 
 def record_bandit_pick(
