@@ -192,6 +192,32 @@ def scan_and_alert(
     summary["overall_breached"] = overall_breached
 
     if not breached and not overall_breached:
+        # 2026-07-14: auto-resolve any lingering open attribution
+        # alerts when the window is healthy again. Prior state: no
+        # auto-resolve → after L4 flip + retro-credit backfill,
+        # attribution recovers to 100% but the CRITICAL row lingers
+        # until `resolve_stale_alerts` sweeps at 24h. Same class-of-
+        # bug pattern as sibling monitors' current-state discipline.
+        # Best-effort: any DB failure keeps the row (safe fallback).
+        try:
+            import psycopg
+
+            dsn_ = dsn or os.environ.get("DATABASE_URL") or "dbname=genlab"
+            with psycopg.connect(dsn_) as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE pipeline_alerts SET resolved_at = NOW()
+                     WHERE check_name = %s AND resolved_at IS NULL
+                    """,
+                    (CHECK_NAME,),
+                )
+                summary["auto_resolved"] = cur.rowcount
+        except Exception as exc:
+            logger.warning(
+                "[attribution_health_monitor] auto-resolve failed (leaving "
+                "stale row in place; resolve_stale_alerts will sweep at 24h): %s",
+                exc,
+            )
         return summary
 
     # Build the alert message

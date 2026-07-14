@@ -969,13 +969,20 @@ def check_publish_failures(niche_id: str) -> list[Alert]:
         )
         by_status = dict(cur.fetchall())
         conn.close()
-        failed = by_status.get("FAILED", 0)
+        # 2026-07-14: include REMOVED_BY_META. Meta's 24h post-survival
+        # check demotes silently-removed posts to REMOVED_BY_META — an
+        # audience-facing failure that publish_silence already ignores
+        # (line ~1051 allowlists INSIGHTS_*) but publish_failures was
+        # not counting. Meta-takedown streaks are load-bearing signals
+        # of content-policy drift that a niche's captions/hooks may need
+        # adjustment.
+        failed = by_status.get("FAILED", 0) + by_status.get("REMOVED_BY_META", 0)
         if failed >= 5:
             alerts.append(
                 Alert(
                     check="publish_failures",
                     severity="critical",
-                    message=f"{failed} FAILED publishes in last 24h",
+                    message=f"{failed} publish failures (FAILED + REMOVED_BY_META) in last 24h",
                     niche_id=niche_id,
                     details={"status_breakdown": by_status},
                 )

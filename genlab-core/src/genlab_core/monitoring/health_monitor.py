@@ -195,15 +195,26 @@ def write_alerts_to_db(alerts: list[Alert]) -> int:
 
         written = 0
         for alert in alerts:
-            # Deduplicate: skip if an unresolved alert exists OR a same-shape
-            # alert was resolved within the grace window.
+            # Deduplicate: skip if an unresolved alert exists AT SAME OR
+            # HIGHER SEVERITY, OR a same-severity+shape alert was
+            # resolved within the grace window. Prior dedup key was
+            # (check_name, niche_id) alone — an ESCALATION (warning →
+            # critical) was silently dropped, so the operator kept
+            # seeing the older warning row while the condition worsened.
+            # Severity rank: critical > warning > info.
+            _RANK = {"critical": 3, "warning": 2, "info": 1}
+            incoming_rank = _RANK.get(alert.severity, 1)
             cur.execute(
-                "SELECT id FROM pipeline_alerts "
+                "SELECT severity FROM pipeline_alerts "
                 "WHERE check_name = %s AND niche_id IS NOT DISTINCT FROM %s "
                 "AND (resolved_at IS NULL OR resolved_at > NOW() - %s::interval)",
                 (alert.check, alert.niche_id or None, grace),
             )
-            if cur.fetchone():
+            existing_rows = cur.fetchall()
+            existing_max_rank = max(
+                (_RANK.get(r[0], 1) for r in existing_rows), default=0
+            )
+            if existing_max_rank >= incoming_rank:
                 continue
 
             cur.execute(

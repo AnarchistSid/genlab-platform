@@ -42,10 +42,19 @@ def publishing_alerts():
             info = []
 
             # CRITICAL: Blueprints approved but failed to publish (have error_message)
+            #
+            # 2026-07-14: added `updated_at >= NOW() - INTERVAL '7 days'`
+            # to match the operational-actionability window already
+            # applied to sibling stale_visual_ready + partial_publish
+            # alerts (task #618, 2026-07-09). Prior to this bound, a
+            # blueprint that error'd 4 months ago and was never demoted
+            # still fired CRITICAL forever — same class-of-bug the
+            # sibling alerts patched. See CLAUDE.md rule 12.
             pf = conn.execute(
                 "SELECT niche_id, COUNT(*) as cnt FROM blueprints "
                 "WHERE status = 'VISUAL_READY' AND action_taken = 'approved' "
                 "AND error_message IS NOT NULL AND error_message != '' "
+                "AND updated_at >= NOW() - INTERVAL '7 days' "
                 "GROUP BY niche_id"
             ).fetchall()
             if pf:
@@ -234,9 +243,23 @@ def system_alerts():
             with pg_connect(
                 dsn, row_factory=dict_row, niche_id=request.args.get("niche_id", "all") or "all"
             ) as conn:
+                # 2026-07-14: switched from `created_at >= CURRENT_DATE`
+                # (UTC midnight) to `updated_at >= NOW() - INTERVAL '24 hours'`
+                # (trailing window). Prior query fired "missed_today"
+                # every day between 00:00 UTC and each niche's fire time
+                # (~03:30 UTC for trend-anticipation, ~06:30 UTC for
+                # publisher). The trailing 24h window is:
+                #   (a) always populated once each niche has fired at
+                #       least once in the last day (steady-state truth),
+                #   (b) uses updated_at so a dedup pass producing 0 new
+                #       blueprints is still evidence the pipeline ran
+                #       (updated_at bumps on stage transitions).
+                # Class-of-bug: alerts must reflect current state, not
+                # point-in-time historical signal. See
+                # [[class-of-bug-alerts-must-reflect-current-state-not-historical-signal]].
                 niches_today = conn.execute(
                     "SELECT DISTINCT niche_id FROM blueprints "
-                    "WHERE created_at >= CURRENT_DATE AND created_at < CURRENT_DATE + INTERVAL '1 day'"
+                    "WHERE updated_at >= NOW() - INTERVAL '24 hours'"
                 ).fetchall()
                 ran = {r["niche_id"] for r in niches_today}
                 expected = {"gaming", "sports", "movies", "anime", "ai_creators"}

@@ -265,19 +265,41 @@ def detect_dead_pollers(niche_id: str) -> list[Alert]:
     try:
         with pg_connect(os.environ.get("DATABASE_URL", ""), niche_id=niche_id) as conn:
             with conn.cursor() as cur:
+                # 2026-07-14: added recency-of-STILL-broken predicate.
+                # Prior query fired whenever any unresolved token_expired
+                # row was >7d old, even if the token had been refreshed
+                # days ago and only the STALE unresolved rows lingered
+                # (resolve_stale_alerts only sweeps at 24h; older rows
+                # can survive). New shape: only fire if the platform
+                # STILL has a token_expired alert in the last 24h, which
+                # is direct evidence the poller is still broken now.
+                # Class-of-bug: alerts must reflect current state, not
+                # point-in-time historical signal (CLAUDE.md rule);
+                # sibling live-probe pattern is check_meta_token /
+                # check_threads / check_tiktok (memory rule #16).
                 cur.execute(
                     """
-                    SELECT details->>'platform' AS platform,
-                           MIN(created_at) AS first_seen,
-                           COUNT(*) AS occurrences
-                    FROM pipeline_alerts
-                    WHERE check_name = 'token_expired'
-                      AND niche_id = %s
-                      AND resolved_at IS NULL
-                      AND created_at < NOW() - INTERVAL '7 days'
-                    GROUP BY details->>'platform'
+                    SELECT stuck.platform, stuck.first_seen, stuck.occurrences
+                    FROM (
+                        SELECT details->>'platform' AS platform,
+                               MIN(created_at) AS first_seen,
+                               COUNT(*) AS occurrences
+                        FROM pipeline_alerts
+                        WHERE check_name = 'token_expired'
+                          AND niche_id = %s
+                          AND resolved_at IS NULL
+                          AND created_at < NOW() - INTERVAL '7 days'
+                        GROUP BY details->>'platform'
+                    ) stuck
+                    WHERE EXISTS (
+                        SELECT 1 FROM pipeline_alerts recent
+                        WHERE recent.check_name = 'token_expired'
+                          AND recent.niche_id = %s
+                          AND recent.details->>'platform' = stuck.platform
+                          AND recent.created_at > NOW() - INTERVAL '24 hours'
+                    )
                     """,
-                    (niche_id,),
+                    (niche_id, niche_id),
                 )
                 rows = cur.fetchall()
         for platform, first_seen, count in rows:

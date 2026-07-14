@@ -947,7 +947,16 @@ def check_youtube() -> dict:
         }
 
     except ImportError:
-        logger.debug("google-auth not available — falling back to token-exchange check")
+        # WARNING (not DEBUG) — CLAUDE.md rule #17. If the raw
+        # token-exchange fallback below ALSO breaks (e.g. Google
+        # removes the refresh_token grant, or the endpoint changes),
+        # a silent ImportError here means the "google-auth missing"
+        # fact is invisible in prod — same shape as the pytrends
+        # dormant ImportError episode.
+        logger.warning(
+            "google-auth not available — falling back to raw token-exchange check "
+            "(install google-auth for the richer health probe)"
+        )
 
     # Fallback: raw token exchange to verify credentials are not revoked
     try:
