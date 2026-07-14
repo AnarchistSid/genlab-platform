@@ -324,6 +324,31 @@ class RenderGamingVideo(VisualRenderStrategy):
                 story.setdefault("media", {})["rendered_path"] = None
                 continue
 
+            # Pre-render quality gate (PR #784, 2026-07-13). Gaming has
+            # its own render code path — inherited ``_compose_frame`` gate
+            # doesn't apply here. Without this call gaming would keep
+            # shipping bare-title hooks ("Grand Theft Auto V") + LLM
+            # refusal preambles. Session 2026-07-14 audit surfaced the
+            # bypass matching BlackboxBrief's identical gap.
+            from genlab_core.rendering.pre_render_quality import (
+                check_pre_render_quality,
+            )
+
+            _qc = check_pre_render_quality(hook, niche_id="gaming")
+            if not _qc.ok:
+                logger.warning(
+                    "[gaming] pre-render quality gate rejected story %s (%s): %s",
+                    (story.get("story_id") or "?")[:16],
+                    _qc.reason,
+                    _qc.detail,
+                )
+                story.setdefault("media", {})["render_error"] = (
+                    f"pre_render_quality:{_qc.reason}"
+                )
+                stats["skipped"] += 1
+                story["media"]["rendered_path"] = None
+                continue
+
             title = story.get("title", "untitled")
             slug = _slugify(title)
             output_dir = PROJECT_ROOT / ".tmp" / "rendered" / run_id

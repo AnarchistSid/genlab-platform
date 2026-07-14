@@ -610,11 +610,21 @@ class TestRenderDualPath:
             clip_path = f.name
 
         try:
+            # 2026-07-14: hooks now pass through pre_render_quality gate
+            # (PR #784). Use realistic hooks with verb signals + length
+            # ≥15 chars so the gate doesn't reject them.
+            realistic_hooks = [
+                "Fortnite's new update is wild",
+                "This trailer changed everything",
+                "Streamers are freaking out over this",
+                "Nobody expected this launch to work",
+                "What Marvel Rivals did was insane",
+            ]
             stories = [
                 {
                     "title": f"Story {i}",
                     "media": {"clip": {"file_path": clip_path}},
-                    "content": {"hook": f"Hook {i}"},
+                    "content": {"hook": realistic_hooks[i]},
                 }
                 for i in range(5)
             ]

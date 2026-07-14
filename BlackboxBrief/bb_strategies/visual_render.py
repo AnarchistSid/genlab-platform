@@ -47,6 +47,33 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
                     clip_path = Path(clip_entry["clip_path"])
                     if clip_path.exists():
                         hook_text = (story.get("content") or {}).get("hook", "") or story.get("title", "")
+
+                        # Pre-render quality gate (PR #784, 2026-07-13).
+                        # This niche has its own render code path — the
+                        # base class's ``_compose_frame`` gate doesn't
+                        # apply here. Without this call ai_creators
+                        # would keep shipping LLM refusal preambles as
+                        # hooks: 5 already published in 21 days
+                        # ("I can't write a hook for this story…").
+                        # Session 2026-07-14 audit surfaced the bypass.
+                        from genlab_core.rendering.pre_render_quality import (
+                            check_pre_render_quality,
+                        )
+
+                        _qc = check_pre_render_quality(hook_text, niche_id="ai_creators")
+                        if not _qc.ok:
+                            logger.warning(
+                                "[ai_creators] pre-render quality gate rejected story %s (%s): %s",
+                                sid[:16] if sid else "?",
+                                _qc.reason,
+                                _qc.detail,
+                            )
+                            story.setdefault("media", {})["render_error"] = (
+                                f"pre_render_quality:{_qc.reason}"
+                            )
+                            story["media"]["render_status"] = "quality_gate_rejected"
+                            continue
+
                         output_dir = Path(run_dir) / "visuals" / sid if run_dir else None
                         if output_dir:
                             output_dir.mkdir(parents=True, exist_ok=True)
