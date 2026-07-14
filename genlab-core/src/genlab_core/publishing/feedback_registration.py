@@ -276,7 +276,18 @@ def _build_bandit_context(
         # ``learning/linucb.build_content_context_v2`` for the layout.
         try:
             linucb_ctx_v2 = build_content_context_v2(fields, niche_id).tolist()
-        except Exception:
+        except Exception as exc:
+            # 2026-07-14: was silent `except Exception: linucb_ctx_v2 = None`.
+            # v2 build can fail if cyclical-time encoding hits an edge case;
+            # v1 wire is unaffected (returned above). But silent failure
+            # means Intervention 9 rollout can't detect if v2 is silently
+            # broken for any niche. Log at DEBUG (not WARNING) because v2
+            # is still observation-only; elevating would spam logs.
+            logger.debug(
+                "[%s] LinUCB v2 context build failed (v1 unaffected): %s",
+                niche_id,
+                exc,
+            )
             linucb_ctx_v2 = None
         ctx: dict = {
             "hook_features": hook_feats,

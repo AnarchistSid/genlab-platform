@@ -597,7 +597,18 @@ def run_publish(
                 },
             )
         except Exception as exc:  # noqa: BLE001 — episodic emit must never block publish
-            logger.debug("[publish_all_platforms] EVENT_PUBLISH emit skipped: %s", exc)
+            # 2026-07-14 audit: elevated DEBUG → WARNING. EVENT_PUBLISH
+            # feeds real-time observability + episodic-memory for
+            # future RCA queries. Silent failure means the ops
+            # dashboard doesn't get real-time publish notifications
+            # AND future post-mortems have missing telemetry. WARNING
+            # so this stays visible in default log level.
+            logger.warning(
+                "[publish_all_platforms] EVENT_PUBLISH emit skipped: %s "
+                "(publish succeeded but real-time event stream + episodic "
+                "memory record was NOT written)",
+                exc,
+            )
 
     # 8. Register PendingFeedback, extracted in refactor-#9 PR 6d/N to
     # publishing/feedback_registration.py.
