@@ -80,6 +80,14 @@ pipeline:
   inject:
     # Niche-specific ingestion fetcher (in addition to FetchTrendingVideos
     # + FetchRedditClips which the template provides).
+    #
+    # 2026-07-14 niche-audit note: scorebat is disabled at
+    # sources.yaml:176 (`enabled: false` — scorebat emits embed-page
+    # URLs incompatible with yt-dlp). The stage runs but no-ops.
+    # Left wired so re-enabling scorebat only requires flipping
+    # sources.yaml, not touching niche.yaml. If scorebat is
+    # permanently retired, delete this block + the sources.yaml
+    # `scorebat:` section together.
     phase1_fetchers_extra:
       - class: genlab_core.pipeline.stages.fetch_scorebat.FetchScoreBatHighlights
         retries: 1

@@ -5,8 +5,12 @@ publishing_windows:
   - time: "06:30"
     timezone: "UTC"
     label: "12:00 IST"
+    description: "12:00 IST — midday content drop"
+    platforms: [instagram, youtube, facebook, x_twitter, tiktok, threads]
 
 max_publishes_per_day: 1
+
+golden_window: "06:00-07:00"
 
 content_mix:
   reels_percent: 100
@@ -14,3 +18,20 @@ content_mix:
   stories_percent: 0
 
 blackout_periods: []
+
+# 2026-07-14 (niche audit F2): added platform_overrides + `platforms`
+# on the window + `golden_window` to match the other 4 niches'
+# schedule.yaml structure. Prior state omitted these — any downstream
+# consumer that switched from `.get("platform_overrides", {})` to
+# strict key access would break FD-only. Structure mirrors
+# SpliceReel/config/schedule.yaml.
+platform_overrides:
+  youtube:
+    preferred_slot: "06:30"
+    max_per_day: 1
+  tiktok:
+    preferred_slot: "06:30"
+    max_per_day: 1
+  threads:
+    preferred_slot: "06:30"
+    max_per_day: 1

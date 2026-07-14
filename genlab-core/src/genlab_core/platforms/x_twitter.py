@@ -529,8 +529,38 @@ class XTwitterClient:
         media_ids: list[str] | None = None,
         reply_to: str | None = None,
     ) -> str | None:
-        """Call create_tweet; handle 429 by setting rate-limit flag."""
+        """Call create_tweet; handle 429 by setting rate-limit flag.
+
+        2026-07-14 (X audit F1): consult ``TwitterQuotaTracker`` before
+        spending a unit + record on success. Prior state: only the
+        top-level ``publish()`` at :382 gated on quota. Reply path
+        (:631), cross_post_teaser, affiliate_reply, and thread publish
+        all bypassed → silent 500/mo over-run risk. Wrapping the
+        lowest common denominator (this fn) covers every caller path
+        in one place.
+
+        Fail-open on tracker read errors — a corrupt state file
+        should not block the underlying publish. `record_publish`
+        also fail-opens so a write failure doesn't crash the reply.
+        """
         client = self._get_client()
+
+        try:
+            from genlab_core.monitoring.twitter_quota import get_tracker
+
+            tracker = get_tracker()
+            allowed, remaining = tracker.can_publish(cost=1)
+            if not allowed:
+                self._log.warning(
+                    "X/Twitter: monthly quota cap reached (remaining=%d) — skipping tweet",
+                    remaining,
+                )
+                return None
+        except Exception as exc:
+            self._log.warning(
+                "X/Twitter: quota tracker read failed (%s) — proceeding (fail-open)", exc
+            )
+
         kwargs: dict[str, Any] = {"text": text}
         if media_ids:
             kwargs["media_ids"] = media_ids[:4]
@@ -539,7 +569,16 @@ class XTwitterClient:
 
         try:
             response = client.create_tweet(**kwargs)
-            return str(response.data["id"])
+            tweet_id = str(response.data["id"])
+            try:
+                from genlab_core.monitoring.twitter_quota import get_tracker
+
+                get_tracker().record_publish(count=1)
+            except Exception as exc:
+                self._log.warning(
+                    "X/Twitter: quota tracker write failed (%s) — next check may misreport", exc
+                )
+            return tweet_id
         except Exception as exc:
             if self._is_rate_limit_error(exc):
                 self._handle_rate_limit(exc)

@@ -186,11 +186,19 @@ class LocalStageRunner:
                     elapsed,
                     f" (attempt {attempt + 1})" if attempt > 0 else "",
                 )
+                # 2026-07-14 (pipeline audit F1): read per-stage
+                # status override from context. Flag-gated no-ops
+                # (e.g. RelevanceGate on niches without content_filter)
+                # can set ``context["_stage_status"] = "skipped"`` so
+                # the dashboard distinguishes "stage ran + succeeded"
+                # from "stage silently no-op'd". Pop the sentinel so
+                # it doesn't leak to subsequent stages.
+                stage_status = context.pop("_stage_status", "ok")
                 if self._metrics is not None:
                     self._metrics.record_stage(
                         stage_name,
                         duration_ms=elapsed * 1000.0,
-                        status="ok",
+                        status=stage_status,
                     )
                 return StageResult(
                     stage_name=stage_name,
@@ -356,11 +364,14 @@ class SandboxAwareStageRunner:
                 stage_name,
                 elapsed,
             )
+            # 2026-07-14: mirror LocalStageRunner — honor
+            # ``context["_stage_status"]`` skipped-status marker.
+            stage_status = context.pop("_stage_status", "ok")
             if self._metrics is not None:
                 self._metrics.record_stage(
                     stage_name,
                     duration_ms=elapsed * 1000.0,
-                    status="ok",
+                    status=stage_status,
                 )
             return StageResult(
                 stage_name=stage_name,
