@@ -73,17 +73,24 @@ _ENABLE_ENV_VAR: Final[str] = "GENLAB_ENSEMBLE_DECISION_ENABLED"
 
 
 def _integration_enabled() -> bool:
-    """Exact-match feature flag. Only ``true`` / ``TRUE`` / ``True`` activates
-    the ensemble. Any other value (including ``1``, ``yes``, ``on``,
-    empty, unset) keeps the ensemble in its stub / disabled state.
+    """Return True iff the ensemble is env-activated.
 
-    Same fail-closed pattern as :mod:`learning.late_reward`,
-    :mod:`learning.ips_replay` (DR), and the rest of the intelligence
-    package. Deliberately stricter than ``os.environ.get(...).lower()
-    in {"1","true","yes"}`` — an accidental ``ENABLED=1`` in a shell
-    export shouldn't flip on a system-level decision layer.
+    2026-07-14: switched to the codebase-canonical ``env_true`` helper
+    for consistency with sibling flag readers. Previously this used a
+    strict ``in ("true", "TRUE", "True")`` match that rejected ``"1"``
+    — the operator's usual shell convention. Combined with
+    ``ensemble_persist``'s prior strict ``"1"``-only comparison, the
+    two flags in this same module accepted INCOMPATIBLE values, so
+    the persist wire silently no-op'd for weeks despite the decision
+    flag being live. The "accidental activation" argument the prior
+    docstring made doesn't survive scrutiny: env vars are always
+    deliberately set. See
+    ``[[class-of-bug-metric-proxies-mask-audience-facing-failures]]``
+    for the fuller pattern.
     """
-    return os.environ.get(_ENABLE_ENV_VAR, "") in ("true", "TRUE", "True")
+    from genlab_core.settings import env_true
+
+    return env_true(_ENABLE_ENV_VAR)
 
 
 # ── Weights ─────────────────────────────────────────────────────────

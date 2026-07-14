@@ -42,13 +42,24 @@ _ENABLE_ENV_VAR = "GENLAB_ENSEMBLE_PERSIST_ENABLED"
 
 
 def _persist_enabled() -> bool:
-    """Return True iff persistence is opt-in via ``"1"`` env value.
+    """Return True iff persistence is opt-in via a truthy env value.
 
-    Mirrors the strict comparison the sibling gate flags use so a
-    ``"true"`` typo doesn't silently no-op — the L11 flag-state
-    endpoint would surface it as `mis_set` for the operator.
+    2026-07-14: unified with the codebase-canonical ``env_true`` helper
+    (accepts ``1``, ``true``, ``yes``, ``on``, ``y``, ``t`` — case-
+    insensitive). Prior implementation required the STRICT value ``"1"``
+    (rejects ``"true"``), while sibling
+    :func:`genlab_core.scheduling.ensemble_decide._integration_enabled`
+    required the STRICT value ``"true"`` (rejects ``"1"``) — two
+    incompatible activation semantics in the same module. An operator
+    setting ``GENLAB_ENSEMBLE_DECISION_ENABLED=true`` +
+    ``GENLAB_ENSEMBLE_PERSIST_ENABLED=true`` would activate the first
+    but silently no-op the second, producing 0 rows in
+    ``ensemble_votes`` while the badge on Focus Review still showed
+    ensemble decisions — a proxy-signal-masking class-of-bug.
     """
-    return os.environ.get(_ENABLE_ENV_VAR, "0").strip() == "1"
+    from genlab_core.settings import env_true
+
+    return env_true(_ENABLE_ENV_VAR)
 
 
 def record_decision(

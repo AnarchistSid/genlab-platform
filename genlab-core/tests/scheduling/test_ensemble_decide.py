@@ -38,13 +38,20 @@ class TestFeatureFlag:
         assert result.n_voters == 0
         assert result.votes == []
 
-    @pytest.mark.parametrize("val", ["true", "TRUE", "True"])
-    def test_exact_true_activates(self, monkeypatch, val):
+    @pytest.mark.parametrize(
+        "val", ["true", "TRUE", "True", "1", "yes", "on", "y", "t"]
+    )
+    def test_truthy_values_activate(self, monkeypatch, val):
+        """2026-07-14: switched to env_true() semantics. Prior tests
+        locked strict ``"true"``-only which was inconsistent with
+        sibling flags. See ensemble_decide docstring for the class-of-
+        bug context — two flags in the same module with incompatible
+        activation values silently no-op'd for weeks."""
         monkeypatch.setenv("GENLAB_ENSEMBLE_DECISION_ENABLED", val)
         assert ed._integration_enabled()
 
-    @pytest.mark.parametrize("val", ["1", "yes", "on", "TRUE_", "", "false"])
-    def test_non_exact_true_stays_off(self, monkeypatch, val):
+    @pytest.mark.parametrize("val", ["", "false", "0", "no", "off", "TRUE_"])
+    def test_falsy_values_stay_off(self, monkeypatch, val):
         monkeypatch.setenv("GENLAB_ENSEMBLE_DECISION_ENABLED", val)
         assert not ed._integration_enabled()
 

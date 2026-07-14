@@ -54,22 +54,45 @@ def _mk_decision(*, n_votes: int = 3) -> EnsembleDecision:
 
 
 class TestPersistEnabled:
-    """Strict "1" check — mirrors the L11 flag-state guard."""
+    """2026-07-14: unified to env_true() semantics — accepts the same
+    truthy values as every other flag reader in the codebase. Prior
+    tests locked strict ``"1"``-only which conflicted with sibling
+    ensemble_decide's strict ``"true"``-only (see the module docstring
+    for the class-of-bug context)."""
 
     def test_unset_is_disabled(self, monkeypatch):
         monkeypatch.delenv(_ENABLE_ENV_VAR, raising=False)
         assert _persist_enabled() is False
 
-    def test_one_is_enabled(self, monkeypatch):
-        monkeypatch.setenv(_ENABLE_ENV_VAR, "1")
-        assert _persist_enabled() is True
-
-    @pytest.mark.parametrize("value", ["true", "yes", "on", "TRUE", "True"])
-    def test_typo_variants_are_disabled(self, monkeypatch, value):
-        """Locking in the strict comparison — any relaxation would
-        need to update both readers (this + ensemble_decide's flag)."""
+    @pytest.mark.parametrize("value", ["1", "true", "TRUE", "True", "yes", "on", "y", "t"])
+    def test_truthy_values_are_enabled(self, monkeypatch, value):
+        """env_true() accepts these — any of them activates the flag."""
         monkeypatch.setenv(_ENABLE_ENV_VAR, value)
-        assert _persist_enabled() is False
+        assert _persist_enabled() is True, f"{value!r} should enable"
+
+    @pytest.mark.parametrize("value", ["0", "false", "no", "off", "", "random"])
+    def test_falsy_values_are_disabled(self, monkeypatch, value):
+        monkeypatch.setenv(_ENABLE_ENV_VAR, value)
+        assert _persist_enabled() is False, f"{value!r} should disable"
+
+    def test_sibling_flag_consistency(self, monkeypatch):
+        """Cross-flag pin: ensemble_decide's flag AND ensemble_persist's
+        flag must accept the SAME set of activation values. Prior to the
+        2026-07-14 unify PR, decide accepted only ``"true"`` while
+        persist accepted only ``"1"`` — operators who set BOTH to the
+        same value would activate only ONE and silently no-op the other."""
+        from genlab_core.scheduling.ensemble_decide import (
+            _ENABLE_ENV_VAR as decide_env,
+            _integration_enabled,
+        )
+
+        # If both flags read the same value, they must both agree
+        for value in ("true", "1", "TRUE", "yes"):
+            monkeypatch.setenv(decide_env, value)
+            monkeypatch.setenv(_ENABLE_ENV_VAR, value)
+            assert _integration_enabled() == _persist_enabled(), (
+                f"{value!r} activates one but not the other — silent no-op risk"
+            )
 
 
 class TestRecordDecisionDisabled:
