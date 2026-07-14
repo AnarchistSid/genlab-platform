@@ -46,17 +46,28 @@ _SENTENCE_CASE_FIELDS = (
 # Matched case-insensitively as PREFIXES only — a legitimate hook that
 # happens to contain the phrase mid-sentence ("...why I cannot stop
 # thinking about it") is not a refusal. Task #526 pin covers this.
+# 2026-07-14: synced to rendering/pre_render_quality.py's superset.
+# Prior drift: 5 entries only in rendering ("i need to flag", "i need
+# more", "i don't have the", "i'm unable", "i'm afraid") meant the
+# writer could emit a hook the render gate would then reject —
+# wasting the LLM budget. Now the writer catches early. Parity is
+# enforced by test_pre_render_quality_refusal_parity.py.
 _LLM_REFUSAL_PREFIXES: tuple[str, ...] = (
     "i need to stop",
+    "i need to flag",
     "i need the",
+    "i need more",
     "i don't have enough",
+    "i don't have the",
     "i cannot",
     "i can't help",
     "i can't provide",
     "i can't write",
     "i am unable",
+    "i'm unable",
     "i'm sorry",
     "i apologize",
+    "i'm afraid",
 )
 
 
