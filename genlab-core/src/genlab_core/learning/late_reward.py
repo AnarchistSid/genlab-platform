@@ -160,9 +160,21 @@ def recompute_late_reward(
             JOIN publishing_analytics pa ON pa.blueprint_id = b.id
             LEFT JOIN pending_feedback p
                    ON p.platform = pa.platform
-                  AND p.post_id LIKE '%%' || pa.post_id
+                  AND p.post_id = pa.post_id
             WHERE b.id = %s::uuid AND pa.status = 'SUCCESS'
             LIMIT 1
+            -- 2026-07-14 (learning-wire audit F3): switched from
+            -- `LIKE '%%' || pa.post_id` to strict equality. The LIKE
+            -- was a legacy workaround for the pre-#748 double-prefix
+            -- corruption ("facebook:facebook:123..." on write, single-
+            -- strip on read → "facebook:123..." mismatch on JOIN).
+            -- #748 backfilled 297 rows on 2026-07-09 + fixed the
+            -- normalize idempotency, so both sides now share the
+            -- canonical shape. The LIKE was ALSO matching unrelated
+            -- post_ids where one was a suffix of another (e.g.
+            -- pa.post_id='123' matched p.post_id='xyz-9123') —
+            -- silently attributing wrong reward_48h to unrelated
+            -- pending_feedback rows.
             """,
             (blueprint_id,),
         ).fetchone()

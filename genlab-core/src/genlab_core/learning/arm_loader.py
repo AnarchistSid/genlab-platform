@@ -204,6 +204,32 @@ def save_arm(
         # so cross-niche collisions are impossible. Without it we fall
         # back to arm_id-only (idx_ba_arm_id index), preserving the
         # legacy ambiguity for any caller that hasn't been migrated.
+        #
+        # 2026-07-14 (learning-wire audit F1): validate arm_id +
+        # niche_id against a strict allowlist BEFORE interpolating
+        # into the formula string. Prior state accepted any string and
+        # interpolated raw — an arm_id containing `'`, `,`, `)`, or `}`
+        # would break the formula regex OR forge a new AND-clause.
+        # Extra-arm strings include writer-controlled tokens
+        # (e.g. `style:{niche}:{hook_style}`) which could theoretically
+        # carry unsafe characters. The allowlist matches the actual
+        # arm_id shapes used in prod (`content_type__platform`,
+        # `hour:H:platform:niche`, etc.).
+        import re as _re
+
+        _ARM_ID_SAFE = _re.compile(r"^[A-Za-z0-9_:.\-]+$")
+        if not _ARM_ID_SAFE.match(arm_id or ""):
+            logger.warning(
+                "[arm_loader] arm_id %r contains unsafe chars — refusing to interpolate; caller must sanitize",
+                arm_id[:60] if arm_id else arm_id,
+            )
+            return  # can't safely proceed; skip the save
+        if niche_id and not _ARM_ID_SAFE.match(niche_id):
+            logger.warning(
+                "[arm_loader] niche_id %r contains unsafe chars — refusing",
+                niche_id[:60],
+            )
+            return
         if niche_id:
             existing = proxy.all(
                 formula=f"AND({{arm_id}}='{arm_id}',{{niche_id}}='{niche_id}')",
