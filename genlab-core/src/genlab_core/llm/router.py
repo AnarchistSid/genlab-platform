@@ -230,6 +230,17 @@ def _call_openai(
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
     response = client.chat.completions.create(**kwargs)
+    # 2026-07-14 (cost audit F3): record usage so bulk + nano tier
+    # spend is visible on `total_usd` / `budget_remaining_pct`. Prior
+    # state: OpenAI path had zero cost accounting — router.py:_call_openai
+    # was the ONLY LLM path in the module that returned without a
+    # `record_*_usage` call.
+    try:
+        from genlab_core.intelligence.cost_accumulator import record_openai_usage
+
+        record_openai_usage(model, response)
+    except Exception:  # noqa: BLE001 — cost tracking never blocks LLM call
+        pass
     return response.choices[0].message.content
 
 

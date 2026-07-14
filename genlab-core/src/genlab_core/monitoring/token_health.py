@@ -57,6 +57,14 @@ def check_anthropic() -> dict:
             max_tokens=10,
             messages=[{"role": "user", "content": "Say OK"}],
         )
+        # 2026-07-14 (cost audit F3): probe cost visible on dashboard.
+        # Each check runs every N minutes; spend must be attributable.
+        try:
+            from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
+
+            record_anthropic_usage("claude-haiku-4-5-20251001", msg)
+        except Exception:  # noqa: BLE001
+            pass
         return {
             "platform": "anthropic",
             "status": "healthy",
@@ -84,6 +92,15 @@ def check_openai() -> dict:
             max_tokens=10,
             messages=[{"role": "user", "content": "Say OK"}],
         )
+        # 2026-07-14 (cost audit F3): probe cost visible on dashboard.
+        # Small (~$0.00001) but each check runs every N minutes and
+        # spend must be attributable.
+        try:
+            from genlab_core.intelligence.cost_accumulator import record_openai_usage
+
+            record_openai_usage("gpt-4o-mini", resp)
+        except Exception:  # noqa: BLE001
+            pass
         return {
             "platform": "openai",
             "status": "healthy",

@@ -308,3 +308,50 @@ def record_anthropic_usage(model: str, response: Any) -> None:
             model,
             exc,
         )
+
+
+def record_openai_usage(model: str, response: Any) -> None:
+    """Record an OpenAI response's token usage to the active accumulator.
+
+    Sibling of :func:`record_anthropic_usage`. OpenAI's response shape is
+    ``response.usage.prompt_tokens`` / ``response.usage.completion_tokens``
+    (not ``input_tokens``/``output_tokens`` like Anthropic).
+
+    Prior state (2026-07-14 cost audit F3): the router's OpenAI path at
+    ``llm/router.py:_call_openai`` returned the response text but never
+    called any usage-recording helper — bulk + nano tier spend at
+    gpt-4o-mini and gpt-4.1-nano was INVISIBLE to `total_usd` and
+    `budget_remaining_pct`. Given F4 (no global budget cap) that meant
+    OpenAI spend could not be bounded from the dashboard.
+
+    Same fail-open discipline as ``record_anthropic_usage``: cost
+    tracking is non-critical and must NEVER break an LLM call.
+    """
+    try:
+        acc = get_accumulator()
+        if acc is None:
+            return
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return
+        # OpenAI's field names: prompt_tokens, completion_tokens.
+        # Some mocks return a dict-like — support both.
+        if isinstance(usage, dict):
+            input_tokens = int(usage.get("prompt_tokens", 0) or 0)
+            output_tokens = int(usage.get("completion_tokens", 0) or 0)
+        else:
+            input_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+            output_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+        acc.record_llm(
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+    except Exception as exc:
+        # Sibling of anthropic path: WARNING, not silent-swallow.
+        logger.warning(
+            "[cost_accumulator] failed to record_llm for openai model=%s "
+            "(cost tracking degraded): %s",
+            model,
+            exc,
+        )

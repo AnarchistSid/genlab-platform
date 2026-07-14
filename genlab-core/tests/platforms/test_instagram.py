@@ -423,34 +423,58 @@ class TestNicheIdResolution:
     def test_niche_id_kwarg_resolves_via_niche_credentials(self, monkeypatch):
         """When niche_id is set and explicit token is None, the client
         resolves via ``resolve_meta_credentials(niche_id)`` — not the
-        global META_ACCESS_TOKEN."""
+        global META_ACCESS_TOKEN.
+
+        2026-07-14: after the F1 auth-audit fix, both `_resolve_access_token`
+        AND `_resolve_ig_user_id` route through `resolve_meta_credentials`
+        (unified path — sibling behaviour). So `resolve_meta_credentials`
+        is now called TWICE per client construction (once per field). The
+        pin below verifies both fields resolve correctly + the call
+        target is unchanged.
+        """
         monkeypatch.setenv("META_ACCESS_TOKEN", "GLOBAL_token")  # should NOT be used
+        monkeypatch.setenv("META_IG_USER_ID", "GLOBAL_user_id")  # should NOT be used
         from genlab_core.platforms.instagram import InstagramClient
 
         with patch(
             "genlab_core.publishing.niche_credentials.resolve_meta_credentials",
-            return_value={"ig_access_token": "CW_per_niche_token"},
+            return_value={
+                "ig_access_token": "CW_per_niche_token",
+                "ig_user_id": "CW_per_niche_user_id",
+            },
         ) as mock_resolve:
             client = InstagramClient(niche_id="sports")
         assert client._access_token == "CW_per_niche_token"
+        assert client._ig_user_id == "CW_per_niche_user_id"
         assert client.niche_id == "sports"
-        mock_resolve.assert_called_once_with("sports")
+        # Called for both fields (token + user_id). Both calls should
+        # target the same niche_id.
+        assert mock_resolve.call_count == 2
+        for call in mock_resolve.call_args_list:
+            assert call.args == ("sports",)
 
     def test_explicit_token_overrides_niche_id(self, monkeypatch):
         """Test fixtures pass access_token explicitly — this must win
-        over niche_id-resolved tokens AND env fallback. Otherwise existing
-        tests would unexpectedly route through the niche resolver."""
+        over niche_id-resolved tokens AND env fallback.
+
+        2026-07-14 (F1 auth-audit fix): the resolver is now called once
+        for ig_user_id (which was NOT provided explicitly) even when
+        access_token was explicit. Explicit-wins holds field-by-field,
+        not client-wide.
+        """
         monkeypatch.setenv("META_ACCESS_TOKEN", "ENV_token")
         from genlab_core.platforms.instagram import InstagramClient
 
         with patch(
             "genlab_core.publishing.niche_credentials.resolve_meta_credentials",
-            return_value={"ig_access_token": "NICHE_token"},
+            return_value={"ig_access_token": "NICHE_token", "ig_user_id": "NICHE_uid"},
         ) as mock_resolve:
             client = InstagramClient(access_token="EXPLICIT_token", niche_id="sports")
         assert client._access_token == "EXPLICIT_token"
-        # When explicit is provided, niche resolver is NOT called (perf + correctness)
-        mock_resolve.assert_not_called()
+        # Explicit token wins for the token; but user_id was NOT provided,
+        # so the resolver is still called for user_id.
+        assert mock_resolve.call_count == 1
+        assert client._ig_user_id == "NICHE_uid"
 
     def test_empty_niche_id_falls_back_to_env(self, monkeypatch):
         """Backward compat: callers that don't pass niche_id keep using
@@ -480,21 +504,26 @@ class TestNicheIdResolution:
         assert client._access_token == "ENV_fallback"
 
     def test_niche_id_resolves_ig_user_id_too(self, monkeypatch):
-        """ig_user_id has its own per-niche resolver path via
-        ``resolve_niche_env`` (META_IG_USER_ID isn't in the meta_credentials
-        bundle — it's a separate per-niche env var)."""
-        monkeypatch.setenv("META_IG_USER_ID", "GLOBAL_user")
+        """ig_user_id resolves per-niche via ``resolve_meta_credentials``
+        (unified with ig_access_token path).
+
+        2026-07-14 (F1 auth-audit fix): PRIOR STATE called
+        ``resolve_niche_env(niche_id, "META_IG_USER_ID", "META_IG_USER_ID")``
+        directly — the suffix ``META_IG_USER_ID`` didn't match the .env
+        naming ``{PREFIX}_IG_USER_ID``, so every non-BB niche's IG
+        publishing silently fell through to the global (BB's) IG account.
+        Now routed through ``resolve_meta_credentials`` which uses the
+        correct suffix ``IG_USER_ID`` at niche_credentials.py:78.
+        """
+        monkeypatch.setenv("META_IG_USER_ID", "GLOBAL_user")  # should NOT be used
         from genlab_core.platforms.instagram import InstagramClient
 
-        with (
-            patch(
-                "genlab_core.publishing.niche_credentials.resolve_meta_credentials",
-                return_value={"ig_access_token": "tok"},
-            ),
-            patch(
-                "genlab_core.publishing.niche_credentials.resolve_niche_env",
-                return_value="CR_per_niche_user_id",
-            ),
+        with patch(
+            "genlab_core.publishing.niche_credentials.resolve_meta_credentials",
+            return_value={
+                "ig_access_token": "tok",
+                "ig_user_id": "CR_per_niche_user_id",
+            },
         ):
             client = InstagramClient(niche_id="gaming")
         assert client._ig_user_id == "CR_per_niche_user_id"

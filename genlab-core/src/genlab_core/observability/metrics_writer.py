@@ -234,9 +234,19 @@ class PipelineMetrics:
         On normal exit the status is ``"ok"``; on exception it is ``"error"``
         (and the exception is re-raised).
 
+        2026-07-14 (pipeline audit): callers can set
+        ``extra["_status"] = "skipped"`` on the yielded dict to mark the
+        stage as skipped (flag-gated no-op, config-disabled, etc.). Prior
+        state hard-coded ``ok`` — dashboard couldn't distinguish "stage
+        ran + succeeded" from "stage silently no-op'd". Class-of-bug:
+        observability records success on non-execution.
+
         Usage::
 
             with metrics.time_stage("FetchTrendingVideos") as extra:
+                if flag_disabled:
+                    extra["_status"] = "skipped"
+                    return
                 videos = fetcher.fetch()
                 extra["items"] = len(videos)
         """
@@ -245,9 +255,12 @@ class PipelineMetrics:
         try:
             yield extra
             elapsed_ms = (time.monotonic() - t0) * 1000.0
-            self.record_stage(stage, duration_ms=elapsed_ms, status="ok", **extra)
+            # Pop the sentinel so it doesn't land as a spurious extras field.
+            status = extra.pop("_status", "ok")
+            self.record_stage(stage, duration_ms=elapsed_ms, status=status, **extra)
         except Exception:
             elapsed_ms = (time.monotonic() - t0) * 1000.0
+            extra.pop("_status", None)  # error wins over caller-set skipped
             self.record_stage(stage, duration_ms=elapsed_ms, status="error", **extra)
             raise
 

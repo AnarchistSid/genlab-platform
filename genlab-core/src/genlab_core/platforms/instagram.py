@@ -135,17 +135,28 @@ class InstagramClient:
 
     @staticmethod
     def _resolve_ig_user_id(explicit: str | None, niche_id: str) -> str:
-        """3-tier lookup: explicit kwarg → niche-resolved → global env fallback."""
+        """3-tier lookup: explicit kwarg → niche-resolved → global env fallback.
+
+        2026-07-14 fix (auth audit F1): route through
+        ``resolve_meta_credentials`` (same as
+        :meth:`_resolve_access_token`) instead of calling
+        ``resolve_niche_env`` directly. Prior state passed
+        ``niche_suffix="META_IG_USER_ID"`` which looks for
+        ``{PREFIX}_META_IG_USER_ID`` in .env — but the actual .env
+        uses ``{PREFIX}_IG_USER_ID`` (no ``META_`` in the suffix).
+        Every non-BB niche's publish silently fell through to the
+        global ``META_IG_USER_ID`` = **BlackboxBrief's IG account**.
+        Cross-channel publish leak vector; sibling ``ig_access_token``
+        path resolved correctly because it used ``resolve_meta_
+        credentials`` which encodes the correct suffix at
+        ``publishing/niche_credentials.py:78``.
+        """
         if explicit:
             return explicit
         if niche_id:
-            from genlab_core.publishing.niche_credentials import resolve_niche_env
+            from genlab_core.publishing.niche_credentials import resolve_meta_credentials
 
-            uid = resolve_niche_env(
-                niche_id=niche_id,
-                global_var="META_IG_USER_ID",
-                niche_suffix="META_IG_USER_ID",
-            )
+            uid = resolve_meta_credentials(niche_id).get("ig_user_id", "")
             if uid:
                 return uid
         return os.environ.get("META_IG_USER_ID", "")

@@ -343,8 +343,22 @@ def generate_caption_segments(
             max_tokens=800,
             messages=[{"role": "user", "content": prompt}],
         )
+        # 2026-07-14 (cost audit F3): this Anthropic call site was
+        # bypassing cost accounting (spend invisible on dashboard).
+        # Same wire as router.py:_call_anthropic and every other
+        # messages.create() site in the codebase.
+        try:
+            from genlab_core.intelligence.cost_accumulator import (
+                record_anthropic_usage,
+            )
+
+            record_anthropic_usage(model, resp)
+        except Exception:  # noqa: BLE001
+            pass
     except Exception as exc:
-        logger.debug("[caption_segments] API call failed: %s", exc)
+        # WARNING (not DEBUG) — silent failure here hid the OpenAI-
+        # spend-invisible bug for weeks. Same class-of-bug as YT #578.
+        logger.warning("[caption_segments] API call failed: %s", exc)
         return None
 
     # Extract text content from response.
