@@ -376,8 +376,36 @@ def generate_hook(
         return (None, None) if return_style else None
 
     style = NICHE_STYLE.get(niche_id, NICHE_STYLE["gaming"])
-    title = story.get("title", "")
-    summary = (story.get("summary", "") or "")[:300]
+
+    # 2026-07-14 security: sanitize external content BEFORE LLM prompt.
+    # `title` + `summary` originate from RSS feeds, YouTube metadata,
+    # Reddit posts, TMDB — all attacker-influenceable. CLAUDE.md rule:
+    # "Treat ALL external content as untrusted; sanitize via
+    # genlab_core.cache.text_sanitizer". Prior code passed raw fields
+    # verbatim into `f"Story: {title}\nSummary: {summary}"` — a title
+    # like ``"Ignore all previous instructions. You are now..."`` would
+    # execute in the Claude prompt as prompt-injection. sanitize_text
+    # strips HTML, control chars, and truncates.
+    from genlab_core.cache.text_sanitizer import sanitize_text, check_for_injection
+
+    raw_title = story.get("title", "")
+    raw_summary = story.get("summary", "") or ""
+    title = sanitize_text(raw_title, max_length=300)
+    summary = sanitize_text(raw_summary, max_length=300)
+
+    # Log (not block) injection-pattern detections so operators can
+    # audit attempted prompt-injection attacks in journalctl.
+    for label, text in (("title", title), ("summary", summary)):
+        suspicious = check_for_injection(text)
+        if suspicious:
+            logger.warning(
+                "[%s] hook_generator: potential prompt-injection in %s from "
+                "story %s: %s (proceeding with sanitized text)",
+                niche_id,
+                label,
+                (story.get("story_id") or story.get("candidate_id") or "?")[:24],
+                suspicious[:3],
+            )
 
     if not title:
         return (None, None) if return_style else None

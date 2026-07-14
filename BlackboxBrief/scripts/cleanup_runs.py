@@ -26,8 +26,17 @@ from pathlib import Path
 try:
     from genlab_core.storage.disk_quota import DiskQuotaManager
 except ImportError as e:
-    print(f"ERROR: genlab_core not on path. Run with: uv run python scripts/cleanup_runs.py\n{e}")
-    sys.exit(1)
+    # 2026-07-14: was `sys.exit(1)` at IMPORT time — this makes pytest
+    # collection fail because pytest imports the file to discover tests
+    # (from `tests/test_cleanup_publish_lock.py`). Result: 40% of
+    # BlackboxBrief tests were undiscoverable and silently skipped
+    # from every CI run. Move the exit to a runtime path so tests can
+    # still import the module + assert on cleanup logic without
+    # requiring the full genlab_core environment.
+    DiskQuotaManager = None  # type: ignore[assignment,misc]
+    _IMPORT_ERROR = e
+else:
+    _IMPORT_ERROR = None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -80,6 +89,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Daily run cleanup")
     parser.add_argument("--dry-run", action="store_true", help="Log what would be deleted without deleting")
     args = parser.parse_args()
+
+    # 2026-07-14: moved from import-time to runtime. If genlab_core is
+    # unavailable (test env), fail cleanly here rather than during
+    # module import (which would break pytest collection).
+    if DiskQuotaManager is None:
+        print(
+            f"ERROR: genlab_core not on path. Run with: uv run python scripts/cleanup_runs.py\n{_IMPORT_ERROR}"
+        )
+        sys.exit(1)
 
     config = {
         "agents": {

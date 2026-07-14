@@ -550,7 +550,29 @@ class FrameCompositor:
             logger.error(f"FFmpeg failed:\n{(exc.stderr or '')[-2000:]}")
             raise RuntimeError(f"FFmpeg composition failed: {(exc.stderr or '')[-500:]}") from exc
 
-        logger.info(f"[{self.branding.niche_id}] Rendered -> {output_path}")
+        # 2026-07-14: post-render validation. FFmpeg can exit 0 while
+        # producing empty/corrupt output — a malformed filtergraph, a
+        # write-race, or a subprocess signal that FFmpeg catches
+        # cleanly. Without this check the pipeline treats a 0-byte
+        # file as a valid render and downstream ships broken video to
+        # Instagram. 1 KB threshold catches empty + FFmpeg-header-only
+        # cases (real reels are always >100 KB).
+        _MIN_RENDER_SIZE_BYTES = 1024
+        out_path_obj = Path(output_path)
+        if not out_path_obj.is_file():
+            raise RuntimeError(
+                f"FFmpeg exited 0 but output file missing: {output_path}"
+            )
+        out_size = out_path_obj.stat().st_size
+        if out_size < _MIN_RENDER_SIZE_BYTES:
+            raise RuntimeError(
+                f"FFmpeg exited 0 but output too small ({out_size} B < "
+                f"{_MIN_RENDER_SIZE_BYTES} B threshold): {output_path}"
+            )
+
+        logger.info(
+            f"[{self.branding.niche_id}] Rendered -> {output_path} ({out_size:,} B)"
+        )
         return output_path
 
     # --- Hook text wrapping -----------------------------------------------
