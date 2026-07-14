@@ -373,6 +373,26 @@ class XTwitterClient:
         if self._is_currently_rate_limited():
             return _fail("Rate limited — in cooldown, try again later")
 
+        # 2026-07-14: X free-tier 500 tweets/month quota check. When
+        # cap approaches, halt publishes proactively instead of
+        # discovering the 402 error mid-flight (which locks the app
+        # for the remainder of the month). See
+        # ``monitoring.twitter_quota`` for details.
+        try:
+            from genlab_core.monitoring.twitter_quota import get_tracker
+
+            _tracker = get_tracker()
+            _allowed, _remaining = _tracker.can_publish()
+            if not _allowed:
+                return _fail(
+                    f"Monthly free-tier quota exhausted "
+                    f"(0 remaining of 500/month) — publish halted to "
+                    f"avoid 402 lockout. Cap resets at month rollover."
+                )
+        except Exception as exc:  # noqa: BLE001 — fail-open on tracker error
+            logger.debug("[twitter_quota] check skipped: %s", exc)
+            _tracker = None
+
         tw_specific = payload.platform_specific
         routing = "single"
         tweet_text = payload.caption
@@ -460,6 +480,15 @@ class XTwitterClient:
                     "X/Twitter: first-reply exception (non-fatal): %s",
                     exc,
                 )
+
+        # 2026-07-14: increment monthly quota counter on success.
+        # Fail-open — a tracker error should never unwind the successful
+        # publish.
+        if _tracker is not None:
+            try:
+                _tracker.record_publish()
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("[twitter_quota] record_publish failed: %s", exc)
 
         return PublishResult(
             platform=self.platform_id,
@@ -577,6 +606,15 @@ class XTwitterClient:
 
         if not posted_ids:
             return _fail("Thread: no tweets were posted")
+
+        # 2026-07-14: thread publish counts as N tweets against the
+        # monthly free-tier cap. Record all N.
+        try:
+            from genlab_core.monitoring.twitter_quota import get_tracker
+
+            get_tracker().record_publish(count=len(posted_ids))
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[twitter_quota] thread record_publish failed: %s", exc)
 
         return PublishResult(
             platform=self.platform_id,
