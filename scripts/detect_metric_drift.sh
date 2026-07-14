@@ -128,6 +128,39 @@ SELECT
 SQL
 }
 
+# 2026-07-14: also persist WARN drift events to the pipeline_alerts
+# table so operators see them in Mission Control instead of only in
+# journalctl. Deduplicated on (niche_id, check_name, reason) — if a
+# matching UNRESOLVED alert already exists, we no-op. That keeps the
+# alert list short across daily fires while a drift condition
+# persists.
+#
+# check_name = "metric_drift" (constant — routes all drift alerts to
+# one dashboard card). ``details`` JSONB carries the specific reason +
+# numeric stats so operators can drill into each row.
+persist_drift_alert() {
+    local niche="$1"
+    local reason="$2"
+    local details_json="$3"
+    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+        -X -A -t -v ON_ERROR_STOP=1 \
+        -v niche="$niche" -v reason="$reason" -v details="$details_json" \
+        >/dev/null 2>&1 <<'SQL'
+INSERT INTO pipeline_alerts (niche_id, check_name, severity, message, details)
+SELECT :'niche', 'metric_drift', 'warning',
+       'drift: ' || :'reason' || ' on ' || :'niche',
+       :'details'::jsonb
+WHERE NOT EXISTS (
+  SELECT 1 FROM pipeline_alerts
+  WHERE niche_id = :'niche'
+    AND check_name = 'metric_drift'
+    AND severity = 'warning'
+    AND resolved_at IS NULL
+    AND details->>'reason' = :'reason'
+);
+SQL
+}
+
 # Floating-point comparison helper. Returns 0 if $1 OP $2 holds, 1 otherwise.
 # Uses awk to avoid bash's integer-only arithmetic.
 fcmp() {
@@ -169,6 +202,8 @@ for niche in "${NICHES[@]}"; do
     # ── Trigger 1: publishing collapsed ──
     if [[ "$recent_n" -lt 5 ]] && [[ "$baseline_n" -ge 5 ]]; then
         log_warn "[drift] niche=$niche reason=publishing_collapsed recent_n=$recent_n baseline_n=$baseline_n recent_mean=$recent_mean baseline_mean=$baseline_mean"
+        persist_drift_alert "$niche" "publishing_collapsed" \
+            "{\"reason\":\"publishing_collapsed\",\"recent_n\":$recent_n,\"baseline_n\":$baseline_n,\"recent_mean\":$recent_mean,\"baseline_mean\":$baseline_mean}"
     fi
 
     # ── Trigger 2: engagement_rate suddenly all-zero (the original bug pattern) ──
@@ -178,6 +213,8 @@ for niche in "${NICHES[@]}"; do
         baseline_zero_ratio=$(awk -v z="$baseline_zeros" -v n="$baseline_n" 'BEGIN{printf "%.4f", z/n}')
         if fcmp "$recent_zero_ratio" ">=" "0.5" && fcmp "$baseline_zero_ratio" "<" "0.5"; then
             log_warn "[drift] niche=$niche reason=all_zero_engagement recent_zero_ratio=$recent_zero_ratio baseline_zero_ratio=$baseline_zero_ratio recent_mean=$recent_mean baseline_mean=$baseline_mean"
+            persist_drift_alert "$niche" "all_zero_engagement" \
+                "{\"reason\":\"all_zero_engagement\",\"recent_zero_ratio\":$recent_zero_ratio,\"baseline_zero_ratio\":$baseline_zero_ratio,\"recent_mean\":$recent_mean,\"baseline_mean\":$baseline_mean}"
         fi
     fi
 
@@ -186,12 +223,16 @@ for niche in "${NICHES[@]}"; do
         threshold=$(awk -v b="$baseline_mean" 'BEGIN{printf "%.6f", b * 0.1}')
         if fcmp "$recent_mean" "<" "$threshold"; then
             log_warn "[drift] niche=$niche reason=mean_collapsed recent_mean=$recent_mean baseline_mean=$baseline_mean (recent < 10% of baseline)"
+            persist_drift_alert "$niche" "mean_collapsed" \
+                "{\"reason\":\"mean_collapsed\",\"recent_mean\":$recent_mean,\"baseline_mean\":$baseline_mean}"
         fi
     fi
 
     # ── Trigger 4: variance vanished ──
     if fcmp "$recent_stddev" "==" "0" && fcmp "$baseline_stddev" ">" "0"; then
         log_warn "[drift] niche=$niche reason=variance_vanished recent_stddev=$recent_stddev baseline_stddev=$baseline_stddev recent_mean=$recent_mean baseline_mean=$baseline_mean"
+        persist_drift_alert "$niche" "variance_vanished" \
+            "{\"reason\":\"variance_vanished\",\"recent_stddev\":$recent_stddev,\"baseline_stddev\":$baseline_stddev,\"recent_mean\":$recent_mean,\"baseline_mean\":$baseline_mean}"
     fi
 done
 
