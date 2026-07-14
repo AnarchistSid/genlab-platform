@@ -145,15 +145,32 @@ class _DryRunLLM:
 
 
 class _NullPersister:
-    """No-op persister for --dry-run — logs the report but doesn't write."""
+    """No-op persister for --dry-run — logs the report but doesn't write.
 
-    def persist(self, report) -> None:
+    Accepts the same cost-telemetry kwargs as the real persister
+    (added 2026-07-14) so Strategist.run_for_niche can call
+    ``persist(report, cost_usd=..., input_tokens=..., output_tokens=...)``
+    without a TypeError from the dry-run path.
+    """
+
+    def persist(
+        self,
+        report,
+        *,
+        cost_usd: float | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+    ) -> None:
         logger.info(
-            "[DRY-RUN] would persist report id=%s niche=%s phase=%s proposals=%d",
+            "[DRY-RUN] would persist report id=%s niche=%s phase=%s proposals=%d "
+            "cost_usd=%s in=%s out=%s",
             report.id,
             report.niche_id,
             report.detected_phase.value,
             len(report.proposals),
+            cost_usd,
+            input_tokens,
+            output_tokens,
         )
 
 

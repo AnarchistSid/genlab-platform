@@ -36,8 +36,23 @@ class JsonlPersister:
         self._base.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
 
-    def persist(self, report: StrategistReport) -> None:
-        """Append the report as one JSON line. Atomic per-line write."""
+    def persist(
+        self,
+        report: StrategistReport,
+        *,
+        cost_usd: float | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+    ) -> None:
+        """Append the report as one JSON line. Atomic per-line write.
+
+        Cost telemetry kwargs are accepted for Protocol conformance but
+        ignored — JsonlPersister writes the report JSON only. Operators
+        who need cost telemetry from JSONL should use PostgresPersister
+        (which writes cost_usd/input_tokens/output_tokens columns) or
+        embed the CallResult in a wrapper JSON above this layer.
+        """
+        del cost_usd, input_tokens, output_tokens  # Protocol conformance
         path = self._base / f"{report.niche_id}.jsonl"
         line = report.model_dump_json() + "\n"
         with self._lock, path.open("a", encoding="utf-8") as f:
@@ -114,10 +129,23 @@ class PostgresPersister:
         # PR Strategist-1b this stays simple — inputs default to empty dict.
         self._inputs = inputs_snapshot or {}
 
-    def persist(self, report: StrategistReport) -> None:
-        """UPSERT the report. Telemetry (cost, tokens) is None at this layer —
-        the AnthropicStrategistClient captures it but doesn't pipe it through;
-        PR Strategist-2 will wire that."""
+    def persist(
+        self,
+        report: StrategistReport,
+        *,
+        cost_usd: float | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+    ) -> None:
+        """UPSERT the report + cost telemetry.
+
+        2026-07-14: cost/tokens kwargs are now wired from
+        ``Strategist.run_for_niche`` via ``call_result``. Prior to
+        this fix the persister hardcoded them to None with a "PR
+        Strategist-2 will wire that" TODO that shipped 3 months ago
+        and stayed unresolved — every strategist_reports row from
+        2026-04 through 2026-07-12 has NULL cost/tokens columns.
+        """
         params = {
             "id": str(report.id),
             "niche_id": report.niche_id,
@@ -132,9 +160,9 @@ class PostgresPersister:
                 include={"universal_playbook_proposals"}
             ),
             "weekly_summary": report.weekly_summary,
-            "cost_usd": None,
-            "input_tokens": None,
-            "output_tokens": None,
+            "cost_usd": cost_usd,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
         }
         # Extract the inner arrays from the JSON dumps — model_dump_json with
         # include= returns the wrapping object; we want the inner list as JSONB.

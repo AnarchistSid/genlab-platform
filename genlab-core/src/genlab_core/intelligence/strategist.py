@@ -48,9 +48,23 @@ class LLMClient(Protocol):
 
 
 class ReportPersister(Protocol):
-    """Pluggable persistence. Real implementation writes Postgres / JSONL; tests in-memory."""
+    """Pluggable persistence. Real implementation writes Postgres / JSONL; tests in-memory.
 
-    def persist(self, report: StrategistReport) -> None: ...
+    Cost telemetry (cost_usd, input_tokens, output_tokens) is optional
+    for backward compatibility with existing test doubles. When the caller
+    passes them, real persisters (PostgresPersister) write to their
+    dedicated columns; JsonlPersister ignores them (the JSON already
+    encodes them via CallResult if the caller chooses to embed).
+    """
+
+    def persist(
+        self,
+        report: StrategistReport,
+        *,
+        cost_usd: float | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+    ) -> None: ...
 
 
 @dataclass
@@ -167,7 +181,12 @@ class Strategist:
 
         # === Stage 4: persist ===
         try:
-            self.persister.persist(report)
+            self.persister.persist(
+                report,
+                cost_usd=getattr(call_result, "cost_usd", None),
+                input_tokens=getattr(call_result, "input_tokens", None),
+                output_tokens=getattr(call_result, "output_tokens", None),
+            )
         except Exception as exc:
             logger.exception("strategist.persist_failed niche=%s err=%s", niche_id, exc)
             outcome.status = "persist_failed"

@@ -209,3 +209,98 @@ class TestPostgresPersisterContract:
         # (Python Protocols are structural), but the persist() call must succeed
         strategist = Strategist(collector=MagicMock(), llm=MagicMock(), persister=persister)
         assert strategist.persister is persister
+
+
+class TestPostgresPersisterCostTelemetry:
+    """Pin the 2026-07-14 cost-tracking fix.
+
+    Prior bug: ``persister.py:135-137`` hardcoded ``cost_usd``,
+    ``input_tokens``, ``output_tokens`` to ``None`` with a "PR
+    Strategist-2 will wire that" TODO comment. Every strategist_reports
+    row from 2026-04-XX through 2026-07-12 had NULL cost columns —
+    operator had no visibility into weekly Strategist LLM spend.
+
+    Fix: extend ``persist()`` signature with optional cost kwargs +
+    thread them from ``Strategist.run_for_niche`` via ``call_result``.
+    These pins prevent the same NULL-hardcode regression.
+    """
+
+    def _base_report(self):
+        return _make_full_report()
+
+    def test_persist_writes_cost_usd_when_provided(self):
+        conn = MagicMock()
+        persister = PostgresPersister(conn)
+        persister.persist(
+            self._base_report(),
+            cost_usd=0.0421,
+            input_tokens=8500,
+            output_tokens=1200,
+        )
+        _, params = conn.execute.call_args[0]
+        assert params["cost_usd"] == 0.0421
+        assert params["input_tokens"] == 8500
+        assert params["output_tokens"] == 1200
+
+    def test_persist_defaults_to_none_when_kwargs_omitted(self):
+        """Backward-compat: callers that don't pass cost still work."""
+        conn = MagicMock()
+        persister = PostgresPersister(conn)
+        persister.persist(self._base_report())
+        _, params = conn.execute.call_args[0]
+        assert params["cost_usd"] is None
+        assert params["input_tokens"] is None
+        assert params["output_tokens"] is None
+
+    def test_persist_accepts_zero_cost(self):
+        """Zero cost is meaningful data (LLM cache hit) — NOT the None sentinel."""
+        conn = MagicMock()
+        persister = PostgresPersister(conn)
+        persister.persist(
+            self._base_report(),
+            cost_usd=0.0,
+            input_tokens=0,
+            output_tokens=0,
+        )
+        _, params = conn.execute.call_args[0]
+        assert params["cost_usd"] == 0.0  # explicitly 0.0, not None
+        assert params["input_tokens"] == 0
+        assert params["output_tokens"] == 0
+
+    def test_strategist_passes_call_result_telemetry_through(self):
+        """End-to-end pin: Strategist.run_for_niche reads cost from call_result
+        and passes it to persister.persist."""
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        from genlab_core.intelligence.strategist import Strategist
+
+        # Build a full report as valid JSON for the LLM mock
+        report = self._base_report()
+        report_json = report.model_dump_json()
+
+        call_result = MagicMock()
+        call_result.text = report_json
+        call_result.cost_usd = 0.0678
+        call_result.input_tokens = 12345
+        call_result.output_tokens = 890
+
+        llm = MagicMock()
+        llm.generate_report.return_value = call_result
+
+        collector = MagicMock()
+        collector.collect.return_value = {"followers": None}
+
+        persister = MagicMock()
+        strategist = Strategist(collector=collector, llm=llm, persister=persister)
+        outcome = strategist.run_for_niche("ai_creators", date(2026, 6, 29))
+
+        # persist() must have been called with cost_usd + tokens as kwargs
+        persister.persist.assert_called_once()
+        _, kwargs = persister.persist.call_args
+        assert kwargs["cost_usd"] == 0.0678
+        assert kwargs["input_tokens"] == 12345
+        assert kwargs["output_tokens"] == 890
+
+        # RunOutcome mirrors the same cost — already worked pre-fix but pin it
+        assert outcome.cost_usd == 0.0678
