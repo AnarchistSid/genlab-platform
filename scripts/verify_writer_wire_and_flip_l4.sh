@@ -47,10 +47,24 @@ if [ ! -f "$ENV_FILE" ]; then
     exit 2
 fi
 
+# 2026-07-14 fix: the Python subprocess spawned via `sudo -u genlab`
+# doesn't inherit our shell environment, so DATABASE_URL was empty
+# and psycopg's fallback DSN (``dbname=genlab``) tried the local Unix
+# socket at `/var/run/postgresql/` which doesn't exist on this box —
+# script exited 2 with "socket file not found". Extract DATABASE_URL
+# from the env file + pass it via sudo -E preserving-env so the
+# subprocess connects to the right host:port.
+DATABASE_URL=$(grep -E "^DATABASE_URL=" "$ENV_FILE" | head -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'\$//")
+if [ -z "$DATABASE_URL" ]; then
+    echo "[fatal] DATABASE_URL not found in $ENV_FILE" >&2
+    exit 2
+fi
+export DATABASE_URL
+
 echo "[verify] Querying Layer 5 metric for last 6h of publishes..."
 # Same SQL shape as check #8 in post_deploy_verify.sh + Layer 5
 # endpoint. Duplicated inline so this script has zero import deps.
-RESULT=$(sudo -u genlab $VENV - <<'PY' 2>&1 || echo "PY_ERROR"
+RESULT=$(sudo -u genlab -E $VENV - <<'PY' 2>&1 || echo "PY_ERROR"
 import os, psycopg
 dsn = os.environ.get("DATABASE_URL") or "dbname=genlab"
 try:
