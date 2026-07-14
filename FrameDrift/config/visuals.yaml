@@ -93,7 +93,17 @@ intelligent_transform:
     highlight_moment:
       enabled: true
       methods: [llm_pick, audio_peak, motion_peak, first_frame]
-      window_seconds: 8
+      # 2026-07-14 audit: was 8s (default). Same trap the other 4
+      # niches hit — 8s window + ~3s intro + ~3s outro concat = 14s
+      # transformed output, JUST BELOW the 15s SPEC.min_duration
+      # guard at post_render_transform.py:241. Every anime
+      # transformation attempt fell through to base composite with
+      # arm_ids_by_dimension={} → 55 anime transformation arms stuck
+      # at α=β=1 n_plays=0 for weeks.
+      # Bumped to 16s to match gaming/sports/movies/ai_creators —
+      # 16 + 3 + 3 = 22s, safely above the 15s floor. Anime bandit
+      # arms will start accumulating plays from next fire.
+      window_seconds: 16
     audio_ducking:
       enabled: true
       levels_db: [-6, -9, -12]  # anime: conservative range (less aggressive than other niches)
