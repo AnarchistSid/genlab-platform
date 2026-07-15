@@ -43,6 +43,13 @@ _NICHE_KEYWORDS: dict[str, list[str]] = {
 # Minimum file size (bytes) for a valid download
 _MIN_FILE_SIZE = 100 * 1024  # 100 KB
 
+# Minimum clip duration (seconds). Matches validate_videos.SPEC.min_duration
+# so we reject at download-probe time rather than after the compose+render
+# pipeline has burned work. See 2026-07-15 Twitch min-duration follow-up
+# — same class-of-bug prevention, but source-agnostic (catches Reddit,
+# TMDB, and any future fetcher without needing a per-source filter).
+_MIN_DURATION_SECONDS = 15.0
+
 # yt-dlp download timeout (seconds)
 _DOWNLOAD_TIMEOUT: int = get_tuning_config().download.timeout_seconds
 
@@ -266,6 +273,7 @@ def _validate_download(path: str) -> dict[str, Any]:
         1. File exists
         2. File size > 100 KB
         3. Has a video stream (ffprobe)
+        4. Duration >= 15s (validate_videos.SPEC.min_duration)
 
     Returns:
         {"valid": bool, "reason": str, "duration_seconds": float}
@@ -283,6 +291,20 @@ def _validate_download(path: str) -> dict[str, Any]:
         return {"valid": False, "reason": "no video stream", "duration_seconds": 0.0}
 
     duration = _probe_duration(path)
+    # 2026-07-15: reject clips shorter than the platform min_duration
+    # here, at probe time, rather than after compose+render burns work
+    # and leaves a stuck DRAFTED blueprint. Source-agnostic — catches
+    # short Twitch clips, short Reddit videos, TMDB trailer teasers,
+    # and any future fetcher regardless of whether it reports duration
+    # upstream. Duration=0 is preserved as a legit ffprobe-failure
+    # signal (not treated as "too short") so callers can distinguish
+    # a probe error from a genuinely-short clip.
+    if 0 < duration < _MIN_DURATION_SECONDS:
+        return {
+            "valid": False,
+            "reason": f"too_short:{duration:.1f}s (min {_MIN_DURATION_SECONDS:.0f}s)",
+            "duration_seconds": duration,
+        }
     return {"valid": True, "reason": "", "duration_seconds": duration}
 
 
