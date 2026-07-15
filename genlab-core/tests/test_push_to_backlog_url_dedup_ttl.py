@@ -15,8 +15,12 @@ Symptom logs (gaming run 2026-06-23 13:21 UTC):
 
 Fix: opt-in ``pipeline.url_dedup_ttl_days`` config knob. When set, blueprints
 older than the TTL stop contributing to the URL dedup set. None / missing /
-<=0 preserves the old "block forever" behaviour. Anime/movies/ai_creators
-use video-level URLs (unique per item) and leave it unset.
+<=0 preserves the old "block forever" behaviour.
+
+Originally believed (2026-06-23) that anime/movies/ai_creators were exempt
+because they use YouTube watch?v= URLs — but the 2026-07-14 video/dedup
+audit (commit 8cf31bd6) found the same block-forever pattern latent on all
+3 uncovered niches. All 5 niches now set url_dedup_ttl_days=3 as a floor.
 
 If these tests fail the config wire is broken — the regression would be
 invisible because both "TTL active" and "TTL silently ignored" produce
@@ -107,23 +111,51 @@ def test_sports_niche_has_3day_url_dedup_ttl() -> None:
     )
 
 
-def test_naturally_unique_url_niches_leave_ttl_unset() -> None:
-    """Anime/movies/ai_creators use unique YouTube watch?v= URLs.
+def test_all_niches_have_url_dedup_ttl_configured() -> None:
+    """Every niche must set url_dedup_ttl_days — block-forever is the
+    structurally worse default.
 
-    Enabling TTL for them would allow the same evergreen content to
-    re-publish, which is the opposite of what their content model
-    expects. The TTL is an opt-in fix for sticky-source niches only.
+    History — the 2026-06-23 outage first surfaced this on gaming +
+    sports (sticky-source URLs recurring in upstream trending).
+    Anime/movies/ai_creators were originally believed to be exempt
+    because they use naturally-unique YouTube watch?v= URLs — but the
+    2026-07-14 video/dedup audit (commit 8cf31bd6) found the same
+    block-forever pattern latent on all 3 uncovered niches:
+
+      - BB (ai_creators): AI news cycles fast; the same tool
+        announcement legitimately re-blueprints 3 days apart when
+        new features drop
+      - FD (anime): episode clips are seasonal; beloved moments
+        re-blueprint 3 days apart when new remix compilations trend
+      - SR (movies): press tours + trailer campaigns cycle 2-3
+        unique moments per title over days
+
+    3-day TTL is a floor; each niche can tune independently. Prior
+    state (absent → interpreted as block-forever by PushToBacklog)
+    was structurally worse than any operator-tuned value.
+
+    Removing the key from ANY niche re-creates the block-forever
+    trap that this pin exists to prevent.
     """
     repo_root = Path(__file__).resolve().parent.parent.parent
-    for cfg_path in (
-        "FrameDrift/config/niche.yaml",
-        "SpliceReel/config/niche.yaml",
-        "BlackboxBrief/config/niche.yaml",
-    ):
+    niches = (
+        ("gaming", "CriticalRush/niches/gaming/config/niche.yaml"),
+        ("sports", "ClutchWire/config/niche.yaml"),
+        ("anime", "FrameDrift/config/niche.yaml"),
+        ("movies", "SpliceReel/config/niche.yaml"),
+        ("ai_creators", "BlackboxBrief/config/niche.yaml"),
+    )
+    for niche_id, cfg_path in niches:
         cfg = yaml.safe_load((repo_root / cfg_path).read_text())
         pipeline = cfg.get("pipeline", {}) or {}
-        assert "url_dedup_ttl_days" not in pipeline, (
-            f"{cfg_path} should NOT enable url_dedup_ttl_days — it uses "
-            "naturally-unique video-level URLs and doesn't have the "
-            "sticky-source problem gaming/sports do."
+        ttl = pipeline.get("url_dedup_ttl_days")
+        assert ttl is not None, (
+            f"{cfg_path} ({niche_id}) is missing url_dedup_ttl_days — "
+            "PushToBacklog will block URLs forever, re-creating the "
+            "2026-06-23 outage class. Set a positive integer (3 is the "
+            "current floor; each niche can tune independently)."
+        )
+        assert isinstance(ttl, int) and ttl > 0, (
+            f"{cfg_path} url_dedup_ttl_days must be a positive integer, "
+            f"got {ttl!r}"
         )
