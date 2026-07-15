@@ -28,7 +28,23 @@ def pg_backend(request):
     Cleanup deletes this module's test rows (its ``_TEST_NICHE`` and any
     ``rls_test_%`` niches the RLS tests create) using the synchronous psycopg3
     pool, then closes the pool.
+
+    Skip-at-fixture-setup guard (2026-07-15):
+        Storage-test modules use ``pytestmark = pytest.mark.skipif(
+        not os.environ.get("POSTGRES_PASSWORD"), ...)`` — but skipif
+        evaluates at COLLECTION time. If any earlier test file's import
+        triggers ``load_dotenv`` and repopulates POSTGRES_PASSWORD (see
+        the leak documented in ``tests/conftest.py``), the skipif returns
+        False and these tests are NOT marked skipped. They then reach
+        the fixture setup phase, which was previously failing with
+        connection errors (no local Postgres on dev boxes) — showing
+        up as ERROR in the sweep rather than the intended SKIP.
+
+        This guard catches the connection error and re-raises as a
+        pytest.skip so the runtime-level "no reachable DB" case looks
+        identical to the collection-level "no env var" case.
     """
+    import psycopg
     from genlab_core.storage.postgres import PostgresBackend
 
     # The RLS isolation tests are only meaningful when connecting as a
@@ -46,6 +62,18 @@ def pg_backend(request):
         min_size=1,
         max_size=2,
     )
+
+    # Runtime reachability probe. If the DB isn't there, skip cleanly
+    # instead of ERRORing the test — matches the intent of the module-
+    # level skipif (which only catches the missing-env-var case).
+    try:
+        pool = backend._get_pool()
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT 1")
+    except (psycopg.OperationalError, psycopg.errors.ConnectionTimeout) as exc:
+        backend.close()
+        pytest.skip(f"Local Postgres not reachable: {exc}")
+
     yield backend
 
     tables = getattr(request.module, "_ALL_TABLES", ())
