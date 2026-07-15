@@ -10,6 +10,8 @@
 #   * /home/gh-runner/actions-runner/_work/_tool (runner tool cache)
 #   * /home/gh-runner/actions-runner/_work/_temp older than 60 min
 #     (per-job tempdirs from completed CI jobs)
+#   * /opt/genlab/.cache/uv (genlab's own uv cache — unbounded growth
+#     from every `uv sync`; freed 2.9 GB when first pruned 2026-07-15)
 #   * docker system prune (unused images, stopped containers,
 #     dangling volumes — never running data)
 #   * /tmp files older than 7 days
@@ -20,6 +22,8 @@
 #     protection via disk_quota._is_published + pending_publish_run_ids)
 #   * /opt/genlab/.venv — the production python env
 #   * any docker volume in use by genlab-postgres / genlab-redis
+#   * /opt/genlab/.backups — 14-day retention self-managed by
+#     pg_backup.sh + backup_visual_assets.sh
 #
 # History:
 #   2026-06-29 v1 — INCLUDED .tmp/runs prune at -mtime +3, which
@@ -29,6 +33,12 @@
 #     posts lost their renders; operator force-deleted them.
 #   2026-06-29 v2 — current. .tmp/runs prune REMOVED. Pure
 #     system-level cleanup. genlab data left to its own daemons.
+#   2026-07-15 v3 — added /opt/genlab/.cache/uv prune. Genlab's own
+#     uv cache had grown to 3.2 GB across a year of `uv sync` calls.
+#     `uv cache prune --ci` freed 2.9 GB on first run. Prod disk was
+#     oscillating 80-93% used, primarily driven by this unbounded
+#     cache. Adding the prune here makes disk_cleanup.sh actually
+#     reclaim the biggest genlab-user-owned unmanaged consumer.
 #
 # Runs as root (touches /home/gh-runner, /var, docker socket — each
 # owned by different users). Idempotent. Each section best-effort;
@@ -92,6 +102,22 @@ find /home/gh-runner/actions-runner/_work -maxdepth 2 -type d -name "_temp" \
 log "docker system prune..."
 docker system prune -af --volumes 2>&1 | tail -2 | sed 's/^/  /' || \
     log "WARNING: docker prune failed (docker daemon down?)"
+
+# 5b) Genlab's own uv cache — 2026-07-15 addition.
+# Every `uv sync` on deploy adds wheels; nothing prunes them. The
+# --ci flag removes intermediate build artefacts + entries not in the
+# CURRENT lockfile. Next uv sync re-fetches only what's actually
+# needed, which is bounded (~150 MB fresh state) rather than 3+ GB
+# steady state. Runs as genlab so the ownership + XDG_CACHE_HOME
+# resolves to /opt/genlab/.cache/uv/ (root's uv cache would be a
+# different dir, unused by prod).
+log "pruning /opt/genlab/.cache/uv (genlab-owned)..."
+if command -v uv >/dev/null 2>&1; then
+    sudo -u genlab bash -c "cd /opt/genlab && uv cache prune --ci 2>&1" | tail -3 | sed 's/^/  /' || \
+        log "WARNING: uv cache prune failed"
+else
+    log "  uv not on PATH — skipping (installed via /usr/local/bin/uv typically)"
+fi
 
 # 6) /tmp — anything older than 7 days that isn't a socket/lock
 log "removing /tmp files older than 7 days..."
