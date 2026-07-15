@@ -779,19 +779,25 @@ def run_pass(
         try:
             decision = gate_evaluate(blueprint)
         except Exception as exc:
-            # 2026-07-15: added exc_info=True so tracebacks land in
-            # journalctl. Prior shape logged only the exception's
-            # __str__ — hid the actual line + call chain, blocking
-            # diagnosis of the persistent ai_creators `errors=1` fires
-            # (post-deploy 2026-07-15 revealed 1 blueprint per pass
-            # was raising an untraced exception).
+            # 2026-07-15: format the traceback into the message so it
+            # ALWAYS lands in journalctl. Prior shape used exc_info=True
+            # but the CLI runs under systemd Type=oneshot with no
+            # configured logging handler → Python falls back to
+            # logging.lastResort which strips tracebacks. Same-day
+            # discovery: the errors=1 flap was invisible for HOURS
+            # after the exc_info=True deploy because the traceback
+            # never made it to the journal. print() to stderr goes
+            # straight there, no handler configuration required.
+            import sys
+            import traceback
+
+            tb_str = traceback.format_exc()
             result.errors.append(f"gate evaluation failed for {record_id}: {exc}")
-            logger.warning(
-                "[auto_approver] niche=%s bp=%s gate error: %s",
-                niche_id,
-                record_id,
-                exc,
-                exc_info=True,
+            print(
+                f"[auto_approver] niche={niche_id} bp={record_id} "
+                f"gate error: {exc}\n{tb_str}",
+                file=sys.stderr,
+                flush=True,
             )
             continue
 
