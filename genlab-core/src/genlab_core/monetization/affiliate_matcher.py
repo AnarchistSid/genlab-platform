@@ -88,12 +88,29 @@ def _count_today_affiliate_blueprints(niche_id: str) -> int:
     """
     db_url = os.environ.get("DATABASE_URL", "").strip()
     if not db_url:
+        # 2026-07-14 (class-of-bug scan): WARNING was silent-0 return.
+        # `return 0` means "0 posts today → cap DISABLED for this
+        # niche" — if ops accidentally unsets DATABASE_URL in an env,
+        # monetization loses its daily-cap guardrail with no signal.
+        # WARNING makes the fault visible; the return-0 behavior is
+        # preserved as fail-open per the "never block pipeline on
+        # transient query error" docstring.
+        logger.warning(
+            "[affiliate_matcher] DATABASE_URL unset for niche=%s — "
+            "daily cap check disabled (cap treated as 0 posts today, "
+            "cap gate bypassed). Set DATABASE_URL to enforce.",
+            niche_id,
+        )
         return 0
     try:
         import psycopg  # noqa: F401 — kept for the except ImportError clause
 
         from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-3
     except ImportError:
+        logger.warning(
+            "[affiliate_matcher] psycopg import failed — daily cap check disabled for niche=%s",
+            niche_id,
+        )
         return 0
     try:
         with pg_connect(db_url, connect_timeout=5, niche_id=niche_id) as conn:

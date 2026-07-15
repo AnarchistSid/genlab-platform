@@ -263,7 +263,13 @@ class PaapiClient:
             if time.time() - data.get("ts", 0) > self._cache_ttl:
                 return None
             return [PaapiProduct(**p) for p in data.get("products", [])]
-        except Exception:
+        except Exception as exc:
+            # 2026-07-14 (class-of-bug scan): DEBUG log (was bare-silent).
+            # Cache-miss is not fatal — caller re-fetches from live
+            # PAAPI. But silent bare-return meant cache corruption /
+            # format drift / decode errors were invisible. Cache-miss
+            # forensics needs SOMETHING in the journal.
+            logger.debug("[paapi] cache read failed for %s: %s", path.name, exc)
             return None
 
     def _write_cache(self, key: str, products: list[PaapiProduct]) -> None:

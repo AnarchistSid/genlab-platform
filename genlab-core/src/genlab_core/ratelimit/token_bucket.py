@@ -176,6 +176,17 @@ class RateLimiterRegistry:
 
         for name, cfg in config.items():
             if not isinstance(cfg, dict):
+                # 2026-07-14 (compliance audit F7): WARNING was silent
+                # skip. A YAML typo like `twitch_helix: 800` (int
+                # instead of dict) became a silently-missing limiter →
+                # get() raises KeyError at call time far from the
+                # config-load path.
+                logger.warning(
+                    "[ratelimit] skipping non-dict entry %r (got %s); "
+                    "expected `{rate: N, unit: 'second'|'minute'|'hour'}`",
+                    name,
+                    type(cfg).__name__,
+                )
                 continue
             raw_rate = cfg.get("rate", 1.0)
             unit = cfg.get("unit", "second")
