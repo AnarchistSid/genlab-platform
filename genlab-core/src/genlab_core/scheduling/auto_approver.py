@@ -779,12 +779,19 @@ def run_pass(
         try:
             decision = gate_evaluate(blueprint)
         except Exception as exc:
+            # 2026-07-15: added exc_info=True so tracebacks land in
+            # journalctl. Prior shape logged only the exception's
+            # __str__ — hid the actual line + call chain, blocking
+            # diagnosis of the persistent ai_creators `errors=1` fires
+            # (post-deploy 2026-07-15 revealed 1 blueprint per pass
+            # was raising an untraced exception).
             result.errors.append(f"gate evaluation failed for {record_id}: {exc}")
             logger.warning(
                 "[auto_approver] niche=%s bp=%s gate error: %s",
                 niche_id,
                 record_id,
                 exc,
+                exc_info=True,
             )
             continue
 
