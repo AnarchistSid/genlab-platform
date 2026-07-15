@@ -251,6 +251,166 @@ class TestSilentNoOpDetection:
         )
 
 
+class TestIntentionalDisableAllowlist:
+    """Pins for 2026-07-15 allowlist: operator-disabled stages don't false-fire.
+
+    Background: the detector historically flagged sports FetchScoreBatHighlights
+    as silent even though scorebat was deliberately disabled on 2026-07-14
+    (URLs weren't yt-dlp-compatible). The alert trained ops to ignore
+    fetcher_silent_no_op — exactly the risk this detector was meant to
+    prevent. Now silent stages are cross-referenced against
+    ``sources.yaml`` and only alert if their gate keys are NOT
+    ``enabled: false``.
+    """
+
+    def test_stage_with_enabled_false_is_allowlisted(self, fake_runs_dir, monkeypatch):
+        """Silent scorebat + sources.yaml scorebat.enabled=false → no alert."""
+        from genlab_core.pipeline import pipeline_runner
+
+        # Point the intentional-disable helper's loader at a synthetic
+        # config where scorebat is deliberately off.
+        monkeypatch.setattr(
+            pipeline_runner,
+            "_load_sources_yaml",
+            lambda _root, _nid="": {"scorebat": {"enabled": False}},
+        )
+
+        for i in (1, 2, 3):
+            _write_metrics_jsonl(
+                fake_runs_dir / f"sports_run{i:03d}",
+                {"FetchScoreBatHighlights": 0.0001},
+            )
+
+        alerts = check_fetcher_stage_silent_failures("sports")
+        scorebat_alerts = [a for a in alerts if "FetchScoreBatHighlights" in a.message]
+        assert scorebat_alerts == [], (
+            "operator-disabled scorebat MUST NOT fire fetcher_silent_no_op; "
+            f"got: {scorebat_alerts}"
+        )
+
+    def test_stage_with_enabled_true_still_alerts(self, fake_runs_dir, monkeypatch):
+        """Silent reddit + sources.yaml reddit.enabled=true → alert still fires.
+
+        This is the load-bearing case — a genuinely-buggy silent stage
+        (like today's gaming Reddit path drift) must still surface even
+        when the allowlist mechanism is active.
+        """
+        from genlab_core.pipeline import pipeline_runner
+
+        monkeypatch.setattr(
+            pipeline_runner,
+            "_load_sources_yaml",
+            lambda _root, _nid="": {"reddit": {"enabled": True, "subreddits": [{"name": "foo"}]}},
+        )
+
+        for i in (1, 2, 3):
+            _write_metrics_jsonl(
+                fake_runs_dir / f"gaming_run{i:03d}",
+                {"FetchRedditClips": 0.0001},
+            )
+
+        alerts = check_fetcher_stage_silent_failures("gaming")
+        reddit_alerts = [a for a in alerts if "FetchRedditClips" in a.message]
+        assert len(reddit_alerts) == 1, (
+            "reddit.enabled=true + silent stage MUST alert — the allowlist "
+            "only suppresses explicitly-disabled stages"
+        )
+
+    def test_missing_key_still_alerts(self, fake_runs_dir, monkeypatch):
+        """Silent stage + sources.yaml missing the gate key → alert fires.
+
+        This is the exact class-of-bug the detector was built for:
+        sources_config = {} because of a path-drift or field-population
+        bug. "Missing" is NOT "disabled" — it means the operator didn't
+        opt in either way, and the detector should keep watching.
+        """
+        from genlab_core.pipeline import pipeline_runner
+
+        monkeypatch.setattr(
+            pipeline_runner,
+            "_load_sources_yaml",
+            lambda _root, _nid="": {},  # empty — the exact bug shape
+        )
+
+        for i in (1, 2, 3):
+            _write_metrics_jsonl(
+                fake_runs_dir / f"gaming_run{i:03d}",
+                {"FetchRedditClips": 0.0001},
+            )
+
+        alerts = check_fetcher_stage_silent_failures("gaming")
+        reddit_alerts = [a for a in alerts if "FetchRedditClips" in a.message]
+        assert len(reddit_alerts) == 1, (
+            "sources_config={} + silent stage MUST alert — this is the "
+            "sources_config-population class of bug the detector exists to catch"
+        )
+
+    def test_anime_promos_requires_both_providers_disabled(self, fake_runs_dir, monkeypatch):
+        """FetchAnimePromos uses jikan OR anilist. Only both-disabled → allowlist."""
+        from genlab_core.monitoring.health_monitor import _stage_intentionally_disabled
+        from genlab_core.pipeline import pipeline_runner
+
+        # Case A: only jikan disabled → NOT allowlisted (anilist could still work)
+        monkeypatch.setattr(
+            pipeline_runner,
+            "_load_sources_yaml",
+            lambda _root, _nid="": {"jikan": {"enabled": False}, "anilist": {"enabled": True}},
+        )
+        assert _stage_intentionally_disabled("anime", "FetchAnimePromos") is False
+
+        # Case B: both disabled → allowlisted
+        monkeypatch.setattr(
+            pipeline_runner,
+            "_load_sources_yaml",
+            lambda _root, _nid="": {
+                "jikan": {"enabled": False},
+                "anilist": {"enabled": False},
+            },
+        )
+        assert _stage_intentionally_disabled("anime", "FetchAnimePromos") is True
+
+    def test_load_error_does_not_suppress_alert(self, fake_runs_dir, monkeypatch):
+        """The allowlist is a false-positive suppressor, not a load-bearing
+        gate. A broken sources.yaml MUST NOT silently suppress alerts.
+        """
+        from genlab_core.pipeline import pipeline_runner
+
+        def _boom(_root, _nid=""):
+            raise RuntimeError("simulated yaml load failure")
+
+        monkeypatch.setattr(pipeline_runner, "_load_sources_yaml", _boom)
+
+        for i in (1, 2, 3):
+            _write_metrics_jsonl(
+                fake_runs_dir / f"gaming_run{i:03d}",
+                {"FetchRedditClips": 0.0001},
+            )
+
+        alerts = check_fetcher_stage_silent_failures("gaming")
+        reddit_alerts = [a for a in alerts if "FetchRedditClips" in a.message]
+        assert len(reddit_alerts) == 1, (
+            "loader error must NOT swallow the alert — allowlist "
+            "fail-open is fail-alert-open, not fail-silent"
+        )
+
+    def test_stage_without_config_gate_never_allowlisted(self, monkeypatch):
+        """FetchTrendingVideos has no sources.yaml gate — cannot be allowlisted."""
+        from genlab_core.monitoring.health_monitor import _stage_intentionally_disabled
+        from genlab_core.pipeline import pipeline_runner
+
+        # Even if EVERY key is disabled, FetchTrendingVideos isn't in the
+        # gate map so its silence is always actionable.
+        monkeypatch.setattr(
+            pipeline_runner,
+            "_load_sources_yaml",
+            lambda _root, _nid="": {
+                "reddit": {"enabled": False},
+                "scorebat": {"enabled": False},
+            },
+        )
+        assert _stage_intentionally_disabled("gaming", "FetchTrendingVideos") is False
+
+
 class TestSummaryLineHandling:
     def test_pipeline_summary_footer_ignored(self, fake_runs_dir):
         """The summary footer line with ``_type=pipeline_summary`` must

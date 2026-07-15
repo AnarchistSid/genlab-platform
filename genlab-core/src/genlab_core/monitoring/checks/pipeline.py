@@ -379,6 +379,84 @@ _SILENT_FAILURE_DURATION_MS = 1.0
 _SILENT_FAILURE_CONSECUTIVE_RUNS = 3
 
 
+# Mapping from FetcherStage class name → sources.yaml key(s) that
+# gate the stage's execution. A stage is "intentionally disabled" iff
+# ALL its gate keys are present in sources.yaml with ``enabled: false``.
+#
+# The detector reads this to suppress false-positives when an operator
+# has deliberately turned a source off (e.g., sports scorebat disabled
+# 2026-07-14 because URLs weren't yt-dlp-compatible). Without the
+# allowlist, the silent-no-op detector would flag every deliberate
+# disable as a suspicious bug.
+#
+# Adding a new fetcher stage? Add its class name here mapped to the
+# sources.yaml key it reads. Grep site: ``sources_config.get("...", {})``
+# in each fetch_*.py stage file.
+_STAGE_TO_SOURCES_KEYS: dict[str, tuple[str, ...]] = {
+    "FetchRedditClips": ("reddit",),
+    "FetchScoreBatHighlights": ("scorebat",),
+    "FetchScorebat": ("scorebat",),
+    "FetchTMDBTrailers": ("tmdb_trailers",),
+    "FetchTwitchClips": ("twitch_clips",),
+    "FetchSteamTrailers": ("steam_trailers",),
+    # FetchAnimePromos uses either jikan OR anilist — both must be
+    # explicitly disabled to allowlist the stage.
+    "FetchAnimePromos": ("jikan", "anilist"),
+    # FetchTrendingVideos uses YouTube category — no sources.yaml gate.
+    # Deliberately absent from this map; silent no-op there is always
+    # actionable (YouTube quota exhaustion or API-key rot).
+}
+
+
+def _stage_intentionally_disabled(niche_id: str, stage_name: str) -> bool:
+    """Return True iff the stage's sources.yaml keys are all ``enabled: false``.
+
+    An "intentional disable" means the operator has explicitly set
+    ``<key>.enabled: false`` for every sources_config key the stage
+    consults. A missing key OR a key with ``enabled: true`` does NOT
+    count as disabled — the detector should keep firing in those cases
+    because the stage might actually be running with empty config
+    (the bug class this detector was built to catch).
+
+    Loads sources.yaml via the same helper the pipeline uses, so the
+    CriticalRush nested layout (niches/gaming/config/) is resolved
+    correctly (2026-07-15 fix).
+
+    Silently returns False on any load error — the allowlist is a
+    false-positive suppressor, not a load-bearing gate. A broken
+    sources.yaml should still let the alert fire.
+    """
+    gate_keys = _STAGE_TO_SOURCES_KEYS.get(stage_name)
+    if not gate_keys:
+        # Stage has no config gate → can never be "intentionally disabled".
+        return False
+
+    try:
+        # Late import to avoid a circular between monitoring and
+        # pipeline. Both modules are top-level; the runtime import is
+        # only paid on suspect-stage detection (rare).
+        from genlab_core.pipeline.cli import NICHE_DIR_NAMES, _resolve_genlab_root
+        from genlab_core.pipeline.pipeline_runner import _load_sources_yaml
+
+        dir_name = NICHE_DIR_NAMES.get(niche_id)
+        if not dir_name:
+            return False
+        niche_root = _resolve_genlab_root() / dir_name
+        cfg = _load_sources_yaml(niche_root, niche_id)
+    except Exception:
+        return False
+
+    # All gate keys must be explicitly enabled=False. If any is missing
+    # or enabled=True, the stage isn't allowlisted.
+    for key in gate_keys:
+        section = cfg.get(key)
+        if not isinstance(section, dict):
+            return False
+        if section.get("enabled") is not False:
+            return False
+    return True
+
+
 def check_fetcher_stage_silent_failures(niche_id: str) -> list[Alert]:
     """Detect fetcher stages running in <1ms across multiple consecutive runs.
 
@@ -411,6 +489,13 @@ def check_fetcher_stage_silent_failures(niche_id: str) -> list[Alert]:
 
     alerts: list[Alert] = []
     for stage_name in _FETCHER_STAGES_TO_MONITOR:
+        # Skip stages the operator has explicitly disabled via
+        # sources.yaml (e.g., sports scorebat 2026-07-14). Without
+        # this guard the detector false-fires on every deliberate
+        # disable — noise that trains ops to ignore the alert.
+        if _stage_intentionally_disabled(niche_id, stage_name):
+            continue
+
         # For each stage: count how many of the last N runs report
         # this stage with duration < threshold AND status == "ok"
         # (an error counts as a legitimate non-silent run).
