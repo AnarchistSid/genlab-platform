@@ -56,7 +56,7 @@ from genlab_core.pipeline.stage_runner import Stage, StageRunnerFactory
 logger = logging.getLogger(__name__)
 
 
-def _load_sources_yaml(niche_root: str | Path) -> dict[str, Any]:
+def _load_sources_yaml(niche_root: str | Path, niche_id: str = "") -> dict[str, Any]:
     """Load the niche's sources.yaml into a dict for context['sources_config'].
 
     Multiple fetcher stages (FetchRedditClips, FetchScorebat,
@@ -68,12 +68,23 @@ def _load_sources_yaml(niche_root: str | Path) -> dict[str, Any]:
     pipelines ran on YouTube-only data and Reddit/etc. sources
     were dead.
 
+    Mirrors ``niche_loader.load_niche_config``'s dual-path logic:
+      1. ``<niche_root>/config/sources.yaml`` — standalone channel folders
+      2. ``<niche_root>/niches/<niche_id>/config/sources.yaml`` — CriticalRush nested
+
     Fail-OPEN: yaml parse errors return {} so the pipeline continues
     (worst case: same as before the fix — stages no-op).
     """
     import yaml as _yaml
 
-    sources_path = Path(str(niche_root)) / "config" / "sources.yaml"
+    root = Path(str(niche_root))
+    # Try standalone layout first (ClutchWire, SpliceReel, FrameDrift, BlackboxBrief)
+    sources_path = root / "config" / "sources.yaml"
+    if not sources_path.exists() and niche_id:
+        # Fall back to CriticalRush nested layout: niches/<niche_id>/config/
+        nested = root / "niches" / niche_id / "config" / "sources.yaml"
+        if nested.exists():
+            sources_path = nested
     if not sources_path.exists():
         return {}
     try:
@@ -350,7 +361,11 @@ class GenericPipelineRunner:
                 # and FetchSteamTrailers all read {} and silently
                 # no-op'd (0.0000s stage_timing on prod). See
                 # ``_load_sources_yaml`` docstring above.
-                "sources_config": _load_sources_yaml(niche_root),
+                # 2026-07-15 — pass niche_id so the CriticalRush nested
+                # layout (niches/gaming/config/sources.yaml) resolves.
+                # Gaming was silently no-opping FetchRedditClips for
+                # 6+ days because the flat-layout probe missed it.
+                "sources_config": _load_sources_yaml(niche_root, niche_id),
                 # 2026-06-22 — working memory for within-run cross-
                 # stage coordination. Stages append via
                 # ``reasoning_trace.append_trace(context, ...)``;

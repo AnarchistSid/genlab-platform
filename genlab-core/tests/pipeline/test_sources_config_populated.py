@@ -51,11 +51,62 @@ def test_load_sources_yaml_helper_exists_and_is_wired_into_context_dict() -> Non
     #    loader result is the value bound to the 'sources_config' key
     #    in context_dict.
     src = inspect.getsource(pipeline_runner)
-    assert '"sources_config": _load_sources_yaml(niche_root)' in src, (
+    assert '"sources_config": _load_sources_yaml(niche_root, niche_id)' in src, (
         "context_dict construction must populate 'sources_config' from "
-        "_load_sources_yaml(niche_root). If you renamed the helper, "
-        "update this pin in the same commit."
+        "_load_sources_yaml(niche_root, niche_id). The niche_id argument "
+        "is REQUIRED for the CriticalRush nested layout probe (2026-07-15) "
+        "— gaming's sources.yaml lives at niches/gaming/config/, not the "
+        "flat config/. If you renamed the helper, update this pin in the "
+        "same commit."
     )
+
+
+def test_load_sources_yaml_finds_criticalrush_nested_layout(tmp_path: Path) -> None:
+    """Pin: gaming's nested layout resolves via the niche_id fallback probe.
+
+    History — 2026-07-15:
+        Gaming's ``sources.yaml`` lives at
+        ``CriticalRush/niches/gaming/config/sources.yaml`` (one level
+        deeper than every other channel) because CriticalRush was
+        originally designed to host multiple sub-niches. The flat-layout
+        probe missed it; ``FetchRedditClips`` silently no-op'd for 6+
+        days (metrics.jsonl showed duration_ms=0.01 across every fire).
+
+        Fix: ``_load_sources_yaml`` mirrors ``niche_loader.load_niche_config``'s
+        dual-path logic — flat first, then ``niches/<niche_id>/config/``
+        fallback. This pin asserts the fallback works.
+    """
+    niche_root = tmp_path / "CriticalRush"
+    nested_config = niche_root / "niches" / "gaming" / "config"
+    nested_config.mkdir(parents=True)
+    (nested_config / "sources.yaml").write_text(
+        "reddit:\n  enabled: true\n  subreddits:\n    - name: GamingClips\n"
+    )
+    # DO NOT create a flat config/ dir — the fallback must fire.
+
+    result = _load_sources_yaml(niche_root, niche_id="gaming")
+
+    assert result == {"reddit": {"enabled": True, "subreddits": [{"name": "GamingClips"}]}}
+
+
+def test_load_sources_yaml_flat_layout_takes_precedence(tmp_path: Path) -> None:
+    """When BOTH layouts exist, the flat one wins.
+
+    This matches ``niche_loader.load_niche_config``'s ordering — no
+    channel today has both, but the invariant must hold if a future
+    migration lands one before the other is deleted.
+    """
+    niche_root = tmp_path / "CriticalRush"
+    flat_config = niche_root / "config"
+    flat_config.mkdir(parents=True)
+    (flat_config / "sources.yaml").write_text("reddit:\n  flat_wins: true\n")
+    nested_config = niche_root / "niches" / "gaming" / "config"
+    nested_config.mkdir(parents=True)
+    (nested_config / "sources.yaml").write_text("reddit:\n  flat_wins: false\n")
+
+    result = _load_sources_yaml(niche_root, niche_id="gaming")
+
+    assert result == {"reddit": {"flat_wins": True}}
 
 
 def test_load_sources_yaml_reads_reddit_subreddits(tmp_path: Path) -> None:
