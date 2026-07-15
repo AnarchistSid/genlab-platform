@@ -25,6 +25,12 @@ def build_tts_cascade():
 
     providers = []
 
+    # 2026-07-14 (media audit F9): elevated silent `pass` to WARNING.
+    # Prior state: any construction exception (auth error, SDK
+    # version incompat) silently dropped the provider — highest-
+    # quality tier could disappear with zero log signal. Operator
+    # saw ElevenLabs configured in .env but reels shipped with
+    # gTTS-quality audio for weeks. Fixed: WARNING logs the reason.
     # ElevenLabs — highest quality, requires API key
     if os.environ.get("ELEVENLABS_API_KEY"):
         try:
@@ -32,8 +38,8 @@ def build_tts_cascade():
 
             providers.append(ElevenLabsTTS())
             logger.debug("TTS: ElevenLabs provider added")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("TTS: ElevenLabs provider FAILED to construct: %s", exc)
 
     # OpenAI TTS — good quality, requires API key
     if os.environ.get("OPENAI_API_KEY"):
@@ -42,22 +48,22 @@ def build_tts_cascade():
 
             providers.append(OpenAITTS())
             logger.debug("TTS: OpenAI provider added")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("TTS: OpenAI provider FAILED to construct: %s", exc)
 
     # Edge-TTS — free, neural voices (always available)
     try:
         providers.append(EdgeTTS())
         logger.debug("TTS: Edge-TTS provider added")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("TTS: Edge-TTS provider FAILED to construct: %s", exc)
 
     # gTTS — free, lowest quality fallback (always available)
     try:
         providers.append(GoogleTTS())
         logger.debug("TTS: gTTS provider added")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("TTS: gTTS provider FAILED to construct: %s", exc)
 
     if not providers:
         raise RuntimeError("No TTS providers available — install edge-tts or gTTS")
