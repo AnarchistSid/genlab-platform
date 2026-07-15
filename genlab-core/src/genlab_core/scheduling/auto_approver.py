@@ -720,8 +720,17 @@ def run_pass(
             max_records=max(1, policy.max_approvals_per_pass * 3),
         )
     except Exception as exc:
+        # 2026-07-15: print traceback to stderr (bypass logging.lastResort).
+        import sys
+        import traceback
+
         result.errors.append(f"blueprint query failed: {exc}")
-        logger.warning("[auto_approver] niche=%s candidate query failed: %s", niche_id, exc)
+        print(
+            f"[auto_approver] niche={niche_id} candidate query failed: "
+            f"{exc}\n{traceback.format_exc()}",
+            file=sys.stderr,
+            flush=True,
+        )
         return result
 
     result.candidates_examined = len(candidates)
@@ -791,11 +800,10 @@ def run_pass(
             import sys
             import traceback
 
-            tb_str = traceback.format_exc()
             result.errors.append(f"gate evaluation failed for {record_id}: {exc}")
             print(
                 f"[auto_approver] niche={niche_id} bp={record_id} "
-                f"gate error: {exc}\n{tb_str}",
+                f"gate error: {exc}\n{traceback.format_exc()}",
                 file=sys.stderr,
                 flush=True,
             )
@@ -823,11 +831,19 @@ def run_pass(
                     calibration_lookup=_lookup_calibration_stats,
                 )
             except Exception as exc:  # noqa: BLE001 — strategies are advisory
-                logger.warning(
-                    "[auto_approver] niche=%s bp=%s strategy layer error (preserving base decision): %s",
-                    niche_id,
-                    record_id,
-                    exc,
+                # 2026-07-15: same silent-traceback fix as gate_evaluate
+                # handler. logger.warning under systemd oneshot goes
+                # through logging.lastResort which strips tracebacks.
+                # Print directly to stderr → journalctl.
+                import sys
+                import traceback
+
+                print(
+                    f"[auto_approver] niche={niche_id} bp={record_id} "
+                    f"strategy layer error (preserving base decision): "
+                    f"{exc}\n{traceback.format_exc()}",
+                    file=sys.stderr,
+                    flush=True,
                 )
 
         if not decision.approved:
@@ -962,12 +978,16 @@ def _execute_approval(
     except Exception as slot_exc:  # noqa: BLE001
         # Fail-CLOSED: cap-lookup failure must NEVER let the worker
         # over-schedule. Skip this blueprint; next pass retries.
+        # 2026-07-15: print traceback to stderr (bypass logging.lastResort).
+        import sys
+        import traceback
+
         result.errors.append(f"slot lookup failed for {record_id}: {slot_exc}")
-        logger.warning(
-            "[auto_approver] niche=%s bp=%s slot lookup failed: %s",
-            niche_id,
-            record_id,
-            slot_exc,
+        print(
+            f"[auto_approver] niche={niche_id} bp={record_id} "
+            f"slot lookup failed: {slot_exc}\n{traceback.format_exc()}",
+            file=sys.stderr,
+            flush=True,
         )
         return False
 
@@ -992,12 +1012,16 @@ def _execute_approval(
     try:
         backlog_client.blueprints.update(record_id, update_fields, typecast=True)
     except Exception as exc:
+        # 2026-07-15: print traceback to stderr (bypass logging.lastResort).
+        import sys
+        import traceback
+
         result.errors.append(f"backlog update failed for {record_id}: {exc}")
-        logger.warning(
-            "[auto_approver] niche=%s bp=%s backlog update failed: %s",
-            niche_id,
-            record_id,
-            exc,
+        print(
+            f"[auto_approver] niche={niche_id} bp={record_id} "
+            f"backlog update failed: {exc}\n{traceback.format_exc()}",
+            file=sys.stderr,
+            flush=True,
         )
         return False
 
