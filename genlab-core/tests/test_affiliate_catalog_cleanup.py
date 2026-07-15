@@ -1,14 +1,31 @@
 """Pin: affiliate_catalog.yaml is free of zero-value config (2026-06-22 cleanup).
 
-After the 2026-06-22 audit revealed the catalog had compounding bugs
-(evergreen defaults causing intent-mismatch CTAs + dead cuelinks
-entries that earn ₹0/click), this test enforces the invariants:
+History of the evergreen invariant:
 
-1. NO product has ``evergreen_default: true`` — these caused catalog-
-   wide fall-through to generic SKUs (Anime Figure for ALL anime
-   reels, Fitness Tracker for ALL sports reels, Prime for ALL movies
-   reels). Removing evergreen means unmatched stories get no
-   affiliate CTA (which is correct — no CTA beats a wrong CTA).
+    * 2026-06-22 cleanup — REMOVED all ``evergreen_default: true`` on the
+      theory that generic fall-through CTAs caused intent-mismatch
+      (Anime Figure for ALL anime reels, Fitness Tracker for ALL sports
+      reels, Prime for ALL movies reels).
+
+    * 2026-07-14 prod evidence — 0 blueprints in 7 days matched an
+      affiliate product across ALL 5 niches. The 2026-06-22 cleanup was
+      empirically wrong: removing every evergreen killed the entire
+      monetization capability rather than merely trimming intent-mismatch.
+      Commit b0439a42 re-added ONE evergreen per niche (Xbox Game Pass
+      for gaming, Sports Watch for sports, Prime Video for movies, Manga
+      Subscription Box for anime, Claude Pro for ai_creators). Every
+      story that fails specific-keyword matching now gets a curated
+      evergreen CTA. Task memory + commit b0439a42 have the full
+      per-niche picks + rationale.
+
+Invariants pinned here:
+
+1. EXACTLY ONE evergreen per niche — enough to close the fall-through
+   gap without re-creating the intent-mismatch shape the 2026-06-22
+   cleanup was fighting. If a niche loses its evergreen, monetization
+   silently starves again (the 2026-07-14 shape). If a niche gains a
+   second evergreen, the resolver picks non-deterministically among
+   them and re-creates the intent-mismatch shape.
 
 2. NO product carries a ``cuelinks`` network. Per the 2026-06-14
    audit recorded in ``geo_link_resolver.py``, every cuelinks
@@ -40,32 +57,57 @@ def _load_catalog() -> dict:
     return yaml.safe_load(CATALOG_PATH.read_text())
 
 
-class TestNoEvergreenDefaults:
-    """Pin: no product has evergreen_default=True after 2026-06-22 cleanup."""
+class TestExactlyOneEvergreenPerNiche:
+    """Pin: every niche has EXACTLY ONE evergreen product (2026-07-14).
 
-    def test_no_product_has_evergreen_default_true(self):
+    Zero evergreens on a niche = the 2026-07-14 monetization outage
+    (7 days of 0 affiliate matches, capability #6 structurally dead).
+    Two or more evergreens on a niche = resolver picks non-deterministically
+    → the intent-mismatch shape the 2026-06-22 cleanup was fighting.
+    Exactly one is the operator-tuned floor + ceiling.
+    """
+
+    def test_each_niche_has_exactly_one_evergreen_default(self):
         catalog = _load_catalog()
-        offenders = []
+        counts: dict[str, list[str]] = {}
         for niche_id, niche_data in catalog.get("niches", {}).items():
-            for product in niche_data.get("products", []):
-                if product.get("evergreen_default") is True:
-                    offenders.append((niche_id, product.get("name", "?")))
-        assert offenders == [], (
-            f"evergreen_default: true reintroduced — these products will "
-            f"silently fall-through-match ALL unmatched stories in their "
-            f"niche, producing intent-mismatch CTAs: {offenders}"
-        )
+            evergreens = [
+                product.get("name", "?")
+                for product in niche_data.get("products", [])
+                if product.get("evergreen_default") is True
+            ]
+            counts[niche_id] = evergreens
 
-    def test_catalog_source_has_zero_active_evergreen_lines(self):
-        """Pin: line-level check on the source file — catches anyone
-        adding the flag back via raw YAML edit. (Comments mentioning
-        the term in prose are excluded.)"""
-        for line in CATALOG_PATH.read_text().splitlines():
-            stripped = line.lstrip()
-            if stripped.startswith("#"):
-                continue
-            assert "evergreen_default" not in stripped, (
-                f"reintroduced evergreen_default in line: {line!r}"
+        errors = []
+        for niche_id, evergreens in counts.items():
+            if len(evergreens) == 0:
+                errors.append(
+                    f"{niche_id}: MISSING evergreen — every story that fails "
+                    "specific-keyword matching will get no affiliate CTA, "
+                    "re-creating the 2026-07-14 monetization outage."
+                )
+            elif len(evergreens) > 1:
+                errors.append(
+                    f"{niche_id}: has {len(evergreens)} evergreens ({evergreens}) — "
+                    "the resolver will pick non-deterministically, re-creating "
+                    "the intent-mismatch shape the 2026-06-22 cleanup fought."
+                )
+        assert not errors, "\n".join(errors)
+
+    def test_all_5_niches_have_evergreen(self):
+        """Belt-and-suspenders: the map-level check catches a niche that's
+        entirely missing from the catalog (which would silently skip the
+        per-niche count check above)."""
+        catalog = _load_catalog()
+        for niche_id in ("gaming", "sports", "movies", "anime", "ai_creators"):
+            niche_data = catalog.get("niches", {}).get(niche_id, {})
+            evergreens = [
+                p for p in niche_data.get("products", [])
+                if p.get("evergreen_default") is True
+            ]
+            assert len(evergreens) == 1, (
+                f"{niche_id} must have exactly 1 evergreen_default: true "
+                f"product; found {len(evergreens)}"
             )
 
 
