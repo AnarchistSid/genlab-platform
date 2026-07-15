@@ -110,6 +110,42 @@ def _is_non_gameplay_clip(title: str) -> bool:
     return any(marker in padded for marker in _NON_GAMEPLAY_TITLE_MARKERS)
 
 
+# Platform min-duration floor. Twitch clips shorter than this cannot
+# survive ``validate_videos.SPEC.min_duration=15.0``; the render output
+# comes in at the source-clip length (compositor doesn't pad), so
+# rejecting at ingestion is the only place that avoids wasted work
+# + a stuck DRAFTED blueprint. See 2026-07-15 investigation of
+# Sheepy (5.0s) + Granny (5.072s) blueprints.
+_MIN_CLIP_DURATION_SECONDS = 15.0
+
+
+def _filter_clips_by_min_duration(
+    clips: list[dict],
+    min_duration_seconds: float = _MIN_CLIP_DURATION_SECONDS,
+) -> tuple[list[dict], list[float]]:
+    """Split clips into (kept, dropped-durations) by min-duration floor.
+
+    Clips missing a ``duration`` key are treated as 0 → dropped. This
+    matches the failure mode we're trying to prevent: an unknown-duration
+    clip is more likely a scraper edge-case than a legitimately-short
+    clip we want to preserve.
+
+    Returns:
+        (kept, dropped_durations): kept is the surviving list preserving
+        input order; dropped_durations is the list of durations we
+        discarded (for logging).
+    """
+    kept: list[dict] = []
+    dropped: list[float] = []
+    for c in clips:
+        dur = float(c.get("duration", 0) or 0)
+        if dur >= min_duration_seconds:
+            kept.append(c)
+        else:
+            dropped.append(dur)
+    return kept, dropped
+
+
 def _get_twitch_app_token(client_id: str, client_secret: str) -> str | None:
     """Get Twitch app access token via client credentials flow."""
     try:
@@ -214,6 +250,15 @@ class FetchTwitchClips(FetcherStage):
         max_clips = twitch_cfg.get("max_clips_per_game", 5)
         min_views = twitch_cfg.get("min_view_count", 1000)
         lookback_days = twitch_cfg.get("lookback_days", 7)
+        # 2026-07-15: reject clips shorter than the platform min duration
+        # (validate_videos SPEC.min_duration = 15s). Without this filter,
+        # short Twitch clips (e.g. Sheepy 5.0s, Granny 5.072s observed
+        # in prod) flow all the way through the pipeline, fail at
+        # validate_videos with `too_short:5.0s`, and leave DRAFTED
+        # blueprints stuck forever — the health-monitor stale_drafted
+        # alert has been ticking on 2 such blueprints for 1-6 days.
+        # Reject at ingestion so the wasted work never happens.
+        min_duration = float(twitch_cfg.get("min_clip_duration_seconds", 15.0))
 
         # Get Twitch app token
         token = _get_twitch_app_token(client_id, client_secret)
@@ -239,6 +284,23 @@ class FetchTwitchClips(FetcherStage):
             clips = _fetch_clips_for_game(game_id, headers, max_clips, lookback_days)
             all_clips.extend(clips)
             time.sleep(0.1)  # Be nice to Twitch API
+
+        # Filter by min duration — validate_videos SPEC.min_duration=15.0
+        # is the platform floor; anything shorter would be rejected at
+        # render time and leave a stuck DRAFTED blueprint behind.
+        before_dur = len(all_clips)
+        all_clips, dropped_durations = _filter_clips_by_min_duration(
+            all_clips, min_duration_seconds=min_duration
+        )
+        if dropped_durations:
+            logger.info(
+                "[TwitchClips] Dropped %d/%d clips shorter than %.1fs "
+                "(platform min_duration): %s",
+                len(dropped_durations),
+                before_dur,
+                min_duration,
+                sorted(dropped_durations)[:5],
+            )
 
         # Filter by min views and sort
         all_clips = [c for c in all_clips if c.get("view_count", 0) >= min_views]
