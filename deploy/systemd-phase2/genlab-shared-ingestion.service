@@ -17,4 +17,8 @@ Environment=GENLAB_PROJECT_ROOT=/opt/genlab
 Environment=BACKLOG_CONFIG_PATH=/opt/genlab/genlab-core/config/lists_config.yaml
 Environment=HOME=/opt/genlab
 ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.pipeline.shared_ingestion
-TimeoutSec=600
+# 2026-07-15: bumped from 600s. Feed count grew to 710 (max_workers=15
+# ≈ 14 min wall in practice). Old 10 min timeout killed every fire →
+# content_pool stopped growing → 3 niches went into content_gap.
+# Same class-of-bug as publisher TimeoutSec bump on 2026-07-08.
+TimeoutSec=1800
