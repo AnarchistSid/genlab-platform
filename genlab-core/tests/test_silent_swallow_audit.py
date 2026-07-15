@@ -339,13 +339,16 @@ class TestPollerAuditFix:
               silently skipped for that (blueprint, platform).
               Compliance enforcement hole.
 
-          * **monitoring/health_monitor.py:945, 1037, 1116**
+          * **monitoring/checks/pipeline.py + monitoring/checks/infrastructure.py**
               check_publish_failures + check_publish_silence +
               check_services. Each generates a critical/warning
               alert; silently swallowed check ⇒ alert NEVER fires.
               The SERVICE_DOWN 6h-ago + YT 0% + publish-silence
               findings from the 2026-06-25 audit are all this
-              pattern.
+              pattern. (2026-07-08 DEV-1 god-module split moved
+              these check bodies from health_monitor.py into the
+              per-category submodules; health_monitor.py is now a
+              facade — the WARN logs live at the new locations.)
 
         Pin each upgraded site by message substring. The check finds
         the message in source, scans the 5 preceding lines for the
@@ -381,16 +384,21 @@ class TestPollerAuditFix:
                 "genlab-core/src/genlab_core/scheduling/auto_approver.py",
                 "compliance check raised for bp=",
             ),
+            # 2026-07-08 DEV-1 god-module split: these 3 checks moved
+            # from health_monitor.py into per-category submodules.
+            # health_monitor.py re-exports the symbols but the WARN
+            # logs live at the new locations. Update paths here in
+            # lockstep with any future refactor that moves them again.
             (
-                "genlab-core/src/genlab_core/monitoring/health_monitor.py",
+                "genlab-core/src/genlab_core/monitoring/checks/pipeline.py",
                 "check_publish_failures DB query failed",
             ),
             (
-                "genlab-core/src/genlab_core/monitoring/health_monitor.py",
+                "genlab-core/src/genlab_core/monitoring/checks/pipeline.py",
                 "check_publish_silence DB query failed",
             ),
             (
-                "genlab-core/src/genlab_core/monitoring/health_monitor.py",
+                "genlab-core/src/genlab_core/monitoring/checks/infrastructure.py",
                 "check_services systemctl call failed",
             ),
         ]
