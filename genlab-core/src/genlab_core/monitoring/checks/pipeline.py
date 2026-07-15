@@ -138,7 +138,13 @@ def _count_future_queue_blueprints(niche_id: str) -> int | None:
                 """,
                 (niche_id, _QUEUE_RUNWAY_SUPPRESSION_DAYS),
             ).fetchone()
-        return int(row["n"]) if row else 0
+        # 2026-07-15: pg_connect returns positional tuples by default —
+        # `row["n"]` raised TypeError, which the except handler caught +
+        # returned None, silently disabling the queue-depth suppression
+        # for weeks. Post-2026-07-15 deploy surfaced 3 warnings in one
+        # health-monitor fire (ai_creators, sports, movies). Use
+        # positional access.
+        return int(row[0]) if row else 0
     except Exception as exc:  # noqa: BLE001 — fail-open: alert if we can't check
         logger.warning(
             "[health.check_zero_blueprints] queue-depth query failed for "

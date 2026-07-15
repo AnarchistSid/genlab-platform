@@ -46,7 +46,13 @@ def _mk_queue_conn(row_count: int) -> MagicMock:
     conn.__enter__.return_value = conn
     conn.__exit__.return_value = False
     cursor = MagicMock()
-    cursor.fetchone.return_value = {"n": row_count}
+    # 2026-07-15: pg_connect returns positional tuples by default.
+    # Prior mock `{"n": row_count}` silently masked the prod bug —
+    # `row["n"]` raised TypeError, caught by broad except → returned
+    # None → queue-depth suppression silently disabled for weeks
+    # (surfaced post-2026-07-15 deploy). Fix uses `row[0]`; mock
+    # matches.
+    cursor.fetchone.return_value = (row_count,)
     conn.execute.return_value = cursor
     return conn
 
