@@ -29,14 +29,27 @@ class TestRecordLlm:
             "genlab_core.intelligence.cost_accumulator._compute_cost", side_effect=_local_only_cost
         ):
             cost = acc.record_llm("claude-haiku-4-5-20251001", 1_000_000, 1_000_000)
-        # claude-haiku-4-5-20251001: input=0.80, output=4.00 per 1M tokens
-        assert cost == pytest.approx(0.80 + 4.00)
+        # claude-haiku-4-5-20251001: input=1.00, output=5.00 per 1M tokens.
+        # (Prior test asserted 0.80/4.00 — the pricing table was updated to
+        # 1.00/5.00 to match Anthropic's current published Haiku 4.5 rates.
+        # Test was not updated in lockstep. 2026-07-15 restoration.)
+        assert cost == pytest.approx(1.00 + 5.00)
 
-    def test_record_llm_unknown_model_uses_gpt4o_mini_rates(self):
+    def test_record_llm_unknown_model_uses_opus_rates_for_safety(self):
+        """Unknown models fall back to OPUS rates by design (2026-07-14 F6 audit).
+
+        Prior behaviour used gpt-4o-mini (0.15/0.60) — a 100× undercount vs
+        actual Opus/Sonnet rates. A typo in a model ID could silently
+        under-attribute LLM spend by 100×. Overcounting on unknown models
+        surfaces as a visible dashboard cost spike, prompting a fix rather
+        than silently masking the drift.
+
+        See MODEL_COSTS lookup fallback in cost_accumulator.py:79-94.
+        """
         acc = CostAccumulator(run_id="test-unknown")
-        # Unknown model falls back to gpt-4o-mini: input=0.15, output=0.60
+        # Unknown model falls back to OPUS 4.7 rates: input=15.00, output=75.00
         cost = acc.record_llm("some-unknown-model", 1_000_000, 1_000_000)
-        assert cost == pytest.approx(0.15 + 0.60)
+        assert cost == pytest.approx(15.00 + 75.00)
 
     def test_record_llm_appends_entry(self):
         acc = CostAccumulator(run_id="test-entry")
