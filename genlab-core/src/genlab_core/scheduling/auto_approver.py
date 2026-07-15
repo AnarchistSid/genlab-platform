@@ -1053,6 +1053,25 @@ def _cli() -> int:
     """CLI entry point. Used by launchd / cron / Prefect."""
     from genlab_core.pipeline.cli import NICHE_DIR_NAMES
 
+    # 2026-07-15: configure the root logger so ANY downstream module's
+    # ``logger.warning(msg, exc_info=True)`` call actually renders the
+    # traceback. Without this, Python falls back to
+    # ``logging.lastResort`` under systemd Type=oneshot, which uses a
+    # bare ``"%(levelname)s: %(message)s"`` formatter that strips
+    # tracebacks. Same-day incident: gate_evaluate exceptions in this
+    # unit were invisible for weeks because of exactly this.
+    #
+    # The explicit print-to-stderr in each except-handler (see
+    # ``result.errors.append`` sites) is the last-resort defence;
+    # this basicConfig is the FIRST defence — it makes untraced
+    # ``logger.warning(exc_info=True)`` calls from imported libraries
+    # (bandit_lookup, calibration_lookup, gate_strategies, etc.)
+    # ALSO render their tracebacks.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
     parser = argparse.ArgumentParser(
         description="AUTO #2 auto-approval enforcement worker.",
     )

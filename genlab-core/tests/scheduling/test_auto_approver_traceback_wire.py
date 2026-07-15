@@ -45,6 +45,48 @@ def _get_source() -> str:
     return inspect.getsource(auto_approver)
 
 
+class TestCliConfiguresLogging:
+    """Pin — the ``_cli()`` entry point MUST call ``logging.basicConfig``.
+
+    Background (2026-07-15): auto_approver was the ONLY genlab-core CLI
+    entry point (of 21 invoked by systemd units) that lacked basicConfig.
+    All others (publisher, health_monitor, shared_ingestion, drift_detector,
+    metric_collector, gate_tuner, etc.) call basicConfig in their `_cli`
+    or `main`. Without it, systemd Type=oneshot falls back to Python's
+    ``logging.lastResort`` which uses a formatter that strips tracebacks
+    even when ``exc_info=True`` is passed.
+
+    Result before the fix: ``logger.warning(msg, exc_info=True)`` on
+    gate errors was silent in prod for weeks. Any imported-library
+    ``exc_info=True`` (bandit_lookup, calibration_lookup,
+    apply_strategies) was ALSO silent.
+
+    A regression that removes basicConfig from _cli would reintroduce
+    the same silent-failure class.
+    """
+
+    def test_cli_calls_logging_basic_config(self):
+        src = _get_source()
+        # The basicConfig call must be in the _cli() entry point,
+        # NOT elsewhere in the module (a helper's basicConfig wouldn't
+        # run when systemd invokes _cli directly).
+        # Simplest heuristic: find "def _cli" and require basicConfig
+        # to appear before "def " (next function definition).
+        cli_start = src.find("def _cli(")
+        assert cli_start >= 0, "def _cli() not found — module renamed?"
+        # Next def after _cli's start
+        next_def = src.find("\ndef ", cli_start + 1)
+        cli_body = src[cli_start : next_def if next_def > 0 else len(src)]
+        assert "basicConfig" in cli_body, (
+            "auto_approver._cli MUST call logging.basicConfig — otherwise "
+            "Python's logging.lastResort handler under systemd Type=oneshot "
+            "strips tracebacks. Same class-of-bug that hit the auto_approver "
+            "errors=1 flap for weeks in 2026-07-15. Every other genlab-core "
+            "CLI invoked by a systemd unit calls basicConfig in its _cli or "
+            "main. Match the pattern; do not remove."
+        )
+
+
 class TestErrorHandlersPrintTraceback:
     """Each ``result.errors.append(...)`` site must be paired with
     a ``traceback.format_exc()`` + ``file=sys.stderr`` print call.
