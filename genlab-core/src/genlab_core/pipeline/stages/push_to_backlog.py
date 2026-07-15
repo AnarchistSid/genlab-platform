@@ -1893,7 +1893,7 @@ class PushToBacklog:
         # list shows where the dedup pressure landed by content_type.
         kept_for_drop_accounting: list[dict[str, Any]] = []
         for story in stories:
-            title = sanitize_for_graph_api(story.get("title", "Unknown"))
+            raw_title = sanitize_for_graph_api(story.get("title", "Unknown"))
             source_url = story.get("source_url", "")
             published_at = story.get("published_at", datetime.now(UTC).isoformat())
 
@@ -1906,9 +1906,57 @@ class PushToBacklog:
                 skip_llm_drops += 1
                 logger.info(
                     "[PUSH] Skipping story with no recoverable hook: %r",
-                    title[:60],
+                    raw_title[:60],
                 )
                 continue
+
+            # 2026-07-16 language-guard: TEXT surfaces (title, hook, caption,
+            # subtitles, hashtags) MUST be English per operator invariant.
+            # Video source language can be Japanese or English — the video
+            # itself is fine as-is; but the TITLE ships in search results,
+            # feed cards, watch pages, so a non-English title = an
+            # untraslatable card for the (English-speaking) audience.
+            #
+            # The story.title comes verbatim from YouTube/Reddit/Twitch
+            # metadata, which for anime pulls from Thai/Vietnamese/Russian/
+            # Portuguese/French/Hindi creators making anime commentary in
+            # their own language. Historical damage (30d, 2026-06 → 2026-07):
+            # 28 non-English anime titles shipped, including 8 PUBLISHED
+            # (Thai, Vietnamese, French, Portuguese × 2). Root cause was
+            # that this stage used story.title verbatim and only the
+            # hook + captions got LLM-regenerated.
+            #
+            # Fix: prefer the LLM-generated hook as title whenever the
+            # source title has >20% non-ASCII characters (heuristic;
+            # captures Cyrillic/Thai/CJK/Vietnamese/etc. reliably without
+            # false-firing on English titles that include emoji or ★).
+            # The 20% threshold lets titles like "Nina Couldn't Believe
+            # Rudeus' Power ⚡" (~2% non-ASCII from ⚡) pass while
+            # blocking "การ์ตูนคือสิ่งที่ไร้ประโยชน์" (~100% non-ASCII).
+            title = raw_title
+            if raw_title:
+                non_ascii = sum(1 for c in raw_title if ord(c) > 127)
+                if non_ascii / len(raw_title) > 0.20:
+                    llm_hook = content.get("hook") or ""
+                    if llm_hook and sum(1 for c in llm_hook if ord(c) > 127) / max(1, len(llm_hook)) < 0.20:
+                        # LLM produced an English hook — use it as title
+                        logger.info(
+                            "[PUSH] Non-English source title '%s' — "
+                            "substituting LLM-generated hook as title: '%s'",
+                            raw_title[:60],
+                            llm_hook[:60],
+                        )
+                        title = sanitize_for_graph_api(llm_hook[:100])
+                    else:
+                        # No English hook available either — drop the story.
+                        # Publishing with a foreign-language title is
+                        # a worse audience outcome than skipping one slot.
+                        logger.warning(
+                            "[PUSH] Dropping story with non-English title "
+                            "and no English hook fallback: %r",
+                            raw_title[:60],
+                        )
+                        continue
 
             # Cross-niche source guard. Catches contamination that slipped
             # past the stage-prefix guard (e.g. story injected late in the
