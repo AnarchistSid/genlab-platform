@@ -18,12 +18,19 @@ PROTECTED_BRANCHES = {"main", "master"}
 
 
 def _run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    """Run a git command and return the result."""
+    """Run a git command and return the result.
+
+    2026-07-14 (residual audit): added ``timeout=120`` — git operations
+    (fetch, push, remote lookups) can hang indefinitely on network
+    partitions. 2min is generous enough for legit slow operations
+    (large clones over slow uplinks) while still bounding failure.
+    """
     return subprocess.run(
         ["git", *args],
         capture_output=True,
         text=True,
         check=check,
+        timeout=120,
     )
 
 
