@@ -30,6 +30,13 @@ class ToxicityResult:
 class ToxicityGate:
     INBOUND_THRESHOLD = 0.7
     OUTBOUND_THRESHOLD = 0.3
+    # 2026-07-14 (audit F76): after this many consecutive check_inbound
+    # exceptions, the gate switches to fail-CLOSED (drops all comments
+    # by treating them as toxic) so a persistently-broken Detoxify
+    # doesn't let toxic content through indefinitely. First-N failures
+    # remain fail-open (the original design's rationale — avoid dropping
+    # ALL inbound engagement on a transient hiccup).
+    _MAX_CONSECUTIVE_INBOUND_FAILURES = 10
     # R-77: inbound harassment can hide in any of these dimensions, not just the
     # aggregate "toxicity" score. Detoxify "original-small" emits the same
     # Jigsaw categories as "original" (including "obscene", which we
@@ -47,6 +54,9 @@ class ToxicityGate:
 
     def __init__(self) -> None:
         self._model: Any = None
+        # 2026-07-14 (audit F76): track consecutive check_inbound
+        # failures for the tiered fail-open → fail-closed escalation.
+        self._inbound_consecutive_failures: int = 0
 
     def _get_model(self) -> Any:
         if self._model is None:
@@ -59,8 +69,16 @@ class ToxicityGate:
     def check_inbound(self, text: str) -> ToxicityResult:
         """Check inbound comment toxicity. Returns a ToxicityResult.
 
-        Fail-open: on model error, returns non-toxic result so comments
-        aren't silently dropped.
+        Tiered fail-behavior (2026-07-14 audit F76):
+          - First ``_MAX_CONSECUTIVE_INBOUND_FAILURES`` (10) exceptions:
+            fail-OPEN (return non-toxic) so a transient Detoxify hiccup
+            doesn't drop all inbound engagement.
+          - After that threshold: fail-CLOSED (return is_toxic=True) so
+            a persistently-broken Detoxify doesn't let toxic content
+            through indefinitely. Emits ERROR log per failure past
+            threshold for operator visibility.
+          - Any successful check resets the counter (transient failures
+            self-heal without operator intervention).
         """
         try:
             scores = self._get_model().predict(text)
@@ -73,6 +91,10 @@ class ToxicityGate:
             is_toxic = any(
                 scores.get(dim, 0.0) > self.INBOUND_THRESHOLD for dim in self._INBOUND_TOXIC_DIMS
             )
+            # Success — reset the consecutive-failure counter so a
+            # transient earlier hiccup doesn't accumulate toward
+            # fail-closed if the gate recovered.
+            self._inbound_consecutive_failures = 0
             return ToxicityResult(
                 is_toxic=is_toxic,
                 max_dimension=max_dim,
@@ -80,7 +102,31 @@ class ToxicityGate:
                 all_scores=dict(scores),
             )
         except Exception as e:
-            logger.warning("[TOXICITY] Inbound check failed: %s — allowing comment", e)
+            self._inbound_consecutive_failures += 1
+            if self._inbound_consecutive_failures >= self._MAX_CONSECUTIVE_INBOUND_FAILURES:
+                # Fail-CLOSED — treat as toxic so the comment gets
+                # skipped. Prevents a persistently-broken Detoxify
+                # (missing model, permanent import error, disk full)
+                # from letting toxic replies through forever.
+                logger.error(
+                    "[TOXICITY] Inbound check failed for the %dth consecutive time (%s) — "
+                    "SWITCHING TO FAIL-CLOSED: dropping comment. "
+                    "Detoxify infrastructure needs operator attention.",
+                    self._inbound_consecutive_failures,
+                    e,
+                )
+                return ToxicityResult(
+                    is_toxic=True,
+                    max_dimension="detoxify_broken",
+                    max_score=1.0,
+                    all_scores={},
+                )
+            logger.warning(
+                "[TOXICITY] Inbound check failed (%d/%d consecutive): %s — allowing comment",
+                self._inbound_consecutive_failures,
+                self._MAX_CONSECUTIVE_INBOUND_FAILURES,
+                e,
+            )
             return ToxicityResult(
                 is_toxic=False, max_dimension="error", max_score=0.0, all_scores={}
             )

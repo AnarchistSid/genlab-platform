@@ -1,10 +1,18 @@
-"""Tests for the resolve-grace period in write_alerts_to_db dedup.
+"""Tests for the resolve-grace period + severity-escalation dedup in
+write_alerts_to_db.
 
 Closes today's pattern where the dedup logic re-created alerts immediately
 after manual resolve (because the underlying condition — e.g. zero-download
 runs in the last 3 days — was still true).  The grace period treats
 recently-resolved alerts as still-suppressed so manual resolutions stick
 long enough for the operator to actually address the underlying issue.
+
+2026-07-14 severity-escalation extension: the SELECT now returns
+``(id, severity)`` — a warning → critical escalation IS a write even
+when a same-shape lower-severity row exists in the grace window. Mocks
+now pass 2-tuples ``(id, "warning"|"critical"|"info"|None)`` in
+``fetchone_returns``. Legacy 1-tuple mocks still work (fall back to
+rank=0 = write regardless).
 
 These tests verify the SQL clause directly; the smoke tests on Hetzner
 (``test_grace_period.py`` and ``test_grace_expires.py``) cover the
@@ -36,17 +44,18 @@ class TestResolveGracePeriod:
         """The SELECT clause must consider recently-resolved alerts as
         still-suppressed via the OR resolved_at > NOW() - interval check.
         """
-        conn, cur = _mock_conn(fetchone_returns=[(123,)])  # row exists → skip
+        # Existing row already at critical → incoming critical dedupes.
+        conn, cur = _mock_conn(fetchone_returns=[(123, "critical")])
 
         with patch("psycopg.connect", return_value=conn):
             written = write_alerts_to_db([Alert("download_failure", "critical", "x", "gaming")])
 
-        assert written == 0  # skipped because dedup hit
+        assert written == 0  # skipped because dedup hit at same severity
         # Verify the dedup SELECT was issued with the grace clause
         select_calls = [
             c.args
             for c in cur.execute.call_args_list
-            if c.args and "SELECT id FROM pipeline_alerts" in c.args[0]
+            if c.args and "SELECT id, severity FROM pipeline_alerts" in c.args[0]
         ]
         assert len(select_calls) == 1
         sql, params = select_calls[0]
@@ -71,7 +80,7 @@ class TestResolveGracePeriod:
         select_calls = [
             c.args
             for c in cur.execute.call_args_list
-            if c.args and "SELECT id FROM pipeline_alerts" in c.args[0]
+            if c.args and "SELECT id, severity FROM pipeline_alerts" in c.args[0]
         ]
         assert select_calls[0][1][2] == "10 minutes"
 
@@ -92,8 +101,13 @@ class TestResolveGracePeriod:
         assert len(insert_calls) == 1
 
     def test_dedup_hit_skips_insert(self):
-        """If the dedup SELECT returns a row, the INSERT is skipped."""
-        conn, cur = _mock_conn(fetchone_returns=[(456,)])
+        """If the dedup SELECT returns a row AT SAME OR HIGHER severity,
+        the INSERT is skipped.
+
+        2026-07-14: 2-tuple ``(id, severity)`` per severity-escalation
+        extension. Same critical vs critical → skip.
+        """
+        conn, cur = _mock_conn(fetchone_returns=[(456, "critical")])
 
         with patch("psycopg.connect", return_value=conn):
             written = write_alerts_to_db([Alert("qc_collapse", "critical", "x", "sports")])
@@ -106,10 +120,47 @@ class TestResolveGracePeriod:
         ]
         assert insert_calls == []
 
+    def test_escalation_writes_over_lower_severity(self):
+        """warning → critical MUST NOT dedup — the operator needs to
+        see the escalation, not stay on a stale warning banner.
+
+        2026-07-14: severity-escalation pin (audit F1 that was reverted
+        in f300cde2 for test-surgery scope). Now landed.
+        """
+        conn, cur = _mock_conn(fetchone_returns=[(789, "warning")])
+
+        with patch("psycopg.connect", return_value=conn):
+            written = write_alerts_to_db([Alert("qc_collapse", "critical", "x", "sports")])
+
+        assert written == 1  # escalation forces write
+        insert_calls = [
+            c.args
+            for c in cur.execute.call_args_list
+            if c.args and c.args[0].startswith("INSERT INTO pipeline_alerts")
+        ]
+        assert len(insert_calls) == 1
+
+    def test_deescalation_still_dedupes(self):
+        """critical → warning must NOT rewrite. Operator already sees
+        critical; downgrading to warning would be misleading.
+        """
+        conn, cur = _mock_conn(fetchone_returns=[(999, "critical")])
+
+        with patch("psycopg.connect", return_value=conn):
+            written = write_alerts_to_db([Alert("qc_collapse", "warning", "x", "sports")])
+
+        assert written == 0
+        insert_calls = [
+            c.args
+            for c in cur.execute.call_args_list
+            if c.args and c.args[0].startswith("INSERT INTO pipeline_alerts")
+        ]
+        assert insert_calls == []
+
     def test_multiple_alerts_independent_dedup(self):
         """Each alert is dedup'd independently — one hit doesn't skip others."""
-        # First alert hits dedup, second one doesn't
-        conn, cur = _mock_conn(fetchone_returns=[(1,), None])
+        # First alert hits dedup (same critical), second one has no row.
+        conn, cur = _mock_conn(fetchone_returns=[(1, "critical"), None])
 
         with patch("psycopg.connect", return_value=conn):
             written = write_alerts_to_db(
@@ -133,6 +184,6 @@ class TestResolveGracePeriod:
         select_calls = [
             c.args
             for c in cur.execute.call_args_list
-            if c.args and "SELECT id FROM pipeline_alerts" in c.args[0]
+            if c.args and "SELECT id, severity FROM pipeline_alerts" in c.args[0]
         ]
         assert "IS NOT DISTINCT FROM" in select_calls[0][0]

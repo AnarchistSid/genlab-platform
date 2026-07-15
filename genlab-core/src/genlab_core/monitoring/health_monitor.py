@@ -199,18 +199,44 @@ def write_alerts_to_db(alerts: list[Alert]) -> int:
         # resolutions stick long enough for the underlying condition to clear.
         grace = os.environ.get("ALERT_RESOLVE_GRACE", "1 hour")
 
+        # Severity rank — higher = more severe. Escalations (warning
+        # → critical) MUST write even if a same-shape row already
+        # exists at the lower severity, so operator sees the worsening
+        # condition instead of a stale warning banner.
+        _RANK = {"critical": 3, "warning": 2, "info": 1}
         written = 0
         for alert in alerts:
-            # Deduplicate: skip if an unresolved alert exists OR a same-shape
-            # alert was resolved within the grace window.
+            incoming_rank = _RANK.get(alert.severity, 1)
+            # Deduplicate: skip if an unresolved alert exists AT SAME OR
+            # HIGHER SEVERITY, OR a matching-severity+shape alert was
+            # resolved within the grace window.
+            #
+            # 2026-07-14 (audit follow-up): the SELECT returns
+            # ``(id, severity)`` — server-side max-rank computed via
+            # CASE so a single fetchone is enough (no perf hit vs the
+            # prior id-only SELECT). Prior dedup key was
+            # ``(check_name, niche_id)`` alone — silently dropped
+            # ``warning → critical`` escalations.
             cur.execute(
-                "SELECT id FROM pipeline_alerts "
+                "SELECT id, severity FROM pipeline_alerts "
                 "WHERE check_name = %s AND niche_id IS NOT DISTINCT FROM %s "
-                "AND (resolved_at IS NULL OR resolved_at > NOW() - %s::interval)",
+                "AND (resolved_at IS NULL OR resolved_at > NOW() - %s::interval) "
+                "ORDER BY CASE severity "
+                "  WHEN 'critical' THEN 3 WHEN 'warning' THEN 2 "
+                "  WHEN 'info' THEN 1 ELSE 0 END DESC "
+                "LIMIT 1",
                 (alert.check, alert.niche_id or None, grace),
             )
-            if cur.fetchone():
-                continue
+            row = cur.fetchone()
+            if row:
+                # Extract severity from 2-tuple. Tolerate legacy 1-tuple
+                # test mocks by falling back to rank=0 (won't-dedup)
+                # so the operator's escalation still writes.
+                existing_severity = row[1] if len(row) > 1 else None
+                existing_rank = _RANK.get(existing_severity, 0) if existing_severity else 0
+                if existing_rank >= incoming_rank:
+                    continue
+                # Fall through: incoming is a strict escalation.
 
             cur.execute(
                 "INSERT INTO pipeline_alerts "

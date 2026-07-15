@@ -268,22 +268,36 @@ class LinUCBArm:
 
         Guards against two numerical edge cases:
           1. Singular/near-singular matrix — np.linalg.inv raises LinAlgError.
-             Returns a neutral 0.5 so the Thompson fallback upstream picks
-             this arm's score into the normal ranking.
+             Returns ``-inf`` so ``select`` argmax never picks a broken
+             arm over any healthy one.
           2. Negative value inside sqrt (can happen with floating-point
              error on near-singular matrices even after inversion succeeds)
              — clamp the inner product to >= 0 before sqrt so we never
              propagate NaN into the reward signal.
+
+        2026-07-14 design-review fix: switched from 0.5 to -inf. The
+        original docstring claimed "Thompson fallback upstream picks
+        this arm's score into the normal ranking" — but tracing
+        ``LinUCBBandit.select_with_propensity:585`` shows pure argmax
+        over ALL arms' predict() results, with NO Thompson fallback.
+        In mature bandit state where healthy exploitation scores can
+        be small or negative (e.g. -0.2 for a bad-content prediction),
+        a broken arm returning 0.5 would WIN argmax and get selected
+        for publish. -inf guarantees a broken arm never beats a
+        healthy one. Sibling cold-start fallback lives at
+        ``linucb_picker.score_arm:117`` (returns None on n_obs <
+        min_obs), which is different from the numerical-failure path
+        this fn handles.
         """
         try:
             A_inv = self._get_A_inv()
         except np.linalg.LinAlgError:
             logger.warning(
                 "[LinUCB] singular matrix in arm predict (n_obs=%d) — "
-                "falling back to neutral score",
+                "returning -inf so argmax skips this arm",
                 self.n_obs,
             )
-            return 0.5
+            return float("-inf")
         theta = A_inv @ self.b
         exploitation = float(theta @ x)
         inner = float(x @ A_inv @ x)
@@ -295,10 +309,10 @@ class LinUCBArm:
         score = exploitation + exploration
         if not np.isfinite(score):
             logger.warning(
-                "[LinUCB] non-finite score (n_obs=%d) — neutral fallback",
+                "[LinUCB] non-finite score (n_obs=%d) — returning -inf",
                 self.n_obs,
             )
-            return 0.5
+            return float("-inf")
         return score
 
     def update(self, x: np.ndarray, reward: float) -> None:

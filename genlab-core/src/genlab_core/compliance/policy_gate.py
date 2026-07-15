@@ -63,15 +63,38 @@ CheckFn = Callable[[Mapping, str, str], ComplianceDecision]
 # iterates this dict on every call.
 _REGISTERED_CHECKS: dict[str, CheckFn] = {}
 
+# 2026-07-14 (audit F88): parallel dict of default modes per check.
+# Used when the check raises — instead of always downgrading to
+# "warn", check the registered default_mode and elevate to "block"
+# if the check was registered as block-critical (e.g. attribution).
+# A buggy critical check that raises should still block publish, not
+# silently pass through with warn.
+_CHECK_DEFAULT_MODES: dict[str, str] = {}
 
-def register_check(name: str, fn: CheckFn) -> None:
-    """Register a compliance check. Called at module-import time
-    by check implementations in upcoming PRs. Idempotent — re-
-    registering the same name OVERRIDES the previous fn (lets
-    tests substitute mocks without un-registering first)."""
+
+def register_check(name: str, fn: CheckFn, *, default_mode: str = "warn") -> None:
+    """Register a compliance check.
+
+    Args:
+        name: unique check identifier.
+        fn: the check callable.
+        default_mode: 2026-07-14 (audit F88) — the aggregate decision
+            to fall back to when this check RAISES. Defaults to
+            ``"warn"`` (preserves prior behavior for existing
+            registrations). Pass ``"block"`` for critical checks
+            (e.g. attribution) where a bug should fail-closed
+            instead of silently downgrading enforcement.
+
+    Called at module-import time by check implementations. Idempotent —
+    re-registering the same name OVERRIDES the previous fn (lets
+    tests substitute mocks without un-registering first).
+    """
     if not name:
         raise ValueError("check name must be non-empty")
+    if default_mode not in ("allow", "warn", "block"):
+        raise ValueError(f"default_mode must be one of allow|warn|block, got {default_mode!r}")
     _REGISTERED_CHECKS[name] = fn
+    _CHECK_DEFAULT_MODES[name] = default_mode
 
 
 def registered_check_names() -> list[str]:
@@ -120,14 +143,20 @@ def check_publish_policy(
     for check_name, check_fn in _REGISTERED_CHECKS.items():
         try:
             result = check_fn(blueprint, platform, niche_id)
-        except Exception as exc:  # noqa: BLE001 — convert to warn
+        except Exception as exc:  # noqa: BLE001 — respect check's default_mode
+            # 2026-07-14 (audit F88): use the registered default_mode
+            # instead of always downgrading to "warn". A buggy critical
+            # check (e.g. attribution) that raises should still fail
+            # closed, not silently downgrade enforcement.
+            fallback_mode = _CHECK_DEFAULT_MODES.get(check_name, "warn")
             logger.warning(
-                "[policy_gate] check %r raised %s; converting to warn",
+                "[policy_gate] check %r raised %s; falling back to registered default_mode=%r",
                 check_name,
                 exc,
+                fallback_mode,
             )
             all_reasons.append(f"check_raised:{check_name}")
-            decisions_seen.add("warn")
+            decisions_seen.add(fallback_mode)
             continue
         if not isinstance(result, ComplianceDecision):
             logger.warning(

@@ -179,20 +179,57 @@ def test_aggregate_metadata_keyed_by_check_name():
 
 
 def test_check_that_raises_converts_to_warn():
-    """A buggy check shouldn't crash the publish path. The exception
-    is caught + converted to 'warn' with the source check name in
-    reasons. WARNING is logged for the operator to find + fix."""
+    """A buggy check WITHOUT default_mode='block' shouldn't crash the
+    publish path. The exception is caught + converted to 'warn'
+    (the default fallback_mode) with the source check name in
+    reasons. WARNING is logged for the operator to find + fix.
+    """
     from genlab_core.compliance.policy_gate import check_publish_policy, register_check
 
     def broken(_bp, _platform, _niche):
         raise RuntimeError("simulated bug")
 
-    register_check("broken_check", broken)
+    register_check("broken_check", broken)  # default_mode="warn"
 
     with patch("genlab_core.compliance.policy_gate.log_compliance_event"):
         result = check_publish_policy({}, "instagram", "gaming")
     assert result.decision == "warn"
     assert "check_raised:broken_check" in result.reasons
+
+
+def test_check_registered_default_mode_block_fails_closed():
+    """2026-07-14 (audit F88) pin: a check registered with
+    ``default_mode='block'`` that RAISES falls back to BLOCK, not the
+    historic downgrade-to-warn. Critical checks (attribution,
+    account_health) should fail-closed on their own bugs, not silently
+    downgrade enforcement.
+    """
+    from genlab_core.compliance.policy_gate import check_publish_policy, register_check
+
+    def broken_critical(_bp, _platform, _niche):
+        raise RuntimeError("simulated critical-check bug")
+
+    register_check("broken_critical_check", broken_critical, default_mode="block")
+
+    with patch("genlab_core.compliance.policy_gate.log_compliance_event"):
+        result = check_publish_policy({}, "instagram", "gaming")
+    assert result.decision == "block", (
+        "A default_mode='block' check that raises must fall back to "
+        "BLOCK, not warn — critical checks fail-closed on bug."
+    )
+    assert "check_raised:broken_critical_check" in result.reasons
+
+
+def test_register_check_invalid_default_mode_raises():
+    """2026-07-14 (audit F88): register_check rejects invalid
+    default_mode values at registration time (fail-fast, not at
+    check_publish_policy call time).
+    """
+    import pytest as _pytest
+    from genlab_core.compliance.policy_gate import register_check
+
+    with _pytest.raises(ValueError, match="default_mode must be one of"):
+        register_check("bad", lambda *_: None, default_mode="skip")
 
 
 def test_check_returning_non_decision_converts_to_warn():

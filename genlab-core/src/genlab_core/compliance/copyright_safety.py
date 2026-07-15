@@ -304,4 +304,15 @@ def check_copyright_attribution(
 # Register the check at module import time. Idempotent — re-importing
 # the module just overrides with the same fn (per PR #566's
 # register_check contract).
-register_check("copyright_attribution_check", check_copyright_attribution)
+#
+# 2026-07-14 (audit F88): `default_mode="block"` — if this check ever
+# raises (e.g. schema drift on blueprint shape), fall back to BLOCK
+# instead of the historic downgrade-to-warn. Attribution is a
+# security-critical invariant; a buggy check should fail-closed, not
+# silently pass through. Sibling of the L4/L5 attribution defense
+# stack's "fail-closed on doubt" discipline.
+register_check(
+    "copyright_attribution_check",
+    check_copyright_attribution,
+    default_mode="block",
+)
