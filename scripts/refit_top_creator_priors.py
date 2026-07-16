@@ -55,9 +55,16 @@ YYYYMMDD-<niche>.json``:
 
 ## Guardrails
 
-* ``GENLAB_TOP_CREATOR_PRIORS_ENABLED`` env flag — off by default.
-  Runner is a no-op unless flipped, matching the discipline of A.2
-  and every other intelligence engine.
+* ``GENLAB_TOP_CREATORS_ENABLED`` (producer/fetch flag) — runner is a
+  no-op unless this is set to ``"true"``. Activated on prod
+  2026-07-14. This gates whether the system should CARE about top
+  creators at all; if yes, the fetch AND the correlation refit both
+  run. The separate ``GENLAB_TOP_CREATOR_PRIORS_ENABLED`` flag
+  (consumer side) gates whether the correlations are actually READ
+  as bandit priors — that stays off until correlations mature
+  ≥2 weeks (see 2026-07-16 audit; producer/consumer flag split
+  fixed the deadlock where sharing one flag prevented any
+  correlations from ever computing).
 * Missing ``YOUTUBE_API_KEY`` → exit 1 with WARN log.
 * < 3 videos returned per niche → skip niche (correlation undefined).
 * Any single niche fetch failure → log + continue with the rest.
@@ -67,6 +74,8 @@ YYYYMMDD-<niche>.json``:
 B.3's ``genlab_core.learning.top_creator_priors.load_correlations``
 reads today's / yesterday's artifact and exposes per-feature
 correlation for cold-start prior adjustments at arm registration.
+Consumer gates on ``GENLAB_TOP_CREATOR_PRIORS_ENABLED`` — different
+flag from the producer above, on purpose.
 
 ## Exit codes
 
@@ -112,14 +121,36 @@ _MAX_VIDEOS = 50
 
 
 def _flag_enabled() -> bool:
-    """Exact-match ``true`` per the intelligence-package convention.
+    """Gate on the PRODUCER-side (fetch) flag, not the consumer flag.
 
+    History (2026-07-16 audit finding):
+        The script originally gated on ``GENLAB_TOP_CREATOR_PRIORS_ENABLED``
+        — but per CLAUDE.md the ORIGINAL design intent for that flag
+        is CONSUMER-side ("off until correlations mature over ≥2 weeks").
+        Producer + consumer sharing one flag created a DEADLOCK:
+        producer waits for consumer OK → consumer waits for correlations
+        to mature → correlations never compute.
+
+        2026-07-16 audit found the artifact directory
+        ``/opt/genlab/.tmp/top-creator-priors/`` empty despite the timer
+        firing weekly. Root cause: this flag gate.
+
+    Fix (2026-07-16):
+        Gate on ``GENLAB_TOP_CREATORS_ENABLED`` (the fetch-side flag,
+        activated on prod 2026-07-14 per CLAUDE.md). Semantically:
+        "should the system care about top creators at all?" = producer
+        runs. The separate consumer flag
+        ``GENLAB_TOP_CREATOR_PRIORS_ENABLED`` still gates whether
+        ``arm_loader`` READS the correlations for bandit priors — that
+        remains off until data matures ≥2 weeks.
+
+    Exact-match ``true`` per the intelligence-package convention.
     Same pattern as GENLAB_TREND_ANTICIPATION_ENABLED,
-    GENLAB_CROSS_NICHE_TRANSFER_ENABLED, and every other Intervention
-    runner's flag. `"1"` / `"yes"` / `"TRUE"` intentionally do NOT
-    match (docstring convention documented in flag consumers).
+    GENLAB_CROSS_NICHE_TRANSFER_ENABLED. `"1"` / `"yes"` / `"TRUE"`
+    intentionally do NOT match (docstring convention documented in
+    flag consumers).
     """
-    return os.environ.get("GENLAB_TOP_CREATOR_PRIORS_ENABLED", "").strip() == "true"
+    return os.environ.get("GENLAB_TOP_CREATORS_ENABLED", "").strip() == "true"
 
 
 def _artifact_dir() -> Path:
