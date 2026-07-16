@@ -14,8 +14,6 @@ import argparse
 import logging
 from pathlib import Path
 
-import yaml
-
 logger = logging.getLogger(__name__)
 
 _CATALOG_PATH = Path(__file__).parent.parent.parent.parent / "config" / "affiliate_catalog.yaml"
@@ -86,8 +84,15 @@ def main():
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    with open(_CATALOG_PATH) as f:
-        catalog = yaml.safe_load(f)
+    # 2026-07-17: delegate to `catalog_loader.load_catalog` so
+    # ${AMAZON_US_AFFILIATE_TAG} placeholders in URLs get expanded via
+    # os.path.expandvars. Prior state read raw YAML → commission
+    # attribution was computing rates against unexpanded URLs, silently
+    # mis-attributing revenue rows to the wrong affiliate. See
+    # session-2026-07-17 audit round 2 agent 3 (H4).
+    from genlab_core.monetization.catalog_loader import load_catalog
+
+    catalog = load_catalog(Path(_CATALOG_PATH))
 
     changes = check_rates(catalog)
 

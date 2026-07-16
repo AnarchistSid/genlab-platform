@@ -43,9 +43,22 @@ USER_AGENT = "GenLab-LinkChecker/1.0"
 
 
 def load_catalog() -> dict:
-    """Load and return the affiliate catalog YAML as a dict."""
-    with CATALOG_PATH.open("r", encoding="utf-8") as fh:
-        return yaml.safe_load(fh)
+    """Load and return the affiliate catalog YAML as a dict.
+
+    2026-07-17: delegate to `catalog_loader.load_catalog` so
+    ``${AMAZON_US_AFFILIATE_TAG}`` placeholders in URLs get expanded
+    via ``os.path.expandvars``. Prior state read raw YAML, so the
+    HEAD-request health check saw literal ``?tag=${AMAZON_US_...}``
+    URLs — Amazon 404'd every one, producing 4/80 "broken links"
+    false alarms that had nothing to do with the runtime publish
+    path (which correctly uses catalog_loader). See
+    session-2026-07-17 audit round 2 agent 3.
+    """
+    from genlab_core.monetization.catalog_loader import (
+        load_catalog as _canonical_load_catalog,
+    )
+
+    return _canonical_load_catalog(CATALOG_PATH)
 
 
 def parse_catalog_urls(catalog: dict) -> list[dict]:

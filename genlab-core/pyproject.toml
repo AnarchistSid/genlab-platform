@@ -20,6 +20,18 @@ dependencies = [
     "requests[socks]>=2.32",  # 2026-07-14 added [socks] extra — prod .env sets GENLAB_HTTP_SOCKS_PROXY=socks5h://127.0.0.1:9050 (Tor) for Reddit fetches; without PySocks (pulled by [socks]) every Reddit RSS + JSON call fails with "Missing dependencies for SOCKS support" and 12 subreddits per sports run silently return 0 candidates.
     "pytrends>=4.9",  # Google Trends wrapper — used by intel/{google_trends,trend_anticipation,anticipation_accuracy}. Silent ImportError absent this dep = 3 dormant intelligence features + validation window never becomes "ready".
     "feedparser>=6.0",
+    # 2026-07-17: TTS free-tier fallbacks promoted from `[project.optional-
+    # dependencies].tts` to main deps. Same class-of-bug as pytrends above:
+    # `edge_tts` and `gtts` are the LAST-line providers in the 4-tier cascade
+    # (ElevenLabs → OpenAI → Edge → gTTS). Absent from prod venv → cascade
+    # returns `success=False` → GenerateAudio's `Non-fatal: TTS failures
+    # leave blueprints without audio` comment kicked in → videos shipped
+    # silent for weeks. Confirmed 2026-07-17 by smoke-test on prod: all 3
+    # free-tier packages were `MISSING` and OpenAI TTS returned 429
+    # `insufficient_quota` on the paid path. ElevenLabs stays as optional
+    # extra — paid + heavy SDK, opt-in via `uv sync --extra tts-elevenlabs`.
+    "edge-tts>=6.0",
+    "gtts>=2.0",
     "python-slugify[unidecode]>=8.0",  # Override GPL text-unidecode with MIT unidecode
     "argon2-cffi>=23.1",  # PR #561 — password hashing for users table (auth path)
 ]
