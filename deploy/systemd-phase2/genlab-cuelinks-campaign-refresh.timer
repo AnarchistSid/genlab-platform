@@ -1,0 +1,13 @@
+[Unit]
+Description=GenLab Cuelinks campaign shortlist refresh timer
+
+[Timer]
+# Weekly Monday 04:00 UTC (09:30 IST) — matches other weekly refit
+# jobs (top-creator-priors, cross-niche-transfer). Cost per fire:
+# one /campaigns API call = well under any rate limit.
+OnCalendar=Mon *-*-* 04:00:00 UTC
+Persistent=true
+Unit=genlab-cuelinks-campaign-refresh.service
+
+[Install]
+WantedBy=timers.target

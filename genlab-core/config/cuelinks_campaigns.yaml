@@ -1,0 +1,19 @@
+# AUTO-GENERATED — do not hand-edit.
+#
+# This file is rewritten weekly by
+# ``genlab-cuelinks-campaign-refresh.timer`` (Mon 04:00 UTC).
+# Manual edits will be overwritten on the next fire.
+#
+# Empty on first commit (2026-07-16); populated on first successful
+# timer fire after CUELINKS_V3_API_KEY is provisioned on prod.
+#
+# Consumers (PR 3): ``affiliate_matcher`` reads the ``campaigns``
+# list and matches by ``category`` for niche-appropriate merchant
+# suggestions. See scripts/refresh_cuelinks_campaigns.py for the
+# artifact-shape contract.
+
+generated_at: null
+per_page_requested: 500
+total_returned: 0
+top_by_epc: 100
+campaigns: []
