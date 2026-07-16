@@ -63,16 +63,32 @@ class TestQCGates:
         assert "Missing required field" in str(bp["validation_status"]["issues"])
 
     def test_score_penalty_applied(self):
+        """Score penalty applies to REAL QC failures (uncited claim, too
+        many slides, body too long) — not to `excluded_incomplete_content`
+        rows which are hard-skipped via `_skip_llm=True` at
+        push_to_backlog. Priority-score penalty on an excluded row is
+        wasted state.
+
+        2026-07-17: this test previously used a missing-caption story,
+        which now bypasses the score penalty since it's excluded
+        upstream. Reworked to use a too-many-slides failure — a real
+        QC violation that keeps the row in the pipeline with a
+        deranked score.
+        """
         stage = self._make()
         ctx = {
             "stories": [
                 {
                     "candidate_id": "test3",
+                    "hook": "Real hook here",
+                    "body": "Real body text",
+                    "sources": ["https://example.com/1"],
                     "priority_score": 0.8,
-                    "sources": [],
+                    "format": "carousel",
+                    "slides": list(range(20)),
                 },
             ],
-            "niche_config": {},
+            "niche_config": {"templates": {"max_slides": 10}},
         }
         result = stage.execute(ctx)
         assert result["stories"][0]["priority_score"] < 0.8

@@ -121,6 +121,24 @@ class QCGates:
 
         passed = 0
         failed = 0
+        # 2026-07-17: separate "upstream data was too thin to write"
+        # (base_writing.py:652 `_has_writable_context` skipped LLM →
+        # base_hooks.py:306-318 template-formula recovery gave the row
+        # a valid hook → QC hits "Missing required field: caption/body"
+        # because the platform bodies were NEVER populated). This
+        # scenario is a DIFFERENT class from real QC failures like
+        # "body too long" or "uncited claim" — the blueprint was
+        # doomed at the source. Counting it as "failed QC" inflates
+        # the failure rate and misdirects operator attention to
+        # writing quality when the actual cause is upstream fetcher
+        # emitting thin summaries.
+        #
+        # Deep-cuts audit round 2 found: 3 of 5 pipelines showing
+        # 0-50% "QC pass rate" — 100% of failures were this same
+        # upstream-thin shape. Now bucketed as
+        # `excluded_incomplete_content` so pass_rate reflects
+        # blueprints that COULD have shipped.
+        excluded_incomplete = 0
         # Aggregate per-issue counts so the run_report surfaces what's
         # actually wrong instead of just "20% passed". Without this the
         # only signal on a degrading QC pass rate was the rate itself —
@@ -136,8 +154,37 @@ class QCGates:
                 if status["all_passed"]:
                     passed += 1
                 else:
-                    failed += 1
                     issues = status.get("issues", []) or []
+                    # 2026-07-14: hard-skip on "Missing required field:
+                    # caption/body" — the only failure mode that produces
+                    # a blueprint the publisher CANNOT ship (no text).
+                    # Prior behavior: penalize score only → blueprint
+                    # still reached VISUAL_READY and could be
+                    # auto-approved with an empty caption.
+                    # Concrete case: sports blueprint e434882d today —
+                    # hook present, all platform captions empty, QC
+                    # failed with this exact issue, but status advanced
+                    # to VISUAL_READY anyway. Fired qc_collapse (0% for
+                    # 2 runs) + nightly_schedule_missing_slot.
+                    # Other issues (length, word count, banned phrases)
+                    # keep the score-penalty behavior — they might
+                    # recover or be operator-fixable.
+                    is_upstream_thin = any(
+                        "Missing required field: caption/body" in str(i) for i in issues
+                    )
+                    if is_upstream_thin:
+                        bp["_skip_llm"] = True
+                        excluded_incomplete += 1
+                        logger.warning(
+                            "[QCGates] excluded %s: empty caption/body "
+                            "(upstream fetcher/writer produced no platform "
+                            "bodies). Not counted as QC failure — see "
+                            "excluded_incomplete_content in run_stats.",
+                            bp.get("candidate_id", "unknown"),
+                        )
+                        continue
+
+                    failed += 1
                     for issue in issues:
                         # Truncate values from the issue string so the
                         # aggregate key isn't unique per blueprint
@@ -161,28 +208,6 @@ class QCGates:
                     # Apply score penalty
                     if "priority_score" in bp:
                         bp["priority_score"] = max(0, bp["priority_score"] - self.SCORE_PENALTY)
-                    # 2026-07-14: hard-skip on "Missing required field:
-                    # caption/body" — the only failure mode that produces
-                    # a blueprint the publisher CANNOT ship (no text).
-                    # Prior behavior: penalize score only → blueprint
-                    # still reached VISUAL_READY and could be
-                    # auto-approved with an empty caption.
-                    # Concrete case: sports blueprint e434882d today —
-                    # hook present, all platform captions empty, QC
-                    # failed with this exact issue, but status advanced
-                    # to VISUAL_READY anyway. Fired qc_collapse (0% for
-                    # 2 runs) + nightly_schedule_missing_slot.
-                    # Other issues (length, word count, banned phrases)
-                    # keep the score-penalty behavior — they might
-                    # recover or be operator-fixable.
-                    if any("Missing required field: caption/body" in str(i) for i in issues):
-                        bp["_skip_llm"] = True
-                        logger.warning(
-                            "[QCGates] hard-skip %s: empty caption/body "
-                            "is unpublishable; marking _skip_llm=True "
-                            "so downstream stages drop the blueprint",
-                            bp.get("candidate_id", "unknown"),
-                        )
             except Exception:
                 logger.exception(
                     "[QCGates] Error validating blueprint %s",
@@ -197,11 +222,12 @@ class QCGates:
         total = passed + failed
         rate = f"{passed / total:.1%}" if total else "n/a"
         logger.info(
-            "[QCGates] %d/%d passed (%s), %d failed; reasons=%s",
+            "[QCGates] %d/%d passed (%s), %d failed, %d excluded_incomplete; reasons=%s",
             passed,
             total,
             rate,
             failed,
+            excluded_incomplete,
             sorted(failure_reasons.items(), key=lambda kv: -kv[1]) or "[]",
         )
 
@@ -217,6 +243,12 @@ class QCGates:
             # "writing correctly declined to write un-publishable
             # source material". Pre-fix these were conflated.
             "excluded_skip_llm": excluded,
+            # 2026-07-17: blueprints whose only "failure" was
+            # empty platform bodies (upstream fetcher/writer emitted
+            # no writable content). These aren't QC failures — the
+            # blueprint never had a chance. Kept separate so
+            # pass_rate reflects real QC signal, not upstream noise.
+            "excluded_incomplete_content": excluded_incomplete,
         }
 
         return context

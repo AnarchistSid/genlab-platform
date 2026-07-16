@@ -223,11 +223,24 @@ class TestExistingBehaviorPreserved:
         assert qc["failed"] == 0
         assert qc["excluded_skip_llm"] == 0
 
-    def test_real_missing_caption_still_fails(self):
-        """Real QC regressions (missing caption WITHOUT _skip_llm) still fail.
+    def test_missing_caption_bucketed_as_excluded_incomplete(self):
+        """2026-07-17: missing caption/body → `excluded_incomplete_content`
+        bucket, NOT `failed`.
 
-        The fix must not hide legitimate writing-quality failures —
-        only the upstream-skip ones.
+        Prior behaviour: this counted as `failed` and inflated the QC
+        failure rate. Deep-cuts audit round 2 found 3 of 5 pipelines
+        showing 0-50% "QC pass rate" — 100% of failures were this same
+        empty-body shape (bare-title stories: base_writing.py:652 skipped
+        LLM on sub-40-char summaries → base_hooks.py:306-318
+        template-formula recovery gave the row a hook → QC then hit
+        "Missing required field: caption/body" and mis-attributed as
+        writing quality failure).
+
+        New contract: bp["_skip_llm"] = True (so downstream drops it)
+        + counted separately from real QC failures. Pass rate now
+        reflects blueprints that COULD have shipped.
+
+        Debugging signal still available in `failure_examples`.
         """
         broken_story = {
             "story_id": "b1",
@@ -235,19 +248,25 @@ class TestExistingBehaviorPreserved:
             "source_url": "https://example.com/article",
             "content": {
                 "hook": "Has a hook",
-                # No caption / body / instagram.caption set — but ALSO no
-                # _skip_llm flag. This is a real writing-stage bug that
-                # SHOULD still surface as a QC failure.
+                # No caption / body / instagram.caption set. The blueprint
+                # cannot ship regardless of whether the cause is
+                # upstream-thin OR writer-bug — both are doomed and are
+                # bucketed together as "excluded_incomplete_content".
             },
         }
         ctx = {"stories": [broken_story], "niche_config": {}}
         result = QCGates().execute(ctx)
         qc = result["run_stats"]["qc"]
-        assert qc["total"] == 1
-        assert qc["failed"] == 1
-        assert qc["excluded_skip_llm"] == 0
-        assert "Missing required field" in str(qc["failure_reasons"]), (
-            "real writing-quality failures must still be reported — the "
-            "fix only filters upstream-skip stories, not all caption "
-            "failures"
+        assert qc["total"] == 0, (
+            "Missing-body case is now excluded from the QC total (bucketed "
+            "as excluded_incomplete_content). Prior semantics counted it "
+            "as failed, deflating pass_rate."
         )
+        assert qc["failed"] == 0
+        assert qc["excluded_incomplete_content"] == 1, (
+            "Missing caption/body must go to excluded_incomplete_content "
+            "bucket so operator can distinguish real QC failures from "
+            "upstream-doomed rows."
+        )
+        # And the story must be marked _skip_llm=True so downstream drops it
+        assert broken_story.get("_skip_llm") is True
