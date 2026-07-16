@@ -64,7 +64,15 @@ branding:
 # (content-policy-deep-dive-2026-07-05); conservative audio_ducking
 # defaults preserve more of the original clip.
 intelligent_transform:
-  enabled: false  # per-niche activation; GENLAB_INTELLIGENT_TRANSFORM_ENABLED env also required
+  # 2026-07-17: flipped false → true. All 4 other niches already have
+  # this enabled and are accumulating transformation-arm reward data.
+  # Anime was left dormant which meant the 255-arm transformation
+  # bandit had zero observations from FrameDrift, degrading cross-
+  # niche transfer signal quality. Env `GENLAB_INTELLIGENT_TRANSFORM_ENABLED`
+  # must also be true; if the env flag is off this file's value is
+  # a no-op (schema-only), matching the deploy discipline used when
+  # gaming shipped in 2026-07-05.
+  enabled: true  # per-niche activation; GENLAB_INTELLIGENT_TRANSFORM_ENABLED env also required
   dimensions:
     music_mood:
       enabled: true

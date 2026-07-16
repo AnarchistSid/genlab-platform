@@ -38,8 +38,24 @@ export PGPASSWORD="$DB_PASS"
 TABLES=(
     blueprints stories assets publishing_analytics analytics
     content_memory bandit_arms pending_engagement pending_feedback
-    templates sources monetisationprogress
+    templates sources monetisationprogress content_pool
 )
+
+# 2026-07-17: content_pool TTL delete. The deep-cuts audit found
+# 47,092 expired rows (expires_at < NOW()) that were never deleted;
+# autovacuum couldn't reclaim the space because the rows were still
+# live tuples. Delete FIRST, then let the VACUUM ANALYZE loop below
+# pick up content_pool now that it's in TABLES. Guarded by a column
+# probe so a schema migration that renames the column doesn't silently
+# turn this into a full-table delete.
+if psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+    -tAc "SELECT 1 FROM information_schema.columns WHERE table_name='content_pool' AND column_name='expires_at';" 2>/dev/null | grep -q 1; then
+    EXPIRED=$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+        -tAc "DELETE FROM content_pool WHERE expires_at IS NOT NULL AND expires_at < NOW() RETURNING 1;" 2>>"$LOG" | wc -l | tr -d ' ')
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] content_pool TTL delete: ${EXPIRED} rows" | tee -a "$LOG"
+else
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] content_pool.expires_at column missing — skipping TTL delete" | tee -a "$LOG"
+fi
 
 VACUUMED=0
 FAILED=0

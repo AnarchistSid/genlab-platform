@@ -1441,7 +1441,16 @@ def _execute_review_action(
             feedback_category=_category,
         )
     except Exception as _cal_exc:  # noqa: BLE001 — never block review
-        logger.debug("[calibration] skipped (non-fatal): %s", _cal_exc)
+        # 2026-07-17: elevated DEBUG → WARNING per CLAUDE.md rule #17.
+        # Prior DEBUG-level swallow masked a silent regression: no
+        # calibration writes for 17 days (2026-06-29 → 2026-07-16).
+        # Auto-approver ratchet stalled at Week 1 because ready-check
+        # requires ≥30 fresh samples ≥90% agreement — but samples
+        # stopped accumulating. Elevating so the actual exception
+        # surfaces + exc_info captures the traceback.
+        logger.warning(
+            "[calibration] skipped (non-fatal): %s", _cal_exc, exc_info=True
+        )
 
     # Operator-action visibility (autonomy gap doc, Week 2). Emit the
     # action to ``dashboard_events`` so Mission Control shows an

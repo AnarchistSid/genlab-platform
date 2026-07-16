@@ -381,6 +381,19 @@ class PostgresBackend:
     ) -> None:
         self._dsn = dsn or f"postgresql://{user}:{password}@{host}:{port}/{database}"
         self._min_size = min_size
+        # 2026-07-17: env-var override for pool ceiling. Prior hardcoded
+        # max=10 saturated at 06:30 UTC publisher fire (5 niches × 2-3
+        # concurrent conns each on the ThreadPoolExecutor path).
+        # `PoolTimeout` at that window has been the single most common
+        # noise class in the journal. Default preserved at 10 for
+        # callers that pass explicit max_size; env override lets prod
+        # tune without a code change.
+        try:
+            env_override = int(os.environ.get("GENLAB_DB_POOL_MAX", "0"))
+        except (TypeError, ValueError):
+            env_override = 0
+        if env_override > 0:
+            max_size = env_override
         self._max_size = max_size
         self._pool = None
         self._pool_lock = threading.Lock()

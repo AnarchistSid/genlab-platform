@@ -355,3 +355,56 @@ def record_openai_usage(model: str, response: Any) -> None:
             model,
             exc,
         )
+
+
+def record_tts_usage(chars: int, cost_per_1k_chars: float = 0.015) -> None:
+    """Record a TTS synthesis to the active accumulator.
+
+    Called from ``tts/cascade.py`` right after a provider synthesize
+    succeeds. Prior state (2026-07-17 deep-cuts audit): TTS spend was
+    invisible — ``CostAccumulator.record_tts`` existed but had zero
+    callers. ElevenLabs/OpenAI-TTS/EdgeTTS/gTTS runs contributed $0
+    to ``by_category`` even when they cost real money.
+
+    Default rate 0.015 USD / 1k chars matches OpenAI TTS pricing (the
+    typical fallback tier). ElevenLabs is more expensive but cascade
+    ordering means it's tried first — the caller can pass a higher
+    ``cost_per_1k_chars`` when the provider is known.
+
+    Fail-open: cost tracking never blocks a TTS call.
+    """
+    try:
+        acc = get_accumulator()
+        if acc is None:
+            return
+        acc.record_tts(chars=int(chars), cost_per_1k_chars=cost_per_1k_chars)
+    except Exception as exc:
+        logger.warning(
+            "[cost_accumulator] failed to record_tts (%d chars, cost tracking degraded): %s",
+            chars,
+            exc,
+        )
+
+
+def record_image_usage(model: str, count: int = 1) -> None:
+    """Record an image-generation call to the active accumulator.
+
+    Called from image-gen call sites (GPT-Image-1 / DALL-E). Prior
+    state (2026-07-17 deep-cuts audit): image-gen spend was invisible
+    — ``CostAccumulator.record_image`` existed but had zero callers.
+    Runs generating visual thumbnails / hero images contributed $0
+    to ``by_category`` even when they cost real money.
+
+    Fail-open: cost tracking never blocks an image-gen call.
+    """
+    try:
+        acc = get_accumulator()
+        if acc is None:
+            return
+        acc.record_image(model=str(model), count=int(count))
+    except Exception as exc:
+        logger.warning(
+            "[cost_accumulator] failed to record_image for model=%s (cost tracking degraded): %s",
+            model,
+            exc,
+        )

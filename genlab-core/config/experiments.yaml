@@ -1,0 +1,26 @@
+# experiments.yaml — active A/B test registry
+#
+# Loaded by:
+#   genlab_core.pipeline.stages.push_to_backlog:1662
+#   genlab_core.learning.experiment_registry.load_experiments_from_yaml
+#
+# Contract (from experiment_registry.py:33-52):
+#   - experiment_id: unique slug (letters/digits/underscores)
+#   - arms: list of arm names — must match reward-shaper arm keys
+#   - allocation: mapping arm → fraction; fractions MUST sum to 1.0
+#   - start_date: ISO 8601 with timezone (UTC recommended)
+#   - end_date: ISO 8601 or omitted for open-ended
+#   - niche_ids: list — empty/omitted means all niches participate
+#
+# Fail-quiet: a malformed entry is logged + skipped; the rest still load.
+# A missing file OR empty `experiments:` list means the bandit runs its
+# legacy path (no experiment assignment). Safe to start with zero
+# entries; add one when you have a hypothesis to test.
+#
+# 2026-07-17: created as skeleton (deep-cuts audit found the file was
+# referenced by production code at push_to_backlog.py:1673 but
+# didn't exist anywhere — full framework wired, zero entries). This
+# empty-list starter unblocks the "file not found" DEBUG log without
+# altering any live behaviour.
+
+experiments: []

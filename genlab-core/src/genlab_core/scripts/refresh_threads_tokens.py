@@ -53,16 +53,27 @@ def _load_cache() -> dict:
 
 
 def _write_cache(cache: dict, *, dry_run: bool) -> None:
-    """Atomically write the cache file. No-op in dry-run mode."""
+    """Atomically write the cache file. No-op in dry-run mode.
+
+    fcntl.flock on a sidecar lock file serialises concurrent invocations
+    (systemd timer + manual operator invocation) so two writers never
+    race on the same .tmp path.
+    """
     if dry_run:
         logger.info("[refresh-threads] DRY-RUN: would write %d entries", len(cache))
         return
+
+    import fcntl
+
+    lock_path = _CACHE_PATH.with_suffix(".lock")
     try:
         _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = _CACHE_PATH.with_suffix(".json.tmp")
-        tmp_path.write_text(json.dumps(cache, indent=2, sort_keys=True))
-        tmp_path.chmod(0o600)  # contains secrets — operator-readable only
-        tmp_path.replace(_CACHE_PATH)
+        with open(lock_path, "w", encoding="utf-8") as lock_fp:
+            fcntl.flock(lock_fp.fileno(), fcntl.LOCK_EX)
+            tmp_path = _CACHE_PATH.with_suffix(".json.tmp")
+            tmp_path.write_text(json.dumps(cache, indent=2, sort_keys=True))
+            tmp_path.chmod(0o600)  # contains secrets — operator-readable only
+            tmp_path.replace(_CACHE_PATH)
     except Exception as exc:
         logger.error("[refresh-threads] cache write failed: %s", exc)
 

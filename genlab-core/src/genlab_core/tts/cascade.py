@@ -29,6 +29,16 @@ from genlab_core.tts._text_cleaner import clean_text_for_tts
 
 logger = logging.getLogger(__name__)
 
+# Per-provider TTS cost rate (USD per 1000 characters). Public
+# pricing pages as of 2026-07-17. Edge/Google are effectively free
+# but the entry stays so unknown providers get a conservative 0.015.
+_TTS_RATES_USD_PER_1K: dict[str, float] = {
+    "elevenlabs": 0.180,
+    "openai_tts": 0.015,
+    "edge_tts": 0.0,
+    "google_tts": 0.0,
+}
+
 
 @dataclass
 class CircuitBreaker:
@@ -165,6 +175,21 @@ class TTSCascade:
                 result = provider.synthesize(text, output_path)
                 if result.success:
                     breaker.record_success()
+                    # 2026-07-17: wire TTS cost recording (F3-sibling
+                    # fix from the LLM cost audit). Provider-specific
+                    # rate: ElevenLabs is ~$0.18/1k chars; OpenAI TTS
+                    # $0.015/1k; Edge/gTTS free. Sending the per-provider
+                    # rate keeps ``by_category["tts"]`` honest without
+                    # coupling to a specific provider's SDK.
+                    _rate_per_1k = _TTS_RATES_USD_PER_1K.get(provider.name, 0.015)
+                    try:
+                        from genlab_core.intelligence.cost_accumulator import (
+                            record_tts_usage,
+                        )
+
+                        record_tts_usage(len(text), cost_per_1k_chars=_rate_per_1k)
+                    except Exception as _cost_exc:  # noqa: BLE001
+                        logger.debug("TTSCascade: cost record skipped: %s", _cost_exc)
                     if tried:
                         logger.info(
                             "TTSCascade: %s succeeded (after %s failed: %s)",

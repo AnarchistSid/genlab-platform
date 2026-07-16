@@ -9,9 +9,13 @@ Documentation=file:///opt/genlab/docs/STRATEGIST-SPEC.md
 # from Saturday have their 48h reward window still open, but the
 # earlier days of the week are complete).
 OnCalendar=Sun 02:00:00 UTC
-# Skip re-running if we missed a firing (e.g. VPS was down).
-# Persistent=false is the default — this makes it explicit.
-Persistent=false
+# 2026-07-17: flipped Persistent=false → true. If the VPS is down or
+# the service crashes on Sunday 02:00 UTC, missed fires now catch up
+# on next boot. The strategist is weekly and the report drives Monday
+# operator review — silently missing a week would be undetectable
+# until the next Sunday. Deep-cuts audit surfaced this after a
+# journal review showed no strategist runs since 2026-06-15.
+Persistent=true
 Unit=genlab-strategist.service
 
 [Install]

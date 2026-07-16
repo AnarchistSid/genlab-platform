@@ -166,12 +166,27 @@ class TwitterQuotaTracker:
             return {"month": current_month, "used": 0}
 
     def _write_state(self, state: dict) -> None:
-        """Write state via temp-file + rename for atomicity."""
+        """Write state via temp-file + rename for atomicity.
+
+        fcntl.flock on a sidecar lock file serialises concurrent
+        publisher invocations. Without the lock, two parallel publishes
+        can each read `used=N`, each increment to `N+1`, and each
+        write `N+1` — one increment silently lost. On the 500/mo write
+        cap this class-of-bug would appear as false-negative quota
+        headroom.
+        """
+        import fcntl
+
+        lock_path = self._state_path.with_suffix(".lock")
         try:
             self._state_path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = self._state_path.with_name(f"{self._state_path.name}.tmp.{os.getpid()}")
-            tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
-            os.replace(tmp, self._state_path)
+            with open(lock_path, "w", encoding="utf-8") as lock_fp:
+                fcntl.flock(lock_fp.fileno(), fcntl.LOCK_EX)
+                tmp = self._state_path.with_name(
+                    f"{self._state_path.name}.tmp.{os.getpid()}"
+                )
+                tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
+                os.replace(tmp, self._state_path)
         except Exception as exc:
             logger.warning(
                 "[twitter_quota] state write failed (%s) — next check may "
