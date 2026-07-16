@@ -111,30 +111,98 @@ class TestExactlyOneEvergreenPerNiche:
             )
 
 
-class TestNoCuelinks:
-    """Pin: catalog is fully cuelinks-free after 2026-06-22 cleanup."""
+class TestCuelinksAmazonGuard:
+    """Pin: Cuelinks-brokered links are OK for non-Amazon merchants;
+    Cuelinks for Amazon URLs is BANNED.
 
-    def test_no_product_has_cuelinks_network(self):
+    History
+    -------
+    * **2026-06-14** — original ``TestNoCuelinks`` shipped after audit
+      queue item #12. Every cuelinks redirect in a 73-click prod
+      sample earned ₹0. Root cause: cuelinks (linksredirect.com) is
+      a click tracker; it faithfully passes through whatever URL is
+      in the inner ``url=`` param. The catalog's cuelinks entries
+      had bare Amazon URLs without the affiliate tag, so redirects
+      landed on Amazon with no attribution. Fix was to remove
+      cuelinks from the candidate list entirely.
+
+    * **2026-07-16** — operator re-scoped cuelinks: NOT a replacement
+      for Amazon direct, but a COMPLEMENT for merchants Gen Lab
+      doesn't have direct affiliate agreements with (Flipkart,
+      Myntra, Ajio, Meesho, Nykaa, etc.). Cuelinks V3 API +
+      ``cuelinks_client.convert_url`` shipped with a runtime
+      ``AmazonUrlNotAllowed`` guard that raises for any amazon.*
+      URL. The invariant here is the catalog-level mirror of that
+      runtime guard: no product may have a Cuelinks entry pointing
+      at an Amazon URL.
+
+    * Removing ``TestNoCuelinks`` entirely would drop the historical
+      guard. Renaming + tightening preserves it in the new shape.
+    """
+
+    def test_no_product_uses_cuelinks_for_amazon_url(self):
+        """For every product with a Cuelinks entry, the corresponding
+        URL must NOT be an Amazon storefront.
+
+        Regressing this pin re-creates the 2026-06-14 ₹0-commission
+        incident. If a product needs Amazon Associates commission,
+        use the ``amazon_us`` / ``amazon_in`` network entries directly;
+        cuelinks_client raises ``AmazonUrlNotAllowed`` at runtime as
+        the belt-and-suspenders defense.
+        """
+        # Deferred import so this test file doesn't force cuelinks_client
+        # to import when TestNoEvergreenDefaults + TestNoCuelinks run in
+        # environments where the client module has an issue.
+        from genlab_core.monetization.cuelinks_client import _is_amazon_url
+
         catalog = _load_catalog()
         offenders = []
         for niche_id, niche_data in catalog.get("niches", {}).items():
             for product in niche_data.get("products", []):
                 networks = product.get("networks", {}) or {}
-                if "cuelinks" in networks:
-                    offenders.append((niche_id, product.get("name", "?")))
+                cuelinks_entry = networks.get("cuelinks")
+                if not isinstance(cuelinks_entry, dict):
+                    continue
+                target = cuelinks_entry.get("url", "")
+                if _is_amazon_url(target):
+                    offenders.append(
+                        (niche_id, product.get("name", "?"), target[:60])
+                    )
         assert offenders == [], (
-            f"cuelinks network reintroduced into products — per 2026-06-14 "
-            f"audit, cuelinks earns ₹0/click because it doesn't inject "
-            f"Amazon Associates tags. Offenders: {offenders}"
+            f"Cuelinks entries pointing at Amazon URLs re-introduced — the "
+            f"2026-06-14 audit proved cuelinks earns ₹0/click on Amazon URLs "
+            f"because Cuelinks doesn't inject Amazon Associates tags. Use "
+            f"amazon_us / amazon_in network entries directly for Amazon "
+            f"products. Offenders (niche, product, url_head):\n{offenders}"
         )
 
-    def test_default_network_priority_excludes_cuelinks(self):
+    def test_default_network_priority_amazon_first(self):
+        """Pin: even after re-enabling cuelinks for non-Amazon merchants,
+        default_network_priority must list Amazon first when both are
+        candidates. Cuelinks-for-Amazon is worthless (₹0); Amazon direct
+        wins every time. If cuelinks appears BEFORE amazon_us / amazon_in
+        in default_network_priority, the resolver risks picking cuelinks
+        for a product that has both entries — recreating the 2026-06-14
+        incident.
+        """
         catalog = _load_catalog()
         priority = catalog.get("settings", {}).get("default_network_priority", [])
-        assert "cuelinks" not in priority, (
-            f"settings.default_network_priority still includes 'cuelinks' "
-            f"({priority}). Per 2026-06-14 audit, cuelinks adds zero value."
-        )
+        if "cuelinks" not in priority:
+            # Perfectly acceptable — cuelinks not in default priority means
+            # it only fires for products that explicitly opt in. This is
+            # even safer than the ordered rule.
+            return
+        cuelinks_idx = priority.index("cuelinks")
+        for amazon_key in ("amazon_us", "amazon_in", "amazon"):
+            if amazon_key in priority:
+                amazon_idx = priority.index(amazon_key)
+                assert amazon_idx < cuelinks_idx, (
+                    f"default_network_priority has {amazon_key!r} at index "
+                    f"{amazon_idx} but cuelinks at index {cuelinks_idx} — "
+                    f"resolver will pick cuelinks over direct Amazon for any "
+                    f"product with both. Per 2026-06-14 audit, this earns ₹0. "
+                    f"Move Amazon adapters BEFORE cuelinks in the priority list."
+                )
 
 
 class TestProductCount:
