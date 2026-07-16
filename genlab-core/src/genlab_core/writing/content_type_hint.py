@@ -149,8 +149,7 @@ def pick_content_type_hint(niche_id: str) -> str | None:
     except Exception as exc:
         # WARNING: same class as llm_hook_generator + optimal_time.
         logger.warning(
-            "[content_type_hint] BacklogClient failed for niche=%s: %s — "
-            "no bandit steer",
+            "[content_type_hint] BacklogClient failed for niche=%s: %s — no bandit steer",
             niche_id,
             exc,
         )

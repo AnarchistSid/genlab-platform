@@ -342,9 +342,7 @@ class RenderGamingVideo(VisualRenderStrategy):
                     _qc.reason,
                     _qc.detail,
                 )
-                story.setdefault("media", {})["render_error"] = (
-                    f"pre_render_quality:{_qc.reason}"
-                )
+                story.setdefault("media", {})["render_error"] = f"pre_render_quality:{_qc.reason}"
                 stats["skipped"] += 1
                 story["media"]["rendered_path"] = None
                 continue

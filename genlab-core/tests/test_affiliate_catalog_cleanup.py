@@ -102,8 +102,7 @@ class TestExactlyOneEvergreenPerNiche:
         for niche_id in ("gaming", "sports", "movies", "anime", "ai_creators"):
             niche_data = catalog.get("niches", {}).get(niche_id, {})
             evergreens = [
-                p for p in niche_data.get("products", [])
-                if p.get("evergreen_default") is True
+                p for p in niche_data.get("products", []) if p.get("evergreen_default") is True
             ]
             assert len(evergreens) == 1, (
                 f"{niche_id} must have exactly 1 evergreen_default: true "
@@ -165,9 +164,7 @@ class TestCuelinksAmazonGuard:
                     continue
                 target = cuelinks_entry.get("url", "")
                 if _is_amazon_url(target):
-                    offenders.append(
-                        (niche_id, product.get("name", "?"), target[:60])
-                    )
+                    offenders.append((niche_id, product.get("name", "?"), target[:60]))
         assert offenders == [], (
             f"Cuelinks entries pointing at Amazon URLs re-introduced — the "
             f"2026-06-14 audit proved cuelinks earns ₹0/click on Amazon URLs "

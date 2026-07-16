@@ -37,7 +37,9 @@ from pathlib import Path
 
 def _load_module():
     """Load the retro_credit script as a module for direct testing."""
-    script_path = Path(__file__).resolve().parents[1] / "scripts" / "retro_credit_uncredited_posts.py"
+    script_path = (
+        Path(__file__).resolve().parents[1] / "scripts" / "retro_credit_uncredited_posts.py"
+    )
     spec = importlib.util.spec_from_file_location("retro_credit_uncredited_posts", script_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -52,12 +54,14 @@ class TestExitCodeSemantics:
     def test_source_has_new_semantics(self):
         """Source-level check: the new logic must reference attempted
         + success + failed, not just failed."""
-        script_path = Path(__file__).resolve().parents[1] / "scripts" / "retro_credit_uncredited_posts.py"
+        script_path = (
+            Path(__file__).resolve().parents[1] / "scripts" / "retro_credit_uncredited_posts.py"
+        )
         source = script_path.read_text()
         # New pattern: exit 1 only when attempted > 0 AND success == 0
         assert "attempted > 0" in source or "attempted == 0" in source or "return 0" in source
         # Must not use the old strict-eq on failed
-        assert "return 0 if stats[\"failed\"] == 0 else 1" not in source, (
+        assert 'return 0 if stats["failed"] == 0 else 1' not in source, (
             "Old strict-eq on stats['failed'] regressed. This fired systemd "
             "FAILURE on 1 IG shortcode noise every 90 min."
         )
@@ -66,7 +70,9 @@ class TestExitCodeSemantics:
         """Docstring for exit codes should mention the new fail-open
         behavior so future readers understand why we don't fail on
         every noisy target."""
-        script_path = Path(__file__).resolve().parents[1] / "scripts" / "retro_credit_uncredited_posts.py"
+        script_path = (
+            Path(__file__).resolve().parents[1] / "scripts" / "retro_credit_uncredited_posts.py"
+        )
         source = script_path.read_text()
         # There should be a comment explaining the fix
         assert "exit-code semantics" in source.lower() or "90 min" in source, (

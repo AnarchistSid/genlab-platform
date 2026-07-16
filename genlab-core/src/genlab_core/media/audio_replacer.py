@@ -121,18 +121,19 @@ def find_music_bed_for_mood(
             "[audio_replacer] mood_tag %r has no library dir under %s. "
             "Bandit picked a mood without seed material — skipping "
             "audio replacement for this reel.",
-            mood_tag, library_root,
+            mood_tag,
+            library_root,
         )
         return None
 
     candidates = [
-        p for p in mood_dir.iterdir()
-        if p.is_file() and p.suffix.lower() in _MUSIC_EXTENSIONS
+        p for p in mood_dir.iterdir() if p.is_file() and p.suffix.lower() in _MUSIC_EXTENSIONS
     ]
     if not candidates:
         logger.info(
             "[audio_replacer] no music files in %s (expected extensions %s)",
-            mood_dir, ", ".join(_MUSIC_EXTENSIONS),
+            mood_dir,
+            ", ".join(_MUSIC_EXTENSIONS),
         )
         return None
 
@@ -140,9 +141,7 @@ def find_music_bed_for_mood(
     return r.choice(sorted(candidates))
 
 
-def build_audio_mix_filtergraph(
-    source_duck_db: int, music_bed_db: int
-) -> str:
+def build_audio_mix_filtergraph(source_duck_db: int, music_bed_db: int) -> str:
     """Build the FFmpeg filter_complex string for audio mixing.
 
     Composes three filter operations:
@@ -161,9 +160,7 @@ def build_audio_mix_filtergraph(
     )
 
 
-def build_ffmpeg_command(
-    spec: AudioMixSpec, ffmpeg_binary: str
-) -> list[str]:
+def build_ffmpeg_command(spec: AudioMixSpec, ffmpeg_binary: str) -> list[str]:
     """Compose the full ffmpeg argv for an audio mix render.
 
     Kept as a pure function so tests can assert the exact command
@@ -172,19 +169,27 @@ def build_ffmpeg_command(
     return [
         ffmpeg_binary,
         "-y",  # overwrite output
-        "-i", str(spec.source_video_path),
+        "-i",
+        str(spec.source_video_path),
         # -stream_loop -1 loops the music input infinitely; combined with
         # amix duration=first this cuts at source length. Handles music
         # tracks shorter than the reel gracefully.
-        "-stream_loop", "-1",
-        "-i", str(spec.music_bed_path),
+        "-stream_loop",
+        "-1",
+        "-i",
+        str(spec.music_bed_path),
         "-filter_complex",
         build_audio_mix_filtergraph(spec.source_duck_db, spec.music_bed_db),
-        "-map", "0:v",  # video stream from source
-        "-map", "[aout]",  # mixed audio
-        "-c:v", "copy",  # don't re-encode video (fast)
-        "-c:a", "aac",
-        "-b:a", spec.audio_bitrate,
+        "-map",
+        "0:v",  # video stream from source
+        "-map",
+        "[aout]",  # mixed audio
+        "-c:v",
+        "copy",  # don't re-encode video (fast)
+        "-c:a",
+        "aac",
+        "-b:a",
+        spec.audio_bitrate,
         # -shortest hedges against amix duration edge cases — if the
         # filter's duration=first ever gets confused, this hard-limits
         # output to the shortest input length.
@@ -205,14 +210,10 @@ def mix_audio_bed(
     unmixed source path if this returns False.
     """
     if not spec.source_video_path.exists():
-        logger.warning(
-            "[audio_replacer] source video missing: %s", spec.source_video_path
-        )
+        logger.warning("[audio_replacer] source video missing: %s", spec.source_video_path)
         return False
     if not spec.music_bed_path.exists():
-        logger.warning(
-            "[audio_replacer] music bed missing: %s", spec.music_bed_path
-        )
+        logger.warning("[audio_replacer] music bed missing: %s", spec.music_bed_path)
         return False
 
     from genlab_core.media.ffmpeg import get_ffmpeg_binary
@@ -225,8 +226,7 @@ def mix_audio_bed(
 
     cmd = build_ffmpeg_command(spec, ffmpeg)
     logger.info(
-        "[audio_replacer] mixing: source=%s music=%s -> %s "
-        "(duck=%d music_bed=%d)",
+        "[audio_replacer] mixing: source=%s music=%s -> %s (duck=%d music_bed=%d)",
         spec.source_video_path.name,
         spec.music_bed_path.name,
         spec.output_path,
@@ -244,7 +244,8 @@ def mix_audio_bed(
     except subprocess.TimeoutExpired:
         logger.warning(
             "[audio_replacer] ffmpeg timed out after %ds: %s",
-            timeout_seconds, spec.output_path,
+            timeout_seconds,
+            spec.output_path,
         )
         return False
     except (OSError, FileNotFoundError) as exc:
@@ -256,14 +257,15 @@ def mix_audio_bed(
         stderr_tail = "\n".join(result.stderr.strip().splitlines()[-5:])
         logger.warning(
             "[audio_replacer] ffmpeg exit=%d for %s. Last stderr lines:\n%s",
-            result.returncode, spec.output_path, stderr_tail,
+            result.returncode,
+            spec.output_path,
+            stderr_tail,
         )
         return False
 
     if not spec.output_path.exists() or spec.output_path.stat().st_size < 1024:
         logger.warning(
-            "[audio_replacer] output missing or too small: %s "
-            "(size=%d bytes)",
+            "[audio_replacer] output missing or too small: %s (size=%d bytes)",
             spec.output_path,
             spec.output_path.stat().st_size if spec.output_path.exists() else 0,
         )

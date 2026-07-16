@@ -36,7 +36,6 @@ with a clear error instead of silently corrupting downstream state.
 
 from alembic import op
 
-
 revision = "h4d5e6f7g8h9"
 down_revision = "g3c4d5e6f7g8"
 branch_labels = None

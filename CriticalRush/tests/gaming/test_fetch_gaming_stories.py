@@ -402,9 +402,7 @@ class TestTwitchTopStreamerAttribution:
         assert "Fortnite live grind" in s["summary"]
 
     @patch("niches.gaming.stages.fetch_gaming_stories.requests.get")
-    def test_falls_back_to_directory_url_when_no_live_streamer(
-        self, mock_get, monkeypatch
-    ):
+    def test_falls_back_to_directory_url_when_no_live_streamer(self, mock_get, monkeypatch):
         """If /streams returns empty (no live stream currently), fall
         back to the directory URL. Compliance gate will still reject
         it as attribution (commit 0b7a3e14), but the story exists for

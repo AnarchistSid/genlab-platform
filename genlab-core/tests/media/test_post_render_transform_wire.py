@@ -22,7 +22,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.media.post_render_transform import (
     apply_post_render_transformations,
 )
@@ -55,7 +54,8 @@ def test_flag_off_returns_input_path(monkeypatch, tmp_path: Path):
 
 
 def test_visuals_yaml_missing_returns_input_path(
-    monkeypatch, tmp_path: Path,
+    monkeypatch,
+    tmp_path: Path,
 ):
     """Config file missing → log warning + return input. Base render
     must not be lost because the config file moved."""
@@ -78,9 +78,7 @@ def test_config_disabled_returns_input_path(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
 
     yaml_path = tmp_path / "visuals.yaml"
-    yaml_path.write_text(
-        "intelligent_transform:\n  enabled: false\n"
-    )
+    yaml_path.write_text("intelligent_transform:\n  enabled: false\n")
     input_path = str(tmp_path / "composite.mp4")
     (tmp_path / "composite.mp4").write_bytes(b"x")
 
@@ -95,7 +93,8 @@ def test_config_disabled_returns_input_path(monkeypatch, tmp_path: Path):
 
 
 def test_orchestrator_raise_returns_input_path(
-    monkeypatch, tmp_path: Path,
+    monkeypatch,
+    tmp_path: Path,
 ):
     """apply_transformations promises no-raise, but if some import path
     breaks the wire must still return the base composite."""
@@ -131,14 +130,15 @@ def test_orchestrator_raise_returns_input_path(
             "ai_creators",
         ),
         (
-            REPO_ROOT
-            / "CriticalRush"
-            / "niches" / "gaming" / "stages" / "render_gaming_video.py",
+            REPO_ROOT / "CriticalRush" / "niches" / "gaming" / "stages" / "render_gaming_video.py",
             "gaming",
         ),
         (
             REPO_ROOT
-            / "genlab-core" / "src" / "genlab_core" / "strategies"
+            / "genlab-core"
+            / "src"
+            / "genlab_core"
+            / "strategies"
             / "base_visual_render.py",
             "base (sports + movies + anime)",
         ),

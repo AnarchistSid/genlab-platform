@@ -17,7 +17,6 @@ from __future__ import annotations
 import fcntl
 import json
 import logging
-import os
 import re
 import time
 from pathlib import Path
@@ -745,9 +744,7 @@ def process_reply_event(event: dict) -> None:
     if posted:
         _mark_replied(comment_id, platform)
         if bl and sp_item_id:
-            bl.update_engagement_status(
-                sp_item_id, "replied", reply_text=reply, niche_id=niche_id
-            )
+            bl.update_engagement_status(sp_item_id, "replied", reply_text=reply, niche_id=niche_id)
     else:
         # 2026-07-14: mark with `failed:{comment_id}` short-circuit key
         # so same-day poll cycles don't burn LLM budget re-processing

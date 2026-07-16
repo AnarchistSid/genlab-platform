@@ -27,9 +27,7 @@ _SCRIPT_PATH = _REPO_ROOT / "scripts" / "refresh_cuelinks_campaigns.py"
 @pytest.fixture(scope="module")
 def refresh_module():
     """Load the script as a module for direct function access."""
-    spec = importlib.util.spec_from_file_location(
-        "refresh_cuelinks_campaigns", _SCRIPT_PATH
-    )
+    spec = importlib.util.spec_from_file_location("refresh_cuelinks_campaigns", _SCRIPT_PATH)
     module = importlib.util.module_from_spec(spec)
     sys.modules["refresh_cuelinks_campaigns"] = module
     spec.loader.exec_module(module)
@@ -122,9 +120,7 @@ class TestAtomicWrite:
 class TestPostWriteAssertion:
     def test_passes_on_valid_yaml(self, refresh_module, tmp_path):
         target = tmp_path / "cuelinks_campaigns.yaml"
-        target.write_text(
-            "generated_at: '2026-07-16T00:00:00'\ncampaigns: [{id: 1, name: A}]"
-        )
+        target.write_text("generated_at: '2026-07-16T00:00:00'\ncampaigns: [{id: 1, name: A}]")
         # Should not raise
         refresh_module._post_write_assertion(target)
 

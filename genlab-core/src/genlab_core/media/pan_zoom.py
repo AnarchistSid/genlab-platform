@@ -88,9 +88,7 @@ def _center_y_expr() -> str:
     return "ih/2-(ih/zoom/2)"
 
 
-def build_pan_zoom_filter(
-    pattern: str, target_width: int, target_height: int, fps: int
-) -> str:
+def build_pan_zoom_filter(pattern: str, target_width: int, target_height: int, fps: int) -> str:
     """Return the ``-vf`` filter string for a pattern.
 
     Returns ``NO_FILTER`` (empty string) for no-op patterns —
@@ -104,9 +102,7 @@ def build_pan_zoom_filter(
     if pattern == "jump_cut":
         # Not implementable as a simple filter — needs segmentation
         # pipeline. Ship the arm for future expansion; skip for now.
-        logger.debug(
-            "[pan_zoom] jump_cut not implemented — falls back to no_motion"
-        )
+        logger.debug("[pan_zoom] jump_cut not implemented — falls back to no_motion")
         return NO_FILTER
 
     if pattern == "ken_burns_slow":
@@ -142,15 +138,11 @@ def build_pan_zoom_filter(
             f"x='(iw-{target_width})*(t/20)':y='(ih-{target_height})/2'"
         )
 
-    logger.warning(
-        "[pan_zoom] unknown pattern %r — no filter applied", pattern
-    )
+    logger.warning("[pan_zoom] unknown pattern %r — no filter applied", pattern)
     return NO_FILTER
 
 
-def build_ffmpeg_command(
-    spec: PanZoomSpec, ffmpeg_binary: str, filter_str: str
-) -> list[str]:
+def build_ffmpeg_command(spec: PanZoomSpec, ffmpeg_binary: str, filter_str: str) -> list[str]:
     """Compose full argv for a pan/zoom render.
 
     Kept as a pure function so tests can assert command shape without
@@ -159,20 +151,33 @@ def build_ffmpeg_command(
     return [
         ffmpeg_binary,
         "-y",
-        "-i", str(spec.source_video_path),
-        "-vf", filter_str,
+        "-i",
+        str(spec.source_video_path),
+        "-vf",
+        filter_str,
         # bt709 compliance — matches PR 8's motion_compositor + CLAUDE.md
-        "-colorspace", "bt709",
-        "-color_primaries", "bt709",
-        "-color_trc", "bt709",
-        "-pix_fmt", "yuv420p",
-        "-c:v", "libx264",
-        "-preset", spec.preset,
-        "-crf", str(spec.crf),
-        "-c:a", "aac",
-        "-b:a", spec.audio_bitrate,
-        "-ac", "2",
-        "-ar", "48000",
+        "-colorspace",
+        "bt709",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:v",
+        "libx264",
+        "-preset",
+        spec.preset,
+        "-crf",
+        str(spec.crf),
+        "-c:a",
+        "aac",
+        "-b:a",
+        spec.audio_bitrate,
+        "-ac",
+        "2",
+        "-ar",
+        "48000",
         str(spec.output_path),
     ]
 
@@ -198,16 +203,13 @@ def apply_pan_zoom(
     )
     if filter_str == NO_FILTER:
         logger.debug(
-            "[pan_zoom] pattern %r produces no filter — caller "
-            "should use source unchanged",
+            "[pan_zoom] pattern %r produces no filter — caller should use source unchanged",
             spec.pattern,
         )
         return False
 
     if not spec.source_video_path.exists():
-        logger.warning(
-            "[pan_zoom] source video missing: %s", spec.source_video_path
-        )
+        logger.warning("[pan_zoom] source video missing: %s", spec.source_video_path)
         return False
 
     from genlab_core.media.ffmpeg import get_ffmpeg_binary
@@ -221,7 +223,9 @@ def apply_pan_zoom(
     cmd = build_ffmpeg_command(spec, ffmpeg, filter_str)
     logger.info(
         "[pan_zoom] applying %r to %s -> %s",
-        spec.pattern, spec.source_video_path.name, spec.output_path,
+        spec.pattern,
+        spec.source_video_path.name,
+        spec.output_path,
     )
 
     try:
@@ -234,7 +238,8 @@ def apply_pan_zoom(
     except subprocess.TimeoutExpired:
         logger.warning(
             "[pan_zoom] ffmpeg timed out after %ds: %s",
-            timeout_seconds, spec.output_path,
+            timeout_seconds,
+            spec.output_path,
         )
         return False
     except (OSError, FileNotFoundError) as exc:
@@ -245,14 +250,14 @@ def apply_pan_zoom(
         stderr_tail = "\n".join(result.stderr.strip().splitlines()[-5:])
         logger.warning(
             "[pan_zoom] ffmpeg exit=%d for %s. Last stderr:\n%s",
-            result.returncode, spec.output_path, stderr_tail,
+            result.returncode,
+            spec.output_path,
+            stderr_tail,
         )
         return False
 
     if not spec.output_path.exists() or spec.output_path.stat().st_size < 1024:
-        logger.warning(
-            "[pan_zoom] output missing/too small: %s", spec.output_path
-        )
+        logger.warning("[pan_zoom] output missing/too small: %s", spec.output_path)
         return False
 
     return True

@@ -53,9 +53,7 @@ class TestBuildCaptionEmptyContextReturnsEmpty:
         # title, summary are empty.
         story = {"content": {}}
         caption = s._build_caption(story)
-        assert caption == "", (
-            f"Empty-context story should produce empty caption, got: {caption!r}"
-        )
+        assert caption == "", f"Empty-context story should produce empty caption, got: {caption!r}"
 
     def test_hook_alone_still_produces_content(self):
         """Guard: don't be over-aggressive — a hook alone is enough."""

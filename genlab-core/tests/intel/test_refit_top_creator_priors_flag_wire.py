@@ -31,9 +31,7 @@ _SCRIPT_PATH = _REPO_ROOT / "scripts" / "refit_top_creator_priors.py"
 @pytest.fixture(scope="module")
 def refit_module():
     """Load the script as a module for direct function access."""
-    spec = importlib.util.spec_from_file_location(
-        "refit_top_creator_priors_pin", _SCRIPT_PATH
-    )
+    spec = importlib.util.spec_from_file_location("refit_top_creator_priors_pin", _SCRIPT_PATH)
     module = importlib.util.module_from_spec(spec)
     sys.modules["refit_top_creator_priors_pin"] = module
     spec.loader.exec_module(module)

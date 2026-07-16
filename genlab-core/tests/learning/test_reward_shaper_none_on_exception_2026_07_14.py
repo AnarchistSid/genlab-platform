@@ -23,11 +23,7 @@ These tests pin the invariant across the sites we've wired.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
-import pytest
-
-from genlab_core.learning.reward_shaper import RewardShaper, MonetisationRewardShaper
+from genlab_core.learning.reward_shaper import MonetisationRewardShaper, RewardShaper
 
 
 class TestRewardShaperReturnsNoneOnException:
@@ -126,6 +122,7 @@ class TestSourceHasNewSemantics:
     def test_compute_reward_return_type_documents_none(self):
         """The type annotation reflects that None is a possible return."""
         import inspect
+
         sig = inspect.signature(RewardShaper.compute_reward)
         return_annotation = str(sig.return_annotation)
         assert "None" in return_annotation, (

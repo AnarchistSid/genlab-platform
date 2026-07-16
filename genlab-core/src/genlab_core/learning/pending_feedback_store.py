@@ -316,9 +316,7 @@ class PendingFeedbackStore:
         # Postgres JSONB auto-parses to dict; SharePoint stores as JSON
         # string. Handle both shapes for round-trip parity — same pattern
         # as bandit_context above.
-        arm_ids_raw = _f(
-            fields, "ArmIdsByDimension", "arm_ids_by_dimension", default=None
-        )
+        arm_ids_raw = _f(fields, "ArmIdsByDimension", "arm_ids_by_dimension", default=None)
         if isinstance(arm_ids_raw, dict):
             arm_ids_by_dim = arm_ids_raw
         elif isinstance(arm_ids_raw, str) and arm_ids_raw:

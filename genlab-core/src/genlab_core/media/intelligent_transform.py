@@ -243,7 +243,7 @@ class IntelligentTransformConfig(BaseModel):
     dimensions: DimensionsConfig = Field(default_factory=DimensionsConfig)
 
     @classmethod
-    def from_visuals_dict(cls, visuals: dict[str, Any]) -> "IntelligentTransformConfig":
+    def from_visuals_dict(cls, visuals: dict[str, Any]) -> IntelligentTransformConfig:
         """Parse ``intelligent_transform:`` block from a parsed
         visuals.yaml dict. Returns default-off config if the block
         is absent.

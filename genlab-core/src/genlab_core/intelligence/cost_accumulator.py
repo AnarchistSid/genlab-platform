@@ -90,9 +90,7 @@ def _compute_cost(model: str, input_tokens: int, output_tokens: int) -> float:
             "model to MODEL_COSTS to fix",
             model,
         )
-        rates = MODEL_COSTS.get(
-            "claude-opus-4-7", {"input": 15.00, "output": 75.00}
-        )
+        rates = MODEL_COSTS.get("claude-opus-4-7", {"input": 15.00, "output": 75.00})
 
     return (
         input_tokens * rates.get("input", 0) + output_tokens * rates.get("output", 0)

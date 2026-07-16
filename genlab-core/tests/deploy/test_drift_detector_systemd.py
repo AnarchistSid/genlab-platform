@@ -46,9 +46,7 @@ class TestUnitsExist:
         )
 
     def test_timer_present(self):
-        assert _TIMER.is_file(), (
-            f"{_TIMER} missing — without a timer the service never fires."
-        )
+        assert _TIMER.is_file(), f"{_TIMER} missing — without a timer the service never fires."
 
 
 class TestServiceContract:
@@ -66,9 +64,9 @@ class TestServiceContract:
         assert "genlab_core.learning.drift_detector" in exec_start, (
             f"ExecStart doesn't invoke drift_detector: {exec_start!r}"
         )
-        assert (
-            ".venv/bin/python" in exec_start or "uv run" in exec_start
-        ), "ExecStart doesn't use the pinned venv/uv python"
+        assert ".venv/bin/python" in exec_start or "uv run" in exec_start, (
+            "ExecStart doesn't use the pinned venv/uv python"
+        )
 
     def test_on_failure_alert_wired(self):
         """OnFailure MUST point at the shared alert template.
@@ -77,9 +75,7 @@ class TestServiceContract:
         succeeded with zero signals OR crashed and wrote nothing."""
         parser = _parse(_SERVICE)
         on_failure = parser["Unit"].get("OnFailure", "")
-        assert (
-            "genlab-service-failure-alert" in on_failure
-        ), (
+        assert "genlab-service-failure-alert" in on_failure, (
             "OnFailure= not wired to the shared alert template. "
             "Add: OnFailure=genlab-service-failure-alert@%n.service"
         )
@@ -110,7 +106,6 @@ class TestServiceContract:
         to a hardcoded prod path — fine on prod but confusing when
         a future editor tries to point at a different dir. Locking
         that the env var is set explicitly."""
-        parser = _parse(_SERVICE)
         # ConfigParser doesn't natively multi-value Environment=,
         # so read the raw file for the flag.
         raw = _SERVICE.read_text()
@@ -162,9 +157,7 @@ class TestTimerContract:
         on_cal = parser["Timer"].get("OnCalendar", "").strip()
         # Parse `*-*-* HH:MM:SS UTC`
         parts = on_cal.split()
-        assert len(parts) >= 2, (
-            f"OnCalendar={on_cal!r} — unexpected format"
-        )
+        assert len(parts) >= 2, f"OnCalendar={on_cal!r} — unexpected format"
         time_part = parts[1]  # HH:MM:SS
         hour = int(time_part.split(":")[0])
         # Snapshot writer fires 21:30 UTC. Drift detector should fire
@@ -183,6 +176,5 @@ class TestTimerContract:
         parser = _parse(_TIMER)
         unit = parser["Timer"].get("Unit", "").strip()
         assert unit == "genlab-drift-detector.service", (
-            f"Timer's Unit={unit!r} doesn't point at "
-            "genlab-drift-detector.service"
+            f"Timer's Unit={unit!r} doesn't point at genlab-drift-detector.service"
         )

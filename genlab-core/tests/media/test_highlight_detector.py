@@ -19,7 +19,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.media.highlight_detector import (
     HighlightWindow,
     _longest_non_silent,
@@ -133,9 +132,7 @@ class TestParseSceneChanges:
 
 class TestDetectAudioPeak:
     def test_missing_source(self, tmp_path: Path) -> None:
-        result = detect_audio_peak(
-            tmp_path / "no.mp4", video_duration_s=20.0, window_s=8.0
-        )
+        result = detect_audio_peak(tmp_path / "no.mp4", video_duration_s=20.0, window_s=8.0)
         assert result is None
 
     @patch("subprocess.run")
@@ -158,9 +155,7 @@ class TestDetectAudioPeak:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="", stderr=stderr
         )
-        w = detect_audio_peak(
-            source, video_duration_s=20.0, window_s=8.0
-        )
+        w = detect_audio_peak(source, video_duration_s=20.0, window_s=8.0)
         assert w is not None
         # Center at 9s, window 8 → 5.0 to 13.0
         assert w.start_s == pytest.approx(5.0)
@@ -168,44 +163,30 @@ class TestDetectAudioPeak:
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_ffmpeg_timeout_returns_none(
-        self, mock_binary, mock_run, tmp_path: Path
-    ) -> None:
+    def test_ffmpeg_timeout_returns_none(self, mock_binary, mock_run, tmp_path: Path) -> None:
         source = tmp_path / "source.mp4"
         source.write_bytes(b"a" * 2000)
         mock_binary.return_value = "/usr/bin/ffmpeg"
-        mock_run.side_effect = subprocess.TimeoutExpired(
-            cmd=["ffmpeg"], timeout=60
-        )
-        assert detect_audio_peak(
-            source, video_duration_s=20.0, window_s=8.0
-        ) is None
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=60)
+        assert detect_audio_peak(source, video_duration_s=20.0, window_s=8.0) is None
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_ffmpeg_unavailable(
-        self, mock_binary, mock_run, tmp_path: Path
-    ) -> None:
+    def test_ffmpeg_unavailable(self, mock_binary, mock_run, tmp_path: Path) -> None:
         source = tmp_path / "source.mp4"
         source.write_bytes(b"a" * 2000)
         mock_binary.side_effect = RuntimeError("no ffmpeg")
-        result = detect_audio_peak(
-            source, video_duration_s=20.0, window_s=8.0
-        )
+        result = detect_audio_peak(source, video_duration_s=20.0, window_s=8.0)
         assert result is None
 
 
 class TestDetectMotionPeak:
     def test_missing_source(self, tmp_path: Path) -> None:
-        assert detect_motion_peak(
-            tmp_path / "no.mp4", video_duration_s=20.0, window_s=8.0
-        ) is None
+        assert detect_motion_peak(tmp_path / "no.mp4", video_duration_s=20.0, window_s=8.0) is None
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_success_centers_on_highest_scene(
-        self, mock_binary, mock_run, tmp_path: Path
-    ) -> None:
+    def test_success_centers_on_highest_scene(self, mock_binary, mock_run, tmp_path: Path) -> None:
         source = tmp_path / "source.mp4"
         source.write_bytes(b"a" * 2000)
         mock_binary.return_value = "/usr/bin/ffmpeg"
@@ -218,9 +199,7 @@ class TestDetectMotionPeak:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="", stderr=stderr
         )
-        w = detect_motion_peak(
-            source, video_duration_s=20.0, window_s=8.0
-        )
+        w = detect_motion_peak(source, video_duration_s=20.0, window_s=8.0)
         assert w is not None
         # Center at 10s → window (6, 14)
         assert w.start_s == pytest.approx(6.0)
@@ -228,9 +207,7 @@ class TestDetectMotionPeak:
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_no_scenes_detected_returns_none(
-        self, mock_binary, mock_run, tmp_path: Path
-    ) -> None:
+    def test_no_scenes_detected_returns_none(self, mock_binary, mock_run, tmp_path: Path) -> None:
         """No scene changes above threshold → signal too weak, None."""
         source = tmp_path / "source.mp4"
         source.write_bytes(b"a" * 2000)
@@ -238,9 +215,7 @@ class TestDetectMotionPeak:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="", stderr=""
         )
-        assert detect_motion_peak(
-            source, video_duration_s=20.0, window_s=8.0
-        ) is None
+        assert detect_motion_peak(source, video_duration_s=20.0, window_s=8.0) is None
 
 
 class TestDetectLLMPick:
@@ -248,35 +223,27 @@ class TestDetectLLMPick:
         """LLM pick stub — always None until real impl lands."""
         source = tmp_path / "source.mp4"
         source.write_bytes(b"a" * 2000)
-        assert detect_llm_pick(
-            source, video_duration_s=20.0, window_s=8.0
-        ) is None
+        assert detect_llm_pick(source, video_duration_s=20.0, window_s=8.0) is None
 
 
 class TestDetectHighlight:
     def test_first_frame_method(self, tmp_path: Path) -> None:
         source = tmp_path / "source.mp4"
         source.write_bytes(b"a" * 2000)
-        w = detect_highlight(
-            source, "first_frame", video_duration_s=20.0, window_s=8.0
-        )
+        w = detect_highlight(source, "first_frame", video_duration_s=20.0, window_s=8.0)
         assert w == HighlightWindow(0.0, 8.0)
 
     def test_llm_pick_falls_back(self, tmp_path: Path) -> None:
         """LLM pick returns None → dispatcher falls back to first_frame."""
         source = tmp_path / "source.mp4"
         source.write_bytes(b"a" * 2000)
-        w = detect_highlight(
-            source, "llm_pick", video_duration_s=20.0, window_s=8.0
-        )
+        w = detect_highlight(source, "llm_pick", video_duration_s=20.0, window_s=8.0)
         assert w == HighlightWindow(0.0, 8.0)
 
     def test_unknown_method_falls_back(self, tmp_path: Path) -> None:
         source = tmp_path / "source.mp4"
         source.write_bytes(b"a" * 2000)
-        w = detect_highlight(
-            source, "mystery_method", video_duration_s=20.0, window_s=8.0
-        )
+        w = detect_highlight(source, "mystery_method", video_duration_s=20.0, window_s=8.0)
         assert w == HighlightWindow(0.0, 8.0)
 
     def test_fallback_disabled_returns_none(self, tmp_path: Path) -> None:
@@ -284,28 +251,28 @@ class TestDetectHighlight:
         source = tmp_path / "source.mp4"
         source.write_bytes(b"a" * 2000)
         w = detect_highlight(
-            source, "llm_pick",
-            video_duration_s=20.0, window_s=8.0,
+            source,
+            "llm_pick",
+            video_duration_s=20.0,
+            window_s=8.0,
             fallback_to_first_frame=False,
         )
         assert w is None
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_audio_peak_routed(
-        self, mock_binary, mock_run, tmp_path: Path
-    ) -> None:
+    def test_audio_peak_routed(self, mock_binary, mock_run, tmp_path: Path) -> None:
         source = tmp_path / "source.mp4"
         source.write_bytes(b"a" * 2000)
         mock_binary.return_value = "/usr/bin/ffmpeg"
         mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="",
+            args=[],
+            returncode=0,
+            stdout="",
             stderr="[silencedetect] silence_start: 0\n"
-                   "[silencedetect] silence_end: 3.0 | silence_duration: 3.0\n",
+            "[silencedetect] silence_end: 3.0 | silence_duration: 3.0\n",
         )
-        w = detect_highlight(
-            source, "audio_peak", video_duration_s=20.0, window_s=8.0
-        )
+        w = detect_highlight(source, "audio_peak", video_duration_s=20.0, window_s=8.0)
         assert w is not None
         # Non-silent stretch (3, 20), center=11.5, window (7.5, 15.5)
         assert w.duration() == pytest.approx(8.0)

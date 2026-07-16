@@ -121,10 +121,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("idx_ensemble_votes_blueprint", table_name="ensemble_votes")
-    op.drop_index(
-        "idx_ensemble_votes_component_time", table_name="ensemble_votes"
-    )
-    op.drop_index(
-        "idx_ensemble_votes_niche_time", table_name="ensemble_votes"
-    )
+    op.drop_index("idx_ensemble_votes_component_time", table_name="ensemble_votes")
+    op.drop_index("idx_ensemble_votes_niche_time", table_name="ensemble_votes")
     op.drop_table("ensemble_votes")

@@ -312,9 +312,7 @@ class TestIsTransientHeuristic:
             # against fake_anthropic.APIConnectionError WILL match.
             exc = CustomRenamedConnectionError("simulated SDK rename")
             assert type(exc).__name__ == "CustomRenamedConnectionError"
-            assert (
-                AnthropicStrategistClient._is_transient(exc) is True
-            ), (
+            assert AnthropicStrategistClient._is_transient(exc) is True, (
                 "isinstance path failed — the belt-and-suspenders fix "
                 "isn't catching class-hierarchy matches. DEV-3 fix "
                 "regressed."
@@ -343,18 +341,10 @@ class TestIsTransientHeuristic:
             # Name-match still works — this exception matches the
             # frozenset directly.
             exc_cls = type("APIConnectionError", (Exception,), {})
-            assert (
-                AnthropicStrategistClient._is_transient(exc_cls("boom"))
-                is True
-            )
+            assert AnthropicStrategistClient._is_transient(exc_cls("boom")) is True
             # Unrelated exception still returns False even with the
             # isinstance path unable to import.
-            assert (
-                AnthropicStrategistClient._is_transient(
-                    ValueError("bad")
-                )
-                is False
-            )
+            assert AnthropicStrategistClient._is_transient(ValueError("bad")) is False
         finally:
             if original is not None:
                 sys.modules["anthropic"] = original
@@ -480,12 +470,12 @@ class TestSuccessPath:
         """Guards against a re-inlining that would recreate the drift
         risk. Post-fix, no INPUT_COST_PER_M / OUTPUT_COST_PER_M
         class attribute should exist."""
-        assert not hasattr(
-            AnthropicStrategistClient, "INPUT_COST_PER_M"
-        ), "INPUT_COST_PER_M re-added — pricing is now single-source via cost_accumulator"
-        assert not hasattr(
-            AnthropicStrategistClient, "OUTPUT_COST_PER_M"
-        ), "OUTPUT_COST_PER_M re-added — pricing is now single-source via cost_accumulator"
+        assert not hasattr(AnthropicStrategistClient, "INPUT_COST_PER_M"), (
+            "INPUT_COST_PER_M re-added — pricing is now single-source via cost_accumulator"
+        )
+        assert not hasattr(AnthropicStrategistClient, "OUTPUT_COST_PER_M"), (
+            "OUTPUT_COST_PER_M re-added — pricing is now single-source via cost_accumulator"
+        )
 
 
 # === Response parsing edge cases ==================================

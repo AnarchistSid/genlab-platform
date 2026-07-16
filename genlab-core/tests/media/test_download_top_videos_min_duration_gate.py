@@ -38,7 +38,6 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.media.download_top_videos import (
     _MIN_DURATION_SECONDS,
     _validate_download,

@@ -89,11 +89,15 @@ def record_publish(
         # time (WARNING log) instead of silently corrupting analytics.
         # Only applied to URL-derived post_ids (not overrides — those
         # come from PublishResult.post_id which is trusted).
-        if not _from_override and post_id and (
-            post_id.endswith(".com")
-            or post_id.endswith(".net")
-            or post_id.endswith(".org")
-            or "/" not in post_url.rstrip("/")[len("https://") :]
+        if (
+            not _from_override
+            and post_id
+            and (
+                post_id.endswith(".com")
+                or post_id.endswith(".net")
+                or post_id.endswith(".org")
+                or "/" not in post_url.rstrip("/")[len("https://") :]
+            )
         ):
             logger.warning(
                 "[analytics_recorder] malformed post_url=%r derived "

@@ -13,17 +13,15 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.monetization import cuelinks_client
 from genlab_core.monetization.cuelinks_client import (
-    AmazonUrlNotAllowed,
     _AMAZON_DOMAINS,
+    AmazonUrlNotAllowed,
     _is_amazon_url,
     convert_url,
     list_campaigns,
     verify,
 )
-
 
 # ─── Amazon guard ────────────────────────────────────────────────────
 

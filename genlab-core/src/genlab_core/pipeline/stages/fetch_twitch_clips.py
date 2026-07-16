@@ -294,8 +294,7 @@ class FetchTwitchClips(FetcherStage):
         )
         if dropped_durations:
             logger.info(
-                "[TwitchClips] Dropped %d/%d clips shorter than %.1fs "
-                "(platform min_duration): %s",
+                "[TwitchClips] Dropped %d/%d clips shorter than %.1fs (platform min_duration): %s",
                 len(dropped_durations),
                 before_dur,
                 min_duration,

@@ -125,9 +125,7 @@ class AnthropicStrategistClient:
                 input_tokens = getattr(usage, "input_tokens", 0)
                 output_tokens = getattr(usage, "output_tokens", 0)
                 input_per_m, output_per_m = self._pricing()
-                cost = (
-                    input_tokens * input_per_m + output_tokens * output_per_m
-                ) / 1_000_000
+                cost = (input_tokens * input_per_m + output_tokens * output_per_m) / 1_000_000
                 logger.info(
                     "strategist.llm_call_ok model=%s in=%d out=%d cost=$%.4f t=%.2fs",
                     STRATEGIST_MODEL,

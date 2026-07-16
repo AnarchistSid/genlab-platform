@@ -38,9 +38,7 @@ class TestFeatureFlag:
         assert result.n_voters == 0
         assert result.votes == []
 
-    @pytest.mark.parametrize(
-        "val", ["true", "TRUE", "True", "1", "yes", "on", "y", "t"]
-    )
+    @pytest.mark.parametrize("val", ["true", "TRUE", "True", "1", "yes", "on", "y", "t"])
     def test_truthy_values_activate(self, monkeypatch, val):
         """2026-07-14: switched to env_true() semantics. Prior tests
         locked strict ``"true"``-only which was inconsistent with

@@ -31,7 +31,6 @@ from __future__ import annotations
 
 from genlab_core.pipeline.stages.push_to_backlog import _is_blocking
 
-
 # ── original status-only blocking behavior still holds ──────────────
 
 

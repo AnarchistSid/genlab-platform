@@ -37,9 +37,7 @@ bp = Blueprint(
     url_prefix="/api/v1/counterfactual-replay",
 )
 
-_VALID_NICHES = frozenset(
-    {"all", "ai_creators", "gaming", "sports", "movies", "anime"}
-)
+_VALID_NICHES = frozenset({"all", "ai_creators", "gaming", "sports", "movies", "anime"})
 
 
 def _replay_root() -> Path:
@@ -105,8 +103,6 @@ def get_latest():
     try:
         payload = json.loads(path.read_text())
     except (json.JSONDecodeError, OSError) as exc:
-        logger.warning(
-            "counterfactual_replay: %s malformed: %s", path.name, exc
-        )
+        logger.warning("counterfactual_replay: %s malformed: %s", path.name, exc)
         return jsonify({"status": "success", "data": None})
     return jsonify({"status": "success", "data": payload})

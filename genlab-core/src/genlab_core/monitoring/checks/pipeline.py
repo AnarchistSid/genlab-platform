@@ -813,9 +813,7 @@ def check_stale_drafted(niche_id: str) -> list[Alert]:
                 )
             )
     except Exception as exc:
-        logger.warning(
-            "check_stale_drafted failed for niche_id=%s: %s", niche_id, exc
-        )
+        logger.warning("check_stale_drafted failed for niche_id=%s: %s", niche_id, exc)
     return alerts
 
 

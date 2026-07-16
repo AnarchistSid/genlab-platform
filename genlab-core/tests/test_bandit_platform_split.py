@@ -114,9 +114,7 @@ class TestIsEnabled:
             )
         for falsy_value in ("0", "false", "no", "off", "", "anything"):
             monkeypatch.setenv("GENLAB_PER_PLATFORM_BANDIT_ENABLED", falsy_value)
-            assert is_enabled() is False, (
-                f"is_enabled must be False for {falsy_value!r}"
-            )
+            assert is_enabled() is False, f"is_enabled must be False for {falsy_value!r}"
 
 
 class TestListSplitPlatforms:

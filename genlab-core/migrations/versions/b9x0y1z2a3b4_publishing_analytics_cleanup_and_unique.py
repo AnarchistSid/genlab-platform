@@ -92,6 +92,4 @@ def downgrade() -> None:
     # Only the index is reversible. Cross-niche healing + dedupe are
     # data operations that cannot be undone (the deleted rows were
     # strictly worse duplicates; no information loss).
-    op.execute(
-        "DROP INDEX IF EXISTS uq_publishing_analytics_bp_platform"
-    )
+    op.execute("DROP INDEX IF EXISTS uq_publishing_analytics_bp_platform")

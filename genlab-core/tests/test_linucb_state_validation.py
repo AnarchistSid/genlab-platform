@@ -128,10 +128,7 @@ class TestSingularityGuards:
         # After reset, A should be a proper identity (invertible).
         assert np.allclose(restored.A, np.eye(CONTEXT_DIM))
         assert restored.n_obs == 0
-        assert (
-            "singular" in caplog.text.lower()
-            or "resetting" in caplog.text.lower()
-        )
+        assert "singular" in caplog.text.lower() or "resetting" in caplog.text.lower()
 
     def test_near_singular_A_triggers_reset(self):
         """Condition number above _CONDITION_NUMBER_LIMIT means

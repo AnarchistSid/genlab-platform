@@ -30,7 +30,6 @@ even if the audit-trail write fails.
 from __future__ import annotations
 
 import logging
-import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -62,9 +61,7 @@ def _persist_enabled() -> bool:
     return env_true(_ENABLE_ENV_VAR)
 
 
-def record_decision(
-    blueprint_id: str, niche_id: str, decision: EnsembleDecision
-) -> bool:
+def record_decision(blueprint_id: str, niche_id: str, decision: EnsembleDecision) -> bool:
     """Persist all component votes + aggregate for one decision.
 
     Args:

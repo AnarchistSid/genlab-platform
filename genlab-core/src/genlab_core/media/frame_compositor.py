@@ -113,7 +113,10 @@ SHADOW_OPACITY = 0.50
 # state had 3 independent hardcoded ``60`` sites for this same
 # invariant (llm_hook_generator.py, base_hooks.py, this file). Now
 # single source of truth so ceiling bumps propagate.
-from genlab_core.writing.constants import HOOK_MAX_CHARS_PER_LINE, MAX_HOOK_CHARS
+from genlab_core.writing.constants import (  # noqa: E402 — mid-file import intentional per class-of-bug audit above
+    HOOK_MAX_CHARS_PER_LINE,
+    MAX_HOOK_CHARS,
+)
 
 HOOK_MAX_CHARS_LINE = HOOK_MAX_CHARS_PER_LINE
 HOOK_MAX_CHARS = MAX_HOOK_CHARS  # kept as module-level alias for backward compat
@@ -348,8 +351,7 @@ def probe_video(path: str) -> VideoInfo:
         # without any signal. Same pattern as base_visual_render.py:206
         # ffprobe fail elevation from the earlier session.
         logger.warning(
-            "[frame_compositor] r_frame_rate %r unparseable (%s) — "
-            "defaulting to 30fps",
+            "[frame_compositor] r_frame_rate %r unparseable (%s) — defaulting to 30fps",
             fps_str,
             exc,
         )
@@ -577,9 +579,7 @@ class FrameCompositor:
         _MIN_RENDER_SIZE_BYTES = 1024
         out_path_obj = Path(output_path)
         if not out_path_obj.is_file():
-            raise RuntimeError(
-                f"FFmpeg exited 0 but output file missing: {output_path}"
-            )
+            raise RuntimeError(f"FFmpeg exited 0 but output file missing: {output_path}")
         out_size = out_path_obj.stat().st_size
         if out_size < _MIN_RENDER_SIZE_BYTES:
             raise RuntimeError(
@@ -587,9 +587,7 @@ class FrameCompositor:
                 f"{_MIN_RENDER_SIZE_BYTES} B threshold): {output_path}"
             )
 
-        logger.info(
-            f"[{self.branding.niche_id}] Rendered -> {output_path} ({out_size:,} B)"
-        )
+        logger.info(f"[{self.branding.niche_id}] Rendered -> {output_path} ({out_size:,} B)")
         return output_path
 
     # --- Hook text wrapping -----------------------------------------------

@@ -309,9 +309,7 @@ def get_flag_state():
         # sneak out through the warning message. `_classify_value`
         # includes the raw string in its warning; if we redact after,
         # the warning still holds the full secret.
-        raw_for_display = (
-            raw if raw is None or len(raw) <= 32 else "…"
-        )
+        raw_for_display = raw if raw is None or len(raw) <= 32 else "…"
         status, warning = _classify_value(raw_for_display)
         polarity = spec.get("polarity", "enable")
 

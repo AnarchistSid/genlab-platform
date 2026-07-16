@@ -29,7 +29,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from genlab_core.media.intelligent_transform import (
     IntelligentTransformConfig,
 )
@@ -81,9 +80,7 @@ class TestPydanticModelParsing:
     def test_from_malformed_block_returns_defaults(self) -> None:
         """If someone types 'intelligent_transform: []' by mistake
         (list instead of dict), fall back to defaults not crash."""
-        cfg = IntelligentTransformConfig.from_visuals_dict(
-            {"intelligent_transform": []}
-        )
+        cfg = IntelligentTransformConfig.from_visuals_dict({"intelligent_transform": []})
         assert cfg.enabled is False
 
     def test_from_populated_visuals_dict_parses_all_dims(self) -> None:
@@ -159,9 +156,7 @@ class TestAllNicheYAMLsHaveBlock:
     niche — that's a silent failure worth catching here."""
 
     @pytest.mark.parametrize("niche_id,yaml_path", list(_NICHE_YAMLS.items()))
-    def test_niche_yaml_has_intelligent_transform(
-        self, niche_id: str, yaml_path: Path
-    ) -> None:
+    def test_niche_yaml_has_intelligent_transform(self, niche_id: str, yaml_path: Path) -> None:
         assert yaml_path.is_file(), f"{niche_id} visuals.yaml missing at {yaml_path}"
         parsed = yaml.safe_load(yaml_path.read_text())
         assert "intelligent_transform" in parsed, (
@@ -171,9 +166,7 @@ class TestAllNicheYAMLsHaveBlock:
         )
 
     @pytest.mark.parametrize("niche_id,yaml_path", list(_NICHE_YAMLS.items()))
-    def test_niche_yaml_parses_via_pydantic(
-        self, niche_id: str, yaml_path: Path
-    ) -> None:
+    def test_niche_yaml_parses_via_pydantic(self, niche_id: str, yaml_path: Path) -> None:
         parsed = yaml.safe_load(yaml_path.read_text())
         cfg = IntelligentTransformConfig.from_visuals_dict(parsed)
         # 2026-07-14 update (PR #718 obsoleted the PR 2 strict-false
@@ -188,9 +181,7 @@ class TestAllNicheYAMLsHaveBlock:
         )
 
     @pytest.mark.parametrize("niche_id,yaml_path", list(_NICHE_YAMLS.items()))
-    def test_niche_yaml_populates_all_11_dimensions(
-        self, niche_id: str, yaml_path: Path
-    ) -> None:
+    def test_niche_yaml_populates_all_11_dimensions(self, niche_id: str, yaml_path: Path) -> None:
         parsed = yaml.safe_load(yaml_path.read_text())
         block = parsed.get("intelligent_transform", {})
         dims = block.get("dimensions", {})

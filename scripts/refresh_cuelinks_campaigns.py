@@ -114,15 +114,14 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def _shortlist_from_campaigns(
-    campaigns: list[dict], *, top_n: int = _TOP_BY_EPC
-) -> list[dict]:
+def _shortlist_from_campaigns(campaigns: list[dict], *, top_n: int = _TOP_BY_EPC) -> list[dict]:
     """Sort by EPC descending + trim to top-N + shape for the YAML output.
 
     The Cuelinks V3 response includes a lot of fields we don't need
     (creative sizes, deep-link support flags, etc.). Project down to
     the fields affiliate_matcher actually reads.
     """
+
     def epc_7d(c: dict) -> float:
         # V3 response shape TBD in prod; try common field names
         for k in ("epc_7d", "epc", "epc_7"):
@@ -195,9 +194,7 @@ def _post_write_assertion(path: Path) -> None:
 def refresh(*, dry_run: bool = False) -> int:
     """Fetch → sort → write. Returns exit code (0 success, 1 failure)."""
     if not os.environ.get("CUELINKS_V3_API_KEY", "").strip():
-        logger.warning(
-            "[cuelinks-refresh] CUELINKS_V3_API_KEY unset — nothing to do"
-        )
+        logger.warning("[cuelinks-refresh] CUELINKS_V3_API_KEY unset — nothing to do")
         return 1
 
     # Late import so a missing V3 key doesn't drag the client module in

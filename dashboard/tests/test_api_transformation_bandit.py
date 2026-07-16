@@ -17,7 +17,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from server.api.transformation_bandit import _load_transformation_arms, _shape_response
 
 
@@ -262,25 +261,19 @@ class TestFlagEnabledInjection:
         assert result["flag_enabled"] is True
 
     def test_flag_enabled_false_when_absent(self, monkeypatch) -> None:
-        monkeypatch.delenv(
-            "GENLAB_INTELLIGENT_TRANSFORM_ENABLED", raising=False
-        )
+        monkeypatch.delenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", raising=False)
         result = _shape_response([])
         assert result["flag_enabled"] is False
 
     def test_flag_case_insensitive(self, monkeypatch) -> None:
         for value in ("true", "TRUE", "yes", "on"):
-            monkeypatch.setenv(
-                "GENLAB_INTELLIGENT_TRANSFORM_ENABLED", value
-            )
+            monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", value)
             result = _shape_response([])
             assert result["flag_enabled"] is True, f"value={value!r}"
 
     def test_flag_false_for_falsy(self, monkeypatch) -> None:
         for value in ("0", "false", "no", "off", ""):
-            monkeypatch.setenv(
-                "GENLAB_INTELLIGENT_TRANSFORM_ENABLED", value
-            )
+            monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", value)
             result = _shape_response([])
             assert result["flag_enabled"] is False, f"value={value!r}"
 

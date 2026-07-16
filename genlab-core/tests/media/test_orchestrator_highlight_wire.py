@@ -20,7 +20,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.media.highlight_detector import HighlightWindow
 from genlab_core.media.intelligent_transform import IntelligentTransformConfig
 from genlab_core.media.transformation_orchestrator import apply_transformations
@@ -59,9 +58,7 @@ def _cfg() -> IntelligentTransformConfig:
 
 
 class TestFirstFrameSkipsTrim:
-    def test_first_frame_full_duration_no_trim(
-        self, monkeypatch, tmp_path: Path
-    ) -> None:
+    def test_first_frame_full_duration_no_trim(self, monkeypatch, tmp_path: Path) -> None:
         """When window covers full source (first_frame baseline),
         no ffmpeg trim runs — saves render time."""
         monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
@@ -70,13 +67,17 @@ class TestFirstFrameSkipsTrim:
         out = tmp_path / "out.mp4"
 
         # detect_highlight returns (0, 20) — full source
-        with patch(
-            "genlab_core.media.transformation_selector.select_transformation_dimensions",
-            return_value=_choices("first_frame"),
-        ), patch(
-            "genlab_core.media.highlight_detector.detect_highlight",
-            return_value=HighlightWindow(0.0, 20.0),
-        ), patch("subprocess.run") as mock_run:
+        with (
+            patch(
+                "genlab_core.media.transformation_selector.select_transformation_dimensions",
+                return_value=_choices("first_frame"),
+            ),
+            patch(
+                "genlab_core.media.highlight_detector.detect_highlight",
+                return_value=HighlightWindow(0.0, 20.0),
+            ),
+            patch("subprocess.run") as mock_run,
+        ):
             result = apply_transformations(
                 source_video_path=source,
                 output_path=out,
@@ -93,9 +94,7 @@ class TestFirstFrameSkipsTrim:
 
 
 class TestAudioPeakRunsTrim:
-    def test_audio_peak_window_triggers_trim(
-        self, monkeypatch, tmp_path: Path
-    ) -> None:
+    def test_audio_peak_window_triggers_trim(self, monkeypatch, tmp_path: Path) -> None:
         monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
         source = tmp_path / "source.mp4"
         source.write_bytes(b"x" * 2000)
@@ -106,20 +105,23 @@ class TestAudioPeakRunsTrim:
             for arg in args[0]:
                 if arg.endswith(".mp4") and not arg.endswith("source.mp4"):
                     Path(arg).write_bytes(b"trimmed" * 400)
-            return subprocess.CompletedProcess(
-                args=args[0], returncode=0, stdout="", stderr=""
-            )
+            return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
 
-        with patch(
-            "genlab_core.media.transformation_selector.select_transformation_dimensions",
-            return_value=_choices("audio_peak"),
-        ), patch(
-            "genlab_core.media.highlight_detector.detect_highlight",
-            return_value=HighlightWindow(5.0, 13.0),  # 8s window in middle
-        ), patch(
-            "genlab_core.media.ffmpeg.get_ffmpeg_binary",
-            return_value="/usr/bin/ffmpeg",
-        ), patch("subprocess.run", side_effect=_fake_ffmpeg) as mock_run:
+        with (
+            patch(
+                "genlab_core.media.transformation_selector.select_transformation_dimensions",
+                return_value=_choices("audio_peak"),
+            ),
+            patch(
+                "genlab_core.media.highlight_detector.detect_highlight",
+                return_value=HighlightWindow(5.0, 13.0),  # 8s window in middle
+            ),
+            patch(
+                "genlab_core.media.ffmpeg.get_ffmpeg_binary",
+                return_value="/usr/bin/ffmpeg",
+            ),
+            patch("subprocess.run", side_effect=_fake_ffmpeg) as mock_run,
+        ):
             result = apply_transformations(
                 source_video_path=source,
                 output_path=out,
@@ -142,27 +144,30 @@ class TestAudioPeakRunsTrim:
 
 
 class TestTrimFailureFallsBackToSource:
-    def test_trim_ffmpeg_error_marks_skipped(
-        self, monkeypatch, tmp_path: Path
-    ) -> None:
+    def test_trim_ffmpeg_error_marks_skipped(self, monkeypatch, tmp_path: Path) -> None:
         monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
         source = tmp_path / "source.mp4"
         source.write_bytes(b"x" * 2000)
         out = tmp_path / "out.mp4"
 
-        with patch(
-            "genlab_core.media.transformation_selector.select_transformation_dimensions",
-            return_value=_choices("audio_peak"),
-        ), patch(
-            "genlab_core.media.highlight_detector.detect_highlight",
-            return_value=HighlightWindow(5.0, 13.0),
-        ), patch(
-            "genlab_core.media.ffmpeg.get_ffmpeg_binary",
-            return_value="/usr/bin/ffmpeg",
-        ), patch(
-            "subprocess.run",
-            return_value=subprocess.CompletedProcess(
-                args=[], returncode=1, stdout="", stderr="fake error"
+        with (
+            patch(
+                "genlab_core.media.transformation_selector.select_transformation_dimensions",
+                return_value=_choices("audio_peak"),
+            ),
+            patch(
+                "genlab_core.media.highlight_detector.detect_highlight",
+                return_value=HighlightWindow(5.0, 13.0),
+            ),
+            patch(
+                "genlab_core.media.ffmpeg.get_ffmpeg_binary",
+                return_value="/usr/bin/ffmpeg",
+            ),
+            patch(
+                "subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=[], returncode=1, stdout="", stderr="fake error"
+                ),
             ),
         ):
             result = apply_transformations(
@@ -177,9 +182,7 @@ class TestTrimFailureFallsBackToSource:
         assert "highlight_moment" in result.stages_skipped
         assert "highlight_moment" not in result.stages_applied
 
-    def test_detector_returns_none_falls_back(
-        self, monkeypatch, tmp_path: Path
-    ) -> None:
+    def test_detector_returns_none_falls_back(self, monkeypatch, tmp_path: Path) -> None:
         """detect_highlight with fallback_to_first_frame=True should
         rarely return None, but if it does, orchestrator handles it."""
         monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
@@ -187,12 +190,15 @@ class TestTrimFailureFallsBackToSource:
         source.write_bytes(b"x" * 2000)
         out = tmp_path / "out.mp4"
 
-        with patch(
-            "genlab_core.media.transformation_selector.select_transformation_dimensions",
-            return_value=_choices("audio_peak"),
-        ), patch(
-            "genlab_core.media.highlight_detector.detect_highlight",
-            return_value=None,
+        with (
+            patch(
+                "genlab_core.media.transformation_selector.select_transformation_dimensions",
+                return_value=_choices("audio_peak"),
+            ),
+            patch(
+                "genlab_core.media.highlight_detector.detect_highlight",
+                return_value=None,
+            ),
         ):
             result = apply_transformations(
                 source_video_path=source,

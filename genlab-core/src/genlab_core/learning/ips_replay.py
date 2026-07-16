@@ -566,18 +566,13 @@ def _fit_reward_model(
     # the R-18 audit that landed the canonical 12→13D vector.
     from collections import Counter
 
-    dim_counts = Counter(
-        len(d.context) for d in scored_decisions if d.context is not None
-    )
+    dim_counts = Counter(len(d.context) for d in scored_decisions if d.context is not None)
     if not dim_counts:
         ctx_dim = 0
         fittable = list(scored_decisions)
     else:
         ctx_dim = dim_counts.most_common(1)[0][0]
-        fittable = [
-            d for d in scored_decisions
-            if d.context is None or len(d.context) == ctx_dim
-        ]
+        fittable = [d for d in scored_decisions if d.context is None or len(d.context) == ctx_dim]
         dropped = len(scored_decisions) - len(fittable)
         if dropped:
             logger.warning(

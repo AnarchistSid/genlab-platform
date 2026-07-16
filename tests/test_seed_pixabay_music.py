@@ -24,20 +24,14 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-    / "seed_pixabay_music.py"
-)
+SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "seed_pixabay_music.py"
 
 
 @pytest.fixture(scope="module")
 def script_module():
     """Load the CLI script as a module — same pattern as
     ``test_verify_intelligent_transform.py``."""
-    spec = importlib.util.spec_from_file_location(
-        "seed_pixabay_music", SCRIPT_PATH
-    )
+    spec = importlib.util.spec_from_file_location("seed_pixabay_music", SCRIPT_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -95,9 +89,7 @@ def test_target_path_composes_correctly(script_module, tmp_path):
     """``_target_path`` must produce
     ``<root>/<niche_root>/assets/music_beds/<mood>/<slug>_<id>.mp3``."""
     track = {"id": 12345, "title": "Cinematic Piano"}
-    path = script_module._target_path(
-        tmp_path, "ai_creators", "cinematic", track
-    )
+    path = script_module._target_path(tmp_path, "ai_creators", "cinematic", track)
     assert (
         path
         == tmp_path
@@ -130,9 +122,7 @@ def test_seed_dry_run_touches_nothing(script_module, tmp_path, capsys):
     assert s == 0
     assert f == 0
     # No file written
-    assert (
-        list(tmp_path.rglob("*.mp3")) == []
-    ), "Dry-run must not touch disk"
+    assert list(tmp_path.rglob("*.mp3")) == [], "Dry-run must not touch disk"
     out = capsys.readouterr().out
     assert "DRY" in out
 
@@ -190,14 +180,9 @@ def test_seed_ignores_unknown_niche_ids(script_module, tmp_path, capsys):
 def test_manifest_ships_in_repo():
     """The committed manifest is the source-of-truth for what gets
     seeded. Removing it makes the script useless out-of-the-box."""
-    manifest = (
-        SCRIPT_PATH.parent
-        / "seed"
-        / "pixabay_music_manifest.json"
-    )
+    manifest = SCRIPT_PATH.parent / "seed" / "pixabay_music_manifest.json"
     assert manifest.is_file(), (
-        f"Manifest missing at {manifest}. "
-        "Regenerate per scripts/seed/README.md."
+        f"Manifest missing at {manifest}. Regenerate per scripts/seed/README.md."
     )
 
 
@@ -206,7 +191,5 @@ def test_manifest_has_all_4_activated_niches():
     otherwise the seeder produces an empty library for that niche."""
     import json
 
-    manifest = json.loads(
-        (SCRIPT_PATH.parent / "seed" / "pixabay_music_manifest.json").read_text()
-    )
+    manifest = json.loads((SCRIPT_PATH.parent / "seed" / "pixabay_music_manifest.json").read_text())
     assert set(manifest) == {"ai_creators", "gaming", "sports", "movies"}

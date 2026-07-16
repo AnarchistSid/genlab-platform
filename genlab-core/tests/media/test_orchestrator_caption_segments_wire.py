@@ -15,10 +15,9 @@ Verifies:
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
 from genlab_core.media.intelligent_transform import IntelligentTransformConfig
 from genlab_core.media.transformation_orchestrator import apply_transformations
 from genlab_core.media.transformation_selector import (
@@ -75,9 +74,7 @@ def _mk_cfg() -> IntelligentTransformConfig:
 
 
 class TestCaptionSegmentsWire:
-    def test_serialized_segments_flow_through(
-        self, monkeypatch, tmp_path: Path
-    ) -> None:
+    def test_serialized_segments_flow_through(self, monkeypatch, tmp_path: Path) -> None:
         """Writer's list[dict] shape must reach apply_captions as
         list[CaptionSegment]."""
         monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
@@ -92,12 +89,15 @@ class TestCaptionSegmentsWire:
             spec.output_path.write_bytes(b"y" * 2048)
             return True
 
-        with patch(
-            "genlab_core.media.transformation_selector.select_transformation_dimensions",
-            return_value=_mk_choices(),
-        ), patch(
-            "genlab_core.media.caption_animator.apply_captions",
-            side_effect=_fake_apply_captions,
+        with (
+            patch(
+                "genlab_core.media.transformation_selector.select_transformation_dimensions",
+                return_value=_mk_choices(),
+            ),
+            patch(
+                "genlab_core.media.caption_animator.apply_captions",
+                side_effect=_fake_apply_captions,
+            ),
         ):
             result = apply_transformations(
                 source_video_path=source,
@@ -126,9 +126,7 @@ class TestCaptionSegmentsWire:
         assert spec.segments[0].text == "OpenAI just launched"
         assert spec.segments[0].emphasis_words == ["OpenAI"]
 
-    def test_missing_segments_skips_caption_stage(
-        self, monkeypatch, tmp_path: Path
-    ) -> None:
+    def test_missing_segments_skips_caption_stage(self, monkeypatch, tmp_path: Path) -> None:
         monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
         source = tmp_path / "source.mp4"
         source.write_bytes(b"x" * 2000)
@@ -150,9 +148,7 @@ class TestCaptionSegmentsWire:
         assert "caption_style" in result.stages_skipped
         assert "caption_style" not in result.stages_applied
 
-    def test_malformed_entries_dropped(
-        self, monkeypatch, tmp_path: Path
-    ) -> None:
+    def test_malformed_entries_dropped(self, monkeypatch, tmp_path: Path) -> None:
         """Malformed items (missing text, non-dicts) don't crash the
         deserialize step — valid entries still flow through."""
         monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
@@ -167,12 +163,15 @@ class TestCaptionSegmentsWire:
             spec.output_path.write_bytes(b"y" * 2048)
             return True
 
-        with patch(
-            "genlab_core.media.transformation_selector.select_transformation_dimensions",
-            return_value=_mk_choices(),
-        ), patch(
-            "genlab_core.media.caption_animator.apply_captions",
-            side_effect=_fake_apply_captions,
+        with (
+            patch(
+                "genlab_core.media.transformation_selector.select_transformation_dimensions",
+                return_value=_mk_choices(),
+            ),
+            patch(
+                "genlab_core.media.caption_animator.apply_captions",
+                side_effect=_fake_apply_captions,
+            ),
         ):
             apply_transformations(
                 source_video_path=source,

@@ -16,35 +16,26 @@ Covers:
 from __future__ import annotations
 
 import pytest
-
 from genlab_core.learning.retention_derivations import derive_retention_metrics
 
 
 class TestBasicIG:
     def test_avg_watch_3s_instagram_gives_hold_3s_1(self) -> None:
-        d = derive_retention_metrics(
-            {"reach": 100, "avg_watch_time": 3000}, "instagram"
-        )
+        d = derive_retention_metrics({"reach": 100, "avg_watch_time": 3000}, "instagram")
         assert d["hold_3s"] == 1.0
 
     def test_avg_watch_15s_instagram_gives_both_holds_1(self) -> None:
-        d = derive_retention_metrics(
-            {"reach": 100, "avg_watch_time": 15000}, "instagram"
-        )
+        d = derive_retention_metrics({"reach": 100, "avg_watch_time": 15000}, "instagram")
         assert d["hold_3s"] == 1.0
         assert d["hold_15s"] == 1.0
 
     def test_avg_watch_1_5s_instagram_hold_3s_0_5(self) -> None:
-        d = derive_retention_metrics(
-            {"reach": 100, "avg_watch_time": 1500}, "instagram"
-        )
+        d = derive_retention_metrics({"reach": 100, "avg_watch_time": 1500}, "instagram")
         assert d["hold_3s"] == pytest.approx(0.5)
         assert d["hold_15s"] == pytest.approx(0.1)
 
     def test_zero_watch_time_gives_zero(self) -> None:
-        d = derive_retention_metrics(
-            {"reach": 100, "avg_watch_time": 0}, "instagram"
-        )
+        d = derive_retention_metrics({"reach": 100, "avg_watch_time": 0}, "instagram")
         assert d["hold_3s"] == 0.0
         assert d["hold_15s"] == 0.0
 
@@ -52,9 +43,7 @@ class TestBasicIG:
 class TestPlatformUnits:
     def test_youtube_seconds_no_conversion(self) -> None:
         """YouTube already reports avg_view_duration in seconds."""
-        d = derive_retention_metrics(
-            {"reach": 100, "avg_view_duration": 3.0}, "youtube"
-        )
+        d = derive_retention_metrics({"reach": 100, "avg_view_duration": 3.0}, "youtube")
         assert d["hold_3s"] == 1.0
 
     def test_facebook_minutes_to_seconds(self) -> None:
@@ -68,9 +57,7 @@ class TestPlatformUnits:
 
     def test_facebook_zero_plays_gives_none(self) -> None:
         """No plays → can't average, return None gracefully."""
-        d = derive_retention_metrics(
-            {"reach": 100, "plays": 0, "minutes_viewed": 5}, "facebook"
-        )
+        d = derive_retention_metrics({"reach": 100, "plays": 0, "minutes_viewed": 5}, "facebook")
         assert d["hold_3s"] is None
 
 
@@ -106,16 +93,12 @@ class TestSendsPerReach:
 
     def test_sends_per_reach_none_when_missing(self) -> None:
         """No total_interactions field → None (fallback for legacy IG rows)."""
-        d = derive_retention_metrics(
-            {"reach": 100, "likes": 5}, "instagram"
-        )
+        d = derive_retention_metrics({"reach": 100, "likes": 5}, "instagram")
         assert d["sends_per_reach"] is None
 
     def test_sends_per_reach_zero_reach_none(self) -> None:
         """Zero reach → can't divide, return None not crash."""
-        d = derive_retention_metrics(
-            {"reach": 0, "total_interactions": 5}, "instagram"
-        )
+        d = derive_retention_metrics({"reach": 0, "total_interactions": 5}, "instagram")
         assert d["sends_per_reach"] is None
 
     def test_sends_per_reach_clamped_to_1(self) -> None:
@@ -155,23 +138,17 @@ class TestCompletionFallback:
 
     def test_completion_fallback_to_hold_15s(self) -> None:
         """Without video_duration_s, completion falls back to hold_15s."""
-        d = derive_retention_metrics(
-            {"reach": 100, "avg_watch_time": 15000}, "instagram"
-        )
+        d = derive_retention_metrics({"reach": 100, "avg_watch_time": 15000}, "instagram")
         assert d["completion"] == d["hold_15s"]
 
     def test_completion_none_when_no_watch_data(self) -> None:
-        d = derive_retention_metrics(
-            {"reach": 100}, "instagram"
-        )
+        d = derive_retention_metrics({"reach": 100}, "instagram")
         assert d["completion"] is None
 
 
 class TestSavedRate:
     def test_saved_rate_basic(self) -> None:
-        d = derive_retention_metrics(
-            {"reach": 100, "saves": 5}, "instagram"
-        )
+        d = derive_retention_metrics({"reach": 100, "saves": 5}, "instagram")
         assert d["saved_rate"] == pytest.approx(0.05)
 
     def test_saved_rate_none_when_missing_saves(self) -> None:
@@ -182,9 +159,7 @@ class TestSavedRate:
 class TestEngagementQuality:
     def test_comments_weighted_2x(self) -> None:
         """(likes + 2*comments) / reach"""
-        d = derive_retention_metrics(
-            {"reach": 100, "likes": 6, "comments": 2}, "instagram"
-        )
+        d = derive_retention_metrics({"reach": 100, "likes": 6, "comments": 2}, "instagram")
         # (6 + 2*2) / 100 = 10/100 = 0.10
         assert d["engagement_quality"] == pytest.approx(0.10)
 
@@ -196,17 +171,13 @@ class TestEngagementQuality:
 class TestClampBehavior:
     def test_hold_clamped_at_1(self) -> None:
         """Watch time way above threshold → clamp at 1.0, not >1.0."""
-        d = derive_retention_metrics(
-            {"reach": 100, "avg_watch_time": 999999}, "instagram"
-        )
+        d = derive_retention_metrics({"reach": 100, "avg_watch_time": 999999}, "instagram")
         assert d["hold_3s"] == 1.0
         assert d["hold_15s"] == 1.0
 
     def test_saved_rate_clamped_at_1(self) -> None:
         """Weird case: saves > reach clamps at 1.0."""
-        d = derive_retention_metrics(
-            {"reach": 10, "saves": 20}, "instagram"
-        )
+        d = derive_retention_metrics({"reach": 10, "saves": 20}, "instagram")
         assert d["saved_rate"] == 1.0
 
 
@@ -226,9 +197,7 @@ class TestEmptyMetrics:
 
     def test_unknown_platform_returns_all_none(self) -> None:
         """Unknown platform can't extract watch time → hold_* None."""
-        d = derive_retention_metrics(
-            {"reach": 100, "likes": 5}, "unknown_platform"
-        )
+        d = derive_retention_metrics({"reach": 100, "likes": 5}, "unknown_platform")
         assert d["hold_3s"] is None
         assert d["hold_15s"] is None
         # But engagement-side derivations still work.

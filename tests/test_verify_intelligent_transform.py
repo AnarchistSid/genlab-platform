@@ -22,11 +22,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-    / "verify_intelligent_transform.py"
-)
+SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "verify_intelligent_transform.py"
 
 
 @pytest.fixture(scope="module")
@@ -37,9 +33,7 @@ def script_module():
     we import it via ``importlib.util`` the same way the archive-stale
     pins do.
     """
-    spec = importlib.util.spec_from_file_location(
-        "verify_intelligent_transform", SCRIPT_PATH
-    )
+    spec = importlib.util.spec_from_file_location("verify_intelligent_transform", SCRIPT_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)

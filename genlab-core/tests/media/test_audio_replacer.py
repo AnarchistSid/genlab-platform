@@ -20,10 +20,9 @@ from __future__ import annotations
 import random
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
 from genlab_core.media.audio_replacer import (
     AudioMixSpec,
     build_audio_mix_filtergraph,
@@ -164,12 +163,8 @@ class TestFindMusicBed:
         for name in ("track_a.mp3", "track_b.mp3", "track_c.mp3"):
             (mood_dir / name).write_bytes(b"fake")
         # Same seed → same pick
-        first = find_music_bed_for_mood(
-            tmp_path, "cinematic", rng=random.Random(42)
-        )
-        second = find_music_bed_for_mood(
-            tmp_path, "cinematic", rng=random.Random(42)
-        )
+        first = find_music_bed_for_mood(tmp_path, "cinematic", rng=random.Random(42))
+        second = find_music_bed_for_mood(tmp_path, "cinematic", rng=random.Random(42))
         assert first == second
 
     def test_all_supported_extensions(self, tmp_path: Path) -> None:
@@ -183,9 +178,7 @@ class TestFindMusicBed:
         # per file with 20 draws).
         picked_names = set()
         for i in range(50):
-            r = find_music_bed_for_mood(
-                tmp_path, "epic", rng=random.Random(i)
-            )
+            r = find_music_bed_for_mood(tmp_path, "epic", rng=random.Random(i))
             if r is not None:
                 picked_names.add(r.name)
         assert len(picked_names) == 5
@@ -209,9 +202,7 @@ class TestMixAudioBed:
         )
         assert mix_audio_bed(spec) is False
 
-    def test_missing_music_returns_false(
-        self, tmp_path: Path, mix_paths
-    ) -> None:
+    def test_missing_music_returns_false(self, tmp_path: Path, mix_paths) -> None:
         source, _, out = mix_paths
         spec = AudioMixSpec(
             source_video_path=source,
@@ -222,18 +213,14 @@ class TestMixAudioBed:
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_success_path(
-        self, mock_binary, mock_run, mix_paths
-    ) -> None:
+    def test_success_path(self, mock_binary, mock_run, mix_paths) -> None:
         source, music, out = mix_paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
 
         def _fake_run(*args, **kwargs):
             # Simulate ffmpeg writing an output file.
             out.write_bytes(b"o" * 2048)
-            return subprocess.CompletedProcess(
-                args=args[0], returncode=0, stdout="", stderr=""
-            )
+            return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
 
         mock_run.side_effect = _fake_run
 
@@ -247,14 +234,10 @@ class TestMixAudioBed:
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_timeout_returns_false(
-        self, mock_binary, mock_run, mix_paths
-    ) -> None:
+    def test_timeout_returns_false(self, mock_binary, mock_run, mix_paths) -> None:
         source, music, out = mix_paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
-        mock_run.side_effect = subprocess.TimeoutExpired(
-            cmd=["ffmpeg"], timeout=300
-        )
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=300)
 
         spec = AudioMixSpec(
             source_video_path=source,
@@ -265,9 +248,7 @@ class TestMixAudioBed:
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_nonzero_exit_returns_false(
-        self, mock_binary, mock_run, mix_paths
-    ) -> None:
+    def test_nonzero_exit_returns_false(self, mock_binary, mock_run, mix_paths) -> None:
         source, music, out = mix_paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
         mock_run.return_value = subprocess.CompletedProcess(
@@ -300,18 +281,14 @@ class TestMixAudioBed:
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_tiny_output_treated_as_failure(
-        self, mock_binary, mock_run, mix_paths
-    ) -> None:
+    def test_tiny_output_treated_as_failure(self, mock_binary, mock_run, mix_paths) -> None:
         """FFmpeg sometimes writes a broken tiny file on partial failure."""
         source, music, out = mix_paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
 
         def _fake_run(*args, **kwargs):
             out.write_bytes(b"tiny")  # < 1024 bytes
-            return subprocess.CompletedProcess(
-                args=args[0], returncode=0, stdout="", stderr=""
-            )
+            return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
 
         mock_run.side_effect = _fake_run
 

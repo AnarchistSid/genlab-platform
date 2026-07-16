@@ -755,9 +755,7 @@ def set_kill_switch():
     # error, the first is a client misconfiguration deserving a
     # specific 415 message.
     if not request.is_json:
-        return api_error(
-            error="Content-Type must be application/json", code=415
-        )
+        return api_error(error="Content-Type must be application/json", code=415)
     body = request.get_json(silent=True) or {}
     if "active" not in body:
         return api_error(error="body must include 'active' boolean", code=400)

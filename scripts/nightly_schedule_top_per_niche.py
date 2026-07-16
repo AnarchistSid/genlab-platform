@@ -121,6 +121,7 @@ def _refusal_where_clause(field: str = "hook") -> str:
         clauses.append(f"          AND {field} NOT ILIKE '{escaped}%%'")
     return "\n".join(clauses)
 
+
 # 2026-07-09 (task #611): pull-back branch buffer.
 #
 # When the primary candidate filter (scheduled_for IS NULL) returns no
@@ -270,7 +271,7 @@ def pick_top_per_niche(
           AND scheduled_for IS NULL
           AND (action_taken IS NULL OR action_taken NOT IN ('rejected', 'archived'))
           AND hook IS NOT NULL
-{_refusal_where_clause('hook')}
+{_refusal_where_clause("hook")}
           AND length(hook) BETWEEN 15 AND 100
         ORDER BY niche_id, priority_score DESC NULLS LAST, created_at ASC
         """,
@@ -322,7 +323,7 @@ def _pick_pullback_candidates(
           AND scheduled_for::date >= %s
           AND (action_taken IS NULL OR action_taken NOT IN ('rejected', 'archived'))
           AND hook IS NOT NULL
-{_refusal_where_clause('hook')}
+{_refusal_where_clause("hook")}
           AND length(hook) BETWEEN 15 AND 100
         ORDER BY niche_id, scheduled_for ASC, priority_score DESC NULLS LAST
         """,

@@ -83,6 +83,8 @@ class TestPersistEnabled:
         same value would activate only ONE and silently no-op the other."""
         from genlab_core.scheduling.ensemble_decide import (
             _ENABLE_ENV_VAR as decide_env,
+        )
+        from genlab_core.scheduling.ensemble_decide import (
             _integration_enabled,
         )
 
@@ -132,14 +134,10 @@ class TestRecordDecisionWrites:
         pg_connect = MagicMock()
         pg_connect.return_value.__enter__.return_value = conn
         pg_connect.return_value.__exit__.return_value = False
-        monkeypatch.setattr(
-            "genlab_core.storage.tenant_context.pg_connect", pg_connect
-        )
+        monkeypatch.setattr("genlab_core.storage.tenant_context.pg_connect", pg_connect)
         return pg_connect, conn, cursor
 
-    def test_enabled_path_calls_executemany_with_correct_shape(
-        self, monkeypatch
-    ):
+    def test_enabled_path_calls_executemany_with_correct_shape(self, monkeypatch):
         monkeypatch.setenv(_ENABLE_ENV_VAR, "1")
         cursor = MagicMock()
         self._install_pool(monkeypatch, cursor)
@@ -298,18 +296,14 @@ class TestEnsembleDecidePersistHook:
     """The hook inside ensemble_decide MUST call record_decision but
     MUST NOT propagate exceptions from it."""
 
-    def test_ensemble_decide_calls_record_decision_when_enabled(
-        self, monkeypatch
-    ):
+    def test_ensemble_decide_calls_record_decision_when_enabled(self, monkeypatch):
         # Enable both flags. The hook fires unconditionally on the
         # ensemble path; record_decision decides internally whether
         # persistence is on.
         monkeypatch.setenv("GENLAB_ENSEMBLE_DECISION_ENABLED", "true")
         monkeypatch.setenv(_ENABLE_ENV_VAR, "1")
 
-        with patch(
-            "genlab_core.scheduling.ensemble_persist.record_decision"
-        ) as mock_record:
+        with patch("genlab_core.scheduling.ensemble_persist.record_decision") as mock_record:
             from genlab_core.scheduling import ensemble_decide as ed
 
             # Minimal blueprint — bandit + others will mostly abstain,
@@ -348,9 +342,7 @@ class TestEnsembleDecidePersistHook:
         monkeypatch.setenv("GENLAB_ENSEMBLE_DECISION_ENABLED", "true")
         monkeypatch.setenv(_ENABLE_ENV_VAR, "1")
 
-        with patch(
-            "genlab_core.scheduling.ensemble_persist.record_decision"
-        ) as mock_record:
+        with patch("genlab_core.scheduling.ensemble_persist.record_decision") as mock_record:
             from genlab_core.scheduling import ensemble_decide as ed
 
             ed.ensemble_decide({}, "gaming")  # no 'id'

@@ -16,7 +16,6 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.learning.cross_niche_transfer import (
     TransferredPrior,
     compute_transferred_priors,
@@ -29,39 +28,34 @@ from genlab_core.learning.cross_niche_transfer import (
 
 class TestExtractTransformationSuffix:
     def test_basic_composite_key(self) -> None:
-        assert extract_transformation_suffix(
-            "transform__music_mood__cinematic"
-        ) == "music_mood__cinematic"
+        assert (
+            extract_transformation_suffix("transform__music_mood__cinematic")
+            == "music_mood__cinematic"
+        )
 
     def test_negative_int_value_preserved(self) -> None:
         """Integer arm values (audio_ducking dB, caption_pacing ms)
         stringify with signs and dashes — must survive extraction."""
-        assert extract_transformation_suffix(
-            "transform__audio_ducking__-12"
-        ) == "audio_ducking__-12"
-        assert extract_transformation_suffix(
-            "transform__caption_pacing__750"
-        ) == "caption_pacing__750"
+        assert (
+            extract_transformation_suffix("transform__audio_ducking__-12") == "audio_ducking__-12"
+        )
+        assert (
+            extract_transformation_suffix("transform__caption_pacing__750") == "caption_pacing__750"
+        )
 
     def test_style_arm_returns_none(self) -> None:
         assert extract_transformation_suffix("style:gaming:revelation") is None
 
     def test_source_arm_returns_none(self) -> None:
-        assert extract_transformation_suffix(
-            "source:youtube_trending__facebook"
-        ) is None
+        assert extract_transformation_suffix("source:youtube_trending__facebook") is None
 
     def test_hour_arm_returns_none(self) -> None:
-        assert extract_transformation_suffix(
-            "hour:14:youtube:sports"
-        ) is None
+        assert extract_transformation_suffix("hour:14:youtube:sports") is None
 
     def test_content_type_arm_returns_none(self) -> None:
         """Legacy content_type arms don't start with 'transform__'."""
         assert extract_transformation_suffix("gameplay_clip") is None
-        assert extract_transformation_suffix(
-            "gameplay_clip__instagram"
-        ) is None
+        assert extract_transformation_suffix("gameplay_clip__instagram") is None
 
     def test_missing_value_returns_none(self) -> None:
         """'transform__music_mood' with no value → None."""
@@ -80,9 +74,7 @@ class TestExtractPriorKey:
         assert extract_prior_key("style:gaming:revelation") == "revelation"
 
     def test_routes_transformation_arm(self) -> None:
-        assert extract_prior_key(
-            "transform__music_mood__cinematic"
-        ) == "music_mood__cinematic"
+        assert extract_prior_key("transform__music_mood__cinematic") == "music_mood__cinematic"
 
     def test_unknown_class_returns_none(self) -> None:
         assert extract_prior_key("hour:14:youtube:sports") is None
@@ -172,9 +164,7 @@ class TestGetTransferredPriorForTransformationArms:
             "genlab_core.learning.cross_niche_transfer.load_persisted_priors",
             return_value=fake_priors,
         ):
-            result = get_transferred_prior(
-                "sports", "transform__music_mood__cinematic"
-            )
+            result = get_transferred_prior("sports", "transform__music_mood__cinematic")
         assert result == (5.0, 3.0)
 
     def test_returns_none_when_no_persisted_prior(self, monkeypatch) -> None:
@@ -183,18 +173,12 @@ class TestGetTransferredPriorForTransformationArms:
             "genlab_core.learning.cross_niche_transfer.load_persisted_priors",
             return_value={},
         ):
-            result = get_transferred_prior(
-                "sports", "transform__music_mood__cinematic"
-            )
+            result = get_transferred_prior("sports", "transform__music_mood__cinematic")
         assert result is None
 
     def test_returns_none_when_flag_off(self, monkeypatch) -> None:
-        monkeypatch.delenv(
-            "GENLAB_CROSS_NICHE_TRANSFER_ENABLED", raising=False
-        )
-        result = get_transferred_prior(
-            "sports", "transform__music_mood__cinematic"
-        )
+        monkeypatch.delenv("GENLAB_CROSS_NICHE_TRANSFER_ENABLED", raising=False)
+        result = get_transferred_prior("sports", "transform__music_mood__cinematic")
         assert result is None
 
     def test_returns_none_for_non_extractable(self, monkeypatch) -> None:
@@ -207,9 +191,7 @@ class TestRegressionExistingStyleBehavior:
     """Pin that PR 13 doesn't regress legacy style-arm transfer."""
 
     def test_style_extractor_unchanged(self) -> None:
-        assert extract_style_suffix(
-            "style:gaming:revelation__youtube"
-        ) == "revelation"
+        assert extract_style_suffix("style:gaming:revelation__youtube") == "revelation"
 
     def test_style_prior_still_returned(self, monkeypatch) -> None:
         monkeypatch.setenv("GENLAB_CROSS_NICHE_TRANSFER_ENABLED", "true")
@@ -228,9 +210,7 @@ class TestRegressionExistingStyleBehavior:
             "genlab_core.learning.cross_niche_transfer.load_persisted_priors",
             return_value=fake_priors,
         ):
-            result = get_transferred_prior(
-                "sports", "style:sports:revelation"
-            )
+            result = get_transferred_prior("sports", "style:sports:revelation")
         assert result == (6.0, 4.0)
 
 

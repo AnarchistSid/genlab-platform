@@ -156,6 +156,5 @@ def test_all_niches_have_url_dedup_ttl_configured() -> None:
             "current floor; each niche can tune independently)."
         )
         assert isinstance(ttl, int) and ttl > 0, (
-            f"{cfg_path} url_dedup_ttl_days must be a positive integer, "
-            f"got {ttl!r}"
+            f"{cfg_path} url_dedup_ttl_days must be a positive integer, got {ttl!r}"
         )

@@ -266,8 +266,7 @@ class GoogleTrendsIntel:
         pytrends_in_cooldown = now < cooldown_until
         if pytrends_in_cooldown:
             logger.debug(
-                "[%s] pytrends in cooldown (%.0fs remaining) — "
-                "skipping Tier-2/3 attempts",
+                "[%s] pytrends in cooldown (%.0fs remaining) — skipping Tier-2/3 attempts",
                 niche_id,
                 cooldown_until - now,
             )

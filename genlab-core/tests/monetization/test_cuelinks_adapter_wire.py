@@ -15,9 +15,7 @@ re-integration:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from genlab_core.monetization.cuelinks_client import AmazonUrlNotAllowed
 from genlab_core.monetization.network_registry import CuelinksAdapter
@@ -60,10 +58,9 @@ class TestCuelinksAdapterWire:
                 )
         assert result == ""
         # The log must carry the 'leak' marker so operator can grep
-        assert any(
-            "catalog_cuelinks_amazon_url_leak" in rec.message
-            for rec in caplog.records
-        ), f"expected leak log, got: {[r.message for r in caplog.records]}"
+        assert any("catalog_cuelinks_amazon_url_leak" in rec.message for rec in caplog.records), (
+            f"expected leak log, got: {[r.message for r in caplog.records]}"
+        )
 
     def test_missing_product_url_returns_empty(self):
         """Pre-V3 stub used to synthesise an amazon.in URL when
@@ -113,9 +110,7 @@ class TestGeoResolverCandidateOrdering:
         # ordering in the source.
         from pathlib import Path
 
-        src = Path(
-            "genlab-core/src/genlab_core/monetization/geo_link_resolver.py"
-        ).read_text()
+        src = Path("genlab-core/src/genlab_core/monetization/geo_link_resolver.py").read_text()
 
         # Find the IN geo block
         in_block_start = src.find('if geo == "IN":')
@@ -135,9 +130,7 @@ class TestGeoResolverCandidateOrdering:
     def test_us_geo_amazon_before_cuelinks(self):
         from pathlib import Path
 
-        src = Path(
-            "genlab-core/src/genlab_core/monetization/geo_link_resolver.py"
-        ).read_text()
+        src = Path("genlab-core/src/genlab_core/monetization/geo_link_resolver.py").read_text()
 
         # Find the US (else:) block after the IN if
         in_block_start = src.find('if geo == "IN":')
@@ -162,9 +155,7 @@ class TestGeoResolverCandidateOrdering:
         commission on Amazon) fires first for IN geo."""
         from pathlib import Path
 
-        src = Path(
-            "genlab-core/src/genlab_core/monetization/geo_link_resolver.py"
-        ).read_text()
+        src = Path("genlab-core/src/genlab_core/monetization/geo_link_resolver.py").read_text()
 
         in_block_start = src.find('if geo == "IN":')
         in_block_end = src.find("else:", in_block_start)

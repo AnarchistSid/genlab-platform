@@ -385,9 +385,9 @@ class XTwitterClient:
             _allowed, _remaining = _tracker.can_publish()
             if not _allowed:
                 return _fail(
-                    f"Monthly free-tier quota exhausted "
-                    f"(0 remaining of 500/month) — publish halted to "
-                    f"avoid 402 lockout. Cap resets at month rollover."
+                    "Monthly free-tier quota exhausted "
+                    "(0 remaining of 500/month) — publish halted to "
+                    "avoid 402 lockout. Cap resets at month rollover."
                 )
         except Exception as exc:  # noqa: BLE001 — fail-open on tracker error
             logger.debug("[twitter_quota] check skipped: %s", exc)

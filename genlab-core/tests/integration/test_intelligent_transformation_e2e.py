@@ -38,12 +38,10 @@ pipeline with:
 from __future__ import annotations
 
 import random
-import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
 from genlab_core.learning.retention_derivations import derive_retention_metrics
 from genlab_core.learning.transformation_reward_router import (
@@ -56,7 +54,6 @@ from genlab_core.media.transformation_orchestrator import (
 from genlab_core.media.transformation_selector import (
     select_transformation_dimensions,
 )
-
 
 # ============================================================
 # Fixtures
@@ -189,9 +186,7 @@ def populated_proxy() -> MagicMock:
 class TestSelectorProducesChoicesForAllEnabledDimensions:
     """First stage: selector picks arms given a fresh niche."""
 
-    def test_selects_all_11_dimensions(
-        self, monkeypatch, populated_proxy, full_config
-    ) -> None:
+    def test_selects_all_11_dimensions(self, monkeypatch, populated_proxy, full_config) -> None:
         monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
         choices = select_transformation_dimensions(
             "gaming",
@@ -214,9 +209,7 @@ class TestSelectorProducesChoicesForAllEnabledDimensions:
         }
         assert set(choices.choices.keys()) == expected
 
-    def test_arm_ids_use_composite_format(
-        self, monkeypatch, populated_proxy, full_config
-    ) -> None:
+    def test_arm_ids_use_composite_format(self, monkeypatch, populated_proxy, full_config) -> None:
         monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
         choices = select_transformation_dimensions(
             "gaming",
@@ -246,9 +239,7 @@ class TestOrchestratorAppliesSelection:
 
         # Selector uses the real proxy; render modules all mocked to
         # fail (missing assets, no ffmpeg — realistic prod cold-start).
-        with patch(
-            "genlab_core.http.backlog_client.BacklogClient"
-        ) as mock_client_cls:
+        with patch("genlab_core.http.backlog_client.BacklogClient") as mock_client_cls:
             mock_client = MagicMock()
             mock_client.bandit_arms = populated_proxy
             mock_client_cls.return_value = mock_client
@@ -270,15 +261,11 @@ class TestOrchestratorAppliesSelection:
     def test_env_flag_off_short_circuits(
         self, monkeypatch, populated_proxy, full_config, workspace: Path
     ) -> None:
-        monkeypatch.delenv(
-            "GENLAB_INTELLIGENT_TRANSFORM_ENABLED", raising=False
-        )
+        monkeypatch.delenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", raising=False)
         source = workspace / "source.mp4"
         output = workspace / "out.mp4"
         # Proxy should NOT even be queried
-        with patch(
-            "genlab_core.http.backlog_client.BacklogClient"
-        ) as mock_client_cls:
+        with patch("genlab_core.http.backlog_client.BacklogClient") as mock_client_cls:
             result = apply_transformations(
                 source_video_path=source,
                 output_path=output,
@@ -314,6 +301,7 @@ class TestPendingFeedbackRoundTrip:
         assert "arm_ids_by_dimension" in fields
 
         import json as _json
+
         parsed = _json.loads(fields["arm_ids_by_dimension"])
         assert parsed == task.arm_ids_by_dimension
 
@@ -393,13 +381,9 @@ class TestRewardAttribution:
             metrics=metrics,
         )
         # hook_framing → hold_3s = 1.0 (avg = threshold)
-        assert rewards_by_arm[
-            "transform__hook_framing__question_open"
-        ] == pytest.approx(1.0)
+        assert rewards_by_arm["transform__hook_framing__question_open"] == pytest.approx(1.0)
         # music_mood → hold_15s = 3/15 = 0.2
-        assert rewards_by_arm[
-            "transform__music_mood__cinematic"
-        ] == pytest.approx(0.2)
+        assert rewards_by_arm["transform__music_mood__cinematic"] == pytest.approx(0.2)
 
     def test_retention_derivations_produce_expected_shape(self) -> None:
         """Sanity check on the derivation module downstream of the router."""
@@ -463,9 +447,7 @@ class TestFullPipelineFailOpen:
         source = workspace / "source.mp4"
         output = workspace / "out.mp4"
 
-        with patch(
-            "genlab_core.http.backlog_client.BacklogClient"
-        ) as mock_client_cls:
+        with patch("genlab_core.http.backlog_client.BacklogClient") as mock_client_cls:
             mock_client = MagicMock()
             mock_client.bandit_arms = populated_proxy
             mock_client_cls.return_value = mock_client
@@ -498,9 +480,7 @@ class TestFullPipelineFailOpen:
         source = workspace / "source.mp4"
         output = workspace / "out.mp4"
 
-        with patch(
-            "genlab_core.http.backlog_client.BacklogClient"
-        ) as mock_client_cls:
+        with patch("genlab_core.http.backlog_client.BacklogClient") as mock_client_cls:
             result = apply_transformations(
                 source_video_path=source,
                 output_path=output,
@@ -517,9 +497,7 @@ class TestFullPipelineFailOpen:
 class TestSprintReadinessSmoke:
     """One test that exercises the ENTIRE loop end-to-end."""
 
-    def test_full_loop_selector_to_router(
-        self, monkeypatch, populated_proxy, full_config
-    ) -> None:
+    def test_full_loop_selector_to_router(self, monkeypatch, populated_proxy, full_config) -> None:
         """Runs: select arms → serialize to task → parse back →
         route rewards → verify N bandit_updater calls."""
         monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
@@ -548,10 +526,11 @@ class TestSprintReadinessSmoke:
         payload = task.to_sharepoint_fields()
 
         # 3. Simulate DB read (JSONB auto-parsed to dict on Postgres)
+        import json as _json
+
         from genlab_core.learning.pending_feedback_store import (
             PendingFeedbackStore,
         )
-        import json as _json
 
         item = {
             "fields": {
@@ -560,9 +539,7 @@ class TestSprintReadinessSmoke:
                 "niche_id": task.niche_id,
                 "publish_time": task.published_at.isoformat(),
                 "collection_status": "awaiting_48h",
-                "arm_ids_by_dimension": _json.loads(
-                    payload["arm_ids_by_dimension"]
-                ),
+                "arm_ids_by_dimension": _json.loads(payload["arm_ids_by_dimension"]),
             }
         }
         rehydrated = PendingFeedbackStore._from_sharepoint_item(item)

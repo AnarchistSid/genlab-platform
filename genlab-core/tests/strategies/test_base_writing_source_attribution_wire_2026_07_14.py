@@ -26,8 +26,6 @@ These tests pin the wire end-to-end.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 from genlab_core.strategies.base_writing import BaseWritingStrategy
 
 
@@ -51,6 +49,7 @@ class TestStoryToVideoDictSourceAttribution:
         # tests only exercise the pure ``_story_to_video_dict`` helper
         # (no config or logger access), so pass minimal args.
         from pathlib import Path
+
         w = _TestBaseWriting(niche_id="test", niche_root=Path("/tmp"))
         return w
 
@@ -107,12 +106,14 @@ class TestFormatSourceAttributionEndToEnd:
     def test_youtube_produces_credit(self):
         from genlab_core.compliance.copyright_safety import format_source_attribution
 
-        result = format_source_attribution({
-            "video_id": "Cw-qEQfxGwo",
-            "source": "youtube_trending",
-            "source_channel_title": "Muse Asia",
-            "video_url": "https://www.youtube.com/watch?v=Cw-qEQfxGwo",
-        })
+        result = format_source_attribution(
+            {
+                "video_id": "Cw-qEQfxGwo",
+                "source": "youtube_trending",
+                "source_channel_title": "Muse Asia",
+                "video_url": "https://www.youtube.com/watch?v=Cw-qEQfxGwo",
+            }
+        )
         assert "🎬 Original:" in result
         assert "Muse Asia" in result
 
@@ -121,12 +122,14 @@ class TestFormatSourceAttributionEndToEnd:
         activates here."""
         from genlab_core.compliance.copyright_safety import format_source_attribution
 
-        result = format_source_attribution({
-            "video_id": "Cloudrooms",
-            "source": "twitch_trending",
-            "source_channel_title": "",
-            "video_url": "https://www.twitch.tv/directory/game/Cloudrooms",
-        })
+        result = format_source_attribution(
+            {
+                "video_id": "Cloudrooms",
+                "source": "twitch_trending",
+                "source_channel_title": "",
+                "video_url": "https://www.twitch.tv/directory/game/Cloudrooms",
+            }
+        )
         assert "🎬 Original:" in result
         assert "twitch.tv" in result
 
@@ -135,12 +138,14 @@ class TestFormatSourceAttributionEndToEnd:
         the URL template map. The URL fallback catches it."""
         from genlab_core.compliance.copyright_safety import format_source_attribution
 
-        result = format_source_attribution({
-            "video_id": "",
-            "source": "scorebat",
-            "source_channel_title": "ESPN Sports",
-            "video_url": "https://www.scorebat.com/barcelona-vs-getafe/",
-        })
+        result = format_source_attribution(
+            {
+                "video_id": "",
+                "source": "scorebat",
+                "source_channel_title": "ESPN Sports",
+                "video_url": "https://www.scorebat.com/barcelona-vs-getafe/",
+            }
+        )
         assert "🎬 Original:" in result
         assert "ESPN Sports" in result
 
@@ -149,10 +154,12 @@ class TestFormatSourceAttributionEndToEnd:
         Layer 4 gate then blocks publish. Don't fabricate a URL."""
         from genlab_core.compliance.copyright_safety import format_source_attribution
 
-        result = format_source_attribution({
-            "video_id": "",
-            "source": "",
-            "source_channel_title": "",
-            "video_url": "",
-        })
+        result = format_source_attribution(
+            {
+                "video_id": "",
+                "source": "",
+                "source_channel_title": "",
+                "video_url": "",
+            }
+        )
         assert result == ""

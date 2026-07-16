@@ -42,9 +42,7 @@ from genlab_core.storage.disk_quota import _get_pending_publish_run_ids
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SHELL_SCRIPT = REPO_ROOT / "scripts" / "cleanup_all.sh"
 
-TERMINAL_STATUSES = frozenset(
-    {"PUBLISHED", "ARCHIVED", "PUBLISH_FAILED", "REJECTED"}
-)
+TERMINAL_STATUSES = frozenset({"PUBLISHED", "ARCHIVED", "PUBLISH_FAILED", "REJECTED"})
 
 
 class TestShellCleanupMatchesPythonProtection:
@@ -80,7 +78,7 @@ class TestShellCleanupMatchesPythonProtection:
         # Delimiter in the shell script's Python-c body is
         # ``cur.execute(\"\"\"...\"\"\")`` — the quotes are backslash-
         # escaped for the outer bash context.
-        opener = 'cur.execute(' + '\\"' * 3
+        opener = "cur.execute(" + '\\"' * 3
         closer = '\\"' * 3 + ")"
         start = content.find(opener)
         assert start >= 0, "SQL region not found — script structure changed"

@@ -20,7 +20,6 @@ match chain (LinUCB → Thompson → first-match) picks between them.
 from __future__ import annotations
 
 import numpy as np
-
 from genlab_core.pipeline.stages.push_to_backlog import (
     _classify_arm_with_propensity,
 )
@@ -40,7 +39,9 @@ class TestSingleMatchPromotion:
         """
         story, content = self._story_and_content("Fortnite got a new patch")
         arm, prop = _classify_arm_with_propensity(
-            "gaming", story, content,
+            "gaming",
+            story,
+            content,
             arm_boosts=None,
         )
         assert arm == "patch_news"  # matches "patch" keyword
@@ -52,11 +53,13 @@ class TestSingleMatchPromotion:
         promotion that would drown the keyword signal in noise."""
         story, content = self._story_and_content("Fortnite got a new patch")
         arm, prop = _classify_arm_with_propensity(
-            "gaming", story, content,
+            "gaming",
+            story,
+            content,
             arm_boosts={
-                "patch_news": 1.20,          # matched
-                "esports_highlight": 1.25,    # only 1.04× higher — below 1.10× threshold
-                "trailer_reaction": 0.90,     # lower — never a candidate
+                "patch_news": 1.20,  # matched
+                "esports_highlight": 1.25,  # only 1.04× higher — below 1.10× threshold
+                "trailer_reaction": 0.90,  # lower — never a candidate
             },
         )
         assert arm == "patch_news"
@@ -69,11 +72,13 @@ class TestSingleMatchPromotion:
         story, content = self._story_and_content("Fortnite got a new patch")
         # matched arm has low boost; another arm has much higher boost
         arm, prop = _classify_arm_with_propensity(
-            "gaming", story, content,
+            "gaming",
+            story,
+            content,
             arm_boosts={
-                "patch_news": 0.80,          # matched, low
-                "viral_moment": 1.50,         # 1.875× higher — should get added
-                "trailer_reaction": 0.95,     # below matched, never candidate
+                "patch_news": 0.80,  # matched, low
+                "viral_moment": 1.50,  # 1.875× higher — should get added
+                "trailer_reaction": 0.95,  # below matched, never candidate
             },
         )
         # Thompson-boost path picks max(arm_boosts) among candidates.
@@ -89,12 +94,14 @@ class TestSingleMatchPromotion:
         story, content = self._story_and_content("Fortnite got a new patch")
         # Many alternatives all above 1.10× threshold
         arm, prop = _classify_arm_with_propensity(
-            "gaming", story, content,
+            "gaming",
+            story,
+            content,
             arm_boosts={
-                "patch_news": 1.00,          # matched
-                "viral_moment": 1.20,         # +1
-                "esports_highlight": 1.30,    # +2  → these two get added
-                "trailer_reaction": 1.40,     # +3  → top-2 slot filled, this NOT added
+                "patch_news": 1.00,  # matched
+                "viral_moment": 1.20,  # +1
+                "esports_highlight": 1.30,  # +2  → these two get added
+                "trailer_reaction": 1.40,  # +3  → top-2 slot filled, this NOT added
             },
         )
         # Top-2 alternatives = trailer_reaction (1.40) + esports_highlight (1.30).
@@ -106,6 +113,7 @@ class TestSingleMatchPromotion:
         should use LinUCB softmax and produce a non-None propensity.
         This is the target of the fix — real IPS-usable data."""
         import os
+
         story, content = self._story_and_content("Fortnite got a new patch")
 
         # Note: LinUCB requires linucb_arms with the right dimensions
@@ -118,7 +126,9 @@ class TestSingleMatchPromotion:
         # env-off case: should still work + return arm via Thompson
         os.environ.pop("GENLAB_LINUCB_PICK_ENABLED", None)
         arm, prop = _classify_arm_with_propensity(
-            "gaming", story, content,
+            "gaming",
+            story,
+            content,
             arm_boosts={
                 "patch_news": 0.80,
                 "viral_moment": 1.50,
@@ -140,9 +150,11 @@ class TestSingleMatchPromotion:
         pins the case where promotion doesn't trigger."""
         story, content = self._story_and_content("Fortnite got a new patch")
         arm, prop = _classify_arm_with_propensity(
-            "gaming", story, content,
+            "gaming",
+            story,
+            content,
             arm_boosts={
-                "patch_news": 1.50,          # matched, HIGHEST — no promotion
+                "patch_news": 1.50,  # matched, HIGHEST — no promotion
                 "viral_moment": 1.20,
                 "trailer_reaction": 0.90,
             },
@@ -158,7 +170,9 @@ class TestSingleMatchPromotion:
         # Hook matches BOTH viral_moment ("viral") AND trailer_reaction ("trailer")
         content = {"hook": "Fortnite's new trailer just went viral"}
         arm, prop = _classify_arm_with_propensity(
-            "gaming", story, content,
+            "gaming",
+            story,
+            content,
             arm_boosts={
                 "viral_moment": 1.50,
                 "trailer_reaction": 0.80,
@@ -177,10 +191,13 @@ class TestPromotionThreshold:
         from genlab_core.pipeline.stages.push_to_backlog import (
             _classify_arm_with_propensity,
         )
+
         story = {"title": "", "summary": ""}
         content = {"hook": "Fortnite patch news"}
         arm, prop = _classify_arm_with_propensity(
-            "gaming", story, content,
+            "gaming",
+            story,
+            content,
             arm_boosts={
                 "patch_news": 1.00,
                 "viral_moment": 1.10,  # exactly at threshold

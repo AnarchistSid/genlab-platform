@@ -18,14 +18,14 @@ Revises: b9x0y1z2a3b4, i5e6f7g8h9i0
 Create Date: 2026-07-17 00:32:17.997523
 
 """
-from typing import Sequence, Union
 
+from collections.abc import Sequence
 
 # revision identifiers, used by Alembic.
 revision: str = "05c64267a3c6"
-down_revision: Union[str, Sequence[str], None] = ("b9x0y1z2a3b4", "i5e6f7g8h9i0")
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = ("b9x0y1z2a3b4", "i5e6f7g8h9i0")
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

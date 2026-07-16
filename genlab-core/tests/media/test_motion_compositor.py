@@ -21,7 +21,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.media.motion_compositor import (
     MotionAssetChoice,
     MotionCompositeSpec,
@@ -70,17 +69,12 @@ class TestFiltergraph:
         for i in range(3):
             # Each input's audio must be aformat-normalized to a
             # labeled [aN] stream before it enters the concat.
-            assert f"[{i}:a]aformat=" in fg, (
-                f"input {i} audio missing aformat normalization"
-            )
-            assert f"[a{i}]" in fg, (
-                f"input {i} aformat output label [a{i}] missing"
-            )
+            assert f"[{i}:a]aformat=" in fg, f"input {i} audio missing aformat normalization"
+            assert f"[a{i}]" in fg, f"input {i} aformat output label [a{i}] missing"
         # The specific normalization params must match the outer
         # -ar 48000 -ac 2 encode spec — otherwise concat still fails.
         assert "sample_rates=48000" in fg
         assert "channel_layouts=stereo" in fg
-
 
     def test_single_segment_also_normalizes_audio(self) -> None:
         """Even n=1 (no intro/outro, just source) needs the aformat
@@ -173,15 +167,11 @@ class TestResolveAssetPath:
         assert result == f_mov
 
     def test_empty_template_name_returns_none(self, tmp_path: Path) -> None:
-        result = _resolve_asset_path(
-            tmp_path, "intro_animation", "assets/motion/intros", ""
-        )
+        result = _resolve_asset_path(tmp_path, "intro_animation", "assets/motion/intros", "")
         assert result is None
 
     def test_empty_asset_dir_returns_none(self, tmp_path: Path) -> None:
-        result = _resolve_asset_path(
-            tmp_path, "intro_animation", "", "logo_zoom"
-        )
+        result = _resolve_asset_path(tmp_path, "intro_animation", "", "logo_zoom")
         assert result is None
 
 
@@ -306,17 +296,13 @@ class TestCompositeMotionGraphics:
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_success_path(
-        self, mock_binary, mock_run, paths
-    ) -> None:
+    def test_success_path(self, mock_binary, mock_run, paths) -> None:
         source, intro, outro, out = paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
 
         def _fake_run(*args, **kwargs):
             out.write_bytes(b"o" * 2048)
-            return subprocess.CompletedProcess(
-                args=args[0], returncode=0, stdout="", stderr=""
-            )
+            return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
 
         mock_run.side_effect = _fake_run
 
@@ -331,14 +317,10 @@ class TestCompositeMotionGraphics:
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_timeout_returns_false(
-        self, mock_binary, mock_run, paths
-    ) -> None:
+    def test_timeout_returns_false(self, mock_binary, mock_run, paths) -> None:
         source, intro, outro, out = paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
-        mock_run.side_effect = subprocess.TimeoutExpired(
-            cmd=["ffmpeg"], timeout=300
-        )
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=300)
 
         spec = MotionCompositeSpec(
             source_video_path=source,
@@ -349,9 +331,7 @@ class TestCompositeMotionGraphics:
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_nonzero_exit_returns_false(
-        self, mock_binary, mock_run, paths
-    ) -> None:
+    def test_nonzero_exit_returns_false(self, mock_binary, mock_run, paths) -> None:
         source, intro, outro, out = paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
         mock_run.return_value = subprocess.CompletedProcess(
@@ -367,9 +347,7 @@ class TestCompositeMotionGraphics:
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_ffmpeg_unavailable(
-        self, mock_binary, mock_run, paths
-    ) -> None:
+    def test_ffmpeg_unavailable(self, mock_binary, mock_run, paths) -> None:
         source, intro, outro, out = paths
         mock_binary.side_effect = RuntimeError("ffmpeg not found")
 
@@ -383,17 +361,13 @@ class TestCompositeMotionGraphics:
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_tiny_output_is_failure(
-        self, mock_binary, mock_run, paths
-    ) -> None:
+    def test_tiny_output_is_failure(self, mock_binary, mock_run, paths) -> None:
         source, intro, outro, out = paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
 
         def _fake_run(*args, **kwargs):
             out.write_bytes(b"tiny")
-            return subprocess.CompletedProcess(
-                args=args[0], returncode=0, stdout="", stderr=""
-            )
+            return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
 
         mock_run.side_effect = _fake_run
 
@@ -435,16 +409,15 @@ class TestCompositeForReel:
         )
         # intro resolves, outro None → composite still fires
         # (2-segment case). We patch subprocess to avoid running ffmpeg.
-        with patch("subprocess.run") as mock_run, patch(
-            "genlab_core.media.ffmpeg.get_ffmpeg_binary"
-        ) as mock_bin:
+        with (
+            patch("subprocess.run") as mock_run,
+            patch("genlab_core.media.ffmpeg.get_ffmpeg_binary") as mock_bin,
+        ):
             mock_bin.return_value = "/usr/bin/ffmpeg"
 
             def _fake_run(*args, **kwargs):
                 out.write_bytes(b"o" * 2048)
-                return subprocess.CompletedProcess(
-                    args=args[0], returncode=0, stdout="", stderr=""
-                )
+                return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
 
             mock_run.side_effect = _fake_run
             assert composite_for_reel(choice, source, out) is True

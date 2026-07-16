@@ -85,9 +85,7 @@ _ALLOWLIST: frozenset[str] = frozenset(
 
 # Pattern: op.add_column("adopted_table", ...) — captures the table
 # name to check membership.
-_ADD_COLUMN_PATTERN = re.compile(
-    r'op\.add_column\(\s*[\'"]([a-z_]+)[\'"]', re.IGNORECASE
-)
+_ADD_COLUMN_PATTERN = re.compile(r'op\.add_column\(\s*[\'"]([a-z_]+)[\'"]', re.IGNORECASE)
 
 # Pattern: DO $$ block containing "IF NOT EXISTS" or "column_name" +
 # "information_schema" check. Presence in the same file is proof of

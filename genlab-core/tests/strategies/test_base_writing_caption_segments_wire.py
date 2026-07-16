@@ -57,9 +57,7 @@ class TestCaptionSegmentsPropagation:
     writer's ``result`` onto ``story["content"]``."""
 
     @patch("genlab_core.writing.video_content_writer.write_video_content")
-    def test_caption_segments_propagate_to_story_content(
-        self, mock_write_content
-    ):
+    def test_caption_segments_propagate_to_story_content(self, mock_write_content):
         """The exact fix: writer emits caption_segments, base_writing
         must copy them to story["content"]["caption_segments"] so the
         post_render_transform wire picks them up."""
@@ -101,9 +99,7 @@ class TestCaptionSegmentsPropagation:
         assert segs[0]["emphasis_words"] == ["winning"]
 
     @patch("genlab_core.writing.video_content_writer.write_video_content")
-    def test_missing_caption_segments_does_not_error(
-        self, mock_write_content
-    ):
+    def test_missing_caption_segments_does_not_error(self, mock_write_content):
         """Fail-open: if the writer's result omits caption_segments
         (older code path, or generator failed), _write_story_llm must
         not raise. Story just gets no segments, orchestrator skips
@@ -130,11 +126,8 @@ class TestCaptionSegmentsPropagation:
         # cleanly.
         assert story["content"].get("caption_segments") is None
 
-
     @patch("genlab_core.writing.video_content_writer.write_video_content")
-    def test_empty_caption_segments_list_not_propagated(
-        self, mock_write_content
-    ):
+    def test_empty_caption_segments_list_not_propagated(self, mock_write_content):
         """Edge case: writer returns an EMPTY list. Empty list is
         falsy so ``if result.get('caption_segments'):`` is False and
         the empty list is NOT copied to story. Downstream caption_style

@@ -48,9 +48,7 @@ class TestFlag:
         monkeypatch.setenv("GENLAB_PRODUCT_SELECTOR_ENABLED", val)
         assert is_enabled() is False, f"expected off for {val!r}"
 
-    @pytest.mark.parametrize(
-        "val", ["1", "true", "TRUE", "True", "yes", "on", "y", "t"]
-    )
+    @pytest.mark.parametrize("val", ["1", "true", "TRUE", "True", "yes", "on", "y", "t"])
     def test_enabled_on_env_true_values(self, monkeypatch, val):
         monkeypatch.setenv("GENLAB_PRODUCT_SELECTOR_ENABLED", val)
         assert is_enabled() is True, f"expected on for {val!r}"

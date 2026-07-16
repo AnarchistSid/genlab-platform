@@ -44,9 +44,9 @@ FREE_TIER_MONTHLY_CAP = 500
 PUBLISH_LIMIT = 480  # 500 - 20 engagement headroom
 WARNING_THRESHOLD = 0.80  # log WARNING when 80% of monthly cap used
 
-_DEFAULT_STATE_PATH = Path(
-    os.environ.get("GENLAB_PROJECT_ROOT", ".")
-) / ".runtime" / "twitter_quota.json"
+_DEFAULT_STATE_PATH = (
+    Path(os.environ.get("GENLAB_PROJECT_ROOT", ".")) / ".runtime" / "twitter_quota.json"
+)
 
 
 class TwitterQuotaTracker:
@@ -182,9 +182,7 @@ class TwitterQuotaTracker:
             self._state_path.parent.mkdir(parents=True, exist_ok=True)
             with open(lock_path, "w", encoding="utf-8") as lock_fp:
                 fcntl.flock(lock_fp.fileno(), fcntl.LOCK_EX)
-                tmp = self._state_path.with_name(
-                    f"{self._state_path.name}.tmp.{os.getpid()}"
-                )
+                tmp = self._state_path.with_name(f"{self._state_path.name}.tmp.{os.getpid()}")
                 tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
                 os.replace(tmp, self._state_path)
         except Exception as exc:

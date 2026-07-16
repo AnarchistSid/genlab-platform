@@ -89,18 +89,14 @@ class TestGetState:
         the mis-set check flag the strict-reader case separately."""
         monkeypatch.setenv("GENLAB_BAYESIAN_GATE_ENABLED", truthy)
         data = client.get("/api/v1/flags/state").get_json()["data"]
-        target = next(
-            f for f in data["flags"] if f["name"] == "GENLAB_BAYESIAN_GATE_ENABLED"
-        )
+        target = next(f for f in data["flags"] if f["name"] == "GENLAB_BAYESIAN_GATE_ENABLED")
         assert target["status"] == "active"
 
     @pytest.mark.parametrize("falsy", ["0", "false", "no", "off", ""])
     def test_falsy_values_are_dormant(self, client, monkeypatch, falsy):
         monkeypatch.setenv("GENLAB_BAYESIAN_GATE_ENABLED", falsy)
         data = client.get("/api/v1/flags/state").get_json()["data"]
-        target = next(
-            f for f in data["flags"] if f["name"] == "GENLAB_BAYESIAN_GATE_ENABLED"
-        )
+        target = next(f for f in data["flags"] if f["name"] == "GENLAB_BAYESIAN_GATE_ENABLED")
         assert target["status"] == "dormant"
 
     def test_junk_value_is_mis_set_with_warning(self, client, monkeypatch):
@@ -109,24 +105,18 @@ class TestGetState:
         as a warning so operator sees the silent-no-op class."""
         monkeypatch.setenv("GENLAB_BAYESIAN_GATE_ENABLED", "enable-this-plz")
         data = client.get("/api/v1/flags/state").get_json()["data"]
-        target = next(
-            f for f in data["flags"] if f["name"] == "GENLAB_BAYESIAN_GATE_ENABLED"
-        )
+        target = next(f for f in data["flags"] if f["name"] == "GENLAB_BAYESIAN_GATE_ENABLED")
         assert target["status"] == "mis_set"
         assert target["warning"] is not None
         assert "enable-this-plz" in target["warning"]
 
-    def test_disable_polarity_flag_surfaces_disabled_by_flag(
-        self, client, monkeypatch
-    ):
+    def test_disable_polarity_flag_surfaces_disabled_by_flag(self, client, monkeypatch):
         """The AUTO_APPROVE kill switch is polarity=disable — a truthy
         value means the feature is TURNED OFF. Locking in the semantic
         rename so a red badge appears instead of a green one."""
         monkeypatch.setenv("GENLAB_AUTO_APPROVE_DISABLED", "1")
         data = client.get("/api/v1/flags/state").get_json()["data"]
-        target = next(
-            f for f in data["flags"] if f["name"] == "GENLAB_AUTO_APPROVE_DISABLED"
-        )
+        target = next(f for f in data["flags"] if f["name"] == "GENLAB_AUTO_APPROVE_DISABLED")
         assert target["status"] == "disabled_by_flag"
         assert target["polarity"] == "disable"
 
@@ -139,9 +129,7 @@ class TestGetState:
         assert summary["active"] == 2
         assert summary["mis_set"] == 1
         # dormant + active + mis_set = total (no double-count).
-        assert (
-            summary["active"] + summary["dormant"] + summary["mis_set"]
-        ) == summary["total"]
+        assert (summary["active"] + summary["dormant"] + summary["mis_set"]) == summary["total"]
 
     def test_never_leaks_long_raw_value(self, client, monkeypatch):
         """Defensive redaction — flags NEVER legitimately hold long
@@ -151,9 +139,7 @@ class TestGetState:
         long_secret = "sk_live_" + "x" * 64  # 72 chars
         monkeypatch.setenv("GENLAB_BAYESIAN_GATE_ENABLED", long_secret)
         data = client.get("/api/v1/flags/state").get_json()["data"]
-        target = next(
-            f for f in data["flags"] if f["name"] == "GENLAB_BAYESIAN_GATE_ENABLED"
-        )
+        target = next(f for f in data["flags"] if f["name"] == "GENLAB_BAYESIAN_GATE_ENABLED")
         assert target["raw_value"] == "…"
         assert long_secret not in str(data)
 
@@ -161,10 +147,7 @@ class TestGetState:
         """Each entry declares a group so the frontend can render
         categorized rows. Assert the currently-defined groups don't
         drift silently."""
-        groups = {
-            f["group"]
-            for f in client.get("/api/v1/flags/state").get_json()["data"]["flags"]
-        }
+        groups = {f["group"] for f in client.get("/api/v1/flags/state").get_json()["data"]["flags"]}
         expected = {
             "learning",
             "intelligence",

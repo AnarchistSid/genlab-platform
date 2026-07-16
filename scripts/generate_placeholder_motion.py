@@ -124,27 +124,55 @@ def resolve_bg_color(kind: str, accent: str) -> str:
 def _base_ffmpeg_args(bg_color: str) -> list[str]:
     """Common FFmpeg input args: solid color source + logo + silent audio."""
     return [
-        "ffmpeg", "-y",
-        "-f", "lavfi",
-        "-i", f"color=c={bg_color}:s=1080x1920:d={DURATION_S}:r=30",
+        "ffmpeg",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        f"color=c={bg_color}:s=1080x1920:d={DURATION_S}:r=30",
         # Slot [1:*] left for logo; caller appends "-i <logo>"
-        "-f", "lavfi",
-        "-i", f"anullsrc=r=48000:cl=stereo:d={DURATION_S}",
+        "-f",
+        "lavfi",
+        "-i",
+        f"anullsrc=r=48000:cl=stereo:d={DURATION_S}",
     ]
 
 
 def _encode_flags() -> list[str]:
     return [
-        "-c:v", "libx264", "-crf", "20", "-preset", "fast",
-        "-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "128k",
-        "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
-        "-shortest", "-t", str(DURATION_S),
+        "-c:v",
+        "libx264",
+        "-crf",
+        "20",
+        "-preset",
+        "fast",
+        "-c:a",
+        "aac",
+        "-ar",
+        "48000",
+        "-ac",
+        "2",
+        "-b:a",
+        "128k",
+        "-colorspace",
+        "bt709",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-shortest",
+        "-t",
+        str(DURATION_S),
     ]
 
 
 def build_intro_cmd(
-    output: Path, logo: Path, bg_color: str, logo_scale: float,
-    channel_name: str, template: str,
+    output: Path,
+    logo: Path,
+    bg_color: str,
+    logo_scale: float,
+    channel_name: str,
+    template: str,
 ) -> list[str]:
     """Compose FFmpeg command for one intro asset. Pure — returns argv."""
     filters = [
@@ -158,25 +186,38 @@ def build_intro_cmd(
             "x=(w-text_w)/2:y=(h/2)+220[out]"
         )
     else:
-        filters.append(
-            "[0:v][lg]overlay=(W-w)/2:(H-h)/2,format=yuv420p[out]"
-        )
+        filters.append("[0:v][lg]overlay=(W-w)/2:(H-h)/2,format=yuv420p[out]")
     filter_complex = ";".join(filters)
 
     return [
-        "ffmpeg", "-y",
-        "-f", "lavfi", "-i", f"color=c={bg_color}:s=1080x1920:d={DURATION_S}:r=30",
-        "-i", str(logo),
-        "-f", "lavfi", "-i", f"anullsrc=r=48000:cl=stereo:d={DURATION_S}",
-        "-filter_complex", filter_complex,
-        "-map", "[out]", "-map", "2:a",
+        "ffmpeg",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        f"color=c={bg_color}:s=1080x1920:d={DURATION_S}:r=30",
+        "-i",
+        str(logo),
+        "-f",
+        "lavfi",
+        "-i",
+        f"anullsrc=r=48000:cl=stereo:d={DURATION_S}",
+        "-filter_complex",
+        filter_complex,
+        "-map",
+        "[out]",
+        "-map",
+        "2:a",
         *_encode_flags(),
         str(output),
     ]
 
 
 def build_outro_cmd(
-    output: Path, logo: Path, accent_color: str, cta_text: str,
+    output: Path,
+    logo: Path,
+    accent_color: str,
+    cta_text: str,
 ) -> list[str]:
     """Compose FFmpeg command for one outro asset. Pure — returns argv.
 
@@ -211,19 +252,35 @@ def build_outro_cmd(
     filter_complex = ";".join(filters)
 
     return [
-        "ffmpeg", "-y",
-        "-f", "lavfi", "-i", f"color=c={DARK_HEX}:s=1080x1920:d={DURATION_S}:r=30",
-        "-i", str(logo),
-        "-f", "lavfi", "-i", f"anullsrc=r=48000:cl=stereo:d={DURATION_S}",
-        "-filter_complex", filter_complex,
-        "-map", "[out]", "-map", "2:a",
+        "ffmpeg",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        f"color=c={DARK_HEX}:s=1080x1920:d={DURATION_S}:r=30",
+        "-i",
+        str(logo),
+        "-f",
+        "lavfi",
+        "-i",
+        f"anullsrc=r=48000:cl=stereo:d={DURATION_S}",
+        "-filter_complex",
+        filter_complex,
+        "-map",
+        "[out]",
+        "-map",
+        "2:a",
         *_encode_flags(),
         str(output),
     ]
 
 
 def _out_paths(
-    output_mode: str, output_root: Path, prod_root: Path, niche: str, chan_dir: str,
+    output_mode: str,
+    output_root: Path,
+    prod_root: Path,
+    niche: str,
+    chan_dir: str,
 ) -> tuple[Path, Path]:
     """Resolve where intros/ and outros/ go given the output mode."""
     if output_mode == "repo":
@@ -238,7 +295,10 @@ def _out_paths(
 
 
 def generate(
-    repo_root: Path, output_mode: str, output_root: Path, prod_root: Path,
+    repo_root: Path,
+    output_mode: str,
+    output_root: Path,
+    prod_root: Path,
     niche_filter: str | None = None,
 ) -> tuple[int, int]:
     """Generate the full asset set. Returns (produced, failed) counts."""
@@ -252,9 +312,7 @@ def generate(
             failed += len(INTRO_TEMPLATES) + len(OUTRO_TEMPLATES)
             continue
 
-        intros_dir, outros_dir = _out_paths(
-            output_mode, output_root, prod_root, niche, chan_dir
-        )
+        intros_dir, outros_dir = _out_paths(output_mode, output_root, prod_root, niche, chan_dir)
         intros_dir.mkdir(parents=True, exist_ok=True)
         outros_dir.mkdir(parents=True, exist_ok=True)
 
@@ -262,7 +320,12 @@ def generate(
         for name, (bg_kind, scale) in INTRO_TEMPLATES.items():
             out = intros_dir / f"{name}.mp4"
             cmd = build_intro_cmd(
-                out, logo, resolve_bg_color(bg_kind, accent), scale, display, name,
+                out,
+                logo,
+                resolve_bg_color(bg_kind, accent),
+                scale,
+                display,
+                name,
             )
             r = subprocess.run(cmd, capture_output=True, text=True)
             if r.returncode == 0 and out.is_file():
@@ -302,7 +365,7 @@ def main() -> int:
         choices=("repo", "prod"),
         default="repo",
         help="Where to write assets. 'repo' → assets/motion_placeholders/. "
-             "'prod' → <prod-root>/<channel_dir>/assets/motion/.",
+        "'prod' → <prod-root>/<channel_dir>/assets/motion/.",
     )
     ap.add_argument(
         "--output-root",
@@ -326,7 +389,11 @@ def main() -> int:
 
     output_root = args.output_root or args.repo_root
     produced, failed = generate(
-        args.repo_root, args.output_mode, output_root, args.prod_root, args.niche,
+        args.repo_root,
+        args.output_mode,
+        output_root,
+        args.prod_root,
+        args.niche,
     )
     print(f"\n==== SUMMARY: {produced} produced, {failed} failed ====")
     return 0 if failed == 0 else 1

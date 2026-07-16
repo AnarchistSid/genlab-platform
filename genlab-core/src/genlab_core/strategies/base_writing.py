@@ -334,8 +334,7 @@ class BaseWritingStrategy(WritingStrategy):
         if not caption:
             story["_skip_llm"] = True
             logger.warning(
-                "[%s] Template writer produced empty caption (thin story); "
-                "marking _skip_llm=True",
+                "[%s] Template writer produced empty caption (thin story); marking _skip_llm=True",
                 self._niche_id,
             )
             return story
@@ -486,9 +485,7 @@ class BaseWritingStrategy(WritingStrategy):
         # ig_caption when everything else is empty — but the hook is
         # 40-60 chars, not a real caption, and downstream platform
         # adapters expect a body. Better to skip the story cleanly.
-        _all_platform_content_empty = not (
-            _ig_raw or _fb_raw or _yt_raw or _tw_raw or _th_raw
-        )
+        _all_platform_content_empty = not (_ig_raw or _fb_raw or _yt_raw or _tw_raw or _th_raw)
         if _all_platform_content_empty:
             story["_skip_llm"] = True
             logger.warning(

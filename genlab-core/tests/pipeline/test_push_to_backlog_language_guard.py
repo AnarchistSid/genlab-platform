@@ -30,7 +30,6 @@ Pins:
 
 from __future__ import annotations
 
-
 # The 20%-non-ASCII threshold locked at compute-time. Change this + the
 # constant in push_to_backlog.py together, or both niches' cases stop matching.
 _THRESHOLD_PCT = 20
@@ -109,9 +108,7 @@ class TestLanguageGuardWireSource:
         """
         from pathlib import Path
 
-        src = Path(
-            "genlab-core/src/genlab_core/pipeline/stages/push_to_backlog.py"
-        ).read_text()
+        src = Path("genlab-core/src/genlab_core/pipeline/stages/push_to_backlog.py").read_text()
 
         # The specific pattern the guard uses.
         assert "non_ascii = sum(1 for c in raw_title if ord(c) > 127)" in src, (

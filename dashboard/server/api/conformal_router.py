@@ -66,9 +66,7 @@ def _flag_enabled() -> bool:
     other value (``"true"``, ``"yes"``, empty) reads as disabled.
     Matches the audit's H2 case-sensitivity guard.
     """
-    return (
-        os.environ.get("GENLAB_CONFORMAL_ROUTER_ENABLED", "0").strip() == "1"
-    )
+    return os.environ.get("GENLAB_CONFORMAL_ROUTER_ENABLED", "0").strip() == "1"
 
 
 def _summarize_niche(niche_id: str, blob: Any) -> dict[str, Any] | None:
@@ -93,18 +91,14 @@ def _summarize_niche(niche_id: str, blob: Any) -> dict[str, Any] | None:
             "n_calib": int(blob.get("n_calib") or 0),
             "alpha": float(blob.get("alpha") or 0.0),
             "q_hat": float(blob.get("q_hat") or 0.0),
-            "feature_names": [
-                str(x) for x in blob.get("feature_names") or []
-            ],
+            "feature_names": [str(x) for x in blob.get("feature_names") or []],
             # ``ready`` mirrors the module's decision — under this
             # threshold the router fails open regardless of q_hat.
             # Surfacing this makes the card badge unambiguous.
             "ready": sample_count >= _MIN_NICHE_SAMPLES,
         }
     except (TypeError, ValueError) as exc:
-        logger.debug(
-            "conformal_router: niche %s summary skipped: %s", niche_id, exc
-        )
+        logger.debug("conformal_router: niche %s summary skipped: %s", niche_id, exc)
         return None
 
 

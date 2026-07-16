@@ -157,9 +157,7 @@ def list_compliance_events():
         # start / DB blip instead of 500-ing. Sibling /stats endpoint
         # (below) already uses this pattern.
         logger.warning("Compliance events list degraded: %s", exc)
-        return api_success(
-            data={"events": [], "reachable": False, "reason": str(exc)[:200]}
-        )
+        return api_success(data={"events": [], "reachable": False, "reason": str(exc)[:200]})
 
 
 @bp.route("/stats", methods=["GET"])

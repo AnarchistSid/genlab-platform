@@ -110,17 +110,17 @@ def compute_dimension_reward(
     # ever grows to consume router types.
     from genlab_core.learning.retention_derivations import derive_retention_metrics
 
-    derived = derive_retention_metrics(
-        metrics, platform, video_duration_s=video_duration_s
-    )
+    derived = derive_retention_metrics(metrics, platform, video_duration_s=video_duration_s)
     value = derived.get(metric_key)
     if value is None:
         # The specific proxy this dim wants isn't derivable from what
         # the platform returned — scalar fallback keeps learning going.
         logger.debug(
-            "[compute_dimension_reward] %s/%s: derived %s = None; "
-            "using scalar reward %.3f",
-            platform, dimension, metric_key, scalar_reward,
+            "[compute_dimension_reward] %s/%s: derived %s = None; using scalar reward %.3f",
+            platform,
+            dimension,
+            metric_key,
+            scalar_reward,
         )
         return scalar_reward
 
@@ -180,22 +180,25 @@ def route_transformation_rewards(
             video_duration_s=video_duration_s,
         )
         try:
-            bandit_updater(
-                niche_id, arm_id, platform, dim_reward, bandit_context
-            )
+            bandit_updater(niche_id, arm_id, platform, dim_reward, bandit_context)
             updated += 1
             logger.debug(
                 "[transform_reward_router] %s/%s/%s: reward=%.3f",
-                niche_id, dimension, arm_id, dim_reward,
+                niche_id,
+                dimension,
+                arm_id,
+                dim_reward,
             )
         except Exception as exc:
             # Fail-OPEN. Same policy as bandit_platform_split — a single
             # dim update failure NEVER unwinds the content-type update
             # that already succeeded.
             logger.warning(
-                "[transform_reward_router] update failed for "
-                "%s/%s/%s: %s",
-                niche_id, dimension, arm_id, exc,
+                "[transform_reward_router] update failed for %s/%s/%s: %s",
+                niche_id,
+                dimension,
+                arm_id,
+                exc,
             )
 
     logger.info(

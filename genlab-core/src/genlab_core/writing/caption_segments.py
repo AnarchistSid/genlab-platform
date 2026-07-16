@@ -109,9 +109,7 @@ class CaptionSegmentsResult(BaseModel):
         return sum(s.word_count() for s in self.segments)
 
 
-def _prompt_for_segments(
-    niche_id: str, title: str, summary: str, hook_text: str
-) -> str:
+def _prompt_for_segments(niche_id: str, title: str, summary: str, hook_text: str) -> str:
     """Build the LLM system+user prompt for segment generation.
 
     Kept as a pure function so tests can pin the prompt shape without
@@ -274,13 +272,9 @@ def parse_llm_response(raw_text: str) -> CaptionSegmentsResult | None:
         if not isinstance(text, str) or not isinstance(emphasis, list):
             continue
         try:
-            parsed_segments.append(
-                CaptionSegment(text=text, emphasis_words=emphasis)
-            )
+            parsed_segments.append(CaptionSegment(text=text, emphasis_words=emphasis))
         except Exception as exc:
-            logger.debug(
-                "[caption_segments] segment validation failed: %s", exc
-            )
+            logger.debug("[caption_segments] segment validation failed: %s", exc)
 
     clamped = _clamp_segments(parsed_segments)
     hashtags = _clamp_hashtags(data.get("hashtags") or [])
@@ -323,9 +317,7 @@ def generate_caption_segments(
     try:
         import anthropic
     except ImportError:
-        logger.debug(
-            "[caption_segments] anthropic not installed — skipping"
-        )
+        logger.debug("[caption_segments] anthropic not installed — skipping")
         return None
 
     title = (story.get("title") or "").strip()

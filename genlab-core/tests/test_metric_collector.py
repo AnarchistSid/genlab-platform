@@ -1343,9 +1343,7 @@ class TestMultiArmUpdate:
                 bandit_context={"extra_arms": ["hour:6:facebook:anime"]},
             )
 
-        creates_by_arm = {
-            c.args[0]["arm_id"]: c.args[0] for c in proxy.create.call_args_list
-        }
+        creates_by_arm = {c.args[0]["arm_id"]: c.args[0] for c in proxy.create.call_args_list}
         # Both primary + extra arm should be created (both missing)
         assert "episode_moment" in creates_by_arm
         assert "hour:6:facebook:anime" in creates_by_arm

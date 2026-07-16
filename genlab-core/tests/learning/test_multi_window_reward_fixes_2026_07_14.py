@@ -83,8 +83,7 @@ class TestChannelMetricsFnSignature:
         except TypeError as exc:
             if "missing" in str(exc) and "argument" in str(exc):
                 raise AssertionError(
-                    "get_channel_metrics signature mismatch regressed: "
-                    + str(exc)
+                    "get_channel_metrics signature mismatch regressed: " + str(exc)
                 ) from exc
             raise
 
@@ -115,8 +114,7 @@ class TestSignificantLiftGate:
         was invisible pre-fix because delta_pct=0."""
         d = self._delta(reward_48h=0.0, reward_late=0.13)
         assert _is_significant_lift(d), (
-            f"delta_pct={d.delta_pct} was 0 (base-zero); "
-            "gate must fire on absolute delta"
+            f"delta_pct={d.delta_pct} was 0 (base-zero); gate must fire on absolute delta"
         )
 
     def test_bombed_at_48h_still_bombed_at_7d_is_NOT_significant(self):

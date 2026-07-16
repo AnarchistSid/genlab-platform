@@ -60,7 +60,6 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from typing import Any
 
-from genlab_core.pipeline.blueprint_status import LIVE_OR_PENDING as _BLOCKING_STATUSES
 from genlab_core.storage.record_helpers import record_created_at_dt
 
 logger = logging.getLogger(__name__)

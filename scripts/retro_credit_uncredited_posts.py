@@ -235,7 +235,7 @@ def _strip_double_prefix(raw: str, platform: str) -> str:
     until only the bare id remains."""
     prefix = f"{platform}:"
     while raw.startswith(prefix):
-        raw = raw[len(prefix):]
+        raw = raw[len(prefix) :]
     return raw
 
 
@@ -335,9 +335,7 @@ def _query_uncredited(dsn: str, days: int) -> list[TargetPost]:
     return out
 
 
-def _ig_shortcode_to_media_id(
-    shortcode: str, ig_user_id: str, token: str
-) -> str | None:
+def _ig_shortcode_to_media_id(shortcode: str, ig_user_id: str, token: str) -> str | None:
     """Walk the niche's IG media to find the numeric media_id for a
     shortcode. Meta rate limits + no direct shortcode→id endpoint
     means we walk pages until we find it or exhaust."""
@@ -412,9 +410,7 @@ def _is_rate_limit(reason: str) -> bool:
     return '"code":4' in reason or "Application request limit reached" in reason
 
 
-def _edit_fb_message(
-    post_id: str, new_message: str, token: str, dry_run: bool
-) -> tuple[bool, str]:
+def _edit_fb_message(post_id: str, new_message: str, token: str, dry_run: bool) -> tuple[bool, str]:
     if dry_run:
         return True, "dry-run"
     try:
@@ -484,8 +480,10 @@ def run(dsn: str, days: int, dry_run: bool, sleep_seconds: float = 3.0) -> int:
     if _pre > len(targets):
         log.info("Skipped %d state-known-credited targets", _pre - len(targets))
     stats = {
-        "attempted_fb": 0, "attempted_ig": 0,
-        "success_fb": 0, "success_ig": 0,
+        "attempted_fb": 0,
+        "attempted_ig": 0,
+        "success_fb": 0,
+        "success_ig": 0,
         "already_credited": 0,
         "skipped_no_creds": 0,
         "skipped_no_url": 0,
@@ -529,9 +527,7 @@ def run(dsn: str, days: int, dry_run: bool, sleep_seconds: float = 3.0) -> int:
                 )
                 continue
             new_msg = _append_credit(current, credit)
-            ok, reason = _edit_fb_message(
-                t.normalised_post_id, new_msg, token, dry_run
-            )
+            ok, reason = _edit_fb_message(t.normalised_post_id, new_msg, token, dry_run)
             if ok:
                 stats["success_fb"] += 1
                 if not dry_run:
@@ -560,14 +556,10 @@ def run(dsn: str, days: int, dry_run: bool, sleep_seconds: float = 3.0) -> int:
                 log.warning("[ig %s] no IG_USER_ID for %s", t.normalised_post_id, t.niche_id)
                 stats["skipped_no_creds"] += 1
                 continue
-            media_id = _ig_shortcode_to_media_id(
-                t.normalised_post_id, ig_user_id, token
-            )
+            media_id = _ig_shortcode_to_media_id(t.normalised_post_id, ig_user_id, token)
             if not media_id:
                 stats["failed"] += 1
-                failures.append(
-                    f"ig {t.normalised_post_id}: shortcode not found in recent media"
-                )
+                failures.append(f"ig {t.normalised_post_id}: shortcode not found in recent media")
                 log.warning(
                     "[ig %s] shortcode not resolved to media_id",
                     t.normalised_post_id,
@@ -635,12 +627,7 @@ def run(dsn: str, days: int, dry_run: bool, sleep_seconds: float = 3.0) -> int:
     attempted = stats["attempted_fb"] + stats["attempted_ig"]
     success = stats["success_fb"] + stats["success_ig"]
     already_credited = stats["already_credited"]
-    if (
-        attempted > 0
-        and success == 0
-        and already_credited == 0
-        and stats["failed"] > 0
-    ):
+    if attempted > 0 and success == 0 and already_credited == 0 and stats["failed"] > 0:
         # 100% failure rate on real attempts — genuine problem.
         log.error(
             "retro-credit exit=1: %d attempts, 0 successes, "

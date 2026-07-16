@@ -30,9 +30,7 @@ bp = Blueprint(
     url_prefix="/api/v1/drift-signals",
 )
 
-_VALID_NICHES = frozenset(
-    {"gaming", "movies", "sports", "anime", "ai_creators"}
-)
+_VALID_NICHES = frozenset({"gaming", "movies", "sports", "anime", "ai_creators"})
 
 _MIN_WINDOW = 1
 _MAX_WINDOW = 90
@@ -56,9 +54,7 @@ def _flag_enabled() -> bool:
     when the flag is off. Surfaces to the frontend so the card can
     badge "collecting" vs "historical-only".
     """
-    return (
-        os.environ.get("GENLAB_DRIFT_PERSIST_ENABLED", "0").strip() == "1"
-    )
+    return os.environ.get("GENLAB_DRIFT_PERSIST_ENABLED", "0").strip() == "1"
 
 
 def _parse_niche(raw: str | None) -> str | None:
@@ -116,9 +112,7 @@ def _row_to_signal(row: Any) -> dict[str, Any]:
         "recent_obs": int(row[5]),
         "baseline_obs": int(row[6]),
         "is_regression": bool(row[7]),
-        "computed_at": (
-            row[8].isoformat() if hasattr(row[8], "isoformat") else str(row[8])
-        ),
+        "computed_at": (row[8].isoformat() if hasattr(row[8], "isoformat") else str(row[8])),
     }
 
 
@@ -234,10 +228,7 @@ def get_summary():
             {
                 "status": "success",
                 "data": None,
-                "message": (
-                    "drift_signals table not yet available "
-                    "(migration pending?)"
-                ),
+                "message": ("drift_signals table not yet available (migration pending?)"),
             }
         )
 

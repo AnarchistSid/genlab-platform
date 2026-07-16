@@ -284,8 +284,7 @@ class TestIntentionalDisableAllowlist:
         alerts = check_fetcher_stage_silent_failures("sports")
         scorebat_alerts = [a for a in alerts if "FetchScoreBatHighlights" in a.message]
         assert scorebat_alerts == [], (
-            "operator-disabled scorebat MUST NOT fire fetcher_silent_no_op; "
-            f"got: {scorebat_alerts}"
+            f"operator-disabled scorebat MUST NOT fire fetcher_silent_no_op; got: {scorebat_alerts}"
         )
 
     def test_stage_with_enabled_true_still_alerts(self, fake_runs_dir, monkeypatch):

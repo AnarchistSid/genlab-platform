@@ -340,7 +340,9 @@ class TwitchTrendingFetcher:
                 )
                 if top_streamer:
                     source_url = f"https://www.twitch.tv/{top_streamer['user_login']}"
-                    source_channel_title = top_streamer.get("user_name") or top_streamer["user_login"]
+                    source_channel_title = (
+                        top_streamer.get("user_name") or top_streamer["user_login"]
+                    )
                     stream_title = top_streamer.get("title", "") or f"Live: {game['name']}"
                 else:
                     source_url = (

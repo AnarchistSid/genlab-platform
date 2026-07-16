@@ -84,18 +84,20 @@ _CONVERT_CACHE_TTL_HOURS = 24 * 30  # (target_url, subid) → short URL is stabl
 # amazon.co.jp, etc.) means Cuelinks becomes a no-attribution proxy
 # there too. Update this set explicitly rather than a broad regex so
 # every addition surfaces in code review.
-_AMAZON_DOMAINS: frozenset[str] = frozenset({
-    "amazon.com",
-    "amazon.in",
-    "amazon.co.uk",
-    "amazon.de",
-    "amazon.co.jp",
-    "amazon.ca",
-    "amazon.com.au",
-    "amazon.fr",
-    "amazon.it",
-    "amazon.es",
-})
+_AMAZON_DOMAINS: frozenset[str] = frozenset(
+    {
+        "amazon.com",
+        "amazon.in",
+        "amazon.co.uk",
+        "amazon.de",
+        "amazon.co.jp",
+        "amazon.ca",
+        "amazon.com.au",
+        "amazon.fr",
+        "amazon.it",
+        "amazon.es",
+    }
+)
 
 # Module-level cache. Shared .tmp/cache dir so operator disk_cleanup
 # clears all third-party caches with one sweep.
@@ -350,9 +352,7 @@ def _execute(request: urllib.request.Request, *, tag: str, url: str) -> Any:
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
-        logger.warning(
-            "[cuelinks] cuelinks_%s_failed json_decode_error raw=%s", tag, raw[:200]
-        )
+        logger.warning("[cuelinks] cuelinks_%s_failed json_decode_error raw=%s", tag, raw[:200])
         return None
 
 

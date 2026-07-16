@@ -56,18 +56,14 @@ def _install_pool(monkeypatch, *, regressions=None, improvements=None, counts=No
     pool = MagicMock()
     pool.connection.return_value.__enter__.return_value = conn
     pool.connection.return_value.__exit__.return_value = False
-    monkeypatch.setattr(
-        "genlab_core.storage.get_pool", lambda: pool, raising=False
-    )
+    monkeypatch.setattr("genlab_core.storage.get_pool", lambda: pool, raising=False)
     return cursor
 
 
 class TestParameterHandling:
     def test_bad_niche_treated_as_all(self, client, monkeypatch):
         _install_pool(monkeypatch)
-        resp = client.get(
-            "/api/v1/drift-signals/summary?niche_id=nonexistent"
-        )
+        resp = client.get("/api/v1/drift-signals/summary?niche_id=nonexistent")
         assert resp.get_json()["data"]["niche_id"] is None
 
     def test_window_clamped_upper(self, client, monkeypatch):
@@ -92,22 +88,16 @@ class TestParameterHandling:
 
 
 class TestFailOpen:
-    def test_query_failure_returns_pending_migration_message(
-        self, client, monkeypatch
-    ):
+    def test_query_failure_returns_pending_migration_message(self, client, monkeypatch):
         cursor = MagicMock()
-        cursor.execute.side_effect = RuntimeError(
-            'relation "drift_signals" does not exist'
-        )
+        cursor.execute.side_effect = RuntimeError('relation "drift_signals" does not exist')
         conn = MagicMock()
         conn.cursor.return_value.__enter__.return_value = cursor
         conn.cursor.return_value.__exit__.return_value = False
         pool = MagicMock()
         pool.connection.return_value.__enter__.return_value = conn
         pool.connection.return_value.__exit__.return_value = False
-        monkeypatch.setattr(
-            "genlab_core.storage.get_pool", lambda: pool, raising=False
-        )
+        monkeypatch.setattr("genlab_core.storage.get_pool", lambda: pool, raising=False)
 
         resp = client.get("/api/v1/drift-signals/summary")
         body = resp.get_json()
@@ -139,9 +129,7 @@ class TestHappyPath:
             counts=counts,
         )
 
-        resp = client.get(
-            "/api/v1/drift-signals/summary?niche_id=gaming&window_days=14"
-        )
+        resp = client.get("/api/v1/drift-signals/summary?niche_id=gaming&window_days=14")
         data = resp.get_json()["data"]
         assert data["window_days"] == 14
         assert data["niche_id"] == "gaming"
@@ -167,9 +155,7 @@ class TestHappyPath:
 
     def test_empty_result_returns_empty_lists(self, client, monkeypatch):
         _install_pool(monkeypatch)
-        data = client.get(
-            "/api/v1/drift-signals/summary"
-        ).get_json()["data"]
+        data = client.get("/api/v1/drift-signals/summary").get_json()["data"]
         assert data["regressions"] == []
         assert data["improvements"] == []
         assert data["counts_by_niche"] == []
@@ -180,16 +166,12 @@ class TestFlagEnabled:
         _install_pool(monkeypatch)
         monkeypatch.setenv("GENLAB_DRIFT_PERSIST_ENABLED", "1")
         assert (
-            client.get("/api/v1/drift-signals/summary")
-            .get_json()["data"]["flag_enabled"]
-            is True
+            client.get("/api/v1/drift-signals/summary").get_json()["data"]["flag_enabled"] is True
         )
 
     def test_flag_false_when_typo(self, client, monkeypatch):
         _install_pool(monkeypatch)
         monkeypatch.setenv("GENLAB_DRIFT_PERSIST_ENABLED", "true")
         assert (
-            client.get("/api/v1/drift-signals/summary")
-            .get_json()["data"]["flag_enabled"]
-            is False
+            client.get("/api/v1/drift-signals/summary").get_json()["data"]["flag_enabled"] is False
         )

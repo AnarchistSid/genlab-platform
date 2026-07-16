@@ -40,9 +40,8 @@ the response. Frontend renders as "No transformation arms yet".
 from __future__ import annotations
 
 import logging
-import os
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from flask import Blueprint, jsonify
@@ -77,7 +76,7 @@ def _parse_arm_id(arm_id: str) -> tuple[str, str] | None:
     """Parse ``transform__<dim>__<value>`` → ``(dim, value)`` or None."""
     if not arm_id.startswith(_ARM_PREFIX):
         return None
-    rest = arm_id[len(_ARM_PREFIX):]
+    rest = arm_id[len(_ARM_PREFIX) :]
     parts = rest.split("__", 1)
     if len(parts) != 2 or not parts[0] or not parts[1]:
         return None
@@ -99,9 +98,7 @@ def _load_transformation_arms() -> list[dict[str, Any]]:
 
         client = BacklogClient()
     except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "transformation_bandit: BacklogClient construction failed: %s", exc
-        )
+        logger.warning("transformation_bandit: BacklogClient construction failed: %s", exc)
         return []
 
     proxy = getattr(client, "bandit_arms", None)
@@ -123,9 +120,7 @@ def _load_transformation_arms() -> list[dict[str, Any]]:
         # Filter to transformation arms only. Backfill scripts may
         # have set arm_type; historical rows fall through if arm_id
         # matches the composite prefix (belt AND suspenders).
-        is_transform = (
-            arm_type == "transformation" or arm_id.startswith(_ARM_PREFIX)
-        )
+        is_transform = arm_type == "transformation" or arm_id.startswith(_ARM_PREFIX)
         if not is_transform:
             continue
         parsed = _parse_arm_id(arm_id)
@@ -204,7 +199,7 @@ def _shape_response(arms: list[dict[str, Any]]) -> dict[str, Any]:
         shaped_niches[niche] = shaped_dims
 
     return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "flag_enabled": _flag_enabled(),
         "niches": shaped_niches,
     }

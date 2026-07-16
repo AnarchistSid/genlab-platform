@@ -111,9 +111,7 @@ def _summarize_niche(niche_id: str, blob: Any) -> dict[str, Any] | None:
             "mean": [float(x) for x in mean],
         }
     except (TypeError, ValueError) as exc:
-        logger.debug(
-            "bayesian_gate: niche %s summary skipped: %s", niche_id, exc
-        )
+        logger.debug("bayesian_gate: niche %s summary skipped: %s", niche_id, exc)
         return None
 
 

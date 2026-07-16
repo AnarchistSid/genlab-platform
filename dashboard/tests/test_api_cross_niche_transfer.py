@@ -92,9 +92,7 @@ class TestGetPriors:
         state so the frontend can badge "observation only" vs "active".
         This is what lets the operator see priors during observation
         mode without misreading them as "already in effect"."""
-        _write_priors(
-            tmp_path, {"generated_at": "now", "priors": {}}
-        )
+        _write_priors(tmp_path, {"generated_at": "now", "priors": {}})
 
         monkeypatch.setenv("GENLAB_CROSS_NICHE_TRANSFER_ENABLED", "true")
         resp = client.get("/api/v1/cross-niche-transfer/priors")

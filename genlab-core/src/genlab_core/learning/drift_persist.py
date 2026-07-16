@@ -26,7 +26,6 @@ fails.
 from __future__ import annotations
 
 import logging
-import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -96,9 +95,7 @@ def record_signals(signals: list[DriftSignal]) -> int:
     try:
         from genlab_core.storage import get_pool  # type: ignore[attr-defined]
     except Exception as exc:  # pragma: no cover — import error path
-        logger.warning(
-            "drift_persist.pool_import_failed", extra={"error": str(exc)}
-        )
+        logger.warning("drift_persist.pool_import_failed", extra={"error": str(exc)})
         return 0
 
     rows = []
@@ -140,9 +137,7 @@ def record_signals(signals: list[DriftSignal]) -> int:
     try:
         pool = get_pool()
     except Exception as exc:
-        logger.warning(
-            "drift_persist.pool_unavailable", extra={"error": str(exc)}
-        )
+        logger.warning("drift_persist.pool_unavailable", extra={"error": str(exc)})
         return 0
 
     sql = """

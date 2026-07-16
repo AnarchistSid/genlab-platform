@@ -25,7 +25,6 @@ ambiguous positive hits.
 from __future__ import annotations
 
 import pytest
-
 from genlab_core.intelligence.niche_classifier import NicheClassifier
 
 
@@ -81,9 +80,7 @@ class TestAnimeHardRejects:
         """The full classify_and_route path — anime must NOT appear
         in routed_niches for these titles."""
         _scores, routed = classifier.classify_and_route(title, description="")
-        assert "anime" not in routed, (
-            f"Off-niche title routed to anime: {routed}. Title: {title!r}"
-        )
+        assert "anime" not in routed, f"Off-niche title routed to anime: {routed}. Title: {title!r}"
 
 
 class TestAnimePositiveContentStillMatches:

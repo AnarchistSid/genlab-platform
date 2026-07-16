@@ -268,7 +268,9 @@ class BlueprintStore:
         # for traceability. Callers relying on the write side-effect
         # (very rare) can pass `force=True` (existing param) to bypass.
         current_status = (
-            blueprint.get("fields", blueprint).get("status") if isinstance(blueprint, dict) else None
+            blueprint.get("fields", blueprint).get("status")
+            if isinstance(blueprint, dict)
+            else None
         )
         if not force and not kwargs and current_status == status:
             logger.debug(

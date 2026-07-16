@@ -20,14 +20,11 @@ No live API calls — parse_llm_response tested against canned strings.
 
 from __future__ import annotations
 
-import os
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.writing.caption_segments import (
     CaptionSegment,
-    CaptionSegmentsResult,
     _clamp_hashtags,
     _clamp_segments,
     _extract_json_blob,
@@ -50,9 +47,7 @@ class TestCaptionSegmentModel:
         assert seg.emphasis_words == ["hello", "world"]
 
     def test_word_count(self) -> None:
-        assert CaptionSegment(
-            text="one two three four", emphasis_words=[]
-        ).word_count() == 4
+        assert CaptionSegment(text="one two three four", emphasis_words=[]).word_count() == 4
 
 
 class TestExtractJsonBlob:
@@ -165,10 +160,7 @@ class TestClampSegments:
 
     def test_max_5_segments(self) -> None:
         """Never more than 5 segments — anything above is truncated."""
-        raw = [
-            CaptionSegment(text=f"seg {i} text", emphasis_words=[])
-            for i in range(10)
-        ]
+        raw = [CaptionSegment(text=f"seg {i} text", emphasis_words=[]) for i in range(10)]
         clamped = _clamp_segments(raw)
         assert len(clamped) == 5
 
@@ -261,25 +253,19 @@ class TestPromptShape:
 class TestGenerateCaptionSegments:
     def test_no_api_key_returns_none(self, monkeypatch) -> None:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        result = generate_caption_segments(
-            {"title": "T", "summary": "S"}, "gaming", "hook"
-        )
+        result = generate_caption_segments({"title": "T", "summary": "S"}, "gaming", "hook")
         assert result is None
 
     def test_no_title_returns_none(self, monkeypatch) -> None:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "fake")
         with patch("anthropic.Anthropic"):
-            result = generate_caption_segments(
-                {"title": "", "summary": "S"}, "gaming", "hook"
-            )
+            result = generate_caption_segments({"title": "", "summary": "S"}, "gaming", "hook")
         assert result is None
 
     def test_no_hook_returns_none(self, monkeypatch) -> None:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "fake")
         with patch("anthropic.Anthropic"):
-            result = generate_caption_segments(
-                {"title": "T", "summary": "S"}, "gaming", ""
-            )
+            result = generate_caption_segments({"title": "T", "summary": "S"}, "gaming", "")
         assert result is None
 
     def test_api_error_returns_none(self, monkeypatch) -> None:
@@ -299,9 +285,7 @@ class TestGenerateCaptionSegments:
                 return _M
 
         with patch("anthropic.Anthropic", _FakeAnthropic):
-            result = generate_caption_segments(
-                {"title": "T", "summary": "S"}, "gaming", "hook"
-            )
+            result = generate_caption_segments({"title": "T", "summary": "S"}, "gaming", "hook")
         assert result is None
 
     def test_happy_path_end_to_end(self, monkeypatch) -> None:

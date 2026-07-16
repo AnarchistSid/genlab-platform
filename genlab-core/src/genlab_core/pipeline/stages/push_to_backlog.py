@@ -1938,7 +1938,10 @@ class PushToBacklog:
                 non_ascii = sum(1 for c in raw_title if ord(c) > 127)
                 if non_ascii / len(raw_title) > 0.20:
                     llm_hook = content.get("hook") or ""
-                    if llm_hook and sum(1 for c in llm_hook if ord(c) > 127) / max(1, len(llm_hook)) < 0.20:
+                    if (
+                        llm_hook
+                        and sum(1 for c in llm_hook if ord(c) > 127) / max(1, len(llm_hook)) < 0.20
+                    ):
                         # LLM produced an English hook — use it as title
                         logger.info(
                             "[PUSH] Non-English source title '%s' — "

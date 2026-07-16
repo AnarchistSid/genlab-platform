@@ -770,6 +770,7 @@ def get_csrf_token():
 # ── Register API v1 modules ──────────────────────────────
 from server.api.alerts import bp as alerts_bp
 from server.api.analytics import bp as analytics_bp
+from server.api.attribution_health import bp as attribution_health_bp
 from server.api.audience import bp as audience_bp
 from server.api.auto_approval import bp as auto_approval_bp
 from server.api.bandit_hour_posteriors import bp as bandit_hour_posteriors_bp
@@ -802,7 +803,6 @@ from server.api.overview import bp as overview_bp
 from server.api.pipeline import bp as pipeline_bp
 from server.api.platform_posts import bp as platform_posts_bp
 from server.api.product_bandit import bp as product_bandit_bp
-from server.api.attribution_health import bp as attribution_health_bp
 from server.api.publishing_health import bp as publishing_health_bp
 from server.api.publishing_queue import bp as queue_bp
 from server.api.revenue import bp as revenue_bp
@@ -1448,9 +1448,7 @@ def _execute_review_action(
         # requires ≥30 fresh samples ≥90% agreement — but samples
         # stopped accumulating. Elevating so the actual exception
         # surfaces + exc_info captures the traceback.
-        logger.warning(
-            "[calibration] skipped (non-fatal): %s", _cal_exc, exc_info=True
-        )
+        logger.warning("[calibration] skipped (non-fatal): %s", _cal_exc, exc_info=True)
 
     # Operator-action visibility (autonomy gap doc, Week 2). Emit the
     # action to ``dashboard_events`` so Mission Control shows an

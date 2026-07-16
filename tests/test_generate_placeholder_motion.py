@@ -20,18 +20,12 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-    / "generate_placeholder_motion.py"
-)
+SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "generate_placeholder_motion.py"
 
 
 @pytest.fixture(scope="module")
 def script_module():
-    spec = importlib.util.spec_from_file_location(
-        "generate_placeholder_motion", SCRIPT_PATH
-    )
+    spec = importlib.util.spec_from_file_location("generate_placeholder_motion", SCRIPT_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -143,9 +137,7 @@ def test_intro_cmd_yuv420p(script_module, tmp_path):
 # ── output path resolution pins ─────────────────────────────────────
 
 
-def test_repo_mode_writes_under_assets_motion_placeholders(
-    script_module, tmp_path
-):
+def test_repo_mode_writes_under_assets_motion_placeholders(script_module, tmp_path):
     """repo mode writes under a mirror path so PR reviewers can inspect
     generated MP4s in-tree."""
     intros, outros = script_module._out_paths(
@@ -175,7 +167,8 @@ def test_repo_ships_baseline_32_mp4s():
     repo_root = Path(__file__).resolve().parents[1]
     root = repo_root / "assets" / "motion_placeholders"
     if not root.is_dir():
-        pytest.skip("assets/motion_placeholders/ not present — run "
-                    "scripts/generate_placeholder_motion.py")
+        pytest.skip(
+            "assets/motion_placeholders/ not present — run scripts/generate_placeholder_motion.py"
+        )
     mp4s = list(root.rglob("*.mp4"))
     assert len(mp4s) == 32, f"expected 32 MP4s under {root}, got {len(mp4s)}"

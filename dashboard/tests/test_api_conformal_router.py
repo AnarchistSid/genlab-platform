@@ -161,9 +161,7 @@ class TestGetState:
                 },
             },
         )
-        gaming = client.get("/api/v1/conformal-router/state").get_json()[
-            "data"
-        ]["niches"][0]
+        gaming = client.get("/api/v1/conformal-router/state").get_json()["data"]["niches"][0]
         assert "weights" not in gaming
         assert "intercept" not in gaming
 
@@ -224,8 +222,6 @@ class TestGetState:
         )
         niche_ids = [
             n["niche_id"]
-            for n in client.get(
-                "/api/v1/conformal-router/state"
-            ).get_json()["data"]["niches"]
+            for n in client.get("/api/v1/conformal-router/state").get_json()["data"]["niches"]
         ]
         assert niche_ids == ["anime", "gaming", "movies"]

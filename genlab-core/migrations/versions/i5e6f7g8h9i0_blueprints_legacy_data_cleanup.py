@@ -60,7 +60,6 @@ chk_violations_non_published 0  ← no legit-broken rows
 
 from alembic import op
 
-
 revision = "i5e6f7g8h9i0"
 down_revision = "h4d5e6f7g8h9"
 branch_labels = None

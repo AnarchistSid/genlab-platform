@@ -241,7 +241,6 @@ def _fetch_divergence_stats(niche_id: str, window_days: int) -> dict:
     Returns a dict with the same shape as the calibration-stats
     endpoint so frontend can reuse card patterns.
     """
-    import os
 
     dsn = os.environ.get("DATABASE_URL", "").strip()
     if not dsn:

@@ -37,9 +37,7 @@ def _disable_auth(monkeypatch):
 def client(tmp_path, monkeypatch):
     # BAYESIAN_GATE_STATE_PATH is honoured by both the endpoint and
     # the module — safe to point at a scratch file.
-    monkeypatch.setenv(
-        "BAYESIAN_GATE_STATE_PATH", str(tmp_path / "bayesian_gate_state.json")
-    )
+    monkeypatch.setenv("BAYESIAN_GATE_STATE_PATH", str(tmp_path / "bayesian_gate_state.json"))
     # Ensure a clean env for flag checks; individual tests set as needed.
     monkeypatch.delenv("GENLAB_BAYESIAN_GATE_ENABLED", raising=False)
     app.config["TESTING"] = True

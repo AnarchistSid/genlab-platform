@@ -63,7 +63,6 @@ def _connect():
         return None
 
 
-
 # 2026-07-14 session finding: post_decision_trace stayed at 0 rows
 # for months because ALL writers passed the SHA256 candidate_id
 # (64 hex chars, not a UUID). _coerce_uuid rejected everything →

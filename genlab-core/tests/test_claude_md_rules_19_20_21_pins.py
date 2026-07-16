@@ -11,7 +11,6 @@ Rule #21 — never leave a weekly timer at Persistent=false
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
@@ -35,8 +34,10 @@ def test_rule_19_calibration_logger_swallow_not_debug() -> None:
     downgrades this back to DEBUG. Silent for 17 days last time.
     """
     src_lines = (
-        _REPO_ROOT / "dashboard" / "server" / "review_server.py"
-    ).read_text(encoding="utf-8").splitlines()
+        (_REPO_ROOT / "dashboard" / "server" / "review_server.py")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    )
 
     # Locate the `except Exception as _cal_exc:` line and inspect the
     # NEXT 20 lines only — enough to see the log call, small enough to
@@ -95,14 +96,13 @@ def test_rule_20_flock_on_secret_state_writes(path: str) -> None:
         "path. See CLAUDE.md rule #20."
     )
     assert "fcntl.flock" in src, (
-        f"Rule #20 regression in {path}: fcntl.flock call removed. See "
-        "CLAUDE.md rule #20."
+        f"Rule #20 regression in {path}: fcntl.flock call removed. See CLAUDE.md rule #20."
     )
     assert "LOCK_EX" in src, (
         f"Rule #20 regression in {path}: exclusive lock (LOCK_EX) removed. "
         "Shared lock allows concurrent writers. See CLAUDE.md rule #20."
     )
-    assert '.with_suffix(".lock")' in src or '.lock' in src, (
+    assert '.with_suffix(".lock")' in src or ".lock" in src, (
         f"Rule #20 regression in {path}: sidecar .lock file no longer "
         "referenced. Lock file must be separate from the secrets file "
         "(0o600 on secrets breaks lock-file open in different processes). "
@@ -124,16 +124,14 @@ def test_rule_21_strategist_timer_persistent_true() -> None:
     Regression scenario: someone copy-pastes a hourly-timer template
     that carries `Persistent=false`.
     """
-    timer_src = (
-        _REPO_ROOT / "deploy" / "systemd-phase2" / "genlab-strategist.timer"
-    ).read_text(encoding="utf-8")
+    timer_src = (_REPO_ROOT / "deploy" / "systemd-phase2" / "genlab-strategist.timer").read_text(
+        encoding="utf-8"
+    )
 
     # Ignore comment lines so the audit-trail comment
     # "flipped Persistent=false → true" doesn't false-fire this pin.
     non_comment_lines = [
-        line
-        for line in timer_src.splitlines()
-        if line.strip() and not line.strip().startswith("#")
+        line for line in timer_src.splitlines() if line.strip() and not line.strip().startswith("#")
     ]
     non_comment_body = "\n".join(non_comment_lines)
 

@@ -22,7 +22,6 @@ from genlab_core.writing.video_content_writer import (
     _is_llm_refusal,
 )
 
-
 # ── prefix inventory ────────────────────────────────────────────────
 
 
@@ -93,10 +92,7 @@ def test_legitimate_hook_containing_phrase_mid_sentence_is_NOT_refusal():
 
 def test_normal_hook_is_NOT_refusal():
     """Sanity — a real hook doesn't trigger."""
-    assert (
-        _is_llm_refusal("The secret technique hiding on every Star Wars ship")
-        is False
-    )
+    assert _is_llm_refusal("The secret technique hiding on every Star Wars ship") is False
 
 
 def test_empty_string_is_NOT_refusal():
@@ -133,7 +129,10 @@ def test_writer_source_calls_is_llm_refusal():
 
     src = (
         Path(__file__).resolve().parents[2]
-        / "src" / "genlab_core" / "writing" / "video_content_writer.py"
+        / "src"
+        / "genlab_core"
+        / "writing"
+        / "video_content_writer.py"
     )
     content = src.read_text()
     assert "_is_llm_refusal(hook)" in content, (

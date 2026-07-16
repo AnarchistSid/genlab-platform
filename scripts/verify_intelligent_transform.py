@@ -109,9 +109,7 @@ def _connect():
 
     url = os.environ.get("DATABASE_URL")
     if not url:
-        raise SystemExit(
-            "DATABASE_URL not set; source /opt/genlab/.env before running."
-        )
+        raise SystemExit("DATABASE_URL not set; source /opt/genlab/.env before running.")
     return psycopg.connect(url, row_factory=psycopg.rows.dict_row)
 
 
@@ -164,9 +162,7 @@ def query_recent(window_hours: int, min_build_date: str | None = None) -> list[d
 
 def aggregate(rows: list[dict]) -> dict[str, dict[str, int]]:
     """Group by niche and count per-dimension applications."""
-    per_niche: dict[str, dict[str, int]] = defaultdict(
-        lambda: defaultdict(int)
-    )
+    per_niche: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for row in rows:
         niche = row["niche_id"]
         per_niche[niche]["_reels"] += 1
@@ -191,7 +187,7 @@ def print_table(agg: dict[str, dict[str, int]]) -> int:
     # Compact table — dimensions across columns, niches down rows.
     header = ["niche", "reels"] + list(CORE_DIMENSIONS) + list(ASSET_GATED_DIMENSIONS)
     widths = [max(len(h), 12) for h in header]
-    print("  " + "  ".join(h.ljust(w) for h, w in zip(header, widths)))
+    print("  " + "  ".join(h.ljust(w) for h, w in zip(header, widths, strict=True)))
     print("  " + "  ".join("-" * w for w in widths))
 
     for niche in sorted(agg):
@@ -200,7 +196,7 @@ def print_table(agg: dict[str, dict[str, int]]) -> int:
         row = [niche, str(reels)]
         for dim in CORE_DIMENSIONS + ASSET_GATED_DIMENSIONS:
             row.append(_format_cell(stats.get(dim, 0), reels))
-        print("  " + "  ".join(c.ljust(w) for c, w in zip(row, widths)))
+        print("  " + "  ".join(c.ljust(w) for c, w in zip(row, widths, strict=True)))
 
         # Regression signal: reels published but ZERO core dims applied.
         if reels > 0 and all(stats.get(d, 0) == 0 for d in CORE_DIMENSIONS):
@@ -253,9 +249,7 @@ def main() -> int:
         print(json.dumps(agg, indent=2, sort_keys=True))
         return 0
 
-    print(
-        f"Intelligent-transformation attribution — last {args.window_hours}h\n"
-    )
+    print(f"Intelligent-transformation attribution — last {args.window_hours}h\n")
     return print_table(agg)
 
 

@@ -31,9 +31,7 @@ def _load_script_module():
 
     Not on the package path — it lives in ``scripts/`` at workspace
     root. Use importlib to load it dynamically."""
-    spec = importlib.util.spec_from_file_location(
-        "register_transformation_arms", _SCRIPT_PATH
-    )
+    spec = importlib.util.spec_from_file_location("register_transformation_arms", _SCRIPT_PATH)
     module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
     spec.loader.exec_module(module)  # type: ignore[union-attr]
     return module
@@ -89,9 +87,7 @@ class TestEnumerateArms:
     }
 
     @pytest.mark.parametrize("niche_id,yaml_path", list(_NICHE_YAMLS.items()))
-    def test_enumerate_produces_arms(
-        self, script_module, niche_id, yaml_path
-    ) -> None:
+    def test_enumerate_produces_arms(self, script_module, niche_id, yaml_path) -> None:
         import yaml
 
         parsed = yaml.safe_load(yaml_path.read_text())
@@ -143,7 +139,6 @@ class TestEnumerateArms:
         }
         arms = list(script_module.enumerate_arms_for_niche(block))
         arm_ids = {arm[0] for arm in arms}
-        values = {arm[2] for arm in arms}
         assert "transform__audio_ducking__-12" in arm_ids
         assert "transform__caption_pacing__750" in arm_ids
         # dimension_values are strings
@@ -173,12 +168,8 @@ class TestBanditArmsPerNiche:
         "caption_pacing",
     }
 
-    @pytest.mark.parametrize(
-        "niche_id,yaml_path", list(TestEnumerateArms._NICHE_YAMLS.items())
-    )
-    def test_all_11_dimensions_produce_arms(
-        self, script_module, niche_id, yaml_path
-    ) -> None:
+    @pytest.mark.parametrize("niche_id,yaml_path", list(TestEnumerateArms._NICHE_YAMLS.items()))
+    def test_all_11_dimensions_produce_arms(self, script_module, niche_id, yaml_path) -> None:
         import yaml
 
         parsed = yaml.safe_load(yaml_path.read_text())
@@ -262,9 +253,7 @@ class TestRegisterArmsForNiche:
     + save_arm calls. Test the dry-run path (no DB) and the mocked
     live path."""
 
-    def test_dry_run_enumerates_without_writing(
-        self, script_module, monkeypatch, tmp_path
-    ):
+    def test_dry_run_enumerates_without_writing(self, script_module, monkeypatch, tmp_path):
         # Point script at a synthetic visuals.yaml.
         fake_yaml = tmp_path / "visuals.yaml"
         fake_yaml.write_text(
@@ -285,9 +274,7 @@ class TestRegisterArmsForNiche:
             "gaming",
             str(fake_yaml.relative_to(tmp_path)),
         )
-        stats = script_module.register_arms_for_niche(
-            "gaming", tmp_path, dry_run=True
-        )
+        stats = script_module.register_arms_for_niche("gaming", tmp_path, dry_run=True)
         assert stats["dry_run"] is True
         assert stats["total"] == 3  # 2 moods + 1 style
         assert stats["registered"] == 0  # dry run doesn't write

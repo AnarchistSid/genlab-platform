@@ -184,14 +184,10 @@ class SportScoringStrategy(BaseScoringStrategy):
         # this fix restores the flow. RSS stories (ESPN etc.) still respect
         # the threshold since their fields are populated.
         min_score = self._thresholds.get("min_clip_score", 0.20)
-        above = [
-            c for c in scored
-            if c.get("_trending_video") or c["final_score"] >= min_score
-        ]
+        above = [c for c in scored if c.get("_trending_video") or c["final_score"] >= min_score]
         dropped = len(scored) - len(above)
         trending_bypassed = sum(
-            1 for c in scored
-            if c.get("_trending_video") and c["final_score"] < min_score
+            1 for c in scored if c.get("_trending_video") and c["final_score"] < min_score
         )
 
         top_n = self._thresholds.get("top_clips_per_run", 20)

@@ -77,9 +77,7 @@ class TestRecordSignalsWrites:
         pool = MagicMock()
         pool.connection.return_value.__enter__.return_value = conn
         pool.connection.return_value.__exit__.return_value = False
-        monkeypatch.setattr(
-            "genlab_core.storage.get_pool", lambda: pool, raising=False
-        )
+        monkeypatch.setattr("genlab_core.storage.get_pool", lambda: pool, raising=False)
         return cursor
 
     def test_row_shape_matches_migration_columns(self, monkeypatch):
@@ -126,9 +124,7 @@ class TestRecordSignalsWrites:
         second = rows[1]
         assert second[7] is False
 
-    def test_unparseable_computed_at_drops_row_but_keeps_batch(
-        self, monkeypatch
-    ):
+    def test_unparseable_computed_at_drops_row_but_keeps_batch(self, monkeypatch):
         """A single malformed timestamp shouldn't fail the whole
         batch — the writer drops the row and inserts the rest."""
         monkeypatch.setenv(_ENABLE_ENV_VAR, "1")
@@ -149,9 +145,7 @@ class TestRecordSignalsWrites:
         assert "good_b" in arm_ids
         assert "bad_ts" not in arm_ids
 
-    def test_all_unparseable_returns_zero_without_calling_pool(
-        self, monkeypatch
-    ):
+    def test_all_unparseable_returns_zero_without_calling_pool(self, monkeypatch):
         """If EVERY row drops, we shouldn't touch the DB at all —
         `pool.connection()` context manager is never entered."""
         monkeypatch.setenv(_ENABLE_ENV_VAR, "1")
@@ -162,13 +156,9 @@ class TestRecordSignalsWrites:
         conn.cursor.return_value.__exit__.return_value = False
         pool.connection.return_value.__enter__.return_value = conn
         pool.connection.return_value.__exit__.return_value = False
-        monkeypatch.setattr(
-            "genlab_core.storage.get_pool", lambda: pool, raising=False
-        )
+        monkeypatch.setattr("genlab_core.storage.get_pool", lambda: pool, raising=False)
 
-        n = record_signals(
-            [_mk_signal(computed_at="garbage-1"), _mk_signal(computed_at="")]
-        )
+        n = record_signals([_mk_signal(computed_at="garbage-1"), _mk_signal(computed_at="")])
         assert n == 0
         pool.connection.assert_not_called()
         cursor.executemany.assert_not_called()
@@ -198,9 +188,7 @@ class TestRecordSignalsFailOpen:
         pool = MagicMock()
         pool.connection.return_value.__enter__.return_value = conn
         pool.connection.return_value.__exit__.return_value = False
-        monkeypatch.setattr(
-            "genlab_core.storage.get_pool", lambda: pool, raising=False
-        )
+        monkeypatch.setattr("genlab_core.storage.get_pool", lambda: pool, raising=False)
         assert record_signals([_mk_signal()]) == 0
 
     def test_logs_warning_on_failure(self, monkeypatch, caplog):
@@ -209,15 +197,10 @@ class TestRecordSignalsFailOpen:
         def raising():
             raise RuntimeError("db down")
 
-        monkeypatch.setattr(
-            "genlab_core.storage.get_pool", raising, raising=False
-        )
+        monkeypatch.setattr("genlab_core.storage.get_pool", raising, raising=False)
         with caplog.at_level(logging.WARNING):
             record_signals([_mk_signal()])
-        assert any(
-            "drift_persist" in r.message
-            for r in caplog.records
-        )
+        assert any("drift_persist" in r.message for r in caplog.records)
 
 
 class TestDriftDetectorPersistHook:

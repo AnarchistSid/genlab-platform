@@ -24,8 +24,6 @@ declares the merge point.
 
 from collections.abc import Sequence
 
-from alembic import op
-
 # revision identifiers, used by Alembic.
 revision: str = "b8w9x0y1z2ab"
 down_revision: str | Sequence[str] | None = ("a7v8w9x0y1z2", "y6t7u8v9w0x1")

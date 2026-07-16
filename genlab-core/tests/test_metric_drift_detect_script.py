@@ -91,7 +91,8 @@ class TestScript:
         # This lets the docstring/history comment reference the flag
         # without tripping the pin.
         offending_lines = [
-            line for line in _SCRIPT.read_text().splitlines()
+            line
+            for line in _SCRIPT.read_text().splitlines()
             if "--csv=" in line and not line.lstrip().startswith("#")
         ]
         assert not offending_lines, (

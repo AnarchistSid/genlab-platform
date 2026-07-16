@@ -94,9 +94,7 @@ def main() -> None:
     # unavailable (test env), fail cleanly here rather than during
     # module import (which would break pytest collection).
     if DiskQuotaManager is None:
-        print(
-            f"ERROR: genlab_core not on path. Run with: uv run python scripts/cleanup_runs.py\n{_IMPORT_ERROR}"
-        )
+        print(f"ERROR: genlab_core not on path. Run with: uv run python scripts/cleanup_runs.py\n{_IMPORT_ERROR}")
         sys.exit(1)
 
     config = {

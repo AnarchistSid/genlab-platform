@@ -16,7 +16,6 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
-
 from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
 from genlab_core.learning.transformation_reward_router import (
     compute_dimension_reward,
@@ -168,30 +167,36 @@ class TestComputeDimensionReward:
     def test_metrics_without_platform_falls_back(self) -> None:
         """Legacy callers that pass metrics but no platform get
         scalar. Prevents crash on caller-that-forgot-to-upgrade."""
-        assert compute_dimension_reward(
-            "music_mood", 0.5, metrics={"reach": 100, "likes": 5}
-        ) == 0.5
+        assert (
+            compute_dimension_reward("music_mood", 0.5, metrics={"reach": 100, "likes": 5}) == 0.5
+        )
 
     def test_unknown_dimension_falls_back(self) -> None:
         """A dim not in _DIMENSION_TO_METRIC_FN → scalar fallback."""
-        assert compute_dimension_reward(
-            "some_new_dim_added_later",
-            0.42,
-            metrics={"reach": 100, "avg_watch_time": 15000},
-            platform="instagram",
-        ) == 0.42
+        assert (
+            compute_dimension_reward(
+                "some_new_dim_added_later",
+                0.42,
+                metrics={"reach": 100, "avg_watch_time": 15000},
+                platform="instagram",
+            )
+            == 0.42
+        )
 
     def test_derived_metric_none_falls_back(self) -> None:
         """When raw signals for the derived metric are missing,
         scalar fallback kicks in instead of crashing on None."""
         # music_mood needs hold_15s; hold_15s needs avg_watch_time
         # metrics dict omits it entirely.
-        assert compute_dimension_reward(
-            "music_mood",
-            0.42,
-            metrics={"reach": 100, "likes": 5},
-            platform="instagram",
-        ) == 0.42
+        assert (
+            compute_dimension_reward(
+                "music_mood",
+                0.42,
+                metrics={"reach": 100, "likes": 5},
+                platform="instagram",
+            )
+            == 0.42
+        )
 
     def test_hook_framing_uses_hold_3s(self) -> None:
         """hook_framing → hold_3s. avg 3s Instagram watch → hold_3s=1.0."""
@@ -284,9 +289,7 @@ class TestPendingFeedbackStoreRoundTrip:
             }
         }
         task = PendingFeedbackStore._from_sharepoint_item(item)
-        assert task.arm_ids_by_dimension == {
-            "music_mood": "transform__music_mood__cinematic"
-        }
+        assert task.arm_ids_by_dimension == {"music_mood": "transform__music_mood__cinematic"}
 
     def test_json_string_shape_parses(self) -> None:
         """SharePoint stores JSONB as JSON string — legacy compat."""
@@ -307,9 +310,7 @@ class TestPendingFeedbackStoreRoundTrip:
             }
         }
         task = PendingFeedbackStore._from_sharepoint_item(item)
-        assert task.arm_ids_by_dimension == {
-            "music_mood": "transform__music_mood__cinematic"
-        }
+        assert task.arm_ids_by_dimension == {"music_mood": "transform__music_mood__cinematic"}
 
     def test_missing_column_gives_empty_dict(self) -> None:
         """Pre-sprint publishes have no arm_ids_by_dimension in DB.

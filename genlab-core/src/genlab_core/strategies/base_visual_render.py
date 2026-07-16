@@ -237,6 +237,7 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                 # Extract the @handle if present so caption + watermark
                 # cite the same creator.
                 import re as _re
+
                 m = _re.search(r"@([A-Za-z0-9_.\-]+)", _sa)
                 if m:
                     _source_credit = "@" + m.group(1)
@@ -255,9 +256,7 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                 # blueprint at DRAFTED with NO render_error → recreated
                 # the 2026-05-21 "4 niches stuck since" incident that
                 # comment 313-317 below was written to prevent.
-                story.setdefault("media", {})["render_error"] = (
-                    "compositor_returned_empty"
-                )
+                story.setdefault("media", {})["render_error"] = "compositor_returned_empty"
                 logger.warning(
                     "%s compositor returned empty path for story %s — "
                     "render_error persisted, blueprint stays DRAFTED",

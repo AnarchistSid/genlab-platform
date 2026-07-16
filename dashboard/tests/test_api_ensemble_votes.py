@@ -87,9 +87,7 @@ class TestParameterHandling:
             total_row=(0,),
             reco_rows=[],
         )
-        resp = client.get(
-            "/api/v1/ensemble-votes/summary?niche_id=nonexistent"
-        )
+        resp = client.get("/api/v1/ensemble-votes/summary?niche_id=nonexistent")
         assert resp.status_code == 200
         assert resp.get_json()["data"]["niche_id"] is None
 
@@ -100,9 +98,7 @@ class TestParameterHandling:
             total_row=(0,),
             reco_rows=[],
         )
-        resp = client.get(
-            "/api/v1/ensemble-votes/summary?window_days=not-a-number"
-        )
+        resp = client.get("/api/v1/ensemble-votes/summary?window_days=not-a-number")
         assert resp.get_json()["data"]["window_days"] == 7
 
     def test_window_days_clamped_upper(self, client, monkeypatch):
@@ -112,9 +108,7 @@ class TestParameterHandling:
             total_row=(0,),
             reco_rows=[],
         )
-        resp = client.get(
-            "/api/v1/ensemble-votes/summary?window_days=999"
-        )
+        resp = client.get("/api/v1/ensemble-votes/summary?window_days=999")
         assert resp.get_json()["data"]["window_days"] == 90
 
     def test_window_days_clamped_lower(self, client, monkeypatch):
@@ -124,16 +118,12 @@ class TestParameterHandling:
             total_row=(0,),
             reco_rows=[],
         )
-        resp = client.get(
-            "/api/v1/ensemble-votes/summary?window_days=0"
-        )
+        resp = client.get("/api/v1/ensemble-votes/summary?window_days=0")
         assert resp.get_json()["data"]["window_days"] == 1
 
 
 class TestFailOpen:
-    def test_storage_import_failure_returns_data_null(
-        self, client, monkeypatch
-    ):
+    def test_storage_import_failure_returns_data_null(self, client, monkeypatch):
         """A missing psycopg import shouldn't 500 — the endpoint gets
         polled every 60s by the dashboard, and a full outage would
         cascade."""
@@ -152,33 +142,24 @@ class TestFailOpen:
             resp = client.get("/api/v1/ensemble-votes/summary")
             assert resp.status_code == 200
             assert resp.get_json()["data"] is None
-            assert (
-                "migration"
-                in resp.get_json().get("message", "").lower()
-            )
+            assert "migration" in resp.get_json().get("message", "").lower()
         finally:
             if original_get_pool is not None:
                 monkeypatch.setattr(storage, "get_pool", original_get_pool)
 
-    def test_query_failure_returns_pending_migration_message(
-        self, client, monkeypatch
-    ):
+    def test_query_failure_returns_pending_migration_message(self, client, monkeypatch):
         """When the table doesn't exist yet (migration pending), the
         endpoint MUST return a specific 'migration pending' message so
         the frontend can distinguish this from 'no data yet'."""
         cursor = MagicMock()
-        cursor.execute.side_effect = RuntimeError(
-            'relation "ensemble_votes" does not exist'
-        )
+        cursor.execute.side_effect = RuntimeError('relation "ensemble_votes" does not exist')
         conn = MagicMock()
         conn.cursor.return_value.__enter__.return_value = cursor
         conn.cursor.return_value.__exit__.return_value = False
         pool = MagicMock()
         pool.connection.return_value.__enter__.return_value = conn
         pool.connection.return_value.__exit__.return_value = False
-        monkeypatch.setattr(
-            "genlab_core.storage.get_pool", lambda: pool, raising=False
-        )
+        monkeypatch.setattr("genlab_core.storage.get_pool", lambda: pool, raising=False)
 
         resp = client.get("/api/v1/ensemble-votes/summary")
         assert resp.status_code == 200
@@ -215,9 +196,7 @@ class TestHappyPath:
             total_row=total_row,
             reco_rows=reco_rows,
         )
-        resp = client.get(
-            "/api/v1/ensemble-votes/summary?niche_id=gaming&window_days=7"
-        )
+        resp = client.get("/api/v1/ensemble-votes/summary?niche_id=gaming&window_days=7")
         assert resp.status_code == 200
         data = resp.get_json()["data"]
         assert data["total_decisions"] == 143
@@ -232,9 +211,7 @@ class TestHappyPath:
         assert bandit["mean_score"] == pytest.approx(0.52)
 
         # Hook classifier never abstained → vote_rate exactly 1.0
-        hook = next(
-            c for c in data["components"] if c["component"] == "hook_classifier"
-        )
+        hook = next(c for c in data["components"] if c["component"] == "hook_classifier")
         assert hook["vote_rate"] == pytest.approx(1.0)
         assert hook["abstained"] == 0
 
@@ -254,9 +231,7 @@ class TestHappyPath:
         )
         resp = client.get("/api/v1/ensemble-votes/summary")
         judge = next(
-            c
-            for c in resp.get_json()["data"]["components"]
-            if c["component"] == "llm_judge"
+            c for c in resp.get_json()["data"]["components"] if c["component"] == "llm_judge"
         )
         assert judge["mean_score"] is None
         assert judge["mean_disagreement_when_voting"] is None
@@ -265,26 +240,18 @@ class TestHappyPath:
 
 class TestFlagEnabled:
     def test_flag_enabled_true_when_one(self, client, monkeypatch):
-        _install_pool(
-            monkeypatch, comp_rows=[], total_row=(0,), reco_rows=[]
-        )
+        _install_pool(monkeypatch, comp_rows=[], total_row=(0,), reco_rows=[])
         monkeypatch.setenv("GENLAB_ENSEMBLE_PERSIST_ENABLED", "1")
         assert (
-            client.get("/api/v1/ensemble-votes/summary")
-            .get_json()["data"]["flag_enabled"]
-            is True
+            client.get("/api/v1/ensemble-votes/summary").get_json()["data"]["flag_enabled"] is True
         )
 
     def test_flag_enabled_false_when_typo(self, client, monkeypatch):
         """Strict "1" match — "true" is NOT enabled. Locks in the
         sibling flag-state semantic so a well-meaning loosening
         surfaces as a test failure."""
-        _install_pool(
-            monkeypatch, comp_rows=[], total_row=(0,), reco_rows=[]
-        )
+        _install_pool(monkeypatch, comp_rows=[], total_row=(0,), reco_rows=[])
         monkeypatch.setenv("GENLAB_ENSEMBLE_PERSIST_ENABLED", "true")
         assert (
-            client.get("/api/v1/ensemble-votes/summary")
-            .get_json()["data"]["flag_enabled"]
-            is False
+            client.get("/api/v1/ensemble-votes/summary").get_json()["data"]["flag_enabled"] is False
         )

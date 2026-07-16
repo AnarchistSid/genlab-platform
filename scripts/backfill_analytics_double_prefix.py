@@ -104,8 +104,9 @@ def _find_double_prefix_rows(conn) -> list[dict]:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--commit", action="store_true",
-                        help="Apply UPDATE/DELETE. Default is dry-run.")
+    parser.add_argument(
+        "--commit", action="store_true", help="Apply UPDATE/DELETE. Default is dry-run."
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -151,7 +152,9 @@ def main():
             updated += 1
 
         conn.commit()
-        logger.info("Applied: %d DELETE + %d UPDATE = %d total", deleted, updated, deleted + updated)
+        logger.info(
+            "Applied: %d DELETE + %d UPDATE = %d total", deleted, updated, deleted + updated
+        )
 
         # Verify — should return 0 rows now
         remaining = _find_double_prefix_rows(conn)

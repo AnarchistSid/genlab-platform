@@ -47,8 +47,9 @@ def test_coerce_uuid_derives_uuid5_from_non_uuid():
     genlab namespace. Empty inputs still return None. Prior
     behavior returned None for everything non-UUID, causing
     post_decision_trace to stay at 0 rows for months."""
-    from genlab_core.learning.post_decision_trace import _coerce_uuid
     import uuid
+
+    from genlab_core.learning.post_decision_trace import _coerce_uuid
 
     # SharePoint-style id → derived UUID (was None pre-fix)
     result = _coerce_uuid("sp-1234-5678")
@@ -112,9 +113,7 @@ def test_record_bandit_pick_accepts_non_uuid_via_uuid5(monkeypatch):
     conn = _patch_conn()
     from genlab_core.learning.post_decision_trace import record_bandit_pick
 
-    with patch(
-        "genlab_core.learning.post_decision_trace._connect", return_value=conn
-    ):
+    with patch("genlab_core.learning.post_decision_trace._connect", return_value=conn):
         ok = record_bandit_pick(
             blueprint_id="sp-1234-5678",  # not a UUID; now converted via uuid5
             niche_id="gaming",
@@ -283,9 +282,7 @@ def test_record_engagement_window_accepts_non_uuid_via_uuid5(monkeypatch):
     conn = _patch_conn()
     from genlab_core.learning.post_decision_trace import record_engagement_window
 
-    with patch(
-        "genlab_core.learning.post_decision_trace._connect", return_value=conn
-    ):
+    with patch("genlab_core.learning.post_decision_trace._connect", return_value=conn):
         ok = record_engagement_window(
             blueprint_id="not-a-uuid",
             niche_id="gaming",

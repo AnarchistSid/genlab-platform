@@ -19,7 +19,6 @@ import random
 from unittest.mock import MagicMock
 
 import pytest
-
 from genlab_core.media.intelligent_transform import (
     IntelligentTransformConfig,
 )
@@ -83,9 +82,7 @@ class TestGateFlags:
     def test_config_disabled_returns_empty(self, monkeypatch) -> None:
         monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
         cfg = IntelligentTransformConfig.from_visuals_dict({})  # enabled=False
-        proxy = _proxy_returning_arms(
-            {"transform__music_mood__cinematic": (2.0, 1.0)}
-        )
+        proxy = _proxy_returning_arms({"transform__music_mood__cinematic": (2.0, 1.0)})
         result = select_transformation_dimensions("gaming", cfg, proxy=proxy)
         assert result.is_empty()
         # Proxy must NOT have been queried when config gate blocks.
@@ -94,48 +91,32 @@ class TestGateFlags:
     def test_env_flag_off_returns_empty(self, monkeypatch) -> None:
         monkeypatch.delenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", raising=False)
         cfg = _make_enabled_config(music_moods=["cinematic"])
-        proxy = _proxy_returning_arms(
-            {"transform__music_mood__cinematic": (2.0, 1.0)}
-        )
+        proxy = _proxy_returning_arms({"transform__music_mood__cinematic": (2.0, 1.0)})
         result = select_transformation_dimensions("gaming", cfg, proxy=proxy)
         assert result.is_empty()
         proxy.all.assert_not_called()
 
     def test_env_flag_case_insensitive(self, monkeypatch) -> None:
         for value in ("1", "true", "TRUE", "yes", "on", "  YES  "):
-            monkeypatch.setenv(
-                "GENLAB_INTELLIGENT_TRANSFORM_ENABLED", value
-            )
+            monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", value)
             cfg = _make_enabled_config(music_moods=["cinematic"])
-            proxy = _proxy_returning_arms(
-                {"transform__music_mood__cinematic": (5.0, 1.0)}
-            )
+            proxy = _proxy_returning_arms({"transform__music_mood__cinematic": (5.0, 1.0)})
             result = select_transformation_dimensions(
                 "gaming", cfg, proxy=proxy, rng=random.Random(0)
             )
-            assert not result.is_empty(), (
-                f"Env value {value!r} should enable selection"
-            )
+            assert not result.is_empty(), f"Env value {value!r} should enable selection"
 
     def test_env_flag_off_values(self, monkeypatch) -> None:
         for value in ("0", "false", "no", "off", ""):
             monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", value)
             cfg = _make_enabled_config(music_moods=["cinematic"])
-            proxy = _proxy_returning_arms(
-                {"transform__music_mood__cinematic": (5.0, 1.0)}
-            )
-            result = select_transformation_dimensions(
-                "gaming", cfg, proxy=proxy
-            )
-            assert result.is_empty(), (
-                f"Env value {value!r} should disable selection"
-            )
+            proxy = _proxy_returning_arms({"transform__music_mood__cinematic": (5.0, 1.0)})
+            result = select_transformation_dimensions("gaming", cfg, proxy=proxy)
+            assert result.is_empty(), f"Env value {value!r} should disable selection"
 
 
 class TestSelectionCore:
-    def test_returns_one_choice_per_enabled_dimension(
-        self, monkeypatch
-    ) -> None:
+    def test_returns_one_choice_per_enabled_dimension(self, monkeypatch) -> None:
         monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
         cfg = _make_enabled_config(
             music_moods=["cinematic", "hype"],
@@ -148,9 +129,7 @@ class TestSelectionCore:
                 "transform__caption_style__word_by_word": (3.0, 1.0),
             }
         )
-        result = select_transformation_dimensions(
-            "gaming", cfg, proxy=proxy, rng=random.Random(42)
-        )
+        result = select_transformation_dimensions("gaming", cfg, proxy=proxy, rng=random.Random(42))
         assert set(result.choices.keys()) == {"music_mood", "caption_style"}
         for dim, choice in result.choices.items():
             assert choice.dimension == dim
@@ -174,9 +153,7 @@ class TestSelectionCore:
                 "transform__caption_style__word_by_word": (3.0, 1.0),
             }
         )
-        result = select_transformation_dimensions(
-            "gaming", cfg, proxy=proxy, rng=random.Random(0)
-        )
+        result = select_transformation_dimensions("gaming", cfg, proxy=proxy, rng=random.Random(0))
         assert "music_mood" not in result.choices
         assert "caption_style" in result.choices
 
@@ -195,9 +172,7 @@ class TestConfigDriftFilter:
         )
         # Use seeded RNG so exploration doesn't randomly pick the
         # legacy arm — force exploitation path.
-        result = select_transformation_dimensions(
-            "gaming", cfg, proxy=proxy, rng=random.Random(1)
-        )
+        result = select_transformation_dimensions("gaming", cfg, proxy=proxy, rng=random.Random(1))
         assert "music_mood" in result.choices
         # Even though legacy_mood has α=100 (much higher), config-drift
         # filter excludes it. Only cinematic can win.
@@ -213,7 +188,6 @@ class TestExplorationVsExploitation:
             ("transform__music_mood__a", "a", 10.0, 1.0),
             ("transform__music_mood__b", "b", 1.0, 10.0),
         ]
-        rng = random.Random(0)
         # Verify the first random() > EPSILON on this seed
         # (implementation-detail check — just ensuring test setup is real)
         r = random.Random(0)
@@ -222,9 +196,7 @@ class TestExplorationVsExploitation:
         # Run 100 times and expect majority a.
         wins_a = 0
         for _ in range(100):
-            choice = _pick_arm(
-                "music_mood", candidates, rng=random.Random(_ * 7 + 1)
-            )
+            choice = _pick_arm("music_mood", candidates, rng=random.Random(_ * 7 + 1))
             if choice.dimension_value == "a":
                 wins_a += 1
         # Expect a to win at least 70/100 (strong Thompson signal).
@@ -259,14 +231,9 @@ class TestExplorationVsExploitation:
 
 class TestPropensityBounds:
     def test_propensity_in_unit_interval(self) -> None:
-        candidates = [
-            (f"transform__music_mood__{i}", str(i), 1.0 + i, 1.0)
-            for i in range(5)
-        ]
+        candidates = [(f"transform__music_mood__{i}", str(i), 1.0 + i, 1.0) for i in range(5)]
         for seed in range(20):
-            choice = _pick_arm(
-                "music_mood", candidates, rng=random.Random(seed)
-            )
+            choice = _pick_arm("music_mood", candidates, rng=random.Random(seed))
             assert 0.0 <= choice.propensity <= 1.0
 
     def test_propensity_nonzero(self) -> None:
@@ -276,9 +243,7 @@ class TestPropensityBounds:
             ("transform__music_mood__a", "a", 1.0, 1.0),
         ]
         for seed in range(20):
-            choice = _pick_arm(
-                "music_mood", candidates, rng=random.Random(seed)
-            )
+            choice = _pick_arm("music_mood", candidates, rng=random.Random(seed))
             assert choice.propensity > 0.0
 
 
@@ -343,9 +308,7 @@ class TestMalformedArmsIgnored:
             }
         )
         # Should not crash; should still pick cinematic.
-        result = select_transformation_dimensions(
-            "gaming", cfg, proxy=proxy, rng=random.Random(0)
-        )
+        result = select_transformation_dimensions("gaming", cfg, proxy=proxy, rng=random.Random(0))
         assert result.choices["music_mood"].dimension_value == "cinematic"
 
 

@@ -178,9 +178,7 @@ def main() -> int:
         return 3
 
     print(f"Seeding from {args.manifest.name} into {args.project_root}\n")
-    downloaded, skipped, failed = seed(
-        manifest, args.project_root, dry_run=args.dry_run
-    )
+    downloaded, skipped, failed = seed(manifest, args.project_root, dry_run=args.dry_run)
 
     print()
     print("==== SEED SUMMARY ====")

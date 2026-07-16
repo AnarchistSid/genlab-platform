@@ -175,10 +175,7 @@ class QCGates:
                     # Other issues (length, word count, banned phrases)
                     # keep the score-penalty behavior — they might
                     # recover or be operator-fixable.
-                    if any(
-                        "Missing required field: caption/body" in str(i)
-                        for i in issues
-                    ):
+                    if any("Missing required field: caption/body" in str(i) for i in issues):
                         bp["_skip_llm"] = True
                         logger.warning(
                             "[QCGates] hard-skip %s: empty caption/body "

@@ -138,9 +138,7 @@ class TestKeywordListIntegrity:
     def test_no_arm_id_duplicated_within_niche(self):
         for niche_id, arms in _ARM_KEYWORDS.items():
             arm_ids = [arm_id for arm_id, _ in arms]
-            assert len(arm_ids) == len(set(arm_ids)), (
-                f"{niche_id} has duplicate arm_id: {arm_ids}"
-            )
+            assert len(arm_ids) == len(set(arm_ids)), f"{niche_id} has duplicate arm_id: {arm_ids}"
 
     def test_keywords_are_lowercase(self):
         """classify() uses .lower() on text, so keywords must be lowercase

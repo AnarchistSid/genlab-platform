@@ -362,9 +362,7 @@ class AnalyticsStore:
                         raise
                 return existing[0]["id"]
             try:
-                record = be.create(
-                    "Analytics", fields, typecast=True, niche_id=niche_id or None
-                )
+                record = be.create("Analytics", fields, typecast=True, niche_id=niche_id or None)
             except Exception as e:
                 if "UNKNOWN_FIELD_NAME" in str(e) or "columnNotFound" in str(e):
                     for f_name in _ANALYTICS_OPTIONAL_FIELDS:

@@ -68,9 +68,7 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
                                 _qc.reason,
                                 _qc.detail,
                             )
-                            story.setdefault("media", {})["render_error"] = (
-                                f"pre_render_quality:{_qc.reason}"
-                            )
+                            story.setdefault("media", {})["render_error"] = f"pre_render_quality:{_qc.reason}"
                             story["media"]["render_status"] = "quality_gate_rejected"
                             continue
 

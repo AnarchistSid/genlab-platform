@@ -15,7 +15,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-
 from genlab_core.monitoring.twitter_quota import (
     FREE_TIER_MONTHLY_CAP,
     PUBLISH_LIMIT,
@@ -87,9 +86,7 @@ class TestMonthRollover:
     def test_rollover_resets_counter(self, tracker, tmp_path):
         # Write a state file with last month
         state_file = tmp_path / "twitter_quota.json"
-        state_file.write_text(
-            json.dumps({"month": "2025-01", "used": 400})
-        )
+        state_file.write_text(json.dumps({"month": "2025-01", "used": 400}))
         # Reading now should detect rollover and reset
         state = tracker.current_state()
         current_month = datetime.now(UTC).strftime("%Y-%m")

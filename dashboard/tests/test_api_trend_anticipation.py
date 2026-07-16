@@ -146,14 +146,10 @@ class TestGetAccuracy:
         assert data["n_topics"] == 8
 
     def test_data_null_when_no_measurement(self, client):
-        resp = client.get(
-            "/api/v1/trend-anticipation/accuracy?niche_id=movies"
-        )
+        resp = client.get("/api/v1/trend-anticipation/accuracy?niche_id=movies")
         assert resp.status_code == 200
         assert resp.get_json()["data"] is None
 
     def test_400_on_invalid_niche(self, client):
-        resp = client.get(
-            "/api/v1/trend-anticipation/accuracy?niche_id=notaniche"
-        )
+        resp = client.get("/api/v1/trend-anticipation/accuracy?niche_id=notaniche")
         assert resp.status_code == 400

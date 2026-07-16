@@ -88,9 +88,7 @@ def _walk_alert_severity_kwargs(tree: ast.AST):
         for kw in node.keywords:
             if kw.arg != "severity":
                 continue
-            if isinstance(kw.value, ast.Constant) and isinstance(
-                kw.value.value, str
-            ):
+            if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
                 yield kw.value.value, kw.value.lineno
             else:
                 # Non-literal — yield None + the lineno so the test

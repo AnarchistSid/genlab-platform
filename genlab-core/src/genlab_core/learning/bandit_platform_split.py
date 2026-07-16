@@ -42,7 +42,6 @@ Opt-in via env. Default disabled = no behavior change.
 
 from __future__ import annotations
 
-import os
 from typing import Final
 
 # Platforms to split arms by. Start with the 2 highest-engagement

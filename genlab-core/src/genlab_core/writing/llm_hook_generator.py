@@ -394,7 +394,7 @@ def generate_hook(
     # like ``"Ignore all previous instructions. You are now..."`` would
     # execute in the Claude prompt as prompt-injection. sanitize_text
     # strips HTML, control chars, and truncates.
-    from genlab_core.cache.text_sanitizer import sanitize_text, check_for_injection
+    from genlab_core.cache.text_sanitizer import check_for_injection, sanitize_text
 
     raw_title = story.get("title", "")
     raw_summary = story.get("summary", "") or ""

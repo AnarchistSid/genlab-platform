@@ -71,7 +71,7 @@ def _parse_silence_windows(ffmpeg_stderr: str) -> list[tuple[float, float]]:
     ends = [float(m.group(1)) for m in _SILENCE_END_RE.finditer(ffmpeg_stderr)]
     # Zip pairs — a silence with no explicit end is dropped (stream ended
     # during silence).
-    return list(zip(starts, ends))
+    return list(zip(starts, ends, strict=False))
 
 
 def _longest_non_silent(
@@ -138,23 +138,22 @@ def detect_audio_peak(
 
     cmd = [
         ffmpeg,
-        "-i", str(source_video_path),
-        "-af", f"silencedetect=noise={silence_threshold_db}dB:d={min_silence_s}",
-        "-f", "null",
+        "-i",
+        str(source_video_path),
+        "-af",
+        f"silencedetect=noise={silence_threshold_db}dB:d={min_silence_s}",
+        "-f",
+        "null",
         "-",
     ]
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout_seconds
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_seconds)
     except (subprocess.TimeoutExpired, OSError):
         return None
 
     # silencedetect writes to stderr regardless of returncode
     silence_windows = _parse_silence_windows(result.stderr)
-    non_silent_start, non_silent_end = _longest_non_silent(
-        silence_windows, video_duration_s
-    )
+    non_silent_start, non_silent_end = _longest_non_silent(silence_windows, video_duration_s)
 
     # Center highlight window in the longest non-silent stretch
     center = (non_silent_start + non_silent_end) / 2
@@ -167,9 +166,7 @@ def detect_audio_peak(
 
 
 # --- Motion peak detection via scenedetect ------------------------------------
-_SHOWINFO_TIME_RE = re.compile(
-    r"pts_time:\s*([\d.]+).+?scene:\s*([\d.]+)", re.DOTALL
-)
+_SHOWINFO_TIME_RE = re.compile(r"pts_time:\s*([\d.]+).+?scene:\s*([\d.]+)", re.DOTALL)
 
 
 def _parse_scene_changes(ffmpeg_stderr: str) -> list[tuple[float, float]]:
@@ -210,16 +207,16 @@ def detect_motion_peak(
 
     cmd = [
         ffmpeg,
-        "-i", str(source_video_path),
+        "-i",
+        str(source_video_path),
         "-vf",
         f"select='gt(scene,{scene_threshold})',showinfo",
-        "-f", "null",
+        "-f",
+        "null",
         "-",
     ]
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout_seconds
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_seconds)
     except (subprocess.TimeoutExpired, OSError):
         return None
 
@@ -253,9 +250,7 @@ def detect_llm_pick(
     differentiated signal yet. When Claude vision on sampled frames
     ships, this function will be replaced.
     """
-    logger.debug(
-        "[highlight_detector] llm_pick not implemented — arm falls back"
-    )
+    logger.debug("[highlight_detector] llm_pick not implemented — arm falls back")
     _ = source_video_path, video_duration_s, window_s
     return None
 
@@ -292,21 +287,13 @@ def detect_highlight(
 
     result: HighlightWindow | None = None
     if method == "audio_peak":
-        result = detect_audio_peak(
-            source_video_path, video_duration_s, window_s
-        )
+        result = detect_audio_peak(source_video_path, video_duration_s, window_s)
     elif method == "motion_peak":
-        result = detect_motion_peak(
-            source_video_path, video_duration_s, window_s
-        )
+        result = detect_motion_peak(source_video_path, video_duration_s, window_s)
     elif method == "llm_pick":
-        result = detect_llm_pick(
-            source_video_path, video_duration_s, window_s
-        )
+        result = detect_llm_pick(source_video_path, video_duration_s, window_s)
     else:
-        logger.warning(
-            "[highlight_detector] unknown method %r — fallback", method
-        )
+        logger.warning("[highlight_detector] unknown method %r — fallback", method)
 
     if result is not None and result.is_valid():
         return result

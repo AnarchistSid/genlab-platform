@@ -88,9 +88,7 @@ class TestSQLColumnIntegrity:
         assert "p.platform = pa.platform" in src, (
             "pending_feedback join must include ``p.platform = pa.platform``."
         )
-        assert "p.post_id" in src, (
-            "pending_feedback join must include a ``p.post_id`` predicate."
-        )
+        assert "p.post_id" in src, "pending_feedback join must include a ``p.post_id`` predicate."
 
 
 class TestFeatureFlag:

@@ -29,7 +29,6 @@ Failure modes (all fail-OPEN — re-ranking is augmentation only):
 from __future__ import annotations
 
 import logging
-import os
 import re
 from typing import Any
 
@@ -116,8 +115,12 @@ def _build_prompt(candidates: list[Any], niche_id: str, top_k: int) -> tuple[str
             sanitize_text,
         )
     except Exception:  # noqa: BLE001 — never break the ranker on sanitize import
-        check_for_injection = lambda _text: []  # type: ignore[assignment]
-        sanitize_text = lambda text, max_length=0: text  # type: ignore[assignment]
+
+        def check_for_injection(_text):  # type: ignore[assignment]
+            return []
+
+        def sanitize_text(text, max_length=0):  # type: ignore[assignment]
+            return text
 
     lines = []
     for i, v in enumerate(candidates):

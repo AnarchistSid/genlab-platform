@@ -74,9 +74,7 @@ class TestGetLatest:
             ],
         }
         _write_artifact(tmp_path, "replay-20260701-043000-gaming.json", payload)
-        resp = client.get(
-            "/api/v1/counterfactual-replay/latest?niche_id=gaming"
-        )
+        resp = client.get("/api/v1/counterfactual-replay/latest?niche_id=gaming")
         assert resp.status_code == 200
         data = resp.get_json()["data"]
         assert data is not None
@@ -101,9 +99,7 @@ class TestGetLatest:
         os.utime(p_old, (time.time() - 3600, time.time() - 3600))
         os.utime(p_new, (time.time(), time.time()))
 
-        resp = client.get(
-            "/api/v1/counterfactual-replay/latest?niche_id=gaming"
-        )
+        resp = client.get("/api/v1/counterfactual-replay/latest?niche_id=gaming")
         data = resp.get_json()["data"]
         assert data["n_decisions_total"] == 99
 
@@ -117,30 +113,22 @@ class TestGetLatest:
             {"niche": "all", "n_decisions_total": 500},
         )
         # No gaming-specific artifact
-        resp = client.get(
-            "/api/v1/counterfactual-replay/latest?niche_id=gaming"
-        )
+        resp = client.get("/api/v1/counterfactual-replay/latest?niche_id=gaming")
         assert resp.get_json()["data"] is None
 
     def test_data_null_when_no_artifact(self, client):
-        resp = client.get(
-            "/api/v1/counterfactual-replay/latest?niche_id=movies"
-        )
+        resp = client.get("/api/v1/counterfactual-replay/latest?niche_id=movies")
         assert resp.status_code == 200
         assert resp.get_json()["data"] is None
 
     def test_400_on_invalid_niche(self, client):
-        resp = client.get(
-            "/api/v1/counterfactual-replay/latest?niche_id=notaniche"
-        )
+        resp = client.get("/api/v1/counterfactual-replay/latest?niche_id=notaniche")
         assert resp.status_code == 400
 
     def test_malformed_json_returns_null_not_500(self, client, tmp_path):
         dest = tmp_path / "counterfactual-replay"
         dest.mkdir(parents=True, exist_ok=True)
         (dest / "replay-20260701-043000-gaming.json").write_text("{corrupt")
-        resp = client.get(
-            "/api/v1/counterfactual-replay/latest?niche_id=gaming"
-        )
+        resp = client.get("/api/v1/counterfactual-replay/latest?niche_id=gaming")
         assert resp.status_code == 200
         assert resp.get_json()["data"] is None

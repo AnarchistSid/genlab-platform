@@ -42,7 +42,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from genlab_core.writing.caption_segments import CaptionSegment
@@ -95,17 +95,10 @@ def _resolve_font() -> str:
 
 def _escape_drawtext(text: str) -> str:
     """Escape single quotes + colon + backslash for FFmpeg drawtext."""
-    return (
-        text.replace("\\", "\\\\")
-        .replace("'", "\\'")
-        .replace(":", "\\:")
-        .replace(",", "\\,")
-    )
+    return text.replace("\\", "\\\\").replace("'", "\\'").replace(":", "\\:").replace(",", "\\,")
 
 
-def _emphasis_color_for(
-    emphasis_arm: str, style: str
-) -> str:
+def _emphasis_color_for(emphasis_arm: str, style: str) -> str:
     """Which color to render emphasis words in.
 
     Hormozi style always yellow (its whole identity). Other styles
@@ -120,9 +113,7 @@ def _fontsize_for(style: str) -> int:
     return _MEME_FONTSIZE if style == "meme" else _DEFAULT_FONTSIZE
 
 
-def _segment_time_ranges(
-    n_segments: int, video_duration_s: float
-) -> list[tuple[float, float]]:
+def _segment_time_ranges(n_segments: int, video_duration_s: float) -> list[tuple[float, float]]:
     """Divide the video duration into equal-length segments.
 
     A 20s video with 3 segments gets ranges [(0, 6.67), (6.67, 13.33),
@@ -134,9 +125,7 @@ def _segment_time_ranges(
     return [(i * span, (i + 1) * span) for i in range(n_segments)]
 
 
-def _word_is_emphasis(
-    word: str, emphasis_words: list[str]
-) -> bool:
+def _word_is_emphasis(word: str, emphasis_words: list[str]) -> bool:
     """Case-insensitive + punctuation-tolerant emphasis match."""
     core = word.lower().strip(",.!?;:")
     for e in emphasis_words:
@@ -182,26 +171,22 @@ def build_caption_filter_chain(
     """
     if not segments or video_duration_s <= 0:
         return ""
-    if style not in {
-        "word_by_word", "hormozi_yellow", "karaoke", "minimal", "meme"
-    }:
-        logger.warning(
-            "[caption_animator] unknown style %r — skipping", style
-        )
+    if style not in {"word_by_word", "hormozi_yellow", "karaoke", "minimal", "meme"}:
+        logger.warning("[caption_animator] unknown style %r — skipping", style)
         return ""
 
     fontsize = _fontsize_for(style)
     emphasis_hex = _emphasis_color_for(emphasis_color, style)
     # y position: lower third but above the Instagram username strip.
     # Using ``h*0.72`` keeps consistent placement across dimensions.
-    y_expr = f"h*0.72"
+    y_expr = "h*0.72"
 
     time_ranges = _segment_time_ranges(len(segments), video_duration_s)
     filters: list[str] = []
 
     pacing_s = max(0.1, pacing_ms / 1000.0)
 
-    for seg, (seg_start, seg_end) in zip(segments, time_ranges):
+    for seg, (seg_start, seg_end) in zip(segments, time_ranges, strict=False):
         words = seg.text.split()
         if not words:
             continue
@@ -234,15 +219,16 @@ def build_caption_filter_chain(
                 word_end = seg_end
             word_end = min(word_end, seg_end)
 
-            color = (
-                emphasis_hex
-                if _word_is_emphasis(word, seg.emphasis_words)
-                else "white"
-            )
+            color = emphasis_hex if _word_is_emphasis(word, seg.emphasis_words) else "white"
             filters.append(
                 _drawtext_for_word(
-                    word, word_start, word_end, y_expr,
-                    fontsize, color, font_path,
+                    word,
+                    word_start,
+                    word_end,
+                    y_expr,
+                    fontsize,
+                    color,
+                    font_path,
                 )
             )
 
@@ -259,16 +245,26 @@ def build_ffmpeg_command(
     return [
         ffmpeg_binary,
         "-y",
-        "-i", str(spec.source_video_path),
-        "-vf", filter_str,
-        "-colorspace", "bt709",
-        "-color_primaries", "bt709",
-        "-color_trc", "bt709",
-        "-pix_fmt", "yuv420p",
-        "-c:v", "libx264",
-        "-preset", spec.preset,
-        "-crf", str(spec.crf),
-        "-c:a", "copy",  # audio unchanged
+        "-i",
+        str(spec.source_video_path),
+        "-vf",
+        filter_str,
+        "-colorspace",
+        "bt709",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:v",
+        "libx264",
+        "-preset",
+        spec.preset,
+        "-crf",
+        str(spec.crf),
+        "-c:a",
+        "copy",  # audio unchanged
         str(spec.output_path),
     ]
 
@@ -299,7 +295,9 @@ def apply_captions(
         logger.debug(
             "[caption_animator] empty filter chain — skipping "
             "(style=%s segments=%d duration=%.1fs)",
-            spec.style, len(spec.segments), spec.video_duration_s,
+            spec.style,
+            len(spec.segments),
+            spec.video_duration_s,
         )
         return False
 
@@ -321,7 +319,9 @@ def apply_captions(
     cmd = build_ffmpeg_command(spec, ffmpeg, filter_str)
     logger.info(
         "[caption_animator] applying %d segments (style=%s) -> %s",
-        len(spec.segments), spec.style, spec.output_path,
+        len(spec.segments),
+        spec.style,
+        spec.output_path,
     )
 
     try:
@@ -334,20 +334,21 @@ def apply_captions(
     except subprocess.TimeoutExpired:
         logger.warning(
             "[caption_animator] ffmpeg timed out after %ds: %s",
-            timeout_seconds, spec.output_path,
+            timeout_seconds,
+            spec.output_path,
         )
         return False
     except (OSError, FileNotFoundError) as exc:
-        logger.warning(
-            "[caption_animator] ffmpeg subprocess failed: %s", exc
-        )
+        logger.warning("[caption_animator] ffmpeg subprocess failed: %s", exc)
         return False
 
     if result.returncode != 0:
         stderr_tail = "\n".join(result.stderr.strip().splitlines()[-5:])
         logger.warning(
             "[caption_animator] ffmpeg exit=%d for %s. Last stderr:\n%s",
-            result.returncode, spec.output_path, stderr_tail,
+            result.returncode,
+            spec.output_path,
+            stderr_tail,
         )
         return False
 

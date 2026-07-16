@@ -23,9 +23,7 @@ import configparser
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SERVICE_FILE = (
-    REPO_ROOT / "deploy" / "systemd-phase2" / "genlab-publisher.service"
-)
+SERVICE_FILE = REPO_ROOT / "deploy" / "systemd-phase2" / "genlab-publisher.service"
 
 
 def _read_unit(path: Path) -> configparser.ConfigParser:

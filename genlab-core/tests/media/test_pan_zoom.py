@@ -19,7 +19,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.media.pan_zoom import (
     NO_FILTER,
     PanZoomSpec,
@@ -101,9 +100,7 @@ class TestBuildFFmpegCommand:
         cmd = build_ffmpeg_command(spec, "/usr/bin/ffmpeg", "somefilter")
         for flag in ("-colorspace", "-color_primaries", "-color_trc"):
             idx = cmd.index(flag)
-            assert cmd[idx + 1] == "bt709", (
-                f"{flag} must be bt709, got {cmd[idx + 1]}"
-            )
+            assert cmd[idx + 1] == "bt709", f"{flag} must be bt709, got {cmd[idx + 1]}"
 
     def test_libx264_crf20_preset_fast(self, tmp_path: Path) -> None:
         spec = self._spec(tmp_path)
@@ -143,24 +140,18 @@ class TestApplyPanZoom:
         """no_motion is a valid arm — caller uses source unchanged.
         We return False to signal that."""
         source, out = paths
-        spec = PanZoomSpec(
-            source_video_path=source, output_path=out, pattern="no_motion"
-        )
+        spec = PanZoomSpec(source_video_path=source, output_path=out, pattern="no_motion")
         assert apply_pan_zoom(spec) is False
 
     def test_jump_cut_returns_false(self, tmp_path: Path, paths) -> None:
         """jump_cut isn't implemented → NO_FILTER → False."""
         source, out = paths
-        spec = PanZoomSpec(
-            source_video_path=source, output_path=out, pattern="jump_cut"
-        )
+        spec = PanZoomSpec(source_video_path=source, output_path=out, pattern="jump_cut")
         assert apply_pan_zoom(spec) is False
 
     def test_unknown_pattern_returns_false(self, tmp_path: Path, paths) -> None:
         source, out = paths
-        spec = PanZoomSpec(
-            source_video_path=source, output_path=out, pattern="mystery"
-        )
+        spec = PanZoomSpec(source_video_path=source, output_path=out, pattern="mystery")
         assert apply_pan_zoom(spec) is False
 
     def test_missing_source_returns_false(self, tmp_path: Path) -> None:
@@ -173,22 +164,16 @@ class TestApplyPanZoom:
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_success_path(
-        self, mock_binary, mock_run, tmp_path: Path, paths
-    ) -> None:
+    def test_success_path(self, mock_binary, mock_run, tmp_path: Path, paths) -> None:
         source, out = paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
 
         def _fake_run(*args, **kwargs):
             out.write_bytes(b"o" * 2048)
-            return subprocess.CompletedProcess(
-                args=args[0], returncode=0, stdout="", stderr=""
-            )
+            return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
 
         mock_run.side_effect = _fake_run
-        spec = PanZoomSpec(
-            source_video_path=source, output_path=out, pattern="ken_burns_slow"
-        )
+        spec = PanZoomSpec(source_video_path=source, output_path=out, pattern="ken_burns_slow")
         assert apply_pan_zoom(spec) is True
 
     @patch("subprocess.run")
@@ -199,9 +184,7 @@ class TestApplyPanZoom:
         """Short-circuit: no_motion pattern must NOT invoke subprocess."""
         source, out = paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
-        spec = PanZoomSpec(
-            source_video_path=source, output_path=out, pattern="no_motion"
-        )
+        spec = PanZoomSpec(source_video_path=source, output_path=out, pattern="no_motion")
         apply_pan_zoom(spec)
         mock_run.assert_not_called()
         # Binary lookup also skipped when filter is NO_FILTER — cheaper.
@@ -209,65 +192,45 @@ class TestApplyPanZoom:
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_timeout_returns_false(
-        self, mock_binary, mock_run, tmp_path: Path, paths
-    ) -> None:
+    def test_timeout_returns_false(self, mock_binary, mock_run, tmp_path: Path, paths) -> None:
         source, out = paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
-        mock_run.side_effect = subprocess.TimeoutExpired(
-            cmd=["ffmpeg"], timeout=300
-        )
-        spec = PanZoomSpec(
-            source_video_path=source, output_path=out, pattern="ken_burns_slow"
-        )
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=300)
+        spec = PanZoomSpec(source_video_path=source, output_path=out, pattern="ken_burns_slow")
         assert apply_pan_zoom(spec, timeout_seconds=1) is False
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_nonzero_exit(
-        self, mock_binary, mock_run, tmp_path: Path, paths
-    ) -> None:
+    def test_nonzero_exit(self, mock_binary, mock_run, tmp_path: Path, paths) -> None:
         source, out = paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
         mock_run.return_value = subprocess.CompletedProcess(
             args=["ffmpeg"], returncode=1, stdout="", stderr="err"
         )
-        spec = PanZoomSpec(
-            source_video_path=source, output_path=out, pattern="ken_burns_slow"
-        )
+        spec = PanZoomSpec(source_video_path=source, output_path=out, pattern="ken_burns_slow")
         assert apply_pan_zoom(spec) is False
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_ffmpeg_binary_unavailable(
-        self, mock_binary, mock_run, tmp_path: Path, paths
-    ) -> None:
+    def test_ffmpeg_binary_unavailable(self, mock_binary, mock_run, tmp_path: Path, paths) -> None:
         source, out = paths
         mock_binary.side_effect = RuntimeError("ffmpeg not found")
-        spec = PanZoomSpec(
-            source_video_path=source, output_path=out, pattern="ken_burns_slow"
-        )
+        spec = PanZoomSpec(source_video_path=source, output_path=out, pattern="ken_burns_slow")
         assert apply_pan_zoom(spec) is False
         mock_run.assert_not_called()
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_tiny_output_is_failure(
-        self, mock_binary, mock_run, tmp_path: Path, paths
-    ) -> None:
+    def test_tiny_output_is_failure(self, mock_binary, mock_run, tmp_path: Path, paths) -> None:
         source, out = paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
 
         def _fake_run(*args, **kwargs):
             out.write_bytes(b"tiny")
-            return subprocess.CompletedProcess(
-                args=args[0], returncode=0, stdout="", stderr=""
-            )
+            return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
 
         mock_run.side_effect = _fake_run
-        spec = PanZoomSpec(
-            source_video_path=source, output_path=out, pattern="ken_burns_slow"
-        )
+        spec = PanZoomSpec(source_video_path=source, output_path=out, pattern="ken_burns_slow")
         assert apply_pan_zoom(spec) is False
 
 

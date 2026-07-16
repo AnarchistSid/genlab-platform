@@ -136,9 +136,7 @@ def enumerate_arms_for_niche(
     for value in dims.music_visual_sync.modes:
         yield _arm_id("music_visual_sync", value), "music_visual_sync", value
     for value in dims.caption_emphasis_color.colors:
-        yield _arm_id(
-            "caption_emphasis_color", value
-        ), "caption_emphasis_color", value
+        yield _arm_id("caption_emphasis_color", value), "caption_emphasis_color", value
     for int_value in dims.caption_pacing.pacing_ms_options:
         str_value = str(int_value)
         yield _arm_id("caption_pacing", str_value), "caption_pacing", str_value
@@ -192,8 +190,9 @@ def register_arms_for_niche(
 
     if dry_run:
         logger.info(
-            "[register_transformation_arms] DRY RUN %r: %d arms would be "
-            "registered", niche_id, stats["total"],
+            "[register_transformation_arms] DRY RUN %r: %d arms would be registered",
+            niche_id,
+            stats["total"],
         )
         return stats
 
@@ -233,7 +232,9 @@ def register_arms_for_niche(
         except Exception as exc:
             logger.warning(
                 "[register_transformation_arms] failed to write %s/%s: %s",
-                niche_id, arm_id, exc,
+                niche_id,
+                arm_id,
+                exc,
             )
             stats["skipped"] += 1
 
@@ -263,9 +264,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Enumerate arms without writing to bandit_arms.",
     )
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable DEBUG logging."
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable DEBUG logging.")
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -275,25 +274,17 @@ def main(argv: list[str] | None = None) -> int:
 
     workspace_root = Path(__file__).resolve().parents[1]
 
-    niches = (
-        list(NICHE_VISUALS_YAML.keys())
-        if args.niche == "all"
-        else [args.niche]
-    )
+    niches = list(NICHE_VISUALS_YAML.keys()) if args.niche == "all" else [args.niche]
 
     total_stats: dict[str, dict] = {}
     for niche in niches:
         try:
-            stats = register_arms_for_niche(
-                niche, workspace_root, dry_run=args.dry_run
-            )
+            stats = register_arms_for_niche(niche, workspace_root, dry_run=args.dry_run)
         except FileNotFoundError as exc:
             logger.error("%s", exc)
             return 1
         except Exception as exc:
-            logger.error(
-                "[register_transformation_arms] %s failed: %s", niche, exc
-            )
+            logger.error("[register_transformation_arms] %s failed: %s", niche, exc)
             return 2
         total_stats[niche] = stats
 

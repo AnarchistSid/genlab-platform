@@ -21,7 +21,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.media.caption_animator import (
     CaptionAnimationSpec,
     _emphasis_color_for,
@@ -121,33 +120,26 @@ class TestEscapeDrawtext:
 
 class TestBuildCaptionFilterChain:
     def _segs(self, *args: tuple[str, list[str]]) -> list[CaptionSegment]:
-        return [
-            CaptionSegment(text=t, emphasis_words=e)
-            for t, e in args
-        ]
+        return [CaptionSegment(text=t, emphasis_words=e) for t, e in args]
 
     def test_empty_segments_empty_filter(self) -> None:
-        assert build_caption_filter_chain(
-            [], "word_by_word", "yellow", 750, 20, _fake_font()
-        ) == ""
+        assert build_caption_filter_chain([], "word_by_word", "yellow", 750, 20, _fake_font()) == ""
 
     def test_zero_duration_empty_filter(self) -> None:
         segs = self._segs(("hello world", []))
-        assert build_caption_filter_chain(
-            segs, "word_by_word", "yellow", 750, 0, _fake_font()
-        ) == ""
+        assert (
+            build_caption_filter_chain(segs, "word_by_word", "yellow", 750, 0, _fake_font()) == ""
+        )
 
     def test_unknown_style_empty_filter(self) -> None:
         segs = self._segs(("hello world", []))
-        assert build_caption_filter_chain(
-            segs, "bogus_style", "yellow", 750, 20, _fake_font()
-        ) == ""
+        assert (
+            build_caption_filter_chain(segs, "bogus_style", "yellow", 750, 20, _fake_font()) == ""
+        )
 
     def test_word_by_word_has_per_word_drawtext(self) -> None:
         segs = self._segs(("hello world foo", ["hello"]))
-        f = build_caption_filter_chain(
-            segs, "word_by_word", "yellow", 750, 20, _fake_font()
-        )
+        f = build_caption_filter_chain(segs, "word_by_word", "yellow", 750, 20, _fake_font())
         # 3 drawtext filters, one per word
         assert f.count("drawtext=") == 3
         # 'hello' is emphasis → yellow color
@@ -157,9 +149,7 @@ class TestBuildCaptionFilterChain:
     def test_word_by_word_word_stays_until_seg_end(self) -> None:
         """word_by_word: word 0's `enable` extends to segment end."""
         segs = self._segs(("hello world foo", []))
-        f = build_caption_filter_chain(
-            segs, "word_by_word", "none", 750, 6.0, _fake_font()
-        )
+        f = build_caption_filter_chain(segs, "word_by_word", "none", 750, 6.0, _fake_font())
         # 1 segment at 6s → seg range (0, 6). Word 0 enable is
         # 'between(t,0.000,6.000)'.
         assert "between(t,0.000,6.000)" in f
@@ -167,9 +157,7 @@ class TestBuildCaptionFilterChain:
     def test_karaoke_word_ends_when_next_starts(self) -> None:
         """karaoke: word 0's enable ends when word 1's enable begins."""
         segs = self._segs(("hello world foo", []))
-        f = build_caption_filter_chain(
-            segs, "karaoke", "none", 750, 6.0, _fake_font()
-        )
+        f = build_caption_filter_chain(segs, "karaoke", "none", 750, 6.0, _fake_font())
         # Word 0: 0.000 to 0.750
         assert "between(t,0.000,0.750)" in f
         # Word 1: 0.750 to 1.500
@@ -178,26 +166,20 @@ class TestBuildCaptionFilterChain:
     def test_minimal_single_drawtext_per_segment(self) -> None:
         """minimal: whole segment as one drawtext, not per word."""
         segs = self._segs(("hello world foo bar", []))
-        f = build_caption_filter_chain(
-            segs, "minimal", "yellow", 750, 20, _fake_font()
-        )
+        f = build_caption_filter_chain(segs, "minimal", "yellow", 750, 20, _fake_font())
         # Just 1 drawtext for the 1 segment
         assert f.count("drawtext=") == 1
         assert "text='hello world foo bar'" in f
 
     def test_meme_style_uses_bigger_fontsize(self) -> None:
         segs = self._segs(("hello world", []))
-        f = build_caption_filter_chain(
-            segs, "meme", "yellow", 750, 20, _fake_font()
-        )
+        f = build_caption_filter_chain(segs, "meme", "yellow", 750, 20, _fake_font())
         assert "fontsize=72" in f
 
     def test_hormozi_emphasis_yellow_regardless_of_arm(self) -> None:
         segs = self._segs(("hello WORLD foo", ["WORLD"]))
         # Ask for red emphasis, but hormozi_yellow style overrides
-        f = build_caption_filter_chain(
-            segs, "hormozi_yellow", "red", 750, 20, _fake_font()
-        )
+        f = build_caption_filter_chain(segs, "hormozi_yellow", "red", 750, 20, _fake_font())
         # Yellow (#FFEB3B) present, red (#FF5252) NOT present
         assert "#FFEB3B" in f
         assert "#FF5252" not in f
@@ -209,9 +191,7 @@ class TestBuildCaptionFilterChain:
         # 1 segment × 2s duration; at 750ms per word, only words 0-2
         # fit (word 0 at 0s, word 1 at 0.75s, word 2 at 1.5s).
         # Word 3 would start at 2.25s > 2.0 seg_end.
-        f = build_caption_filter_chain(
-            segs, "word_by_word", "none", 750, 2.0, _fake_font()
-        )
+        f = build_caption_filter_chain(segs, "word_by_word", "none", 750, 2.0, _fake_font())
         # 3 drawtexts (words 0, 1, 2)
         assert f.count("drawtext=") == 3
 
@@ -290,39 +270,29 @@ class TestApplyCaptions:
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_success_path(
-        self, mock_binary, mock_run, tmp_path: Path, paths
-    ) -> None:
+    def test_success_path(self, mock_binary, mock_run, tmp_path: Path, paths) -> None:
         source, out = paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
 
         def _fake_run(*args, **kwargs):
             out.write_bytes(b"o" * 2048)
-            return subprocess.CompletedProcess(
-                args=args[0], returncode=0, stdout="", stderr=""
-            )
+            return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
 
         mock_run.side_effect = _fake_run
         spec = CaptionAnimationSpec(
             source_video_path=source,
             output_path=out,
-            segments=[
-                CaptionSegment(text="hello world", emphasis_words=["hello"])
-            ],
+            segments=[CaptionSegment(text="hello world", emphasis_words=["hello"])],
             font_path=_fake_font(),
         )
         assert apply_captions(spec) is True
 
     @patch("subprocess.run")
     @patch("genlab_core.media.ffmpeg.get_ffmpeg_binary")
-    def test_timeout_returns_false(
-        self, mock_binary, mock_run, tmp_path: Path, paths
-    ) -> None:
+    def test_timeout_returns_false(self, mock_binary, mock_run, tmp_path: Path, paths) -> None:
         source, out = paths
         mock_binary.return_value = "/usr/bin/ffmpeg"
-        mock_run.side_effect = subprocess.TimeoutExpired(
-            cmd=["ffmpeg"], timeout=300
-        )
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=300)
         spec = CaptionAnimationSpec(
             source_video_path=source,
             output_path=out,

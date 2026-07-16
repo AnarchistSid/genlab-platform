@@ -18,8 +18,6 @@ The one-line adopter at ``arm_loader.save_arm`` calls
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 
 

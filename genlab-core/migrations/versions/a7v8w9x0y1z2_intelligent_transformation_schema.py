@@ -97,8 +97,7 @@ def upgrade() -> None:
 
     # Indexes — analytical query paths (Mission Control cards, Strategist)
     op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_ba_arm_type_niche "
-        "ON bandit_arms (arm_type, niche_id)"
+        "CREATE INDEX IF NOT EXISTS idx_ba_arm_type_niche ON bandit_arms (arm_type, niche_id)"
     )
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_ba_dimension_niche "

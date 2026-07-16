@@ -40,9 +40,7 @@ bp = Blueprint(
 # Whitelist matching the niche registry — prevents SQL-string
 # construction on operator-provided input from leaking beyond the
 # expected shape.
-_VALID_NICHES = frozenset(
-    {"gaming", "movies", "sports", "anime", "ai_creators"}
-)
+_VALID_NICHES = frozenset({"gaming", "movies", "sports", "anime", "ai_creators"})
 
 # Clamp window_days to a reasonable range. 1..90 matches the
 # calibration-stats endpoint's window contract for consistency.
@@ -59,9 +57,7 @@ def _flag_enabled() -> bool:
     inspect). Surfacing the flag lets the frontend badge the card
     as "read-only historical" vs "actively collecting".
     """
-    return (
-        os.environ.get("GENLAB_ENSEMBLE_PERSIST_ENABLED", "0").strip() == "1"
-    )
+    return os.environ.get("GENLAB_ENSEMBLE_PERSIST_ENABLED", "0").strip() == "1"
 
 
 def _parse_niche(raw: str | None) -> str | None:
@@ -211,10 +207,7 @@ def get_summary():
             {
                 "status": "success",
                 "data": None,
-                "message": (
-                    "ensemble_votes table not yet available "
-                    "(migration pending?)"
-                ),
+                "message": ("ensemble_votes table not yet available (migration pending?)"),
             }
         )
 
@@ -239,13 +232,9 @@ def get_summary():
                 "voted": int(voted or 0),
                 "abstained": int(abstained or 0),
                 "vote_rate": vote_rate,
-                "mean_score": (
-                    float(mean_score) if mean_score is not None else None
-                ),
+                "mean_score": (float(mean_score) if mean_score is not None else None),
                 "mean_disagreement_when_voting": (
-                    float(mean_disagreement)
-                    if mean_disagreement is not None
-                    else None
+                    float(mean_disagreement) if mean_disagreement is not None else None
                 ),
             }
         )

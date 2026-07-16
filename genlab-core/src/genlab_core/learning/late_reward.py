@@ -263,8 +263,7 @@ def recompute_late_reward(
     # bombed 7d post).
     if reward_late is None:
         logger.warning(
-            "late_reward: shaper returned None bp=%s platform=%s — "
-            "skipping delta measurement",
+            "late_reward: shaper returned None bp=%s platform=%s — skipping delta measurement",
             blueprint_id,
             platform,
         )
@@ -331,9 +330,7 @@ def process_late_reward_batch(
 
             dsn = os.environ.get("DATABASE_URL", "").strip()
             if not dsn:
-                logger.warning(
-                    "late_reward.batch: DATABASE_URL not set — skipping batch"
-                )
+                logger.warning("late_reward.batch: DATABASE_URL not set — skipping batch")
                 return counters
             conn = psycopg.connect(dsn, row_factory=dict_row)
             own_conn = True

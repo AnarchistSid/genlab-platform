@@ -637,8 +637,7 @@ def _resolve_stale_swap_alerts(current_used_mb: int, total_mb: int) -> None:
                 )
                 if cur.rowcount:
                     logger.info(
-                        "[swap_pressure] auto-resolved %d stale alerts "
-                        "(current swap %d/%d MB)",
+                        "[swap_pressure] auto-resolved %d stale alerts (current swap %d/%d MB)",
                         cur.rowcount,
                         current_used_mb,
                         total_mb,
