@@ -220,7 +220,14 @@ for ch in ClutchWire SpliceReel FrameDrift; do
 done
 
 # ── Step 6: CDN cleanup — purge files older than 48h ──
-find "$GENLAB/.media/cdn" -name "*.mp4" -mtime +2 -delete 2>/dev/null
+# 2026-07-17: guard with test -d + `|| true`. Under set -euo pipefail,
+# find on a missing directory exits 1 → whole script fails. On prod the
+# CDN dir hasn't been created yet (no CDN traffic served); the daily
+# cleanup timer was failing for 18h at this exact line. `2>/dev/null`
+# alone suppressed the STDERR but did not affect the exit code.
+if [[ -d "$GENLAB/.media/cdn" ]]; then
+    find "$GENLAB/.media/cdn" -name "*.mp4" -mtime +2 -delete 2>/dev/null || true
+fi
 echo "  CDN: pruned old files" >> "$LOG"
 
 # ── Step 7: Log rotation ──
