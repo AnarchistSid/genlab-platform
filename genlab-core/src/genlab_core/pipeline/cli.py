@@ -437,7 +437,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"\nRun complete: {ctx.run_id}")
         print(f"Stories: {len(ctx.stories)}, Errors: {len(ctx.errors)}")
-        return 1 if ctx.is_aborted else 0
+        return _exit_code_for_ctx(ctx)
 
     results = run_multi(
         niche_ids,
@@ -462,5 +462,34 @@ def main(argv: list[str] | None = None) -> int:
 
     _print_summary(results)
 
-    any_failed = any(ctx.is_aborted for ctx in results.values())
+    any_failed = any(_exit_code_for_ctx(ctx) != 0 for ctx in results.values())
     return 1 if any_failed else 0
+
+
+def _exit_code_for_ctx(ctx) -> int:
+    """Derive systemd-visible exit code from a run context.
+
+    2026-07-17: sibling of CLAUDE.md rules #16/17/19 — silent-fail
+    elevation. Prior state: pipeline returned 0 whenever the runner
+    didn't raise (``ctx.is_aborted``), so ``status=failed`` in the
+    run_report was invisible to systemd → OnFailure alerts never
+    fired → operator learned about dark days only from the Mission
+    Control dashboard hours later.
+
+    Concrete case: sports pipeline has been silent-failing 2+ days on
+    ``video_gate`` (Reddit auth-required on ALL 5/5 candidates) with
+    status=failed in run_report but exit code 0. Fix: read the report
+    status from ``ctx.run_stats["report"]`` (written by the RunReport
+    stage, per run_report.py:373) and exit non-zero if it's ``failed``.
+
+    Preserves the ``ctx.is_aborted`` signal for hard-exception cases
+    that never got as far as writing a report.
+    """
+    if ctx.is_aborted:
+        return 1
+    run_stats = getattr(ctx, "run_stats", None) or {}
+    report = run_stats.get("report") or {}
+    status = report.get("status")
+    if status == "failed":
+        return 2  # distinct from is_aborted so OnFailure handlers can differentiate
+    return 0
