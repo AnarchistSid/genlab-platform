@@ -2279,6 +2279,40 @@ class PushToBacklog:
             yt = content.get("youtube", {})
             tw = content.get("x_twitter", {})
             fb = content.get("facebook", {})
+            th = content.get("threads", {})
+
+            # 2026-07-17: persist-time guard against empty-caption class-of-bug
+            # (session-2026-07-17 audit round 2, agent 3 trace).
+            #
+            # base_hooks.py:306-318 has a template-formula recovery path that
+            # pops `_skip_llm` when a hook can be produced from title alone.
+            # That path can produce a valid hook while the writer's
+            # `content["<platform>"]` dicts are still empty (LLM was skipped
+            # by `_has_writable_context` at base_writing.py:652 because the
+            # story summary fell below the 40-char floor).
+            #
+            # Downstream: publisher L4 attribution gate hard-fails on empty
+            # captions. 6 blueprints in the last 30d shipped this shape;
+            # `83016a45` was the trigger case.
+            #
+            # This is defense-in-depth mirroring
+            # base_writing.py:488 `_all_platform_content_empty` — refuse to
+            # persist rather than write a doomed row.
+            _all_empty = (
+                not (ig.get("caption") or "").strip()
+                and not (fb.get("caption") or "").strip()
+                and not (th.get("caption") or "").strip()
+                and not (yt.get("description") or "").strip()
+            )
+            if _all_empty:
+                logger.warning(
+                    "[PUSH] skipping blueprint for candidate=%s — ALL platform "
+                    "bodies empty (LLM skipped upstream, template-formula rescue "
+                    "produced hook only). Story summary too thin for writer; "
+                    "check fetcher for sub-40-char summaries.",
+                    candidate_id,
+                )
+                continue
 
             media = story.get("media") or {}
             rendered_path = media.get("rendered_path", "")
