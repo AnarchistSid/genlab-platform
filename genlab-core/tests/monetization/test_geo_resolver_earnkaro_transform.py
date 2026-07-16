@@ -102,47 +102,44 @@ class TestNoOpWhenUnconfigured:
             # → empty URL is fine; the safety pin is "no transform call"
 
     def test_non_amazon_network_not_transformed(self, monkeypatch, _no_url_health_check):
-        """A product whose only network is one the matcher no longer
-        picks (cuelinks was removed from candidates in PR #184) must
-        NOT trigger EarnKaro transform.
+        """A product whose picked network isn't amazon/amazon_in must
+        NOT trigger EarnKaro auto-transform.
 
-        Before #184 this pinned "matcher picks cuelinks → don't call
-        EarnKaro." Post-#184, cuelinks isn't a candidate at all, so
-        the matcher returns ``("", "")`` and the EarnKaro gate
-        (``network in ("amazon", "amazon_in")``) is never reached.
+        History:
+        - Pre PR #184 (2026-06-14): cuelinks was in candidates → this
+          test asserted "matcher picks cuelinks → don't call EarnKaro"
+        - PR #184 → PR 3 (2026-07-16) removed cuelinks → this test
+          asserted "no candidate matched → don't call EarnKaro"
+        - PR 3 (2026-07-16) re-adds cuelinks as LAST fallback →
+          matcher now picks cuelinks for cuelinks-only products →
+          this test now asserts the ORIGINAL invariant again:
+          "matcher picks cuelinks (non-Amazon network) → don't call
+          EarnKaro (which only auto-transforms amazon* networks)"
 
-        The test still has value: it pins the defense-in-depth
-        invariant that EarnKaro is NEVER speculatively called when no
-        candidate matches. If someone someday changes the resolver to
-        try EarnKaro on any non-empty product URL regardless of
-        matcher outcome, this test catches it."""
+        The headline invariant (EarnKaro gate = ``network in
+        ("amazon", "amazon_in")``) survives every reshuffling.
+        """
         monkeypatch.setenv("EARNKARO_CONVERT_KEY", "test-key")
         cuelinks_only_product = {
             "name": "Niche Product",
             "networks": {
-                # cuelinks removed from candidates in PR #184; this
-                # product has no matchable network from the resolver's
-                # perspective. Kept here as the canonical "non-Amazon
-                # legacy entry" shape that real product catalogs still
-                # have lying around.
-                "cuelinks": {"url": "https://linksredirect.com/?cid=000000&url=X"},
+                # Non-Amazon Cuelinks URL (Flipkart-like); resolver
+                # WILL pick cuelinks here as of PR 3 (2026-07-16).
+                "cuelinks": {"url": "https://www.cuelinks.com/tracked/flipkart-xyz"},
             },
         }
         with patch("genlab_core.monetization.earnkaro_client.convert_url") as mock_convert:
             url, network = resolve_affiliate_link_with_network(
                 cuelinks_only_product, "gaming", "instagram"
             )
-            # The headline invariant: transform NOT called. Gated on
-            # ``network in ("amazon", "amazon_in")``; with no candidate
-            # matched, network is "" so the gate is never reached.
+            # Headline invariant: transform NOT called for cuelinks.
+            # EarnKaro gate is ``network in ("amazon", "amazon_in")``;
+            # cuelinks doesn't match, so gate is never reached.
             mock_convert.assert_not_called()
-            # Post-#184 expected behavior: no candidate matched →
-            # empty network + URL. Operators see the product surfaced
-            # by the picker but no published affiliate URL, which is
-            # the correct signal that the catalog entry needs an
-            # Amazon URL added.
-            assert network == ""
-            assert url == ""
+            # Post-PR-3 expected: cuelinks picked (non-Amazon),
+            # EarnKaro skipped.
+            assert network == "cuelinks"
+            assert url != ""
 
 
 # ── Success path: when the key IS set ──────────────────────────────────────

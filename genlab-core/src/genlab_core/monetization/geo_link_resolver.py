@@ -339,8 +339,18 @@ def resolve_affiliate_link_with_network(
 
     # Build candidate list — Amazon Associates first (real commission),
     # then per-geo affiliate networks (EarnKaro for IN; ShareASale/CJ/
-    # Impact for US — added in #34a, 2026-06-13). Cuelinks removed
-    # 2026-06-14 after the audit (see docstring above).
+    # Impact for US — added in #34a, 2026-06-13).
+    #
+    # ## Cuelinks (2026-07-16 re-integration, PR 3)
+    #
+    # Cuelinks was removed 2026-06-14 (see docstring above) because
+    # the pre-V3 stub routed Amazon URLs → ₹0 commission. It's now
+    # re-added as the LAST fallback in both geo lists — the ordering
+    # matters: Amazon adapters always come first, so any product with
+    # both an Amazon URL and a Cuelinks URL picks Amazon. Cuelinks
+    # only fires when Amazon URLs are absent or broken. The client-
+    # side ``cuelinks_client.AmazonUrlNotAllowed`` guard is the
+    # belt-and-suspenders defense.
     #
     # The candidate is silently skipped for any niche whose
     # product["networks"] dict doesn't carry the network's url field
@@ -353,6 +363,7 @@ def resolve_affiliate_link_with_network(
             "amazon_in",
             "amazon_us",
             "earnkaro",  # Indian deal aggregator
+            "cuelinks",  # Non-Amazon merchants (Flipkart/Myntra/etc.); LAST by design
         ]
     else:
         candidates = [
@@ -361,6 +372,7 @@ def resolve_affiliate_link_with_network(
             "shareasale",  # US network — direct tracking links
             "cj",  # CJ Affiliate — global, template-based
             "impact",  # Impact.com — per-advertiser deep links
+            "cuelinks",  # US Cuelinks coverage is thinner but non-zero; LAST by design
         ]
 
     base_url = ""

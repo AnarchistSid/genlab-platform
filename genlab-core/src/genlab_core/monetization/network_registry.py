@@ -13,6 +13,7 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 import os
 import urllib.parse
 from dataclasses import dataclass, field
@@ -73,20 +74,79 @@ class AmazonUSAdapter:
 
 @dataclass
 class CuelinksAdapter:
+    """Cuelinks affiliate adapter — routes non-Amazon merchant URLs
+    through the V3 API for tracked attribution.
+
+    ## 2026-07-16 re-integration (PR 3 of 3)
+
+    The 2026-06-14 audit (commit ``1444565d``) removed Cuelinks
+    entirely because the pre-V3 stub built ``linksredirect.com`` URLs
+    that wrapped bare Amazon links WITHOUT the Amazon Associates tag.
+    Every redirect earned ₹0.
+
+    The V3 re-integration re-scopes Cuelinks: it's the broker for
+    non-Amazon merchants (Flipkart, Myntra, Ajio, Meesho, Nykaa, etc.)
+    where Cuelinks IS the actual affiliate network. Amazon URLs are
+    HARD-BLOCKED by the client (``cuelinks_client.AmazonUrlNotAllowed``
+    raises); this adapter catches that exception, logs at WARNING,
+    and returns ``""`` so the resolver falls to the next candidate
+    (which for Amazon products means the direct amazon_us / amazon_in
+    adapter).
+
+    ## Kwargs
+
+    * ``product_url`` (required) — the merchant URL to route through
+      Cuelinks. Must NOT be an Amazon storefront.
+    * ``subid`` (optional) — channel/blueprint attribution string.
+      Suggested: ``f"{niche_id}:{blueprint_id[:8]}"``. Empty allowed
+      but makes downstream Cuelinks reporting harder.
+
+    Returns the tracked Cuelinks URL on success, ``""`` on:
+      - missing product_url
+      - missing CUELINKS_V3_API_KEY env var
+      - Amazon URL (caught + logged)
+      - Cuelinks V3 API failure (network / auth / rate limit)
+    """
+
     network_id: str = "cuelinks"
     display_name: str = "Cuelinks"
     publisher_id: str = field(default_factory=lambda: os.environ.get("CUELINKS_PUBLISHER_ID", ""))
 
     def validate_url(self, url: str) -> bool:
-        return "linksredirect.com" in url
+        # V3 tracked URLs use ``cuelinks.com`` as the host; the
+        # pre-V3 ``linksredirect.com`` shape is also accepted for
+        # backwards compat with any historical cached values.
+        return "cuelinks.com" in url or "linksredirect.com" in url
 
     def generate_url(self, product_id: str, **kwargs) -> str:
+        # Late import so importing this module doesn't force cuelinks_client
+        # into every affiliate consumer's dep chain.
+        from genlab_core.monetization import cuelinks_client
+
         product_url = kwargs.get("product_url", "")
         if not product_url:
-            _tag = os.environ.get("AMAZON_IN_AFFILIATE_TAG", "")
-            product_url = f"https://www.amazon.in/dp/{product_id}?tag={_tag}"
-        encoded = urllib.parse.quote(product_url, safe="")
-        return f"https://linksredirect.com/?cid={self.publisher_id}&source=linkkit&url={encoded}"
+            # No merchant URL supplied — cannot route through Cuelinks.
+            # Returning "" lets the resolver fall to the next candidate.
+            # (Pre-V3 stub used to synthesise an amazon.in URL here;
+            # that was the exact ₹0-commission pathway the audit killed.)
+            return ""
+
+        subid = kwargs.get("subid", "")
+        try:
+            return cuelinks_client.convert_url(product_url, subid=subid)
+        except cuelinks_client.AmazonUrlNotAllowed as exc:
+            # Catalog contains a cuelinks entry pointing at an Amazon URL —
+            # the pin test (test_no_product_uses_cuelinks_for_amazon_url)
+            # is the primary defense but a race between config-load and
+            # test-run could let one through. Log LOUDLY so operator sees
+            # it in dashboard alerts and fix the catalog.
+            logging.getLogger(__name__).warning(
+                "[cuelinks] catalog_cuelinks_amazon_url_leak product_id=%s url=%s exc=%s",
+                product_id,
+                product_url[:80],
+                exc,
+            )
+            return ""
 
 
 @dataclass
