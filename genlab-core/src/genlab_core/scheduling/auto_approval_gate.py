@@ -340,6 +340,30 @@ def evaluate(
     # signal flows through the confidence aggregate where it
     # competes with composite + virality.
     hook_clf = _to_float(extra.get("hook_classifier_score"))
+    # 2026-07-17: under-trained-model uncertainty band. Empirical
+    # prod distribution (session-2026-07-17 audit round 3):
+    #     ai_creators: n=6, avg=0.167, max=0.316 (0/6 ≥ 0.5)
+    #     anime:       n=14, avg=0.261, max=0.653 (2/14 ≥ 0.5)
+    #     gaming:      n=23, avg=0.293, max=0.705 (4/23 ≥ 0.5)
+    #     movies:      n=21, avg=0.227, max=0.502 (1/21 ≥ 0.5)
+    #     sports:      n=16, avg=0.251, max=0.531 (1/16 ≥ 0.5)
+    # The XGBoost model was trained at MIN_EXAMPLES=50 → the raw
+    # probas cluster in [0.05, 0.35]. Treating a 0.17 score as
+    # "17% confidence" is WRONG — the model has no useful signal.
+    # That drag was the structural block on auto-approver Week 1→2
+    # ramp (~92% calibration agreement but 0 approvals for 20+ days
+    # because the mean confidence stayed below 0.80).
+    #
+    # Fix: skip contribution when the model's output is in the
+    # uncertainty band [0, HOOK_CLF_STRONG_FLOOR). The model is
+    # only informative when it produces a strong-positive signal
+    # (≥0.5, or configurably ≥0.4). Below that, treat as no-signal
+    # (same as the None cold-start path).
+    #
+    # Long-term fix is model recalibration + more training data.
+    # This gate change unblocks auto-approver in the interim without
+    # weakening its rejection criteria.
+    HOOK_CLF_STRONG_FLOOR = 0.4
     if hook_clf is None:
         reasons.append("hook_classifier_score missing (no contribution)")
         # Intentionally NO append to confidences — see docstring above.
@@ -348,13 +372,24 @@ def evaluate(
         if clamped >= 0.5:
             passed.append("hook_classifier_score")
             reasons.append(f"hook_classifier_score={clamped:.2f} ≥ 0.50 (predicted strong)")
-        else:
-            # NOT added to failed_checks — soft signal only. The low
-            # score just drags the confidence average.
+            confidences.append(clamped)
+        elif clamped >= HOOK_CLF_STRONG_FLOOR:
+            # In the borderline band [0.4, 0.5) — contribute the raw
+            # score so a middle-ground model opinion has some weight
+            # without dominating.
             reasons.append(
-                f"hook_classifier_score={clamped:.2f} < 0.50 (predicted weak, soft signal)"
+                f"hook_classifier_score={clamped:.2f} < 0.50 (borderline soft signal)"
             )
-        confidences.append(clamped)
+            confidences.append(clamped)
+        else:
+            # Below the noise floor — the model has no useful signal
+            # for this hook. Skip contribution to preserve confidence
+            # math for well-formed blueprints. Same discipline as
+            # cold-start None case.
+            reasons.append(
+                f"hook_classifier_score={clamped:.2f} < {HOOK_CLF_STRONG_FLOOR:.2f} "
+                "(under-trained-model uncertainty, no contribution)"
+            )
 
     # ── Aggregate confidence ──────────────────────────────────────────
     # Average across the per-score confidences. Empty list means no
