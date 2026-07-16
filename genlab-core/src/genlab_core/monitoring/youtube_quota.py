@@ -66,11 +66,26 @@ logger = logging.getLogger(__name__)
 # ── constants ──────────────────────────────────────────────────────────
 DAILY_QUOTA: int = 10_000
 UPLOAD_COST: int = 1_600
-# 5 channels × 1600 units/upload = 8000 minimum. 90% of 10000 = 9000 only
-# fits 5 uploads. Raised to 98% to allow all 5 channels + some headroom
-# for search/analytics queries. Apply for YouTube quota increase (100K/day)
-# to remove this constraint entirely.
-HARD_STOP_PCT: float = 0.98
+# History of HARD_STOP_PCT:
+#   * 0.90 (pre 2026-06-27) — 9000 hard-stop only fit 5 uploads exactly
+#     (5 × 1600 = 8000; next upload check `8000+1600=9600 > 9000` blocked)
+#   * 0.98 (2026-06-27 → 2026-07-16) — 9800 gave 200u headroom for
+#     search/analytics. Turned out too tight: 2 search calls (100u each)
+#     ate all headroom before some niches' publish attempts. 30-day
+#     comprehensive audit (2026-07-16) counted 9 upload-blocked events
+#     at "8300/9800, 84.7%" — the 6th channel's upload check `used +
+#     1600 > 9800` fired because used had crept past 8200 due to non-
+#     upload ops.
+#   * 1.00 (2026-07-16) — use the actual API budget. Google's quota
+#     accounting can lag by hours, but the retry-next-day path
+#     (`error_classifier.py QUOTA class`) handles `quotaExceeded`
+#     cleanly if we happen to overshoot. Deliberately trading
+#     "1-per-week rare overshoot handled by retry" for "9-per-month
+#     under-conservative blocks that lose the publish window entirely".
+#
+# Real fix (external): apply for YouTube quota increase (100K/day) to
+# remove this constraint entirely. Deferred; not blocked on this.
+HARD_STOP_PCT: float = 1.00
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
