@@ -79,6 +79,7 @@ from dataclasses import dataclass
 _LLM_REFUSAL_PREFIXES: tuple[str, ...] = (
     "i need to stop",
     "i need to flag",
+    "i need to pause",  # 2026-07-17: 4 archived blueprints leaked past pre-gate
     "i need the",
     "i need more",
     "i don't have enough",
@@ -87,6 +88,7 @@ _LLM_REFUSAL_PREFIXES: tuple[str, ...] = (
     "i can't help",
     "i can't provide",
     "i can't write",
+    "i can't access",  # 2026-07-17: movies blueprint 6e943894 leaked
     "i am unable",
     "i'm unable",
     "i'm sorry",

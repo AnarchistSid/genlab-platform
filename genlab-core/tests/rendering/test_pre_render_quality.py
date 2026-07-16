@@ -53,6 +53,12 @@ class TestLLMRefusalPreambles:
             "I don't have enough information to write a hook",
             "I'm sorry, but I need more details",
             "I apologize, but the story doesn't have enough context",
+            # 2026-07-17 audit round 2 gaps — 5 archived + 1 stuck-VISUAL_READY
+            # blueprint leaked past pre-gate:
+            "I can't access the Reddit link, so I'm missing the",
+            "I need to pause here — the Story title is empty",
+            "I need to pause here: the Summary field is missing",
+            "I need to pause here and flag a critical issue",
         ],
     )
     def test_refusal_preamble_rejected(self, hook):

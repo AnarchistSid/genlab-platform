@@ -96,6 +96,17 @@ fi
 find /home/gh-runner/actions-runner/_work -maxdepth 2 -type d -name "_temp" \
     -mmin +60 -exec rm -rf {} + 2>/dev/null || true
 
+# Runner _diag logs — 2026-07-17 addition. Accumulates unbounded
+# (~2 files per CI job × ~50 jobs/day → 545 MB / 1214 files >7 days
+# observed at audit time). The runner emits fresh diagnostics per
+# invocation; anything older than 7 days is post-mortem material
+# only. Keeping recent for the "last few jobs failed, why" case.
+if [ -d /home/gh-runner/actions-runner/_diag ]; then
+    diag_deleted=$(find /home/gh-runner/actions-runner/_diag -type f -mtime +7 2>/dev/null | wc -l)
+    find /home/gh-runner/actions-runner/_diag -type f -mtime +7 -delete 2>/dev/null || true
+    log "  removed ${diag_deleted} runner _diag files older than 7 days"
+fi
+
 # 5) Docker prune — containers, images, build cache, volumes
 # `--volumes` only removes UNUSED volumes (genlab-postgres + genlab-redis
 # volumes are in use → untouched). `-a` includes all unused images.
