@@ -2625,11 +2625,41 @@ class PushToBacklog:
                             exc,
                         )
 
+                    # Layer 3 S4a (2026-07-17, writer-only): question_reveal
+                    # variant selector. Priority position: series > question_reveal
+                    # > watch_till_end > single_clip. Question_reveal is MORE
+                    # specific than watch_till_end (question word + "?" vs
+                    # compilation keyword), so it goes above in the chain.
+                    # Empty variant_payload for now — S4b will add the reveal
+                    # field for the compositor timed-text overlay.
+                    if not variant_assigned:
+                        try:
+                            from genlab_core.writing.question_reveal_selector import (
+                                is_question_reveal_eligible,
+                            )
+
+                            if is_question_reveal_eligible(story):
+                                fields["variant_type"] = "question_reveal"
+                                fields["variant_payload"] = {}
+                                variant_assigned = True
+                                logger.info(
+                                    "[PUSH] variant=question_reveal eligible: title=%r duration=%s",
+                                    (story.get("title") or "")[:60],
+                                    story.get("duration_seconds"),
+                                )
+                        except Exception as exc:  # noqa: BLE001
+                            logger.debug(
+                                "[PUSH] question_reveal selection skipped for story=%s: %s",
+                                story.get("story_id", "<no-id>"),
+                                exc,
+                            )
+
                     # Layer 3 S3 (2026-07-17): watch_till_end variant selector.
-                    # Only fires when series_part didn't already claim this
-                    # blueprint — variants are exclusive. Selector itself also
-                    # short-circuits on series priority (defense in depth).
-                    # Empty variant_payload for this variant per PAYLOAD_CONTRACTS.
+                    # Only fires when NEITHER series_part NOR question_reveal
+                    # already claimed this blueprint — variants are exclusive.
+                    # Selector also short-circuits on series priority (defense
+                    # in depth). Empty variant_payload for this variant per
+                    # PAYLOAD_CONTRACTS.
                     if not variant_assigned:
                         try:
                             from genlab_core.writing.watch_till_end_selector import (

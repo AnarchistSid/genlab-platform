@@ -440,29 +440,57 @@ def write_video_content(
     except Exception as exc:
         logger.debug("[%s] series detection skipped: %s", niche_id, exc)
 
-    # Layer 3 S3 (2026-07-17): watch_till_end variant selector. For
-    # compilation-type content ("Top 10", "Highlights", "Reactions") in
-    # the 30-90s sweet spot where the source has no built-in hook, we
-    # need the LLM to craft a payoff-promise hook that engineers
-    # completion-rate retention. Selector short-circuits on series
-    # priority (variants are exclusive on a blueprint).
-    watch_till_end_hint = ""
+    # Layer 3 S4a (2026-07-17, writer-only): question_reveal variant
+    # selector. For question-shaped titles (Why/How/What/... + "?") in
+    # the 30-90s sweet spot, steer the LLM to craft a hook that leans
+    # into the source's question format. Selector short-circuits on
+    # series priority; watch_till_end priority is enforced BELOW (only
+    # fires if this one didn't). Compositor timed-text overlay is S4b.
+    question_reveal_hint = ""
+    variant_selected = False
     try:
-        from genlab_core.writing.watch_till_end_selector import (
-            format_watch_till_end_prompt_section,
-            is_watch_till_end_eligible,
+        from genlab_core.writing.question_reveal_selector import (
+            format_question_reveal_prompt_section,
+            is_question_reveal_eligible,
         )
 
-        if is_watch_till_end_eligible(video):
-            watch_till_end_hint = format_watch_till_end_prompt_section()
+        if is_question_reveal_eligible(video):
+            question_reveal_hint = format_question_reveal_prompt_section()
+            variant_selected = True
             logger.info(
-                "[%s] watch_till_end eligible: title=%r duration=%s",
+                "[%s] question_reveal eligible: title=%r duration=%s",
                 niche_id,
                 (video.get("title") or "")[:60],
                 video.get("duration_seconds"),
             )
     except Exception as exc:
-        logger.debug("[%s] watch_till_end selection skipped: %s", niche_id, exc)
+        logger.debug("[%s] question_reveal selection skipped: %s", niche_id, exc)
+
+    # Layer 3 S3 (2026-07-17): watch_till_end variant selector. For
+    # compilation-type content ("Top 10", "Highlights", "Reactions") in
+    # the 30-90s sweet spot where the source has no built-in hook, we
+    # need the LLM to craft a payoff-promise hook that engineers
+    # completion-rate retention. Selector short-circuits on series
+    # priority; wire-level guard here short-circuits on question_reveal
+    # (question_reveal is more specific — variants exclusive).
+    watch_till_end_hint = ""
+    if not variant_selected:
+        try:
+            from genlab_core.writing.watch_till_end_selector import (
+                format_watch_till_end_prompt_section,
+                is_watch_till_end_eligible,
+            )
+
+            if is_watch_till_end_eligible(video):
+                watch_till_end_hint = format_watch_till_end_prompt_section()
+                logger.info(
+                    "[%s] watch_till_end eligible: title=%r duration=%s",
+                    niche_id,
+                    (video.get("title") or "")[:60],
+                    video.get("duration_seconds"),
+                )
+        except Exception as exc:
+            logger.debug("[%s] watch_till_end selection skipped: %s", niche_id, exc)
 
     age_hours = video.get("age_hours", 1)
     if not age_hours:
@@ -582,6 +610,7 @@ def write_video_content(
         + content_angle_hint
         + findings_hint
         + series_context_hint
+        + question_reveal_hint
         + watch_till_end_hint
         + "OUTPUT FORMAT — strictly enforced:\n"
         "Respond ONLY with valid JSON. ALL SIX KEYS ARE REQUIRED and must\n"
