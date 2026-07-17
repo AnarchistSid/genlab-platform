@@ -278,7 +278,9 @@ class InstagramClient:
                     success=False,
                     error=self._last_error or "Instagram Reel publish failed — unknown error",
                 )
-            return self._build_publish_success(post_id)
+            result = self._build_publish_success(post_id)
+            self._post_first_comment_if_present(result, payload)
+            return result
 
         # Local path — upload to CDN and retry against a different provider on
         # Meta container error 2207077 ("media upload failed", i.e. Meta's
@@ -363,7 +365,9 @@ class InstagramClient:
             )
 
             if post_id is not None:
-                return self._build_publish_success(post_id)
+                result = self._build_publish_success(post_id)
+                self._post_first_comment_if_present(result, payload)
+                return result
 
             # Publish failed. If the failure is NOT a Meta CDN-fetch error,
             # retrying with a different provider can't help — return now.
@@ -414,6 +418,41 @@ class InstagramClient:
             post_id=post_id,
             post_url=real_url,
         )
+
+    def _post_first_comment_if_present(self, result: PublishResult, payload: PublishPayload) -> None:
+        """Post the affiliate first-comment after successful IG publish.
+
+        2026-07-17 (Layer 2 monetization): IG allows external URLs in
+        comments (unlike caption where they downrank to search-only
+        reach). Pinning an affiliate comment on publish gets 2-8% CTR
+        vs 0.1-0.3% bio-link CTR = 20-80× click improvement with zero
+        extra traffic. Best-effort — a failure here doesn't fail the
+        publish (mirrors Facebook's pattern at facebook.py:208).
+        """
+        if not (result.success and payload.first_comment_text and result.post_id):
+            return
+        try:
+            ok = self.post_reply(
+                parent_id=result.post_id,
+                text=payload.first_comment_text,
+                context_id=result.post_id,
+            )
+            if ok:
+                self._log.info(
+                    "Instagram: affiliate first-comment posted under %s",
+                    result.post_id,
+                )
+            else:
+                self._log.warning(
+                    "Instagram: first-comment post returned False for %s",
+                    result.post_id,
+                )
+        except Exception as exc:
+            self._log.warning(
+                "Instagram: first-comment post exception under %s: %s",
+                result.post_id,
+                exc,
+            )
 
     # ------------------------------------------------------------------
     # Engageable protocol

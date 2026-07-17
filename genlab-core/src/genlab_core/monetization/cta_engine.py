@@ -405,6 +405,40 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
         # First-comment: the affiliate CTA itself, posted after main post
         fields["facebook_first_comment"] = fb_cta_text
 
+    # ── Instagram first-comment (2026-07-17 Layer 2 monetization) ─────────────
+    # IG bio-link CTR is 0.1-0.3%; pinned first-comment CTR is 2-8% =
+    # 20-80× improvement with ZERO extra traffic. IG allows external
+    # URLs in comments (unlike caption where external URLs downrank).
+    # Reads by payload_builder → InstagramClient.publish() posts as
+    # first comment via post_reply().
+    if url and product_name:
+        ig_cta_text = f"🔗 Get {product_name}: {url}"
+        if bandit:
+            try:
+                variant = bandit.select(platform="instagram")
+                if variant.arm_id != "default":
+                    ig_cta_text = variant.format(product_name=product_name, url=url)
+                    selected_variants.append(variant.arm_id)
+            except Exception as e:
+                logger.debug("[CTAEngine] Bandit select failed for instagram: %s", e)
+        fields["instagram_first_comment"] = ig_cta_text
+
+    # ── YouTube first-comment (2026-07-17 Layer 2 monetization) ───────────────
+    # YT comments support clickable URLs and are prominently displayed
+    # under Shorts. Same 20-80× CTR improvement over bio-link routing.
+    # Posted via YouTubeClient.post_reply (comments.insert).
+    if url and product_name:
+        yt_cta_text = f"🔗 Get {product_name}: {url}"
+        if bandit:
+            try:
+                variant = bandit.select(platform="youtube")
+                if variant.arm_id != "default":
+                    yt_cta_text = variant.format(product_name=product_name, url=url)
+                    selected_variants.append(variant.arm_id)
+            except Exception as e:
+                logger.debug("[CTAEngine] Bandit select failed for youtube: %s", e)
+        fields["youtube_first_comment"] = yt_cta_text
+
     # ── Twitter / X first-reply ───────────────────────────────────────────────
     # X links in the main tweet body get downranked; standard creator
     # practice is to drop the affiliate URL as a self-reply. Main

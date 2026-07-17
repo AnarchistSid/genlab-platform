@@ -501,13 +501,46 @@ class YouTubeClient:
             except Exception as exc:
                 self._log.warning("YouTube quota recording failed (non-fatal): %s", exc)
 
-        return PublishResult(
+        result = PublishResult(
             platform=self.platform_id,
             success=True,
             post_id=video_id,
             post_url=f"https://youtube.com/shorts/{video_id}",
             raw_response={"video_id": video_id, "title": title},
         )
+
+        # 2026-07-17 (Layer 2 monetization): pin affiliate first-comment.
+        # YT comments support clickable URLs and are prominently displayed
+        # under Shorts. Pinned first-comment CTR 2-8% vs bio-link 0.1-0.3%
+        # = 20-80× click improvement with zero extra traffic. Best-effort:
+        # first-comment failure doesn't fail the publish (mirrors Facebook
+        # pattern at facebook.py:208 + Instagram
+        # _post_first_comment_if_present).
+        if payload.first_comment_text and video_id:
+            try:
+                ok = self.post_reply(
+                    parent_id=video_id,
+                    text=payload.first_comment_text,
+                    context_id=video_id,
+                )
+                if ok:
+                    self._log.info(
+                        "YouTube: affiliate first-comment posted under %s",
+                        video_id,
+                    )
+                else:
+                    self._log.warning(
+                        "YouTube: first-comment post returned False for %s",
+                        video_id,
+                    )
+            except Exception as exc:
+                self._log.warning(
+                    "YouTube: first-comment post exception under %s: %s",
+                    video_id,
+                    exc,
+                )
+
+        return result
 
     def _upload_video(
         self,

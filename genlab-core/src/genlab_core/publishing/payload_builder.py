@@ -308,6 +308,13 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
     # Per-platform follow-up comment text. Affiliate URLs ship as a
     # comment/reply after the main post — keeps captions clean and avoids
     # algorithmic downranking on Facebook and X/Twitter.
+    #
+    # 2026-07-17 (Layer 2 monetization): added IG + YT. Empirical
+    # bio-link CTR is 0.1-0.3%; pinned first-comment CTR is 2-8%.
+    # Adding IG+YT to the dispatch is the highest-leverage single
+    # monetization change per audit round 4 — 20-80× CTR jump with
+    # ZERO extra traffic. Reads `{platform}_first_comment` field
+    # populated by cta_engine.py's expanded per-platform CTA generation.
     first_comment_text = ""
     if platform == "facebook":
         first_comment_text = (fields.get("facebook_first_comment", "") or "").strip()
@@ -316,6 +323,10 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
         # branch previously only matched "x_twitter", silently dropping the X
         # affiliate self-reply (the entire X monetization payload).
         first_comment_text = (fields.get("twitter_first_comment", "") or "").strip()
+    elif platform == "instagram":
+        first_comment_text = (fields.get("instagram_first_comment", "") or "").strip()
+    elif platform == "youtube":
+        first_comment_text = (fields.get("youtube_first_comment", "") or "").strip()
 
     return PublishPayload(
         caption=caption,
