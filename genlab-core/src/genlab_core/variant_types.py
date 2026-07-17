@@ -98,10 +98,97 @@ def validate_payload(variant_type: str, payload: dict) -> list[str]:
     return [key for key in required if key not in payload]
 
 
+def choose_variant(story: dict) -> tuple[str, dict]:
+    """Return ``(variant_type, variant_payload)`` for a story using the
+    canonical priority chain.
+
+    Layer 3 S4.5 (2026-07-17). Encapsulates the priority ordering that
+    was previously enforced by SOURCE ORDER in the writer and push_to_backlog
+    wire blocks. Extracting to one function:
+
+    1. Makes the priority chain testable in isolation.
+    2. Creates the single hook point that S5 (bandit extension) will
+       replace or wrap — bandit-driven variant selection needs ONE
+       function to intercept, not three sequential ifs in two call sites.
+    3. Future-proofs against accidental source reordering breaking the
+       chain silently.
+
+    Canonical priority (highest to lowest):
+
+    1. ``series_part`` — explicit series indicator in title
+       (Part N / Episode N / SxxEyy / Chapter N). Strongest algorithmic
+       signal for YT (3-5× subscribe rate).
+    2. ``question_reveal`` — question-shaped title (Why/How/What... + "?").
+       Cognitive-commitment hook drives past scroll decision.
+    3. ``watch_till_end`` — compilation-type content (Top N, Highlights,
+       Reactions) in 30-90s range. Retention-engineered hook for
+       completion rate.
+    4. ``single_clip`` — default. Unchanged pipeline behavior.
+
+    Fail-open: any exception in a selector returns ``single_clip`` with
+    empty payload. This function is a pure orchestrator — never crashes
+    the pipeline regardless of selector state.
+
+    ## Why the existing writer/push_to_backlog wire is NOT refactored to use this
+
+    S1-S4a already committed with the priority chain enforced by
+    source order. Those code paths are tested + working. This new
+    function ships as an ADDITIVE hook — future S5 bandit work can
+    call ``choose_variant`` at its own entry point, and IF an operator
+    decides to unify the wire later, the migration is a mechanical
+    replacement (one function call instead of three if-blocks).
+
+    Not modifying tested paths tonight keeps deploy risk zero.
+    """
+    # Local imports — same lazy-import pattern the existing writer +
+    # push_to_backlog paths use for these modules. Avoids widening the
+    # top-level import surface of variant_types.
+    try:
+        from genlab_core.writing.series_detector import detect_series
+
+        series_info = detect_series(story)
+        if series_info is not None:
+            return (
+                "series_part",
+                {
+                    "series_id": series_info.series_id,
+                    "part_number": series_info.part_number,
+                    "total_parts": series_info.total_parts,
+                    "series_title": series_info.series_title,
+                    "detection_pattern": series_info.detection_pattern,
+                },
+            )
+    except Exception:
+        pass  # fall through to next selector
+
+    try:
+        from genlab_core.writing.question_reveal_selector import (
+            is_question_reveal_eligible,
+        )
+
+        if is_question_reveal_eligible(story):
+            return ("question_reveal", {})
+    except Exception:
+        pass
+
+    try:
+        from genlab_core.writing.watch_till_end_selector import (
+            is_watch_till_end_eligible,
+        )
+
+        if is_watch_till_end_eligible(story):
+            return ("watch_till_end", {})
+    except Exception:
+        pass
+
+    return (DEFAULT_VARIANT, {})
+
+
 __all__ = [
     "DEFAULT_VARIANT",
     "PAYLOAD_CONTRACTS",
     "VARIANT_TYPES",
+    "choose_variant",
     "is_valid_variant",
     "validate_payload",
 ]
