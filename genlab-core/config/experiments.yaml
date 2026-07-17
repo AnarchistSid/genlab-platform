@@ -17,10 +17,75 @@
 # legacy path (no experiment assignment). Safe to start with zero
 # entries; add one when you have a hypothesis to test.
 #
-# 2026-07-17: created as skeleton (deep-cuts audit found the file was
-# referenced by production code at push_to_backlog.py:1673 but
-# didn't exist anywhere — full framework wired, zero entries). This
-# empty-list starter unblocks the "file not found" DEBUG log without
-# altering any live behaviour.
+# 2026-07-17 (morning): created as skeleton — file was referenced by
+# production code but didn't exist anywhere, causing loader to
+# fail-quiet with "file not found" DEBUG log.
+#
+# 2026-07-17 (evening): added 2 meaningful experiments. Dates quoted
+# so YAML parses as strings (validator requires isinstance(start_date, str);
+# unquoted ISO 8601 becomes datetime.datetime and gets silently rejected).
+#
+# ## Ship-safety pattern
+#
+# All entries below use `start_date: "2026-07-18T06:30:00+00:00"` —
+# TOMORROW's 06:30 UTC (12:00 IST) publisher fire. Gives operator
+# overnight review window before any behavioral change lands. If
+# unwanted, edit the start_date to a far-future value or delete the
+# entry entirely before 12:00 IST tomorrow.
+#
+# ## Arm-name reference (source of truth per module)
+#
+# content_type per niche (writing/content_type_hint.py:_KNOWN_CONTENT_TYPES):
+#   gaming: gameplay_clip, esports_highlight, trailer_reaction, patch_news
+#   sports: highlight_play, breaking_trade, record_milestone, upset_reaction
+#   movies: trailer_drop, scene_reaction, box_office_update, cast_reveal
+#   anime: episode_moment, season_announcement, fight_scene, adaptation_news
+#   ai_creators: tool_demo, model_release, creative_showcase, comparison_test
+#
+# hook_style (writing/llm_hook_generator.py:_HOOK_STYLES):
+#   question, bold_claim, controversy, revelation, comparison
 
-experiments: []
+experiments:
+  # ─── Experiment 1: gameplay_clip vs trailer_reaction (gaming) ───
+  #
+  # Motivation: current base bandit posteriors on gaming show
+  # gameplay_clip dominating (~30% posterior) but trailer_reaction
+  # rarely gets sampled (~8% posterior). Might be under-explored
+  # rather than genuinely worse. 50/50 allocation forces the bandit
+  # to gather balanced data for 30 days, then the posterior update
+  # reflects real relative performance.
+  #
+  # Expected outcome: either trailer_reaction posterior catches up
+  # (confirming under-exploration bias) OR gameplay_clip's lead
+  # widens with tighter confidence (confirming it's genuinely better).
+  # Either result is actionable.
+  - experiment_id: gaming_gameplay_vs_trailer_reaction_2026_07
+    arms: [gameplay_clip, trailer_reaction]
+    allocation:
+      gameplay_clip: 0.5
+      trailer_reaction: 0.5
+    start_date: "2026-07-18T06:30:00+00:00"
+    end_date: "2026-08-17T06:30:00+00:00"
+    niche_ids: [gaming]
+
+  # ─── Experiment 2: bold_claim vs question hook style (ai_creators) ───
+  #
+  # Motivation: anime bandit has bold_claim winning at 35.4% (per
+  # intelligence-state-audit-2026-07-16). Question hook style is the
+  # historical default but never tested rigorously against bold_claim
+  # in ai_creators specifically. AI news content might respond
+  # differently — questions like "Why did Anthropic vault their AI?"
+  # match the S4a question_reveal variant's cognitive-commitment
+  # thesis; bold_claim might feel too aggressive for AI's more
+  # measured audience.
+  #
+  # Expected outcome: signals whether ai_creators should copy anime's
+  # bold_claim winning strategy or preserve question dominance.
+  - experiment_id: ai_creators_bold_claim_vs_question_hook_2026_07
+    arms: [bold_claim, question]
+    allocation:
+      bold_claim: 0.5
+      question: 0.5
+    start_date: "2026-07-18T06:30:00+00:00"
+    end_date: "2026-08-17T06:30:00+00:00"
+    niche_ids: [ai_creators]
