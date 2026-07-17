@@ -313,6 +313,33 @@ def _build_bandit_context(
         ):
             extra_arms.append(f"hour:{publish_hour}:{platform}:{niche_id}")
 
+        # Layer 3 S5-prep (2026-07-17): variant arm attribution. Every
+        # reward gets attributed to the blueprint's structural variant
+        # (variant_type set by push_to_backlog per S1 wire) so the S5
+        # bandit extension can sample per-variant per-niche when it
+        # lands. Includes single_clip (the default) as a proper baseline
+        # arm rather than an implicit reference — Thompson sampling
+        # handles the uneven observation density between the majority
+        # single_clip arm and the ~5-20% non-default variants correctly
+        # via posterior width.
+        #
+        # Guarded against unknown variant_type values (typos, stale
+        # data) via the VARIANT_TYPES enum check. Fail-open — this is
+        # observability infrastructure; a failure here shouldn't block
+        # feedback registration on the primary content_type arm.
+        try:
+            from genlab_core.variant_types import VARIANT_TYPES
+
+            variant_type = fields.get("variant_type", "")
+            if variant_type and variant_type in VARIANT_TYPES:
+                extra_arms.append(f"variant:{niche_id}:{variant_type}")
+        except Exception as exc:
+            logger.debug(
+                "[publish] variant arm attribution skipped for niche=%s: %s",
+                niche_id,
+                exc,
+            )
+
         if extra_arms:
             ctx["extra_arms"] = extra_arms
         return ctx
