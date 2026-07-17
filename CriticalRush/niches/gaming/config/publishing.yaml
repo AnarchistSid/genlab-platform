@@ -91,8 +91,34 @@ threads:
 #   - GENLAB_AUTO_APPROVE_DISABLED=1 in /opt/genlab/.env → global kill
 #   - touch /opt/genlab/.runtime/auto_approve_kill_switch → file flag
 
+# 2026-07-17: FLIPPED ON — auto-approver enforcement moved to gaming
+# from ai_creators. Reason (session-2026-07-17 audit round 3,
+# comprehensive learning-state query): gaming is empirically READY:
+#
+#   Calibration: 116 samples × 90.5% agreement (clears ≥30 × ≥90%)
+#   Bandit stack: 590 observations (best-trained of any niche)
+#   Top posteriors: style:gaming:question 19.5% (n=29),
+#                   gameplay_clip 11.1% (n=191)
+#   Ensemble votes: 84 in last 30d (only niche with active ensemble)
+#   Time × platform winner: hour:6:facebook:gaming = 10.2%
+#
+# ai_creators was flipped OFF in same session (7.9% agreement, WORST
+# of 5 niches — see BlackboxBrief/config/publishing.yaml).
+#
+# Auto-ramp (genlab-auto2-ramp.timer, daily 15:00 IST) will advance
+# rollout_pct 0.10 → 0.20 → 0.30 → 0.40 → 0.50 automatically as
+# calibration stays above 90% agreement (RAMP_INCREMENT=0.10 per
+# fire, DEFAULT_MAX_ROLLOUT_PCT=0.50 caps auto-ramp — operator has
+# to manually push past 0.50 to reach 1.0).
+#
+# min_confidence=0.80 matches ai_creators's calibrated value from
+# PR #786. Gaming's confidence math is healthier — bandit contributes
+# real signal (not just prior), and hook_classifier's uncertainty-band
+# skip (session-2026-07-17 commit 5350d1c1) removes the sub-0.4
+# noise drag. So the 0.80 floor should clear naturally on strong
+# gaming blueprints (top arms deliver 3-4× baseline engagement).
 auto_publish:
-  enabled: false
-  min_confidence: 0.85
+  enabled: true
+  min_confidence: 0.80
   max_approvals_per_pass: 3
-  rollout_pct: 0.0
+  rollout_pct: 0.10
