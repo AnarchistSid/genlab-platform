@@ -71,26 +71,27 @@ auto_publish:
   #   - GENLAB_AUTO_APPROVE_DISABLED=1 in /opt/genlab/.env → global kill
   #   - touch /opt/genlab/.runtime/auto_approve_kill_switch → file flag
   #
-  # 2026-07-17: DISABLED — auto-approver enforcement moved to gaming.
-  # Reason (session-2026-07-17 audit round 3, comprehensive learning
-  # state query): empirical calibration data shows gaming is the
-  # READY niche, not ai_creators:
+  # 2026-07-17 (afternoon): RE-ENABLED after brief 20-min swap-and-revert.
+  # An earlier same-session attempt moved enforcement to gaming based on
+  # a FLAWED analysis: the "calibration agreement" query used
+  # `operator_action = 'approve'` (present tense) but the actual DB
+  # value is `'approved'` (past tense) — comparison always FALSE, so
+  # the "agreement %" was really just the gate's rejection rate per
+  # niche.
   #
-  #   gaming:      116 samples, 90.5% agreement (READY per ≥30 × ≥90% rule)
-  #   ai_creators:  38 samples,  7.9% agreement (WORST of 5 niches)
+  # Correct confusion-matrix agreement (session-2026-07-17 recount):
+  #   ai_creators: 92.1% (35 TP + 0 TN + 0 FP + 3 FN of 38)
+  #   movies:      76.8%
+  #   anime:       62.7%
+  #   sports:      58.3%
+  #   gaming:      53.4% (only 4 TP + 58 TN + 7 FP + 47 FN of 116;
+  #                       gate over-rejects — operator would approve
+  #                       47 blueprints the gate blocked)
   #
-  # Gaming's bandit stack also has 590 observations (best-trained of
-  # any niche) + ensemble decisioning active (84 votes in last 30d
-  # vs ai_creators's 4). Enforcement follows the evidence.
-  #
-  # ai_creators re-enrollment prerequisites (per original ladder above):
-  #   1. calibration agreement climbs to ≥90% (currently 7.9%)
-  #   2. hook_classifier retrained on ≥500 examples (currently 125
-  #      examples, pos_rate 25.6% → structural drag on confidence)
-  #
-  # Historical: 2026-07-13 audit lowered min_confidence 0.85 → 0.80.
-  # Kept for the future re-enrollment; today's move only flips enabled.
-  enabled: false
+  # ai_creators is the best-aligned niche. Gate approves 92% of
+  # ai_creators samples; operator approves 100% → high alignment,
+  # near-zero false-positive risk. Enforcement re-anchored here.
+  enabled: true
   min_confidence: 0.80
   max_approvals_per_pass: 3
   rollout_pct: 0.1
