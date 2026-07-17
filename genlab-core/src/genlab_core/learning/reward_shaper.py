@@ -93,10 +93,18 @@ BASE_WEIGHTS: dict[str, dict[str, float]] = {
         "comment_rate": 0.1,
     },
     "instagram": {
-        "views": 0.2,
-        "saves": 0.3,
-        "dm_send_rate": 0.3,
+        # 2026-07-17 (Layer 4 foundational): added `follower_gained`
+        # at 0.15 weight. Prior state: NO follower-growth signal on
+        # IG at all — the bandit optimized purely for engagement
+        # (views/saves/dm/shares) with no reward for actually growing
+        # the audience. Wired by learning/metrics/follower_delta.py
+        # augment call at 168h reward-collection window. Other weights
+        # reduced proportionally to preserve sum ≈ 1.0.
+        "views": 0.15,
+        "saves": 0.25,
+        "dm_send_rate": 0.25,
         "shares": 0.15,
+        "follower_gained": 0.15,
         "skip_rate": -0.05,
     },
     "tiktok": {
@@ -106,9 +114,15 @@ BASE_WEIGHTS: dict[str, dict[str, float]] = {
         "follower_gained": 0.20,
     },
     "facebook": {
-        "minutes_viewed": 0.40,
-        "shares": 0.30,
+        # 2026-07-17 (Layer 4 foundational): added `follower_gained`
+        # at 0.15 weight (same rationale as instagram above). Facebook's
+        # legacy weights had ZERO follower-growth signal even though FB
+        # is the highest-follower niche for ai_creators (10K legacy) +
+        # movies (8.7K).
+        "minutes_viewed": 0.30,
+        "shares": 0.25,
         "completion_rate": 0.20,
+        "follower_gained": 0.15,
         "reach": 0.10,
     },
     "twitter": {
@@ -124,9 +138,14 @@ BASE_WEIGHTS: dict[str, dict[str, float]] = {
         "profile_clicks": 0.10,
     },
     "threads": {
-        "views": 0.30,
-        "replies": 0.30,
-        "reposts": 0.25,
+        # 2026-07-17 (Layer 4 foundational): added `follower_gained`
+        # at 0.15 weight. Threads is one of the 4 in-scope platforms
+        # (2026-07-17 operator directive) — needs follower growth
+        # signal like IG and FB. Other weights reduced proportionally.
+        "views": 0.25,
+        "replies": 0.25,
+        "reposts": 0.20,
+        "follower_gained": 0.15,
         "discovery_share": 0.15,
     },
 }
@@ -151,8 +170,18 @@ _METRIC_TARGETS: dict[str, dict[str, float]] = {
     "reply_chain_rate": {"twitter": 0.005, "x": 0.005},
     "completion_rate": {"facebook": 0.3},
     "skip_rate": {"instagram": 0.4},
+    # 2026-07-17 (Layer 4 foundational): early-stage targets. New IG/YT/FB/
+    # Threads channels typically gain 0-2 followers per post; setting target
+    # low (2-5) means normalized reward saturates at ~1.0 when a post
+    # genuinely drives 2-5 new followers — a meaningful early-stage signal.
+    # As channels grow past 5K followers, retune upward (10-50 range).
     "subscriber_gained": {"youtube": 2},
-    "follower_gained": {"tiktok": 10},
+    "follower_gained": {
+        "tiktok": 10,
+        "instagram": 3,
+        "facebook": 3,
+        "threads": 2,
+    },
     "avg_watch_time": {"tiktok": 15},
     "minutes_viewed": {"facebook": 50},
     "shares": {"instagram": 5, "facebook": 3},

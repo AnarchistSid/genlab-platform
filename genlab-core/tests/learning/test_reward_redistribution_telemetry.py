@@ -69,6 +69,8 @@ class TestWarningThreshold:
 
         # Provide EVERY IG metric the shaper expects. Values don't
         # matter — presence is what suppresses the warning.
+        # 2026-07-17: added follower_gained to keep this test in sync
+        # with BASE_WEIGHTS after Layer 4 foundational wire.
         shaper.compute_reward(
             platform="instagram",
             metrics={
@@ -78,6 +80,7 @@ class TestWarningThreshold:
                 "reach": 500,
                 "dm_send_rate": 0.01,
                 "skip_rate": 0.02,
+                "follower_gained": 3,
                 "profile_visits": 10,
                 "follows": 1,
                 "comments": 3,

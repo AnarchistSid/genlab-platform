@@ -37,7 +37,7 @@ import os
 import threading
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 # Callback type: (niche_id, content_type, platform, reward, bandit_context) -> None
@@ -137,10 +137,38 @@ def fetch_platform_metrics(
         logger.warning("[metric_collector] no fetcher for platform '%s'", platform)
         return {}
     try:
-        return fn(raw_id, niche_id=niche_id)
+        metrics = fn(raw_id, niche_id=niche_id)
     except Exception as exc:
         logger.warning("[metric_collector] %s fetch failed for %s: %s", platform, post_id, exc)
         return {}
+
+    # 2026-07-17 (Layer 4 foundational): augment with follower_gained /
+    # subscriber_gained from audience_snapshots deltas. Only at the 168h
+    # window — follower growth on shorter windows (24h/48h) is too
+    # noisy to attribute. Prior state: `follower_gained` was declared as
+    # a reward weight in reward_shaper.BASE_WEIGHTS for tiktok since
+    # 2026-05, and `subscriber_gained` for youtube — but NEVER populated
+    # anywhere in the codebase → bandit optimized purely for engagement
+    # with zero follower-growth signal. Now wired.
+    if window == "168h":
+        try:
+            from genlab_core.learning.metrics.follower_delta import (
+                augment_metrics_with_follower_delta,
+            )
+
+            # publish_time isn't a direct arg here; approximate by 7d
+            # ago (168h) — the caller's window intent aligns with this.
+            approx_publish = datetime.now(UTC) - timedelta(hours=168)
+            metrics = augment_metrics_with_follower_delta(
+                metrics, niche_id, platform, approx_publish, window_days=7,
+            )
+        except Exception as exc:
+            logger.debug(
+                "[metric_collector] follower_delta augment failed for %s/%s: %s",
+                niche_id, platform, exc,
+            )
+
+    return metrics
 
 
 # P5a (2026-06-19): YouTube fetcher + module-level state moved to
