@@ -120,6 +120,12 @@ class TestPublish:
                 status_code=200,
                 json=lambda: {"status_code": "FINISHED"},
             )
+            # 2026-07-17 (Layer 1 batch 2): CDN URL preflight added.
+            # Test URLs need HEAD-mock returning 200 + video/*.
+            mock_req.head.return_value = MagicMock(
+                status_code=200,
+                headers={"Content-Type": "video/mp4"},
+            )
             result = ig_client.publish(payload)
 
         assert result.success is True
@@ -146,6 +152,10 @@ class TestPublish:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"status_code": "PUBLISHED"},
+            )
+            mock_req.head.return_value = MagicMock(
+                status_code=200,
+                headers={"Content-Type": "video/mp4"},
             )
             result = ig_client.publish(payload)
 
@@ -253,6 +263,10 @@ class TestPublish:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"status_code": "FINISHED"},
+            )
+            mock_req.head.return_value = MagicMock(
+                status_code=200,
+                headers={"Content-Type": "video/mp4"},
             )
             ig_client.publish(payload)
 

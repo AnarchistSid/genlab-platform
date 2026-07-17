@@ -371,13 +371,22 @@ class YouTubeClient:
 
         video_path = payload.media_paths[0]
 
-        # Niche → YouTube category mapping
+        # Niche → YouTube category mapping.
+        #
+        # 2026-07-17 (Layer 1 batch 2): ai_creators changed 28→24.
+        # Category 28 (Science & Technology) is search-optimized but
+        # gets weak algorithmic push on YouTube Shorts recommendation
+        # feed. Category 24 (Entertainment) is what viral tech
+        # explainer channels use (MKBHD Shorts, Marques Brownlee's
+        # Shorts subaccount, MrWhoseTheBoss, etc.) — the Shorts algo
+        # weights Entertainment for cold-start discovery. For a channel
+        # with 4 subscribers trying to break out, discovery > search.
         _NICHE_CATEGORIES: dict[str, str] = {
-            "gaming": "20",
-            "sports": "17",
-            "movies": "1",
-            "anime": "1",
-            "ai_creators": "28",
+            "gaming": "20",       # Gaming
+            "sports": "17",       # Sports
+            "movies": "1",        # Film & Animation
+            "anime": "1",         # Film & Animation
+            "ai_creators": "24",  # Entertainment (was 28 Science & Tech)
         }
 
         # Build title: prefer YouTubeSpecific.shorts_title > hook > caption
@@ -401,15 +410,19 @@ class YouTubeClient:
             # Last resort: use first 40 chars of caption as title
             title = (payload.caption or "")[:37] + "?" if payload.caption else "New Video"
 
-        # Ensure #Shorts tag for algorithm classification
-        if "#shorts" not in title.lower():
-            title = title[:92] + " #Shorts"  # Reserve 8 chars for " #Shorts"
-        else:
-            title = title[:100]
+        # Title budget: cap at 100 chars (YouTube hard limit). Don't
+        # append #Shorts to title — see description-first-line below.
+        title = title[:100]
 
-        # Build description from caption + hashtags
+        # 2026-07-17 (Layer 1 batch 2): #Shorts tag moved from TITLE
+        # (weak signal — algo classifier weights it lightly) to
+        # DESCRIPTION FIRST LINE (strong signal — YouTube's Shorts
+        # classifier heavily weights description-prefix tokens for
+        # short-form detection). Also keeps titles cleaner (title is
+        # user-facing; #Shorts is algorithmic metadata).
+        # See: YouTube Creator Academy "Shorts algorithm" 2024 update.
         hashtags_str = " ".join(payload.hashtags) if payload.hashtags else ""
-        description_parts = []
+        description_parts = ["#Shorts"]
         if payload.caption:
             description_parts.append(payload.caption.strip())
         if hashtags_str:

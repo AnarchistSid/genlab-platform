@@ -644,6 +644,27 @@ class InstagramClient:
 
         return self._media_publish(creation_id=creation_id)
 
+    def _preflight_video_url(self, video_url: str) -> str | None:
+        """HEAD-check the CDN URL is fetchable by Meta.
+
+        2026-07-17 (Layer 1 batch 2): Meta's REELS container-creation
+        polls the URL server-side; if the CDN returned 404 / non-video
+        content-type / expired, Meta fails with generic 2207077
+        ("media upload failed") after burning 30-60s. Local pre-check
+        skips the wasted round-trip. Returns error string on failure,
+        None on success.
+        """
+        try:
+            head = requests.head(video_url, timeout=15, allow_redirects=True)
+        except Exception as exc:
+            return f"CDN URL preflight failed ({type(exc).__name__}): {exc}"
+        if head.status_code != 200:
+            return f"CDN URL preflight returned HTTP {head.status_code}"
+        ctype = (head.headers.get("Content-Type") or "").lower()
+        if not (ctype.startswith("video/") or ctype == "application/octet-stream"):
+            return f"CDN URL preflight returned unexpected Content-Type: {ctype!r}"
+        return None
+
     def _create_reel_container(
         self,
         *,
@@ -656,6 +677,22 @@ class InstagramClient:
 
         Returns the creation_id on success, ``None`` on failure.
         """
+        # 2026-07-17 (Layer 1 batch 2): preflight CDN URL to catch
+        # 404 / wrong-content-type / expired-URL cases locally instead
+        # of burning 30-60s on Meta's async container polling. Only
+        # runs for http(s) URLs — Meta accepts file:// only via a
+        # different upload path.
+        if video_url.startswith(("http://", "https://")):
+            preflight_error = self._preflight_video_url(video_url)
+            if preflight_error is not None:
+                self._last_error = f"Preflight rejected: {preflight_error}"
+                self._log.warning(
+                    "Skipping Meta container-create; %s (url tail=%s)",
+                    preflight_error,
+                    video_url[-60:],
+                )
+                return None
+
         url = f"{self._base_url}/{self._ig_user_id}/media"
         data: dict[str, Any] = {
             "media_type": "REELS",
