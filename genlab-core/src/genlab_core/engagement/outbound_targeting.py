@@ -43,7 +43,10 @@ Each target passes multiple filters before being returned:
 Additional filters that happen at the CALLER level (not here):
 - Rate limit: 1 comment/creator/week per niche (via rate_limiter)
 - Toxicity gate on generated reply (via toxicity_gate)
-- Layer 4 policy: skip monetized-competitor videos (future work)
+- Layer 4 policy: skip competitor videos — SHIPPED 2026-07-17 via
+  ``competitor_creators_config``. Operator-curated per-niche channel_id
+  blocklist. Empty default → no-op. Filter is invoked here at target
+  discovery time before any comment-level filtering runs.
 """
 
 from __future__ import annotations
@@ -131,9 +134,7 @@ def _rank_comments(comments: list[dict]) -> list[dict]:
     creator; replying there may look like piggy-backing) and target
     positions 3-5.
     """
-    scored = sorted(
-        comments, key=lambda c: int(c.get("like_count", 0) or 0), reverse=True
-    )
+    scored = sorted(comments, key=lambda c: int(c.get("like_count", 0) or 0), reverse=True)
     # Skip position 0-1, target 2-5 (0-indexed → positions 3-6)
     return scored[2:6] if len(scored) >= 3 else scored
 
@@ -143,6 +144,7 @@ def discover_youtube_targets(
     creator_recent_videos: list[dict],
     *,
     already_replied_comment_ids: set[str] | None = None,
+    competitor_blocklist: dict[str, set[str]] | None = None,
     min_comment_chars: int = DEFAULT_MIN_COMMENT_CHARS,
     min_video_comment_count: int = DEFAULT_MIN_VIDEO_COMMENT_COUNT,
     max_video_age_days: int = DEFAULT_MAX_VIDEO_AGE_DAYS,
@@ -180,6 +182,13 @@ def discover_youtube_targets(
     avoid spam-flag concentration).
     """
     already_replied = already_replied_comment_ids or set()
+    # Layer 4 audit round 4 policy (2026-07-17): competitor blocklist.
+    # Direct-competitor channels never receive outbound replies from us
+    # (looks like poaching; triggers spam-report flags at higher rates).
+    # Blocklist is per-niche channel_id sets from
+    # ``competitor_creators_config.load_competitor_creators``. Empty
+    # default preserves behavior (no filter fires when config absent).
+    blocked_channels = (competitor_blocklist or {}).get(niche_id, set())
     targets: list[OutboundTarget] = []
     per_creator_count: dict[str, int] = {}
 
@@ -191,6 +200,18 @@ def discover_youtube_targets(
         if len(targets) >= max_targets_per_niche:
             return targets
         video_channel_id = str(video.get("channel_id") or "")
+        # Competitor blocklist check — skip the entire video (and all
+        # its comments) when the channel is on this niche's blocklist.
+        # Runs BEFORE per-creator cap check because a blocked channel
+        # shouldn't count against the "3 replies per creator" budget.
+        if video_channel_id and video_channel_id in blocked_channels:
+            logger.info(
+                "[outbound_targeting] skipping video %s: channel %s on %s competitor blocklist",
+                video.get("video_id"),
+                video_channel_id,
+                niche_id,
+            )
+            continue
         if per_creator_count.get(video_channel_id, 0) >= max_targets_per_creator:
             continue
 
@@ -225,19 +246,13 @@ def discover_youtube_targets(
                     video_title=str(video.get("title") or ""),
                     video_view_count=int(video.get("view_count", 0) or 0),
                     comment_id=comment_id,
-                    comment_author_channel_id=str(
-                        comment.get("author_channel_id") or ""
-                    ),
-                    comment_author_display_name=str(
-                        comment.get("author_display_name") or ""
-                    ),
+                    comment_author_channel_id=str(comment.get("author_channel_id") or ""),
+                    comment_author_display_name=str(comment.get("author_display_name") or ""),
                     comment_text=str(comment.get("text") or ""),
                     comment_like_count=int(comment.get("like_count", 0) or 0),
                 )
             )
-            per_creator_count[video_channel_id] = (
-                per_creator_count.get(video_channel_id, 0) + 1
-            )
+            per_creator_count[video_channel_id] = per_creator_count.get(video_channel_id, 0) + 1
             if per_creator_count[video_channel_id] >= max_targets_per_creator:
                 break
             if len(targets) >= max_targets_per_niche:

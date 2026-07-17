@@ -1,0 +1,13 @@
+version: 1
+
+niches:
+  ai_creators:
+    channels: []
+  gaming:
+    channels: []
+  sports:
+    channels: []
+  movies:
+    channels: []
+  anime:
+    channels: []
