@@ -434,7 +434,10 @@ def list_conversions(
         "per_page": str(per_page),
     }
     query = urllib.parse.urlencode(params)
-    url = f"{_CUELINKS_V3_BASE}/conversions?{query}"
+    # V3 endpoint is /transactions (real-time conversions with cursor
+    # sync per developer portal docs). Earlier draft used /conversions
+    # which 404s. Verified live 2026-07-17.
+    url = f"{_CUELINKS_V3_BASE}/transactions?{query}"
 
     body = _get(url, key=key)
     if body is None:
@@ -444,7 +447,7 @@ def list_conversions(
 
 
 def _parse_conversions(body: Any) -> list[dict[str, Any]]:
-    """Parse Cuelinks V3 /conversions response into a normalized list.
+    """Parse Cuelinks V3 /transactions response into a normalized list.
 
     Handles the multiple shapes Cuelinks V3 has been observed to
     return: bare list, {"data": [...]}, {"conversions": [...]}.
