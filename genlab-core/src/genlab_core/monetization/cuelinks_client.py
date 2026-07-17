@@ -299,6 +299,13 @@ def _cache_key_for(seed: str) -> str:
     return f"cuelinks-{digest[:32]}"
 
 
+# 2026-07-17: Cuelinks V3 WAF returns HTTP 403 for requests carrying
+# the default Python-urllib/X.Y User-Agent. Direct curl works. Adding
+# a real UA restores 200. Discovered live during first API-key
+# provisioning — confirmed with side-by-side curl vs client.
+_USER_AGENT = "GenLab/1.0 (+https://github.com/AnarchistSid/genlab-platform)"
+
+
 def _get(url: str, *, key: str) -> Any:
     request = urllib.request.Request(
         url,
@@ -306,6 +313,7 @@ def _get(url: str, *, key: str) -> Any:
         headers={
             "Accept": "application/json",
             "Authorization": f"Token {key}",
+            "User-Agent": _USER_AGENT,
         },
     )
     return _execute(request, tag="get", url=url)
@@ -320,6 +328,7 @@ def _post(url: str, *, key: str, payload: dict[str, Any]) -> Any:
             "Content-Type": "application/json",
             "Accept": "application/json",
             "Authorization": f"Token {key}",
+            "User-Agent": _USER_AGENT,
         },
     )
     return _execute(request, tag="post", url=url)
