@@ -133,6 +133,29 @@ class BlueprintStore:
             if val:
                 fields[key] = val
 
+        # Layer 3 (2026-07-17): variant_type + variant_payload columns
+        # were added by migration a8w9x0y1z2a3. Column defaults handle
+        # rows created before this wire ships (single_clip / {}); the
+        # UNKNOWN_FIELD_NAME retry path below strips these if the
+        # migration hasn't run yet on a target backend.
+        from genlab_core.variant_types import (
+            DEFAULT_VARIANT,
+            is_valid_variant,
+        )
+
+        variant_type = blueprint.get("variant_type") or DEFAULT_VARIANT
+        if not is_valid_variant(variant_type):
+            logger.warning(
+                "[blueprint_store] unknown variant_type=%r for candidate_id=%s — "
+                "falling back to %s. See genlab_core.variant_types.VARIANT_TYPES.",
+                variant_type,
+                blueprint.get("candidate_id"),
+                DEFAULT_VARIANT,
+            )
+            variant_type = DEFAULT_VARIANT
+        fields["variant_type"] = variant_type
+        fields["variant_payload"] = blueprint.get("variant_payload") or {}
+
         # PR #526 (2026-06-24, SR-C tenant binding): pass niche_id
         # through to the backend's SET LOCAL app.niche_id step. The
         # blueprint dict always carries niche_id from the caller
@@ -161,6 +184,8 @@ class BlueprintStore:
                     "published_hour",
                     "published_day",
                     "clip_url",
+                    "variant_type",
+                    "variant_payload",
                 ):
                     fields.pop(f, None)
                 # Retry preserves the same niche binding — the original
@@ -370,6 +395,28 @@ class BlueprintStore:
             # bug class flagged by the audit, just on the bulk path).
             if bp.get("niche_id"):
                 record["niche_id"] = bp["niche_id"]
+
+            # Layer 3 (2026-07-17): variant_type + variant_payload —
+            # mirrors the single-create path. Migration a8w9x0y1z2a3
+            # column defaults handle rows that don't specify (falls
+            # back to single_clip / {}).
+            from genlab_core.variant_types import (
+                DEFAULT_VARIANT,
+                is_valid_variant,
+            )
+
+            variant_type = bp.get("variant_type") or DEFAULT_VARIANT
+            if not is_valid_variant(variant_type):
+                logger.warning(
+                    "[blueprint_store] batch: unknown variant_type=%r for "
+                    "candidate_id=%s — falling back to %s.",
+                    variant_type,
+                    bp.get("candidate_id"),
+                    DEFAULT_VARIANT,
+                )
+                variant_type = DEFAULT_VARIANT
+            record["variant_type"] = variant_type
+            record["variant_payload"] = bp.get("variant_payload") or {}
             records.append(record)
 
         # PR #527: detect unique-niche state to decide kwarg shape.
