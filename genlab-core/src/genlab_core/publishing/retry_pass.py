@@ -172,14 +172,48 @@ def _eligible_retry_platforms(pps: dict, daily_cap: Any | None) -> list[str]:
         if not should_retry(error_class) or attempts >= MAX_RETRY_ATTEMPTS:
             continue
 
-        # R-21: never auto-re-publish a failure that may have actually landed
-        # (timeout / broken pipe / container-expired). Duplicate-post risk.
-        if status_data.get("ambiguous") or is_ambiguous_failure(status_data.get("last_error", "")):
+        # R-21: ambiguous failures (timeout / broken pipe / container-expired)
+        # MAY have actually landed on the platform — duplicate-post risk.
+        #
+        # 2026-07-17 (audit round 4): the original blanket-skip policy
+        # created a permanent-fail loop for IG. 30-day data showed 24/24
+        # IG failures with empty error strings, all marked ambiguous
+        # (executor TimeoutError → "Publish timed out after 600s"
+        # matched _AMBIGUOUS_AFTER_SEND regex), all permanently skipped.
+        # Follower growth on IG stayed at 0-3 followers over 60 days
+        # across all 5 niches.
+        #
+        # New policy: allow AT MOST ONE ambiguous retry per blueprint per
+        # platform. If the first attempt truly did land, the retry
+        # produces a duplicate post — worst case 1 duplicate per bp per
+        # platform. If the first attempt didn't land (the empirically
+        # common case), the retry recovers. After 1 ambiguous retry,
+        # permanent skip preserves the original R-21 protection.
+        #
+        # Phase-2 (deferred): caption-fingerprint check via
+        # /{ig_user_id}/media before retrying — needs new IG client
+        # methods + IG-specific retry logic. Ships as a follow-up
+        # after this policy change proves out on prod.
+        is_ambiguous_shape = (
+            status_data.get("ambiguous")
+            or is_ambiguous_failure(status_data.get("last_error", ""))
+        )
+        if is_ambiguous_shape and attempts >= 1:
             logger.warning(
-                "[publish] Skipping cross-run retry of %s — ambiguous failure may have landed",
+                "[publish] Skipping cross-run retry of %s — ambiguous "
+                "failure at attempt %d (max 1 ambiguous retry per R-21 "
+                "duplicate-post protection)",
                 plat,
+                attempts,
             )
             continue
+        if is_ambiguous_shape:
+            logger.info(
+                "[publish] Allowing ONE ambiguous retry for %s (attempt %d) "
+                "— will permanent-skip on next ambiguous failure",
+                plat,
+                attempts + 1,
+            )
 
         if _retry_not_yet_due(status_data):
             continue

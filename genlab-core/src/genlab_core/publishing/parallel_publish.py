@@ -51,9 +51,17 @@ from genlab_core.publishing.preflight import resolve_client_kwargs
 
 logger = logging.getLogger(__name__)
 
-# Per-platform publish wall-clock cap. Default 600s matches the historical
-# behaviour. Tunable per-call if a niche needs different latency budgets.
-DEFAULT_PUBLISH_TIMEOUT_SECONDS: int = 600
+# Per-platform publish wall-clock cap.
+#
+# 2026-07-17 (audit round 4): raised 600 → 900 to give IG's
+# _TOTAL_PUBLISH_BUDGET_SECONDS=420 (see instagram.py:46) a full 480s
+# slippage margin. Prior state: IG budget 540 + executor timeout 600
+# = 60s margin. Meta's async container-polling occasionally exceeds
+# 540s (2207077 slow-fetch → longer retry cycles) → hits 600s
+# executor kill → TimeoutError → marked ambiguous → permanently
+# skipped by retry_pass.py:177. 480s margin drops that hazard to
+# near-zero for the observed distribution.
+DEFAULT_PUBLISH_TIMEOUT_SECONDS: int = 900
 
 
 @dataclass
@@ -137,11 +145,24 @@ def execute_parallel_publish(
                     error=f"Publish timed out after {timeout_seconds}s for {platform}",
                 )
             except Exception as exc:
+                # 2026-07-17 (audit round 4): capture type + traceback in
+                # error string. Prior state: `f"Publish error: {exc}"` where
+                # `str(exc)` is often empty for wrapped urllib3 / requests
+                # exceptions → analytics_recorder writes empty error_message
+                # → 24/24 IG failures over 30 days had empty error strings
+                # and no way to diagnose. Full type + traceback tail
+                # guarantees non-empty diagnostic for every failure.
+                import traceback as _tb
+
                 platform = futures[future]
+                tb_tail = _tb.format_exc()[-400:]
                 result = PublishResult(
                     platform=to_registry_id(platform),
                     success=False,
-                    error=f"Publish error: {exc}",
+                    error=(
+                        f"Publish error [{type(exc).__name__}]: {exc!r} | "
+                        f"tb_tail: {tb_tail}"
+                    ),
                 )
 
             error_class = ""

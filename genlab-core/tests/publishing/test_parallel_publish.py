@@ -359,8 +359,34 @@ class TestEmptyEdgeCases:
 
 
 class TestDefaultTimeout:
-    def test_default_is_600s(self) -> None:
-        """600s matches the historical inline value. Bumping this changes
-        the wall-clock budget of a single platform publish — an ops
-        decision that should be intentional."""
-        assert DEFAULT_PUBLISH_TIMEOUT_SECONDS == 600
+    def test_default_is_900s(self) -> None:
+        """2026-07-17 (audit round 4): bumped 600 → 900 to give IG's
+        `_TOTAL_PUBLISH_BUDGET_SECONDS=420` a 480s slippage margin
+        (previously 60s). Prior state: Meta's async container-polling
+        occasionally exceeded 540s → executor killed IG mid-poll at 600s
+        → TimeoutError → ambiguous mark → permanently skipped by
+        retry_pass.py:177. 24/24 IG publishes over 30d failed this way.
+
+        MUST stay coupled with instagram._TOTAL_PUBLISH_BUDGET_SECONDS —
+        the invariant is `executor_timeout > ig_budget + 60s margin`.
+        See strategic-analysis-2026-07-17-growth-targets memory.
+        """
+        assert DEFAULT_PUBLISH_TIMEOUT_SECONDS == 900, (
+            "Executor timeout must give IG's TOTAL_PUBLISH_BUDGET_SECONDS "
+            "a substantial slippage margin. If reducing, first read the "
+            "audit-round-4 memo on the permanent-fail loop this fixed."
+        )
+
+    def test_executor_timeout_exceeds_ig_budget_with_margin(self) -> None:
+        """Enforce the coupling: executor timeout ≥ IG budget + 60s.
+        This is the load-bearing invariant that prevents the ambiguous-
+        skip permanent-fail loop from returning."""
+        from genlab_core.platforms.instagram import _TOTAL_PUBLISH_BUDGET_SECONDS
+
+        margin = DEFAULT_PUBLISH_TIMEOUT_SECONDS - _TOTAL_PUBLISH_BUDGET_SECONDS
+        assert margin >= 60, (
+            f"executor_timeout={DEFAULT_PUBLISH_TIMEOUT_SECONDS}s minus "
+            f"IG budget={_TOTAL_PUBLISH_BUDGET_SECONDS}s = {margin}s margin. "
+            "Must be ≥60s or IG's slow-poll cases get killed mid-poll → "
+            "ambiguous → permanently skipped. See audit round 4."
+        )

@@ -43,7 +43,15 @@ _POLL_SLOWDOWN_AFTER = 30
 # reel AFTER the publisher gave up → a phantom/duplicate publish. We bound the
 # TOTAL wall-clock budget below the executor timeout and share it across the
 # initial poll + retry, so the call always returns before the future times out.
-_TOTAL_PUBLISH_BUDGET_SECONDS = 540  # < 600 executor timeout, ~60s margin
+# 2026-07-17 (audit round 4): 540 → 420. Combined with
+# parallel_publish.DEFAULT_PUBLISH_TIMEOUT_SECONDS raise to 900,
+# gives IG 480s slippage margin (was 60s). Prior 60s margin was
+# insufficient — Meta's async container polling occasionally exceeded
+# 540s → executor killed IG mid-poll at 600s → TimeoutError →
+# ambiguous mark → permanent skip via retry_pass.py:177. Empirical
+# result: 24/24 IG publishes failed with empty error strings over
+# 30 days.
+_TOTAL_PUBLISH_BUDGET_SECONDS = 420  # 420 IG budget + 900 executor timeout = 480s margin
 _RETRY_MIN_REMAINING_SECONDS = 90  # 30s backoff + ≥60s for a useful second poll
 
 
