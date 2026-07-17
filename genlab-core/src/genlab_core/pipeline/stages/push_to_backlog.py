@@ -2593,6 +2593,7 @@ class PushToBacklog:
                     # writer's series-injection path was skipped (fail-open).
                     # Both callsites share the same detector — cheap regex, no
                     # state coupling. See [[variant-architecture-roadmap]].
+                    variant_assigned = False
                     try:
                         from genlab_core.writing.series_detector import detect_series
 
@@ -2609,6 +2610,7 @@ class PushToBacklog:
                                 "series_title": series_info.series_title,
                                 "detection_pattern": series_info.detection_pattern,
                             }
+                            variant_assigned = True
                             logger.info(
                                 "[PUSH] variant=series_part detected: %s part=%d/%d id=%s",
                                 series_info.series_title,
@@ -2622,6 +2624,32 @@ class PushToBacklog:
                             story.get("story_id", "<no-id>"),
                             exc,
                         )
+
+                    # Layer 3 S3 (2026-07-17): watch_till_end variant selector.
+                    # Only fires when series_part didn't already claim this
+                    # blueprint — variants are exclusive. Selector itself also
+                    # short-circuits on series priority (defense in depth).
+                    # Empty variant_payload for this variant per PAYLOAD_CONTRACTS.
+                    if not variant_assigned:
+                        try:
+                            from genlab_core.writing.watch_till_end_selector import (
+                                is_watch_till_end_eligible,
+                            )
+
+                            if is_watch_till_end_eligible(story):
+                                fields["variant_type"] = "watch_till_end"
+                                fields["variant_payload"] = {}
+                                logger.info(
+                                    "[PUSH] variant=watch_till_end eligible: title=%r duration=%s",
+                                    (story.get("title") or "")[:60],
+                                    story.get("duration_seconds"),
+                                )
+                        except Exception as exc:  # noqa: BLE001
+                            logger.debug(
+                                "[PUSH] watch_till_end selection skipped for story=%s: %s",
+                                story.get("story_id", "<no-id>"),
+                                exc,
+                            )
 
                     if publishable:
                         fields["visual_paths"] = json.dumps([rendered_path])

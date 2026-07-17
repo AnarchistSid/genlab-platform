@@ -440,6 +440,30 @@ def write_video_content(
     except Exception as exc:
         logger.debug("[%s] series detection skipped: %s", niche_id, exc)
 
+    # Layer 3 S3 (2026-07-17): watch_till_end variant selector. For
+    # compilation-type content ("Top 10", "Highlights", "Reactions") in
+    # the 30-90s sweet spot where the source has no built-in hook, we
+    # need the LLM to craft a payoff-promise hook that engineers
+    # completion-rate retention. Selector short-circuits on series
+    # priority (variants are exclusive on a blueprint).
+    watch_till_end_hint = ""
+    try:
+        from genlab_core.writing.watch_till_end_selector import (
+            format_watch_till_end_prompt_section,
+            is_watch_till_end_eligible,
+        )
+
+        if is_watch_till_end_eligible(video):
+            watch_till_end_hint = format_watch_till_end_prompt_section()
+            logger.info(
+                "[%s] watch_till_end eligible: title=%r duration=%s",
+                niche_id,
+                (video.get("title") or "")[:60],
+                video.get("duration_seconds"),
+            )
+    except Exception as exc:
+        logger.debug("[%s] watch_till_end selection skipped: %s", niche_id, exc)
+
     age_hours = video.get("age_hours", 1)
     if not age_hours:
         # Compute from view_count / view_velocity if available
@@ -558,6 +582,7 @@ def write_video_content(
         + content_angle_hint
         + findings_hint
         + series_context_hint
+        + watch_till_end_hint
         + "OUTPUT FORMAT — strictly enforced:\n"
         "Respond ONLY with valid JSON. ALL SIX KEYS ARE REQUIRED and must\n"
         "have non-empty string values:\n"
