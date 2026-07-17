@@ -1,0 +1,27 @@
+[Unit]
+Description=GenLab outbound reply engine timer — every 4 hours
+
+[Timer]
+# Every 4 hours starting from 08:00 UTC (13:30 IST). Gives 6 runs
+# per day = 6 × 15 max replies/niche = 90/niche/day upper bound,
+# but per-creator weekly rate limit + comment-availability filters
+# will keep the actual rate much lower (~5-15/niche/day observed).
+#
+# Cadence rationale:
+# - Too frequent (< 2h) = same creator's new upload might be
+#   discovered multiple times before comments accumulate
+# - Too infrequent (> 8h) = miss the algorithmic-window for new
+#   uploads (YT prioritises comments posted in first 24h)
+# - 4h = 3 uploads-cycles per day for creators that post daily,
+#   catches most in the first-8h window
+#
+# Persistent=false — this is a "grow the audience" tick, not a
+# "capture missed reports" tick. If VPS is down for a day, no
+# reason to fire 6 times at once on next boot (would burn rate
+# limits + look bot-like).
+OnCalendar=*-*-* 08,12,16,20,00,04:00:00 UTC
+Persistent=false
+Unit=genlab-outbound-reply-engine.service
+
+[Install]
+WantedBy=timers.target

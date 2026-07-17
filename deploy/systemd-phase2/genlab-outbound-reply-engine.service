@@ -1,0 +1,45 @@
+[Unit]
+Description=GenLab outbound reply engine — replies to top comments on top-creator videos in-niche
+Documentation=file:///opt/genlab/scripts/run_outbound_reply_engine.py
+After=network-online.target
+
+# 2026-07-14: mass OnFailure coverage — every genlab service
+# should route failures to the shared failure-alert template.
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+
+# Layer 4 growth engine (2026-07-17).
+#
+# Audit round 4: outbound reply-to-top-comments on OTHER creators'
+# videos is the SINGLE highest-impact growth mechanic on IG/YT algos
+# for 2024-26. A witty reply on a 200K-view AI-explainer video has
+# historically netted creators 500-2000 followers overnight —
+# potential 1000× on the current 0.5/day baseline, repeatable daily
+# per channel.
+#
+# Flag-gated OFF by default. Requires:
+#   GENLAB_OUTBOUND_REPLIES_ENABLED=1
+# on prod .env before the timer produces any posts. Absent flag →
+# graceful no-op (safe to enable timer immediately).
+#
+# Rate limits (enforced in-script):
+#   - Max 1 reply per creator per week per niche (spam-flag protection)
+#   - Max 15 replies total per niche per run (15 × 5 niches = 75/day
+#     total upper bound at 2h cadence = 6 runs/day = actually 90 max)
+#   - Max 3 replies per creator video (spread across comment positions)
+#
+# YouTube-only for this initial ship. IG + Threads outbound in
+# Layer 4 batch 2 (needs IG search API integration).
+ExecStart=/opt/genlab/.venv/bin/python scripts/run_outbound_reply_engine.py --niche all
+TimeoutSec=1200
+
+[Install]
+WantedBy=multi-user.target
