@@ -1,0 +1,24 @@
+[Unit]
+Description=GenLab Cuelinks importer timer — daily 06:15 UTC (11:45 IST)
+
+[Timer]
+# 06:15 UTC = 11:45 IST. Sits AFTER genlab-import-amazon-conversions
+# (05:45) and BEFORE register-conversion-rewards (would fire at
+# 06:20 UTC in the L3 sequence) so Cuelinks conversions land in
+# affiliate_revenue before any reward-registration pass reads them.
+#
+# Full daily monetization sequence:
+#   05:45 UTC — genlab-import-amazon-conversions       (CSV upload)
+#   06:15 UTC — genlab-import-cuelinks-conversions     ← THIS (API poll)
+#   06:20 UTC — genlab-register-conversion-rewards     (bandit update)
+#   06:30 UTC — pipelines start
+#
+# Persistent — a missed fire (VPS down, network hiccup) catches up
+# on next boot. Cuelinks retains 90+ days of conversions server-side
+# so a missed day+catch-up loses no data.
+OnCalendar=*-*-* 06:15:00 UTC
+Persistent=true
+Unit=genlab-import-cuelinks-conversions.service
+
+[Install]
+WantedBy=timers.target

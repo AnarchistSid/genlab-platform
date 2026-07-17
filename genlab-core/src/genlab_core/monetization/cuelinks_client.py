@@ -378,6 +378,118 @@ def _parse_campaigns(body: Any) -> list[dict[str, Any]]:
     return []
 
 
+def list_conversions(
+    from_date: str,
+    to_date: str,
+    *,
+    per_page: int = 200,
+) -> list[dict[str, Any]]:
+    """Fetch confirmed conversions in the [from_date, to_date] range.
+
+    2026-07-17 (Layer 2 batch 2 monetization). Cuelinks V3 exposes
+    conversion polling — until this method existed, Gen Lab had
+    ZERO real conversion attribution: `affiliate_revenue` rows were
+    all `clicks × 0.02` estimation, `affiliate_conversions` was
+    empty, 108-arm product bandit had 0 observations.
+
+    Dates in ISO 8601 date format (YYYY-MM-DD). API returns confirmed
+    conversions only (pending/reversed conversions filtered server-
+    side per Cuelinks convention).
+
+    Cache is deliberately NOT applied — conversion data should always
+    reflect the latest server state so the daily import cron can
+    detect newly-confirmed conversions from prior windows.
+
+    Returns
+    -------
+    list of conversion dicts with fields normalized:
+        - conversion_id: str
+        - order_id: str
+        - subid: str  (blueprint attribution — was set at click-time)
+        - campaign_name: str
+        - sale_amount: float (in INR by default)
+        - commission_amount: float
+        - currency: str
+        - status: str ("confirmed" | "pending" | "reversed")
+        - conversion_time: str (ISO 8601)
+    Empty list on API failure or missing key (fail-open — never
+    crashes the importer).
+    """
+    key = _get_key()
+    if not key:
+        return []
+
+    params = {
+        "from_date": from_date,
+        "to_date": to_date,
+        "per_page": str(per_page),
+    }
+    query = urllib.parse.urlencode(params)
+    url = f"{_CUELINKS_V3_BASE}/conversions?{query}"
+
+    body = _get(url, key=key)
+    if body is None:
+        return []
+
+    return _parse_conversions(body)
+
+
+def _parse_conversions(body: Any) -> list[dict[str, Any]]:
+    """Parse Cuelinks V3 /conversions response into a normalized list.
+
+    Handles the multiple shapes Cuelinks V3 has been observed to
+    return: bare list, {"data": [...]}, {"conversions": [...]}.
+    Fail-open — unknown shape returns [].
+    """
+    if isinstance(body, list):
+        rows = body
+    elif isinstance(body, dict):
+        for k in ("data", "conversions", "results", "items"):
+            if isinstance(body.get(k), list):
+                rows = body[k]
+                break
+        else:
+            logger.warning(
+                "[cuelinks] cuelinks_conversions_parse_failed unknown_shape keys=%s",
+                list(body.keys())[:10],
+            )
+            return []
+    else:
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            normalized.append(
+                {
+                    "conversion_id": str(
+                        row.get("conversion_id") or row.get("id") or ""
+                    ),
+                    "order_id": str(row.get("order_id") or ""),
+                    "subid": str(row.get("subid") or row.get("sub_id") or ""),
+                    "campaign_name": str(
+                        row.get("campaign_name") or row.get("merchant") or ""
+                    ),
+                    "sale_amount": float(
+                        row.get("sale_amount") or row.get("order_amount") or 0
+                    ),
+                    "commission_amount": float(
+                        row.get("commission_amount") or row.get("commission") or 0
+                    ),
+                    "currency": str(row.get("currency") or "INR"),
+                    "status": str(row.get("status") or "confirmed"),
+                    "conversion_time": str(
+                        row.get("conversion_time") or row.get("created_at") or ""
+                    ),
+                }
+            )
+        except (TypeError, ValueError) as exc:
+            logger.debug("[cuelinks] skipping malformed conversion row: %s", exc)
+    return normalized
+
+
 def _parse_convert(body: Any) -> str:
     """Pull the tracked URL out of a V3 /links/convert response.
 
