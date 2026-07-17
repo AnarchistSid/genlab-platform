@@ -174,8 +174,11 @@ def discover_youtube_targets(
             ],
         }
 
-    Caller (typically ``outbound_poller.py``) fetches the shape via
-    YouTube Data API v3.
+    Caller (``scripts/run_outbound_reply_engine.py`` — the poller-
+    equivalent shipped 2026-07-17 as the L4 batch 2 runner) fetches the
+    shape via YouTube Data API v3. Named "run_outbound_reply_engine"
+    rather than "outbound_poller" to match the systemd unit name +
+    reflect the reply-execution scope beyond pure target discovery.
 
     Returns up to ``max_targets_per_niche`` targets, distributed
     across creators (max ``max_targets_per_creator`` per creator to
