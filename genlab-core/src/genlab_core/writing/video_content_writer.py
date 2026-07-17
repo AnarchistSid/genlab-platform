@@ -413,6 +413,33 @@ def write_video_content(
     except Exception as exc:
         logger.debug("[%s] Strategist findings injection skipped: %s", niche_id, exc)
 
+    # Layer 3 S2 (2026-07-17): series context injection. If the source
+    # video title indicates part-of-a-series ("Part 3", "Episode 22",
+    # "S03E11"), inject a SERIES CONTEXT section so the writer crafts
+    # a hook that references the arc rather than treating the clip as
+    # standalone. YT algorithm's #1 subscribe trigger per audit round 4.
+    # Same fail-open pattern as content_angle_hint above.
+    series_context_hint = ""
+    try:
+        from genlab_core.writing.series_detector import (
+            detect_series,
+            format_series_prompt_section,
+        )
+
+        series_info = detect_series(video)
+        if series_info is not None:
+            series_context_hint = format_series_prompt_section(series_info)
+            logger.info(
+                "[%s] series detected: %s part=%d/%d pattern=%s",
+                niche_id,
+                series_info.series_title,
+                series_info.part_number,
+                series_info.total_parts,
+                series_info.detection_pattern,
+            )
+    except Exception as exc:
+        logger.debug("[%s] series detection skipped: %s", niche_id, exc)
+
     age_hours = video.get("age_hours", 1)
     if not age_hours:
         # Compute from view_count / view_velocity if available
@@ -530,6 +557,7 @@ def write_video_content(
         + style_hint
         + content_angle_hint
         + findings_hint
+        + series_context_hint
         + "OUTPUT FORMAT — strictly enforced:\n"
         "Respond ONLY with valid JSON. ALL SIX KEYS ARE REQUIRED and must\n"
         "have non-empty string values:\n"

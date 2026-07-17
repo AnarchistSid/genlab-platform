@@ -2587,6 +2587,42 @@ class PushToBacklog:
 
                         fields = inject_cta(fields, story)
 
+                    # Layer 3 S2 (2026-07-17): series_part variant detection.
+                    # Runs independently of write_video_content's own call so
+                    # the blueprint carries variant_type + payload even if the
+                    # writer's series-injection path was skipped (fail-open).
+                    # Both callsites share the same detector — cheap regex, no
+                    # state coupling. See [[variant-architecture-roadmap]].
+                    try:
+                        from genlab_core.writing.series_detector import detect_series
+
+                        series_info = detect_series(story)
+                        if series_info is not None:
+                            fields["variant_type"] = "series_part"
+                            fields["variant_payload"] = {
+                                "series_id": series_info.series_id,
+                                "part_number": series_info.part_number,
+                                "total_parts": series_info.total_parts,
+                                # series_title + detection_pattern are useful
+                                # for retro debugging + analytics but not part
+                                # of the load-bearing PAYLOAD_CONTRACTS keys.
+                                "series_title": series_info.series_title,
+                                "detection_pattern": series_info.detection_pattern,
+                            }
+                            logger.info(
+                                "[PUSH] variant=series_part detected: %s part=%d/%d id=%s",
+                                series_info.series_title,
+                                series_info.part_number,
+                                series_info.total_parts,
+                                series_info.series_id,
+                            )
+                    except Exception as exc:  # noqa: BLE001 — fail-open to single_clip
+                        logger.debug(
+                            "[PUSH] series detection skipped for story=%s: %s",
+                            story.get("story_id", "<no-id>"),
+                            exc,
+                        )
+
                     if publishable:
                         fields["visual_paths"] = json.dumps([rendered_path])
                         # 2026-06-15 audit fix: DO NOT pre-set scheduled_for here.

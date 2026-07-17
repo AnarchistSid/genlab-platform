@@ -1,8 +1,8 @@
 """blueprints — add variant_type + variant_payload (Layer 3 foundation)
 
-Revision ID: a8w9x0y1z2a3
-Revises: z7v8w9x0y1z2
-Create Date: 2026-07-17 17:15:00.000000+00:00
+Revision ID: 43c4084cf927
+Revises: 05c64267a3c6
+Create Date: 2026-07-17 17:45:00.000000+00:00
 
 Layer 3 kickoff (2026-07-17). See `[[variant-architecture-roadmap]]`.
 
@@ -13,8 +13,8 @@ Layer 3 kickoff (2026-07-17). See `[[variant-architecture-roadmap]]`.
   ``storytime`` | ``watch_till_end`` | ``question_reveal``. Source of
   truth for allowed values: ``genlab_core.variant_types.VARIANT_TYPES``.
 - ``variant_payload JSONB DEFAULT '{}' NOT NULL`` — per-variant fields
-  (e.g. ``series_part`` has ``{series_id, part_number}``; ``split_screen``
-  has ``{clip_a, clip_b}``). Empty dict for ``single_clip``.
+  (e.g. ``series_part`` has ``{series_id, part_number, total_parts}``;
+  ``split_screen`` has ``{clip_a, clip_b}``). Empty dict for ``single_clip``.
 
 ## Why this migration is safe to run under live pipeline
 
@@ -51,6 +51,16 @@ which is the S5 bandit-extension load pattern. Partial index excludes
 ``single_clip`` because it's the default and doesn't need indexing until
 non-default variants ship in volume.
 
+## Revision ID lesson
+
+Initial attempt used ``a8w9x0y1z2a3`` which collided with the existing
+monetization_l3_product_bandit_schema migration. Same class-of-bug the
+2026-07-17 merge migration (``05c64267a3c6``) already warned about:
+using ``ls | tail`` (lexicographic sort) instead of ``alembic heads``
+misses the true chain head. Future migration authors: use
+``alembic -c genlab-core/alembic.ini heads`` before setting revision ID
++ down_revision.
+
 ## Downgrade
 
 DROP COLUMN — destructive but only removes the variant metadata; every
@@ -60,8 +70,8 @@ when the column is absent, via the storage-layer graceful-retry path).
 
 from alembic import op
 
-revision = "a8w9x0y1z2a3"
-down_revision = "z7v8w9x0y1z2"
+revision = "43c4084cf927"
+down_revision = "05c64267a3c6"
 branch_labels = None
 depends_on = None
 
