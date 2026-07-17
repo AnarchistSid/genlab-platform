@@ -2640,12 +2640,21 @@ class PushToBacklog:
 
                             if is_question_reveal_eligible(story):
                                 fields["variant_type"] = "question_reveal"
-                                fields["variant_payload"] = {}
+                                # Layer 3 S4b (2026-07-17): persist the
+                                # writer's reveal text to variant_payload so
+                                # the compositor can render it at 8-13s.
+                                # Empty when writer didn't emit reveal (e.g.
+                                # LLM refusal or JSON parse failure) —
+                                # compositor gracefully skips the overlay.
+                                _reveal = (content or {}).get("reveal", "") or ""
+                                fields["variant_payload"] = {"reveal": _reveal} if _reveal else {}
                                 variant_assigned = True
                                 logger.info(
-                                    "[PUSH] variant=question_reveal eligible: title=%r duration=%s",
+                                    "[PUSH] variant=question_reveal eligible: "
+                                    "title=%r duration=%s reveal_len=%d",
                                     (story.get("title") or "")[:60],
                                     story.get("duration_seconds"),
+                                    len(_reveal),
                                 )
                         except Exception as exc:  # noqa: BLE001
                             logger.debug(

@@ -440,14 +440,22 @@ def write_video_content(
     except Exception as exc:
         logger.debug("[%s] series detection skipped: %s", niche_id, exc)
 
-    # Layer 3 S4a (2026-07-17, writer-only): question_reveal variant
-    # selector. For question-shaped titles (Why/How/What/... + "?") in
-    # the 30-90s sweet spot, steer the LLM to craft a hook that leans
-    # into the source's question format. Selector short-circuits on
-    # series priority; watch_till_end priority is enforced BELOW (only
-    # fires if this one didn't). Compositor timed-text overlay is S4b.
+    # Layer 3 S4a (2026-07-17): question_reveal variant selector.
+    # For question-shaped titles (Why/How/What/... + "?") in the 30-90s
+    # sweet spot, steer the LLM to craft a hook that leans into the
+    # source's question format. Selector short-circuits on series
+    # priority; watch_till_end priority is enforced BELOW (only fires
+    # if this one didn't).
+    #
+    # Layer 3 S4b (2026-07-17): when question_reveal fires, also
+    # request a `reveal` field in the JSON output. Compositor renders
+    # it as a timed overlay at 8-13s in portrait layout. Both writer
+    # + compositor changes coexist without one requiring the other —
+    # a reveal field that lands without S4b compositor active is
+    # harmless (stored in variant_payload, not yet rendered).
     question_reveal_hint = ""
     variant_selected = False
+    is_question_reveal_variant = False
     try:
         from genlab_core.writing.question_reveal_selector import (
             format_question_reveal_prompt_section,
@@ -457,6 +465,7 @@ def write_video_content(
         if is_question_reveal_eligible(video):
             question_reveal_hint = format_question_reveal_prompt_section()
             variant_selected = True
+            is_question_reveal_variant = True
             logger.info(
                 "[%s] question_reveal eligible: title=%r duration=%s",
                 niche_id,
@@ -621,7 +630,20 @@ def write_video_content(
         "  - youtube_content\n"
         "  - facebook_content\n"
         "  - threads_content    ← REQUIRED, never empty, never omit\n"
-        "\n"
+        + (
+            # Layer 3 S4b (2026-07-17): question_reveal variant requires
+            # a 7th field. Renders as a timed on-frame overlay at 8-13s
+            # so the payoff appears mid-video, rewarding viewers who
+            # scrolled past the hook.
+            "  - reveal            ← REQUIRED for question_reveal (30-80 chars,\n"
+            "                        the ANSWER to your hook's question, phrased\n"
+            "                        as a punchy one-line reveal. Example: hook\n"
+            "                        'Why did Anthropic vault their AI?' → reveal\n"
+            "                        'It refused to release itself.')\n"
+            if is_question_reveal_variant
+            else ""
+        )
+        + "\n"
         "If you can't satisfy a length target exactly, produce content close\n"
         "to the target — DO NOT omit the field. A field that's slightly\n"
         "off-length is acceptable; a missing field breaks the publish.\n"
@@ -993,6 +1015,24 @@ def write_video_content(
         # all-lowercase "shitpost" output slipped through. to_sentence_case is
         # additive-only (proper nouns / acronyms preserved) and idempotent.
         _apply_sentence_case(content)
+
+        # Layer 3 S4b (2026-07-17): normalize + validate reveal field
+        # when question_reveal variant fired. Empty/missing reveal is
+        # non-fatal — falls back to hook-only render. Long reveals get
+        # truncated (compositor supports 2 wrap lines max at
+        # REVEAL_FONT_SIZE=54, ~30-50 chars per line before wrap).
+        if is_question_reveal_variant:
+            reveal = content.get("reveal", "") or ""
+            reveal = reveal.replace("’", "'").replace("‘", "'")
+            reveal = reveal.replace("“", '"').replace("”", '"')
+            if len(reveal) > 80:
+                reveal = reveal[:77].rsplit(" ", 1)[0] + "..."
+                logger.info(
+                    "[%s] reveal truncated to fit compositor overlay: %s",
+                    niche_id,
+                    reveal[:60],
+                )
+            content["reveal"] = reveal.strip()
 
         return content
 

@@ -241,12 +241,21 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                 m = _re.search(r"@([A-Za-z0-9_.\-]+)", _sa)
                 if m:
                     _source_credit = "@" + m.group(1)
+            # Layer 3 S4b (2026-07-17): pull reveal text from writer
+            # output when variant_type=question_reveal. Empty string
+            # for all other variants → compositor skips reveal filter
+            # entirely (default behavior preserved). Compositor only
+            # renders reveal in portrait layout (MVP scope); passing
+            # non-empty reveal_text to landscape/square logs INFO but
+            # falls back to hook-only rendering.
+            _reveal_text = (story.get("content") or {}).get("reveal") or ""
             composite_path = compositor.compose(
                 source_video_path=str(clip_path),
                 hook_text=hook_text,
                 output_path=output_path,
                 duration_seconds=dur,
                 source_credit=_source_credit,
+                reveal_text=_reveal_text,
             )
             if not composite_path:
                 # 2026-07-14 (media audit F10): persist a render_error so

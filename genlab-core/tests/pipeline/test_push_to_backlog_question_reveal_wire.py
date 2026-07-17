@@ -45,11 +45,16 @@ class TestPushToBacklogQuestionRevealWire:
         blueprint — corruption."""
         src = self._source()
         # Find the question_reveal assignment block + verify variant_assigned
-        # is set to True inside it
+        # is set to True inside it. Window sized to cover the block up to
+        # (but not including) the next variant's block; S4b (2026-07-17)
+        # added reveal-extraction code between variant_type assignment and
+        # variant_assigned assignment, so the earlier 300-char window
+        # started missing the flag set.
         idx = src.find('fields["variant_type"] = "question_reveal"')
         assert idx > 0, "question_reveal assignment not found"
-        # Next ~200 chars should contain variant_assigned = True
-        window = src[idx : idx + 300]
+        next_variant_idx = src.find('fields["variant_type"] = "watch_till_end"', idx)
+        assert next_variant_idx > idx, "watch_till_end block must follow"
+        window = src[idx:next_variant_idx]
         assert "variant_assigned = True" in window, (
             "question_reveal assignment must set variant_assigned=True so "
             "watch_till_end wire-guard short-circuits (variants exclusive)"

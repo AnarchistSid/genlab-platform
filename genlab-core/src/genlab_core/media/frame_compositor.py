@@ -109,6 +109,24 @@ HOOK_MAX_LINES = 2
 SHADOW_OFFSET = 2
 SHADOW_OPACITY = 0.50
 
+# Layer 3 S4b (2026-07-17): reveal text overlay — a timed text that
+# appears mid-video when variant_type='question_reveal'. Deliberately
+# larger font than HOOK_FONT_SIZE so the reveal feels like the climax
+# vs the setup. Positioned lower-middle so it doesn't overlap with
+# the top-of-frame hook block. Timing window (8-13s) chosen to hit
+# the typical 15-60s reel structure at the ~25-33% mark — early
+# enough to reward viewers who scrolled past the hook, late enough
+# to feel earned.
+REVEAL_FONT_SIZE = 54
+REVEAL_LINE_H = 62
+REVEAL_MAX_LINES = 2
+REVEAL_START_SECONDS = 8.0
+REVEAL_END_SECONDS = 13.0
+# Portrait: y = 1150 puts reveal at ~60% down the 1920 canvas —
+# below the hook block (which ends around y=314 with 2 lines) and
+# above the bottom-quarter watermark zone. Prominent + non-overlapping.
+P_REVEAL_Y = 1150
+
 # 2026-07-14 (class-of-bug scan): import from shared constants. Prior
 # state had 3 independent hardcoded ``60`` sites for this same
 # invariant (llm_hook_generator.py, base_hooks.py, this file). Now
@@ -452,6 +470,7 @@ class FrameCompositor:
         preset: str | None = None,
         force_fps: int = 30,
         source_credit: str = "",
+        reveal_text: str = "",
     ) -> str:
         """Render a reel with the canonical frame layout.
 
@@ -473,6 +492,15 @@ class FrameCompositor:
                  video, so it survives platform caption edits. Empty
                  string (default) skips the watermark entirely so
                  existing callers work unchanged.
+            reveal_text: Layer 3 S4b (2026-07-17). When non-empty,
+                 renders a timed overlay of ``reveal_text`` during
+                 ``REVEAL_START_SECONDS``–``REVEAL_END_SECONDS`` of the
+                 output. Used for the ``question_reveal`` variant where
+                 the writer's hook poses a question and the reveal is
+                 the payoff. MVP: portrait layout only. Landscape+square
+                 fall back to hook-only (no reveal) — filed as follow-up.
+                 Empty string (default) skips the reveal filter entirely
+                 so existing callers work unchanged.
 
         Returns:
             output_path on success.
@@ -542,6 +570,20 @@ class FrameCompositor:
             "portrait": self._build_cmd_portrait,
             "square": self._build_cmd_square,
         }[case]
+        # reveal_text is only implemented for portrait in S4b MVP. For
+        # landscape/square we log at INFO if reveal_text was provided but
+        # the layout doesn't support it yet, so operators can grep the
+        # coverage gap without silent-fail. Follow-up: extend landscape
+        # and square with equivalent reveal positioning.
+        if reveal_text and case != "portrait":
+            logger.info(
+                "[%s] reveal_text provided but layout=%s doesn't yet render "
+                "reveal overlay — hook-only fallback (S4b MVP scope, "
+                "landscape+square deferred)",
+                self.branding.niche_id,
+                case,
+            )
+        builder_kwargs = {"reveal_text": reveal_text} if case == "portrait" else {}
         ffmpeg_cmd = builder(
             source_video_path,
             hook_text,
@@ -553,6 +595,7 @@ class FrameCompositor:
             preset,
             force_fps,
             source_credit,
+            **builder_kwargs,
         )
 
         logger.info(
@@ -779,8 +822,68 @@ class FrameCompositor:
 
     # --- Layout B: Portrait (ar <= 0.75) ----------------------------------
 
+    # --- Shared: build timed reveal drawtext chain (Layer 3 S4b) ------------
+
+    def _build_reveal_filter(
+        self,
+        reveal_text: str,
+        reveal_y: int,
+        font_hook: str,
+        prev_label: str,
+        out_label: str = "withreveal",
+    ) -> tuple[str, str]:
+        """Build FFmpeg drawtext filters for center-aligned reveal text
+        with ``enable='between(t,X,Y)'`` timing so the overlay only
+        appears during the reveal window.
+
+        Layer 3 S4b (2026-07-17). Used by question_reveal variant. Same
+        wrap + shadow treatment as the hook so the two overlays feel
+        visually consistent, but larger font + different y position so
+        the reveal reads as the climax rather than a duplicate hook.
+
+        Returns (filter_chain_str, final_label). Empty string when
+        reveal_text is empty — caller should not increment prev_label.
+        """
+        if not reveal_text:
+            return "", prev_label
+        reveal_lines = self._wrap_hook(reveal_text)
+        if not reveal_lines:
+            return "", prev_label
+        # Limit to REVEAL_MAX_LINES (2) to prevent excessive vertical
+        # coverage of source video. Truncation is preferable to
+        # 3-line reveal that obscures the payoff footage.
+        reveal_lines = reveal_lines[:REVEAL_MAX_LINES]
+        num_lines = len(reveal_lines)
+        filters = ""
+        for i, line in enumerate(reveal_lines):
+            safe_line = self._escape_drawtext(line)
+            line_y = reveal_y + i * REVEAL_LINE_H
+            next_label = f"rev{i}" if i < num_lines - 1 else out_label
+            filters += (
+                f"[{prev_label}]drawtext=fontfile='{font_hook}':text='{safe_line}':"
+                f"fontsize={REVEAL_FONT_SIZE}:fontcolor=white:"
+                f"x=(w-text_w)/2:y={line_y}:"
+                f"shadowcolor=black@{SHADOW_OPACITY}:"
+                f"shadowx={SHADOW_OFFSET}:shadowy={SHADOW_OFFSET}:"
+                f"enable='between(t,{REVEAL_START_SECONDS},{REVEAL_END_SECONDS})'"
+                f"[{next_label}];"
+            )
+            prev_label = next_label
+        return filters, out_label
+
     def _build_cmd_portrait(
-        self, src, hook, out, info, duration, trim_start, crf, preset, fps, source_credit=""
+        self,
+        src,
+        hook,
+        out,
+        info,
+        duration,
+        trim_start,
+        crf,
+        preset,
+        fps,
+        source_credit="",
+        reveal_text="",
     ) -> list[str]:
         """Portrait clip: full-screen video with the channel logo overlaid.
 
@@ -876,6 +979,19 @@ class FrameCompositor:
                     f"[{next_label}];"
                 )
                 current_label = next_label
+
+        # ── Layer 3 S4b: reveal overlay (question_reveal variant) ─────────
+        # Timed drawtext at REVEAL_START_SECONDS..REVEAL_END_SECONDS. Only
+        # fires when caller passes non-empty reveal_text (question_reveal
+        # blueprints via base_visual_render → compose(reveal_text=...)).
+        # Positioned at P_REVEAL_Y (lower-middle) — distinct from the
+        # top-of-frame hook so both can coexist visually.
+        reveal_filter, reveal_label = self._build_reveal_filter(
+            reveal_text, P_REVEAL_Y, font_hook, current_label
+        )
+        if reveal_filter:
+            filtergraph += reveal_filter
+            current_label = reveal_label
 
         # G9: watermark drawn last, just before the [out] label. If no
         # credit provided, the copy relabel below is unaffected.
