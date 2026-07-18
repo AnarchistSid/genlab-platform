@@ -279,6 +279,7 @@ def pick_best_arm_with_propensity(
     *,
     min_obs: int = _DEFAULT_MIN_OBS,
     temperature: float = _DETERMINISTIC_TEMPERATURE,
+    stochastic: bool = False,
 ) -> tuple[str | None, float | None]:
     """Return ``(arm_id, propensity)`` — the IPS-aware variant of
     :func:`pick_best_arm`.
@@ -370,13 +371,29 @@ def pick_best_arm_with_propensity(
     # less than 1e-5 — well below IPS estimator precision.
     probs = np.maximum(probs, _MIN_PROPENSITY)
 
-    # Pick the arm with the highest UCB score (argmax — same rule as
-    # pick_best_arm). Determinism on ties via sorted-by-arm-id, also
-    # mirroring pick_best_arm. Propensity returned is the picked arm's
-    # softmax weight (the clamped value, NOT the renormalised value —
-    # matches the LinUCBBandit convention).
-    best_arm = max(sorted(scores), key=lambda a: scores[a])
-    best_propensity = float(probs[arm_ids.index(best_arm)])
+    # Intelligence #8 (2026-07-18): stochastic sampling gate. Default
+    # False preserves the argmax + softmax-approximated-propensity
+    # behavior that matches ``LinUCBBandit.select_with_propensity``
+    # deterministic mode. When True, arms are sampled from the softmax
+    # distribution — makes IPS/DR estimators mathematically meaningful
+    # at the cost of some exploration variance (some blueprints pick
+    # non-argmax arms). Enabled per-niche via
+    # ``GENLAB_LINUCB_STOCHASTIC_ENABLED_{NICHE}=1`` at caller layer
+    # (see push_to_backlog).
+    if stochastic:
+        # Renormalise probs (clamp may have pushed sum slightly above 1)
+        # so numpy.random.choice accepts the weight vector without error.
+        probs_normed = probs / probs.sum()
+        chosen_idx = int(np.random.choice(len(arm_ids), p=probs_normed))
+        best_arm = arm_ids[chosen_idx]
+        best_propensity = float(probs[chosen_idx])
+    else:
+        # Deterministic argmax with softmax-approximated propensity.
+        # Determinism on ties via sorted-by-arm-id. Propensity returned
+        # is the picked arm's softmax weight (the clamped value, NOT the
+        # renormalised value — matches the LinUCBBandit convention).
+        best_arm = max(sorted(scores), key=lambda a: scores[a])
+        best_propensity = float(probs[arm_ids.index(best_arm)])
     logger.debug(
         "[linucb_picker] picked %s with propensity=%.6f from %d candidates",
         best_arm,

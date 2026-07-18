@@ -1328,12 +1328,34 @@ def _classify_arm_with_propensity(
             from genlab_core.learning import linucb_picker
 
             if linucb_picker.is_enabled():
+                # Intelligence #8 (2026-07-18): per-niche stochastic
+                # sampling gate. When
+                # ``GENLAB_LINUCB_STOCHASTIC_ENABLED_{NICHE}=1``, arms
+                # are sampled from softmax(scores/T) instead of argmax.
+                # Makes IPS/DR estimators mathematically meaningful for
+                # this niche's decisions at the cost of some exploration
+                # variance. Global flag
+                # ``GENLAB_LINUCB_STOCHASTIC_ENABLED=1`` acts as fallback
+                # to enable across all niches. Defaults off — preserves
+                # pre-#8 argmax behavior on niches without the flag set.
+                import os as _os
+
+                _niche_flag = _os.environ.get(
+                    f"GENLAB_LINUCB_STOCHASTIC_ENABLED_{niche_id.upper()}"
+                )
+                if _niche_flag is not None:
+                    _stochastic = _niche_flag.strip() == "1"
+                else:
+                    _stochastic = (
+                        _os.environ.get("GENLAB_LINUCB_STOCHASTIC_ENABLED", "0").strip() == "1"
+                    )
+
                 # PR U (2026-06-28): use the propensity-aware variant
                 # so the IPS column on pending_feedback gets populated.
                 # The arm-selection rule is identical to pick_best_arm
                 # — only the (arm, propensity) tuple-return differs.
                 bandit_pick, bandit_propensity = linucb_picker.pick_best_arm_with_propensity(
-                    matches, context, linucb_arms
+                    matches, context, linucb_arms, stochastic=_stochastic
                 )
         except Exception as exc:  # noqa: BLE001 — fail-open to Thompson
             logger.debug("[classify_arm] LinUCB picker error, falling back: %s", exc)
