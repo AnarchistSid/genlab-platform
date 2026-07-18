@@ -1077,6 +1077,7 @@ def _classify_arm_with_propensity(
     _random_control_rng=None,
     active_experiment=None,
     experiment_assignment_id: str = "",
+    arm_posteriors: dict[str, tuple[float, float]] | None = None,
 ) -> tuple[str | None, float | None]:
     """Classify content into a bandit arm_id, with optional IPS propensity.
 
@@ -1364,15 +1365,58 @@ def _classify_arm_with_propensity(
 
     # Thompson-boost tie-break (today's logic) when LinUCB didn't run
     # or returned None (cold-start). Falls back to the first match if
-    # no boost data is available for the matched arms. Thompson has no
-    # IPS-compatible propensity concept (its sampling distribution
-    # changes shape on every call as the posteriors update), so
-    # bandit_propensity stays None down this branch.
+    # no boost data is available for the matched arms.
+    #
+    # Intelligence #8b (2026-07-18): the pre-existing comment claimed
+    # "Thompson has no IPS-compatible propensity concept". That's true
+    # for the point-in-time propensity but conflates it with the
+    # MARGINAL propensity (P(arm wins Thompson pick) integrated over
+    # Beta draws) which IS what IPS wants. When the per-niche flag
+    # ``GENLAB_THOMPSON_PROPENSITY_ENABLED_{NICHE}=1`` is set, we
+    # estimate this via Monte Carlo (~200 Beta draws per arm) and log
+    # it alongside the pick. Enables meaningful IPS/DR on the ~96% of
+    # decisions that currently bypass LinUCB entirely.
     if bandit_pick is None:
         if not arm_boosts:
             bandit_pick = matches[0]
         else:
             bandit_pick = max(matches, key=lambda a: arm_boosts.get(a, 1.0))
+
+            # Intelligence #8b: Thompson propensity capture. Only fire
+            # when the per-niche flag is set + we have raw posteriors
+            # to draw from. arm_posteriors is None when the caller
+            # didn't thread it through — degrades to Thompson-picks-
+            # with-null-propensity behavior (pre-#8b).
+            if arm_posteriors:
+                try:
+                    from genlab_core.learning.thompson_propensity import (
+                        compute_thompson_propensity,
+                        is_thompson_propensity_enabled,
+                    )
+
+                    if is_thompson_propensity_enabled(niche_id):
+                        # Restrict to matched arms only — Thompson picks
+                        # argmax over MATCHES, not over all arms.
+                        matched_posteriors = {
+                            a: arm_posteriors[a] for a in matches if a in arm_posteriors
+                        }
+                        if matched_posteriors:
+                            bandit_propensity = compute_thompson_propensity(
+                                bandit_pick, matched_posteriors
+                            )
+                            logger.debug(
+                                "[classify_arm] Thompson propensity for %s: %.4f "
+                                "(niche=%s, n_matches=%d)",
+                                bandit_pick,
+                                bandit_propensity,
+                                niche_id,
+                                len(matched_posteriors),
+                            )
+                except Exception as exc:  # noqa: BLE001 — fail-open to None
+                    logger.debug(
+                        "[classify_arm] Thompson propensity capture failed: %s",
+                        exc,
+                    )
 
     # Random-control wrap (Lever I1 wiring). With probability epsilon
     # (default 5%) override the bandit pick with a uniform-random pick
@@ -2241,6 +2285,11 @@ class PushToBacklog:
                 context=linucb_context,
                 active_experiment=active_experiment,
                 experiment_assignment_id=candidate_id,
+                # Intelligence #8b: pass raw Beta posteriors so the
+                # Thompson tie-break path can compute MC-based propensity
+                # for the ~96% of decisions that bypass LinUCB entirely.
+                # preloaded_arms is loaded once per niche run at line 1699.
+                arm_posteriors=preloaded_arms,
             )
 
             # Lever R1 emit (2026-06-22): record the bandit pick for
