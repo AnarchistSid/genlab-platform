@@ -96,3 +96,69 @@ class TestRecordPublish:
             "module top. Do not re-inline the composite-key "
             "expression — task #625 documented this class of bug."
         )
+
+
+class TestDuplicateKeyDowngrade:
+    """2026-07-18: retry_pass calls record_publish again on retry attempts,
+    which hits the (blueprint_id, platform) UNIQUE index. That's expected —
+    log at DEBUG, not WARNING, so operator alerting isn't spammed."""
+
+    def _make_client(self, exc: Exception):
+        client = MagicMock()
+        client.publishing_analytics.create.side_effect = exc
+        return client
+
+    def test_uq_constraint_violation_logs_debug_not_warning(self, caplog):
+        import logging as _logging
+
+        client = self._make_client(
+            RuntimeError(
+                "duplicate key value violates unique constraint "
+                '"uq_publishing_analytics_bp_platform"'
+            )
+        )
+        with caplog.at_level(_logging.DEBUG, logger="genlab_core.publishing.analytics_recorder"):
+            record_publish(
+                client,
+                niche_id="gaming",
+                platform="instagram",
+                status="FAILED",
+                blueprint_id="bp_1",
+            )
+        # WARNING records should NOT include the duplicate-key message
+        warning_records = [
+            r
+            for r in caplog.records
+            if r.levelno == _logging.WARNING and "duplicate key" in r.getMessage()
+        ]
+        assert not warning_records, "duplicate PA row on retry should be DEBUG, not WARNING"
+        # And DEBUG record SHOULD mention it
+        debug_records = [
+            r
+            for r in caplog.records
+            if r.levelno == _logging.DEBUG and "duplicate PA row on retry" in r.getMessage()
+        ]
+        assert debug_records
+
+    def test_other_exceptions_still_warn(self, caplog):
+        """Non-duplicate errors (auth, network, malformed data) MUST
+        still log at WARNING — otherwise we'd hide real problems."""
+        import logging as _logging
+
+        client = self._make_client(RuntimeError("auth token expired"))
+        with caplog.at_level(_logging.WARNING, logger="genlab_core.publishing.analytics_recorder"):
+            record_publish(
+                client,
+                niche_id="gaming",
+                platform="instagram",
+                status="FAILED",
+                blueprint_id="bp_2",
+            )
+        warning_records = [
+            r
+            for r in caplog.records
+            if r.levelno == _logging.WARNING and "auth token expired" in r.getMessage()
+        ]
+        assert warning_records, (
+            "non-duplicate errors must still WARNING — otherwise real prod issues get hidden"
+        )

@@ -147,4 +147,22 @@ def record_publish(
             post_url[:60] if post_url else "(no url)",
         )
     except Exception as e:
-        logger.warning("Failed to record to Publishing_Analytics: %s", e)
+        # 2026-07-18: retry_pass calls record_publish again on retry
+        # attempts, hitting the (blueprint_id, platform) UNIQUE index
+        # added by migration 56c7cc68 (2026-07-17). This is EXPECTED
+        # behavior — the retry recorded the same platform state, and
+        # the original insert already captured it. Downgrade to DEBUG
+        # so operator alerting isn't spammed by expected-on-retry noise.
+        # Every other write failure remains at WARNING for real errors.
+        msg = str(e)
+        if "uq_publishing_analytics_bp_platform" in msg or (
+            "duplicate key" in msg and "publishing_analytics" in msg
+        ):
+            logger.debug(
+                "[analytics_recorder] duplicate PA row on retry (expected): %s/%s bp=%s",
+                niche_id,
+                platform,
+                blueprint_id,
+            )
+        else:
+            logger.warning("Failed to record to Publishing_Analytics: %s", e)
