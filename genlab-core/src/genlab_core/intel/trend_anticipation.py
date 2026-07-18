@@ -272,11 +272,12 @@ def _signal_search_velocity(topic: str, niche_id: str) -> tuple[float, int] | No
         pt.build_payload([topic], timeframe="now 7-d", geo="US")
         df = pt.interest_over_time()
     except Exception as exc:
-        logger.debug(
+        logger.warning(
             "[trend_anticipation] pytrends query failed for %r (%s): %s",
             topic,
             niche_id,
             exc,
+            exc_info=True,
         )
         return None
 
@@ -388,19 +389,22 @@ def _signal_creator_pickup(topic: str, niche_id: str) -> float | None:
             timeout=15,
         )
         if resp.status_code != 200:
-            logger.debug(
-                "[trend_anticipation] YT search returned %d for %r",
+            logger.warning(
+                "[trend_anticipation] YT search returned %d for %r (%s) — body: %s",
                 resp.status_code,
                 topic,
+                niche_id,
+                resp.text[:200],
             )
             return None
         total = int(resp.json().get("pageInfo", {}).get("totalResults", 0))
     except Exception as exc:
-        logger.debug(
+        logger.warning(
             "[trend_anticipation] YT search failed for %r (%s): %s",
             topic,
             niche_id,
             exc,
+            exc_info=True,
         )
         return None
 
@@ -494,10 +498,12 @@ def _signal_social_velocity(topic: str, niche_id: str) -> float | None:
             timeout=15,
         )
         if resp.status_code != 200:
-            logger.debug(
-                "[trend_anticipation] Reddit search %d for %r",
+            logger.warning(
+                "[trend_anticipation] Reddit search %d for %r (%s) — body: %s",
                 resp.status_code,
                 topic,
+                niche_id,
+                resp.text[:200],
             )
             return None
 
@@ -517,11 +523,12 @@ def _signal_social_velocity(topic: str, niche_id: str) -> float | None:
             return None
         mean_kph = karma_per_hour_sum / n
     except Exception as exc:
-        logger.debug(
+        logger.warning(
             "[trend_anticipation] Reddit search failed for %r (%s): %s",
             topic,
             niche_id,
             exc,
+            exc_info=True,
         )
         return None
 
@@ -717,20 +724,23 @@ def _signal_news_lead(topic: str, niche_id: str) -> float | None:
 
         resp = requests.get(url, timeout=15, headers={"User-Agent": "GenLab/1.0"})
         if resp.status_code != 200:
-            logger.debug(
-                "[trend_anticipation] Google News returned %d for %r",
+            logger.warning(
+                "[trend_anticipation] Google News returned %d for %r (%s) — body: %s",
                 resp.status_code,
                 topic,
+                niche_id,
+                resp.text[:200],
             )
             return None
         parsed = feedparser.parse(resp.content)
         n_articles = len(parsed.get("entries", []))
     except Exception as exc:
-        logger.debug(
+        logger.warning(
             "[trend_anticipation] news_lead failed for %r (%s): %s",
             topic,
             niche_id,
             exc,
+            exc_info=True,
         )
         return None
 
@@ -912,11 +922,12 @@ def read_todays_anticipation(
     try:
         payload = json.loads(path.read_text())
     except (json.JSONDecodeError, OSError) as exc:
-        logger.debug(
+        logger.warning(
             "[trend_anticipation] read failed for %s/%s: %s",
             stamp,
             niche_id,
             exc,
+            exc_info=True,
         )
         return None
 
