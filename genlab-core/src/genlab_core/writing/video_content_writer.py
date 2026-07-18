@@ -397,6 +397,35 @@ def write_video_content(
     except Exception as exc:
         logger.debug("[%s] content-angle hint injection skipped: %s", niche_id, exc)
 
+    # Intelligence stack #4a (2026-07-18): DPO preference examples.
+    # Read top-engagement-ratio pairs from preference_data (weekly
+    # producer accumulated ~19 pairs since 2026-06-22). Uses in-context
+    # learning as the immediate consumer wire; #4b covers the Bedrock
+    # fine-tune path when volume + AWS access align. Fail-open on any
+    # error — writer works exactly as before when preference_data is
+    # empty or DB unreachable.
+    preference_hint = ""
+    try:
+        from genlab_core.writing.preference_hint import (
+            fetch_recent_preference_examples,
+            format_preference_prompt_section,
+        )
+
+        # Default to instagram platform match (preference_data rows are
+        # per-platform; the writer produces multi-platform content so
+        # we anchor to IG which has richest historical data).
+        _pref_examples = fetch_recent_preference_examples(niche_id, platform="instagram", limit=3)
+        if _pref_examples:
+            preference_hint = format_preference_prompt_section(_pref_examples)
+            logger.info(
+                "[%s] preference_hint: %d examples (top ratio=%.1f×)",
+                niche_id,
+                len(_pref_examples),
+                _pref_examples[0].get("engagement_ratio", 0.0),
+            )
+    except Exception as exc:
+        logger.debug("[%s] preference_hint skipped: %s", niche_id, exc)
+
     # PR Strategist-3: append operator-approved learning findings (top 5)
     # into the system prompt so the writer leans on causal patterns the
     # operator has explicitly validated. Fail-closed: if strategy_phase
@@ -617,6 +646,7 @@ def write_video_content(
         + (f"{extra_instructions}\n\n" if extra_instructions else "")
         + style_hint
         + content_angle_hint
+        + preference_hint
         + findings_hint
         + series_context_hint
         + question_reveal_hint
