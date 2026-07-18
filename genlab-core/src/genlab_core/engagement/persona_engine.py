@@ -303,3 +303,105 @@ class PersonaEngine:
         except Exception as exc:  # noqa: BLE001 — fail-safe to neutral
             logger.warning("[PERSONA-JUDGE] validation raised: %s", exc)
             return 0.5, "judge_exception"
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Module-level API — Layer 4 outbound reply engine (2026-07-18)
+#
+# The outbound reply engine runner (``scripts/run_outbound_reply_engine.py``)
+# expects module-level ``load_persona`` and ``generate_reply`` functions.
+# This section adds those wrappers around the class-based ``PersonaEngine``
+# API + delegates persona loading to ``comment_processor._load_persona``
+# (which owns the multi-path resolution logic: channel dir → agent root
+# → packaged fallback).
+#
+# Why module-level: thin runner scripts shouldn't own PersonaEngine
+# instance lifecycle. They just want "load + call". This mirrors the
+# module-level API pattern from ``series_detector`` /
+# ``watch_till_end_selector`` / ``question_reveal_selector`` (Layer 3
+# selectors that also expose thin module-level functions).
+#
+# Production bug caught 2026-07-18 09:30 IST fire:
+#   `posted=0 failed=21 across 5 niches`
+#   Reason: `cannot import name 'generate_reply' from 'persona_engine'`
+# The runner imported symbols that didn't exist at module level. These
+# wrappers fix that gap — first real outbound replies will post at next
+# fire (17:30 IST daily).
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def load_persona(niche_id: str) -> NichePersona | None:
+    """Load persona for a niche, returning None on failure (fail-open).
+
+    Delegates to ``comment_processor._load_persona`` which owns the
+    multi-path resolution (channel dir → agent root → packaged fallback).
+    Converts FileNotFoundError to None so callers can fail-open on
+    missing persona rather than crash the whole run.
+
+    Fresh construction on every call (~200 tokens of prompt-build cost)
+    — that's acceptable at outbound cadence (5 niches × 3 targets = 15
+    calls per run, run runs 1× daily). If cadence increases, cache
+    module-level.
+    """
+    try:
+        # Use the private-named helper — persona-loading is a single
+        # source of truth per rule "same-invariant-two-paths" (writing/
+        # constants.py:6). Do NOT duplicate the resolution logic here.
+        from genlab_core.engagement.comment_processor import _load_persona
+
+        return _load_persona(niche_id)
+    except FileNotFoundError:
+        logger.warning(
+            "[persona_engine] load_persona: no persona.yaml for niche=%s",
+            niche_id,
+        )
+        return None
+    except Exception as exc:  # noqa: BLE001 — fail-open on any resolution error
+        logger.warning(
+            "[persona_engine] load_persona failed for niche=%s: %s",
+            niche_id,
+            exc,
+        )
+        return None
+
+
+def generate_reply(
+    *,
+    persona: NichePersona,
+    comment_text: str,
+    context: dict | None = None,
+) -> str | None:
+    """Module-level reply generation for outbound engagement runners.
+
+    Wrapper around ``PersonaEngine.generate_reply`` adapted to the
+    outbound-engine's call shape:
+
+      persona=       persona loaded via ``load_persona(niche_id)``
+      comment_text=  the comment we're replying to
+      context=       dict with optional keys:
+                       - video_title (str): mapped to post_context
+                       - author_display_name (str): informational only
+                       - is_outbound_reply (bool): informational only
+                       - platform (str): defaults to "youtube" for YT-only
+                         outbound (2026-07-18 initial ship); when IG
+                         outbound wires, caller passes platform="instagram"
+
+    Returns ``str | None`` — None when persona missing, LLM circuit open,
+    or all retries fail toxicity. Caller treats None as "skip this
+    target and move to next" per rule #5 (never silent-fail a platform).
+    """
+    if persona is None:
+        return None
+
+    context = context or {}
+    post_context = str(context.get("video_title", "") or "")
+    platform = str(context.get("platform", "youtube") or "youtube")
+
+    # Fresh PersonaEngine per call — same rationale as load_persona
+    # docstring above (acceptable at outbound cadence).
+    engine = PersonaEngine(persona=persona, toxicity_gate=ToxicityGate())
+    return engine.generate_reply(
+        comment=comment_text,
+        platform=platform,
+        post_context=post_context,
+    )
