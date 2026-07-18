@@ -43,8 +43,21 @@ set -euo pipefail
 MODE="dry-run"
 if [[ "${1:-}" == "--apply" ]]; then
     MODE="apply"
+elif [[ "${1:-}" == "--cancel-scheduled-stale" ]]; then
+    # Explicit operator escape hatch for the CLAUDE.md cleanup_safety.md
+    # invariant. Only fires when the ORIGINAL rendering source is
+    # unrecoverable (media GC'd) AND the operator explicitly requests
+    # cancellation. Sets scheduled_for=NULL + records visibility.
+    #
+    # Prod investigation 2026-07-18: sampled 2 of 14 scheduled-stale
+    # blueprints (a1ff7f15 movies, 9a30aa9f ai_creators). BOTH had
+    # source videos gone from content_pool AND media GC'd. Neither
+    # can be re-rendered. Cancelling is the correct response.
+    MODE="cancel-scheduled"
 elif [[ -n "${1:-}" ]]; then
-    echo "Usage: $0 [--apply]" >&2
+    echo "Usage: $0 [--apply|--cancel-scheduled-stale]" >&2
+    echo "  --apply                  demote UNSCHEDULED stale rows to DRAFTED" >&2
+    echo "  --cancel-scheduled-stale set scheduled_for=NULL on SCHEDULED stale rows" >&2
     exit 2
 fi
 
@@ -143,6 +156,33 @@ if scheduled_stale_rows:
     print(" next 5 to fire:")
     for bp_id, niche_id, _, _, scheduled_for in upcoming:
         print(f"   {str(bp_id)[:8]} niche={niche_id} scheduled={scheduled_for.date()}")
+
+# --cancel-scheduled-stale mode: operator-explicit escape from
+# cleanup_safety.md invariant for the specific case where source is
+# unrecoverable + media GC'd. Only fires when caller passed the flag.
+if MODE == "cancel-scheduled":
+    if not scheduled_stale_rows:
+        print()
+        print("[cleanup] no scheduled-stale rows to cancel - queue is clean")
+        sys.exit(0)
+    print()
+    print(f"[cleanup] --cancel-scheduled-stale - cancelling {len(scheduled_stale_rows)} schedules...")
+    scheduled_ids = [r[0] for r in scheduled_stale_rows]
+    cur.execute(
+        """
+        UPDATE blueprints
+        SET scheduled_for = NULL,
+            error_message = COALESCE(error_message, '') || ' | cleanup:media_gc_removed_and_source_lost:2026-07-18'
+        WHERE id = ANY(%s)
+          AND scheduled_for IS NOT NULL
+        """,
+        (scheduled_ids,),
+    )
+    conn.commit()
+    print(f"[cleanup] cancelled schedule on {cur.rowcount} row(s) — status remains VISUAL_READY/APPROVED but they no longer fire")
+    print("[cleanup] error_message stamped with 'cleanup:media_gc_removed_and_source_lost:2026-07-18' for audit visibility")
+    print("[cleanup] blueprints will remain in queue until next disk_cleanup cycle purges them, or operator archives manually")
+    sys.exit(0)
 
 if not stale_rows:
     print()
