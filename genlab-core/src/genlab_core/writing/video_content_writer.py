@@ -397,6 +397,30 @@ def write_video_content(
     except Exception as exc:
         logger.debug("[%s] content-angle hint injection skipped: %s", niche_id, exc)
 
+    # Layer 3 S5 (2026-07-18): variant_type bandit hint. Thompson-samples
+    # variant:{niche}:{X} arms populated by S5-prep. Returns None during
+    # cold-start window (~48h post-S5-prep-deploy) when no non-default
+    # variant has observations yet. Informational only — structural
+    # variant selection still happens at push_to_backlog via rule-based
+    # detectors. This hint steers writer TONE, not pipeline routing.
+    variant_hint = ""
+    try:
+        from genlab_core.writing.variant_type_hint import (
+            format_variant_type_prompt,
+            pick_variant_type_hint,
+        )
+
+        _picked_variant = pick_variant_type_hint(niche_id)
+        if _picked_variant:
+            variant_hint = format_variant_type_prompt(_picked_variant)
+            logger.info(
+                "[%s] variant_hint bandit picked: %s",
+                niche_id,
+                _picked_variant,
+            )
+    except Exception as exc:
+        logger.debug("[%s] variant_type_hint skipped: %s", niche_id, exc)
+
     # Intelligence stack #4a (2026-07-18): DPO preference examples.
     # Read top-engagement-ratio pairs from preference_data (weekly
     # producer accumulated ~19 pairs since 2026-06-22). Uses in-context
@@ -646,6 +670,7 @@ def write_video_content(
         + (f"{extra_instructions}\n\n" if extra_instructions else "")
         + style_hint
         + content_angle_hint
+        + variant_hint
         + preference_hint
         + findings_hint
         + series_context_hint
