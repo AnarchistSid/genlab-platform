@@ -138,6 +138,71 @@ class TestScanRuns:
 
         assert records[0].is_published is True
 
+    def test_filesystem_backstop_protects_rendered_mp4(self, tmp_path):
+        """Pin the filesystem-level backstop restored 2026-07-18.
+
+        Scenario reproduces the 2026-07-18 GC bug: a run dir with a
+        rendered composite MP4 under ``visuals/`` — no
+        ``publish_all_summary.json``, no ``_pub`` suffix, no DB
+        protection needed. Filesystem check alone must mark it
+        published so eviction skips it.
+
+        This is the audit-facing invariant. If the DB check in
+        ``_get_pending_publish_run_ids`` fails open on a DB blip,
+        this backstop keeps rendered media from being purged.
+        """
+        runs = tmp_path / "runs"
+        run = runs / "movies_20260627_091638"
+        (run / "visuals" / "40670df795dd7e03").mkdir(parents=True)
+        (run / "visuals" / "40670df795dd7e03" / "reel.mp4").write_bytes(b"v" * 100)
+
+        mgr = DiskQuotaManager(_cfg(runs))
+        records = mgr.scan_runs("test")
+
+        assert records[0].is_published is True, (
+            "Run with rendered MP4 under visuals/ must be protected "
+            "(regressed 2026-03-17 in commit 9082e724, restored 2026-07-18)"
+        )
+
+    def test_filesystem_backstop_protects_visuals_v2(self, tmp_path):
+        runs = tmp_path / "runs"
+        run = runs / "rerendered_run"
+        (run / "visuals_v2").mkdir(parents=True)
+        (run / "visuals_v2" / "reel.mp4").write_bytes(b"v" * 100)
+
+        mgr = DiskQuotaManager(_cfg(runs))
+        records = mgr.scan_runs("test")
+
+        assert records[0].is_published is True
+
+    def test_filesystem_backstop_protects_clips_only(self, tmp_path):
+        """A run with only source clips (no rendered composite yet) is
+        still worth protecting — the clips are the recovery path if
+        the operator wants to re-render."""
+        runs = tmp_path / "runs"
+        run = runs / "clips_only_run"
+        (run / "clips").mkdir(parents=True)
+        (run / "clips" / "source.mp4").write_bytes(b"v" * 100)
+
+        mgr = DiskQuotaManager(_cfg(runs))
+        records = mgr.scan_runs("test")
+
+        assert records[0].is_published is True
+
+    def test_filesystem_backstop_no_mp4_not_protected(self, tmp_path):
+        """Negative case: run dir with visuals/ subdir but no MP4
+        inside should NOT be marked published. Otherwise the backstop
+        becomes over-eager and protects empty scratch dirs forever."""
+        runs = tmp_path / "runs"
+        run = runs / "empty_visuals_run"
+        (run / "visuals").mkdir(parents=True)
+        (run / "visuals" / "notes.txt").write_text("no mp4 here")
+
+        mgr = DiskQuotaManager(_cfg(runs))
+        records = mgr.scan_runs("test")
+
+        assert records[0].is_published is False
+
 
 # ── 2. Eviction logic ───────────────────────────────────────
 

@@ -127,10 +127,39 @@ def _extract_score(run_dir: Path) -> float:
 
 
 def _is_published(run_dir: Path) -> bool:
-    """Detect whether a run contains published content."""
+    """Detect whether a run contains published or publish-ready content.
+
+    Three protection layers, checked in order (cheapest first):
+
+    1. ``publish_all_summary.json`` — the run has completed a publish cycle
+    2. ``_pub`` suffix — legacy convention for publish runs
+    3. Rendered MP4 present under ``visuals/``, ``visuals_v2/``,
+       ``visuals_v3/``, ``rendered/``, or ``clips/`` — the run holds
+       artifacts that could still be referenced by a pending blueprint
+
+    #3 is a filesystem-level backstop for the DB check in
+    ``_get_pending_publish_run_ids``. That DB check fails OPEN on DB
+    errors (returns empty set) — without this backstop, a single DB
+    blip during eviction would silently purge every pending run's
+    media. 2026-07-18 audit found 14 scheduled blueprints in exactly
+    this state (media GC'd, source_pool row expired, unrecoverable).
+
+    History: this fallback shipped `0461a044` (2026-03-16), was
+    accidentally reverted `9082e724` (2026-03-17, "83-issues audit"
+    27-file sweep — no mention of disk_quota in commit message).
+    CLAUDE.md kept documenting the intended behavior; the code didn't
+    match. This restoration reconciles them.
+    """
     if (run_dir / "publish_all_summary.json").is_file():
         return True
     if run_dir.name.endswith("_pub"):
+        return True
+    for vis_dir in ("visuals", "visuals_v2", "visuals_v3", "rendered"):
+        vd = run_dir / vis_dir
+        if vd.is_dir() and any(vd.rglob("*.mp4")):
+            return True
+    clips_dir = run_dir / "clips"
+    if clips_dir.is_dir() and any(clips_dir.glob("*.mp4")):
         return True
     return False
 
