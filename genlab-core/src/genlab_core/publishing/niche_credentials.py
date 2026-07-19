@@ -130,10 +130,37 @@ def _read_threads_token_cache(niche_id: str) -> str:
                 expires_at = datetime.fromisoformat(expires_at_iso.replace("Z", "+00:00"))
                 if datetime.now(UTC) >= expires_at:
                     return ""  # expired — fall through to .env
-            except (ValueError, TypeError):
-                pass  # malformed timestamp — keep the token, log nothing
+            except (ValueError, TypeError) as ts_exc:
+                # Malformed timestamp in operator-provisioned cache. Keep
+                # the token (fail-OPEN — better a valid token with bad
+                # metadata than falling back to expired env). Elevated
+                # 2026-07-19 from "log nothing" — silent-fail on
+                # config corruption meant the operator never saw an
+                # obvious signal that the cache file was malformed.
+                logger.warning(
+                    "[niche_credentials] malformed expires_at in "
+                    ".threads_tokens.json for niche=%s (%r) — token kept "
+                    "but cache config needs fixing: %s",
+                    niche_id,
+                    expires_at_iso,
+                    ts_exc,
+                )
         return token
-    except Exception:
+    except Exception as exc:
+        # ANY exception (JSONDecodeError, PermissionError, OSError, etc.)
+        # silently returned "" — falling back to env. Elevated 2026-07-19:
+        # silent-return here meant an operator-provisioned cache file
+        # that's unreadable would silently expire tokens to env's stale
+        # value. Same class-of-bug as rule #19 (fail-open at DEBUG
+        # equivalent — return-empty here).
+        logger.warning(
+            "[niche_credentials] .threads_tokens.json read failed for "
+            "niche=%s — falling back to env (may silently use stale "
+            "token): %s",
+            niche_id,
+            exc,
+            exc_info=True,
+        )
         return ""
 
 
