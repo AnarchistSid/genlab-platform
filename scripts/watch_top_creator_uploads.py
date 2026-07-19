@@ -161,7 +161,13 @@ def _uploads_playlist_id(
         }
         return playlist_id
     except Exception as exc:  # noqa: BLE001
-        logger.debug("[top-creators] channels.list %s exception: %s", channel_id, exc)
+        logger.warning(
+            "[top-creators] channels.list %s exception — channel dropped "
+            "from upload-lead signal this run: %s",
+            channel_id,
+            exc,
+            exc_info=True,
+        )
         return None
 
 
@@ -189,18 +195,21 @@ def _recent_uploads(
             timeout=15,
         )
         if resp.status_code != 200:
-            logger.debug(
-                "[top-creators] playlistItems.list %s HTTP %d",
+            logger.warning(
+                "[top-creators] playlistItems.list %s HTTP %d — body: %s",
                 playlist_id,
                 resp.status_code,
+                resp.text[:200],
             )
             return []
         items = resp.json().get("items") or []
     except Exception as exc:  # noqa: BLE001
-        logger.debug(
-            "[top-creators] playlistItems.list %s exception: %s",
+        logger.warning(
+            "[top-creators] playlistItems.list %s exception — creator's "
+            "recent uploads absent from A.2 artifact this run: %s",
             playlist_id,
             exc,
+            exc_info=True,
         )
         return []
 

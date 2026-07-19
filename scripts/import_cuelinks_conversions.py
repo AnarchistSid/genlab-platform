@@ -100,9 +100,14 @@ def _resolve_blueprint_id(cur, niche_id: str | None, bp_prefix: str | None) -> s
         if len(rows) == 1:
             return rows[0][0]
     except Exception as exc:
-        logger.debug(
-            "[import-cuelinks] blueprint prefix resolve failed for %s:%s: %s",
-            niche_id, bp_prefix, exc,
+        logger.warning(
+            "[import-cuelinks] blueprint prefix resolve failed for %s:%s "
+            "— conversion will be imported unlinked (no attribution to "
+            "the driving blueprint): %s",
+            niche_id,
+            bp_prefix,
+            exc,
+            exc_info=True,
         )
     return None
 
@@ -123,9 +128,17 @@ def _already_imported(cur, conversion_id: str) -> bool:
         )
         return cur.fetchone() is not None
     except Exception as exc:
-        logger.debug(
-            "[import-cuelinks] idempotency check failed for %s: %s",
-            conversion_id, exc,
+        # Elevated 2026-07-19: silent False here means the caller
+        # treats the row as NOT-YET-IMPORTED → duplicate revenue rows
+        # can accumulate across retries. Any query failure here is a
+        # data-integrity risk, not a soft observability miss.
+        logger.warning(
+            "[import-cuelinks] idempotency check failed for %s — "
+            "conversion may be imported multiple times (data-integrity "
+            "risk): %s",
+            conversion_id,
+            exc,
+            exc_info=True,
         )
         return False
 
