@@ -289,6 +289,33 @@ def _signal_search_velocity(topic: str, niche_id: str) -> tuple[float, int] | No
 
 _CACHE_TTL_HOURS: Final[int] = 12
 
+# Track which signal-reason pairs have already been logged this process
+# so operator sees "signal X null because Y" ONCE per run, not per topic
+# (25 topics × 5 niches = 625 log lines would be too noisy). Reset each
+# time the runner process starts.
+_FIRST_CALL_LOGGED: set[tuple[str, str]] = set()
+
+
+def _log_first_call(signal: str, reason: str, detail: str = "") -> None:
+    """Emit a WARNING once per (signal, reason) per process run.
+
+    Prevents 625-lines-per-run noise on flag-off / creds-missing early
+    returns while still surfacing the reason so operators aren't left
+    guessing why an artifact signal is null. Rule #19 sibling: the flag-
+    off early return isn't an error state, but an operator debugging
+    "why is X null" needs the signal.
+    """
+    key = (signal, reason)
+    if key in _FIRST_CALL_LOGGED:
+        return
+    _FIRST_CALL_LOGGED.add(key)
+    logger.warning(
+        "[trend_anticipation] %s returning None for this run: %s%s",
+        signal,
+        reason,
+        f" ({detail})" if detail else "",
+    )
+
 
 def _get_cache():
     """Cache handle for the two paid signals. Same disk-cache pattern
@@ -351,10 +378,12 @@ def _signal_creator_pickup(topic: str, niche_id: str) -> float | None:
     * Any HTTP / parse error → None (silent, DEBUG-logged).
     """
     if os.environ.get("GENLAB_ANTICIPATION_YT_ENABLED", "") not in ("true", "TRUE", "True"):
+        _log_first_call("creator_pickup", "GENLAB_ANTICIPATION_YT_ENABLED not set to 'true'")
         return None
 
     api_key = os.environ.get("YOUTUBE_API_KEY", "").strip()
     if not api_key:
+        _log_first_call("creator_pickup", "YOUTUBE_API_KEY missing")
         return None
 
     cache = _get_cache()
@@ -451,11 +480,17 @@ def _signal_social_velocity(topic: str, niche_id: str) -> float | None:
         "TRUE",
         "True",
     ):
+        _log_first_call("social_velocity", "GENLAB_ANTICIPATION_REDDIT_ENABLED not set to 'true'")
         return None
 
     client_id = os.environ.get("REDDIT_CLIENT_ID", "").strip()
     client_secret = os.environ.get("REDDIT_CLIENT_SECRET", "").strip()
     if not client_id or not client_secret:
+        _log_first_call(
+            "social_velocity",
+            "REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET missing on prod .env",
+            "operator provisioning needed",
+        )
         return None
 
     cache = _get_cache()
@@ -696,6 +731,7 @@ def _signal_news_lead(topic: str, niche_id: str) -> float | None:
         "TRUE",
         "True",
     ):
+        _log_first_call("news_lead", "GENLAB_ANTICIPATION_NEWS_ENABLED not set to 'true'")
         return None
 
     cache = _get_cache()
