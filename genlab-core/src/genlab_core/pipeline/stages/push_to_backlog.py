@@ -1236,9 +1236,12 @@ def _classify_arm_with_propensity(
                     # cleanly (NULL is the "not applicable" sentinel).
                     return sel.arm_id, None
         except Exception as exc:  # noqa: BLE001 — fail-open to bandit chain
-            logger.debug(
-                "[classify_arm] experiment assignment error, falling through: %s",
+            logger.warning(
+                "[classify_arm] experiment assignment error — falling through "
+                "to bandit chain (experiment allocation lost for niche=%s): %s",
+                niche_id,
                 exc,
+                exc_info=True,
             )
 
     # ε-greedy force-explore — runs BEFORE keyword matching so it
@@ -1425,9 +1428,14 @@ def _classify_arm_with_propensity(
                                 len(matched_posteriors),
                             )
                 except Exception as exc:  # noqa: BLE001 — fail-open to None
-                    logger.debug(
-                        "[classify_arm] Thompson propensity capture failed: %s",
+                    logger.warning(
+                        "[classify_arm] Thompson propensity capture failed for "
+                        "niche=%s arm=%s — propensity stays NULL (IPS excludes "
+                        "this row): %s",
+                        niche_id,
+                        bandit_pick,
                         exc,
+                        exc_info=True,
                     )
 
     # Random-control wrap (Lever I1 wiring). With probability epsilon
@@ -1461,7 +1469,13 @@ def _classify_arm_with_propensity(
             # Preserve the LinUCB propensity (or None if Thompson ran).
             return sel.arm_id, bandit_propensity
     except Exception as exc:  # noqa: BLE001 — fail-open to bandit pick
-        logger.debug("[classify_arm] experimentation wrap error, using bandit pick: %s", exc)
+        logger.warning(
+            "[classify_arm] experimentation wrap error — random-control skipped "
+            "(no counterfactual data generated for niche=%s): %s",
+            niche_id,
+            exc,
+            exc_info=True,
+        )
 
     return bandit_pick, bandit_propensity
 
