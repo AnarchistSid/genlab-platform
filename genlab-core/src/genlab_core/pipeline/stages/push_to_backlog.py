@@ -989,7 +989,14 @@ def _apply_engagement_boost(
                 delta = max(-0.20, min(0.20, (ucb - 0.5) * 0.4))
                 multiplier = multiplier * (1.0 + delta)
         except Exception as exc:
-            logger.debug("[PUSH] LinUCB scoring failed: %s", exc)
+            logger.warning(
+                "[PUSH] LinUCB scoring failed for niche=%s — priority "
+                "multiplier stays at %.3f (no UCB signal): %s",
+                niche_id,
+                multiplier,
+                exc,
+                exc_info=True,
+            )
     return round(base_score * multiplier, 4)
 
 
@@ -1359,7 +1366,12 @@ def _classify_arm_with_propensity(
                     matches, context, linucb_arms, stochastic=_stochastic
                 )
         except Exception as exc:  # noqa: BLE001 — fail-open to Thompson
-            logger.debug("[classify_arm] LinUCB picker error, falling back: %s", exc)
+            logger.warning(
+                "[classify_arm] LinUCB picker error — falling back to "
+                "Thompson (bandit choice degraded, propensity=NULL): %s",
+                exc,
+                exc_info=True,
+            )
             bandit_pick = None
             bandit_propensity = None
 
