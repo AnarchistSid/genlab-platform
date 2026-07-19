@@ -176,7 +176,14 @@ def fetch_instagram(
                 ins_resp.text[:200],
             )
     except requests.RequestException as exc:
-        logger.debug("[platforms.metrics.instagram] insights non-fatal: %s", exc)
+        logger.warning(
+            "[platforms.metrics.instagram] insights request failed for "
+            "media %s — engagement metrics silently missing (reward "
+            "pipeline sees 0 for this post): %s",
+            media_id,
+            exc,
+            exc_info=True,
+        )
 
     # v22.0+ canonical: `views` is the real play count; `reach` is unique-accounts
     # and was wrongly aliased as views in the pre-fix implementation. Fall back to

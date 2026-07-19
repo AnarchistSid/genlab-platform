@@ -81,7 +81,14 @@ def _fetch_post_breakdown(post_id: str, token: str) -> tuple[int, int]:
             timeout=_TIMEOUT_S,
         )
     except requests.RequestException as exc:
-        logger.debug("[platforms.metrics.facebook] post-node breakdown failed: %s", exc)
+        logger.warning(
+            "[platforms.metrics.facebook] post-node breakdown failed for "
+            "post %s — comments+shares silently reported as 0 (reward "
+            "pipeline sees no engagement for this post): %s",
+            post_id,
+            exc,
+            exc_info=True,
+        )
         return 0, 0
 
     if resp.status_code != 200:
