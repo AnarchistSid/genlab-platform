@@ -131,7 +131,13 @@ def log_calibration_for_action(
         try:
             decision = gate_evaluate(flat)
         except Exception as ev_exc:
-            logger.debug("[calibration] gate evaluation failed: %s", ev_exc)
+            logger.warning(
+                "[calibration] gate evaluation failed — calibration row "
+                "logged with decision=None, breaking the auto-approver "
+                "confusion matrix (rule #22): %s",
+                ev_exc,
+                exc_info=True,
+            )
             decision = None
 
         # Translate dashboard action vocabulary to calibration_logger's
@@ -195,6 +201,25 @@ def log_calibration_for_action(
                 operator_action=operator_action,
             )
         except Exception as trace_exc:  # noqa: BLE001 — never block caller
-            logger.debug("[trace] operator-decision wire skipped: %s", trace_exc)
+            logger.warning(
+                "[trace] operator-decision wire skipped — post_decision_trace "
+                "row lost (2026-07-16 audit flagged 99 orphaned trace rows; "
+                "silent-fail here compounds that class-of-bug): %s",
+                trace_exc,
+                exc_info=True,
+            )
     except Exception as cal_exc:  # noqa: BLE001 — never block caller
-        logger.debug("[calibration] skipped (non-fatal): %s", cal_exc)
+        # 2026-07-19: elevated DEBUG → WARNING. Same class-of-bug that
+        # rule #19 was written from (`review_server.py:1443` masked
+        # 17 days of calibration_logger failures 2026-06-29 → 2026-07-16).
+        # When calibration_helper was extracted from review_server.py,
+        # the OUTER swallow was reintroduced at DEBUG. This is a
+        # regression of the rule #19 origin site. Elevated to WARNING
+        # + exc_info=True so the underlying failure is visible before
+        # another 17-day silent stall accumulates.
+        logger.warning(
+            "[calibration] skipped (non-fatal) — auto-approver readiness "
+            "ratchet stalls if this fires systematically: %s",
+            cal_exc,
+            exc_info=True,
+        )

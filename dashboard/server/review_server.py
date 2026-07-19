@@ -1380,7 +1380,13 @@ def _execute_review_action(
         try:
             _decision = _gate_evaluate(_flat)
         except Exception as _ev_exc:
-            logger.debug("[calibration] gate evaluation failed: %s", _ev_exc)
+            logger.warning(
+                "[calibration] gate evaluation failed — calibration row "
+                "logged with decision=None (rule #22 confusion matrix "
+                "broken): %s",
+                _ev_exc,
+                exc_info=True,
+            )
             _decision = None
         # S1 (2026-06-15): pass action_taken_source so calibration_logger
         # can drop gate-vs-gate rows. The re-fetched ``_flat`` carries
