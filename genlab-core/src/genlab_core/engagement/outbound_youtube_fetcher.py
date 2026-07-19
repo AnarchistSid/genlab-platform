@@ -71,7 +71,13 @@ def _increment_quota_soft(units: int, operation: str) -> None:
         tracker = YouTubeQuotaTracker()
         tracker.record("video_list" if units == 1 else "search", niche_id="all")
     except Exception as exc:
-        logger.debug("[outbound-yt] quota increment skipped: %s (op=%s)", exc, operation)
+        logger.warning(
+            "[outbound-yt] quota increment skipped for op=%s — YouTube "
+            "quota tracker not counting this call (over-consumption risk): %s",
+            operation,
+            exc,
+            exc_info=True,
+        )
 
 
 def _yt_get(path: str, params: dict[str, Any]) -> dict | None:

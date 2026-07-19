@@ -1773,7 +1773,14 @@ class PushToBacklog:
                     active_experiment.arms,
                 )
         except Exception as exc:  # noqa: BLE001 — fail-open to no experiment
-            logger.debug("[PUSH] experiment registry load failed: %s", exc)
+            logger.warning(
+                "[PUSH] experiment registry load failed for niche=%s — "
+                "ALL experiments silently disabled this run (Intel #2 "
+                "experiments.yaml becomes a no-op): %s",
+                niche_id,
+                exc,
+                exc_info=True,
+            )
             active_experiment = None
 
         # Load content_memory hashes + active-blueprint URLs for cross-run dedup.

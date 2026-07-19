@@ -214,7 +214,13 @@ def _resolve_post_context(post_id: str, platform: str) -> str:
         hook = (fields.get("hook") or fields.get("hook_text") or "").strip()
         return " — ".join(p for p in (title, hook) if p)[:300]
     except Exception as exc:
-        logger.debug("[engagement] post-context resolution failed for %s: %s", post_id, exc)
+        logger.warning(
+            "[engagement] post-context resolution failed for %s — reply "
+            "generation loses video title+hook context (quality drop): %s",
+            post_id,
+            exc,
+            exc_info=True,
+        )
         return ""
 
 

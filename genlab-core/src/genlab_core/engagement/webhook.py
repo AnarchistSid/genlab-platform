@@ -81,7 +81,13 @@ def _resolve_niche(media_id: str) -> str:
             _niche_cache[media_id] = niche
             return niche
     except Exception as exc:
-        logger.debug("Niche lookup failed for %s: %s", media_id, exc)
+        logger.warning(
+            "[webhook] Niche lookup failed for media_id=%s — engagement "
+            "event may be misrouted (defaults to ai_creators): %s",
+            media_id,
+            exc,
+            exc_info=True,
+        )
     return "ai_creators"
 
 

@@ -152,10 +152,12 @@ async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
                 resp.raise_for_status()
                 data = resp.json()
             except Exception as e:
-                logger.debug(
-                    "[POLLER] YouTube: comment fetch failed for %s: %s",
+                logger.warning(
+                    "[POLLER] YouTube: comment fetch failed for %s — "
+                    "video's comments skipped this poll cycle: %s",
                     video_id,
                     _scrub_token(e),
+                    exc_info=True,
                 )
                 continue
 
@@ -541,10 +543,12 @@ async def poll_facebook_comments(niche_id: str, page_id: str) -> list[dict]:
                     continue
                 data = resp.json()
             except Exception as e:
-                logger.debug(
-                    "[POLLER] Facebook comment fetch failed for %s: %s",
+                logger.warning(
+                    "[POLLER] Facebook comment fetch failed for %s — "
+                    "post's comments skipped this poll cycle: %s",
                     fb_post_id,
                     _scrub_token(e),
+                    exc_info=True,
                 )
                 continue
 

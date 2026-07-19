@@ -112,7 +112,12 @@ class QCGates:
                     blueprints = result.unique
                     context["stories"] = blueprints
             except Exception as exc:
-                logger.debug("[QCGates] Dedup skipped: %s", exc)
+                logger.warning(
+                    "[QCGates] Dedup skipped — duplicate hooks may pass QC "
+                    "into blueprints this run: %s",
+                    exc,
+                    exc_info=True,
+                )
 
         templates_cfg = config.get("templates", {})
         max_slides = templates_cfg.get("max_slides", self.DEFAULT_MAX_SLIDES)
