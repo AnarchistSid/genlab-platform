@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import time as _time
 from dataclasses import dataclass
@@ -209,6 +210,54 @@ def _upload_to_litterbox(file_path: Path, expiry: str, max_attempts: int) -> str
     return None
 
 
+_TMPFILES_DL_URL_RE = re.compile(
+    r'href="(https://tmpfiles\.org/dl/\d+\.[0-9a-f]+/[^"]+)"'
+)
+
+
+def _resolve_tmpfiles_direct_url(page_url: str) -> str | None:
+    """Resolve the direct video URL from tmpfiles.org's wrapper page.
+
+    tmpfiles.org changed their URL scheme in 2026-07: the old
+    ``/dl/{token}/{filename}`` direct URL now 302s back to the HTML
+    wrapper. The real signed direct URL lives inside the wrapper HTML
+    as ``href="https://tmpfiles.org/dl/{TS}.{HASH}/{token}/{filename}"``.
+
+    Args:
+        page_url: The wrapper URL returned by tmpfiles' upload API
+            (either http:// or https://). Fetched and parsed here.
+
+    Returns:
+        The signed direct URL string on success, ``None`` if the wrapper
+        doesn't contain a recognisable ``/dl/`` href (site changed
+        format again, upload expired, or network hiccup).
+    """
+    if not page_url:
+        return None
+    # Normalise to https and drop any accidental /dl/ prefix left over
+    # from an earlier version of this function or a caller who already
+    # tried the naive replace.
+    https_page = page_url.replace("http://tmpfiles.org/", "https://tmpfiles.org/").replace(
+        "https://tmpfiles.org/dl/", "https://tmpfiles.org/"
+    )
+    try:
+        resp = requests.get(https_page, timeout=_UPLOAD_TIMEOUT)
+    except Exception as exc:
+        logger.warning("[CDN] tmpfiles wrapper fetch failed: %s", exc)
+        return None
+    if resp.status_code != 200:
+        logger.warning("[CDN] tmpfiles wrapper returned HTTP %d", resp.status_code)
+        return None
+    match = _TMPFILES_DL_URL_RE.search(resp.text)
+    if not match:
+        logger.warning(
+            "[CDN] tmpfiles wrapper HTML missing /dl/{ts}.{hash}/... href — "
+            "the site may have changed format again"
+        )
+        return None
+    return match.group(1)
+
+
 def _upload_to_tmpfiles(file_path: Path) -> str | None:
     """Fallback: tmpfiles.org (up to 100 MB)."""
     if not _tmpfiles_cb.can_attempt():
@@ -238,7 +287,26 @@ def _upload_to_tmpfiles(file_path: Path) -> str | None:
             _tmpfiles_cb.record_failure()
             return None
         page_url = data.get("data", {}).get("url", "")
-        dl_url = page_url.replace("http://tmpfiles.org/", "https://tmpfiles.org/dl/")
+        # 2026-07-19: tmpfiles.org changed URL scheme. The old
+        # ``/dl/{token}/{filename}`` pattern now 302s back to the
+        # HTML wrapper page. The real direct-video URL requires a
+        # timestamp-hash segment: ``/dl/{TS}.{HASH}/{token}/{filename}``
+        # that's only available by scraping the wrapper HTML.
+        #
+        # HTML pattern: ``href="https://tmpfiles.org/dl/{TS}.{HASH}/...``
+        # Verified 2026-07-19 with real Meta preflight failures across
+        # all 3 IG-attempted channels (ai_creators, gaming, sports).
+        # Prior naive replace yielded /dl/{token}/{file} → 302 → wrapper
+        # → HEAD sees text/html → Meta preflight rejects.
+        dl_url = _resolve_tmpfiles_direct_url(page_url)
+        if dl_url is None:
+            logger.warning(
+                "tmpfiles: could not extract direct /dl/ URL from wrapper "
+                "at %s — Meta preflight would reject as text/html",
+                page_url,
+            )
+            _tmpfiles_cb.record_failure()
+            return None
         logger.info("tmpfiles: %s → %s", file_path.name, dl_url)
         _tmpfiles_cb.record_success()
         return dl_url
