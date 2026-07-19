@@ -385,6 +385,71 @@ def test_pullback_sql_shares_llm_refusal_filter(script_module):
     assert "length(hook) BETWEEN 15 AND 100" in body, "Pull-back SQL missing hook-length filter."
 
 
+def test_cleanup_marker_exclusion_clause_defined(script_module):
+    """Pin the 2026-07-19 fix for auto-re-scheduling unrecoverable
+    blueprints.
+
+    Yesterday's operator escape hatch (cleanup_stale_visual_ready.sh
+    --cancel-scheduled-stale) set scheduled_for=NULL on 14 blueprints
+    with GC'd media + lost source, stamping error_message with
+    ``cleanup:media_gc_removed_and_source_lost:2026-07-18``. Nightly
+    scheduler re-picked 2 of them (anime `3bce4aec` + movies
+    `1507f01f`) because the query filtered only action_taken. Rooted
+    the fix in a shared clause so BOTH primary + pull-back queries
+    honour the cleanup marker.
+
+    Regression risk if this is removed: any operator "cancel this,
+    it's unrecoverable" action gets silently undone the next night.
+    """
+    assert hasattr(script_module, "_CLEANUP_MARKER_EXCLUSION_CLAUSE"), (
+        "Missing _CLEANUP_MARKER_EXCLUSION_CLAUSE — reintroduces the "
+        "2026-07-19 auto-re-schedule regression that had operators "
+        "re-cancelling the same blueprints every day."
+    )
+    clause = script_module._CLEANUP_MARKER_EXCLUSION_CLAUSE
+    assert "error_message" in clause
+    # 'cleanup:media_gc_removed' is a substring of both
+    # 'cleanup:media_gc_removed_and_source_lost' (cleanup script) and
+    # 'recancel:2026-07-19:auto_scheduler_re-picked...' — actually no,
+    # recancel doesn't contain cleanup:media_gc_removed. So we check
+    # the marker substring that BOTH will end up carrying (the ORIGINAL
+    # cleanup marker persists via COALESCE in the re-cancel step).
+    assert "cleanup:media_gc_removed" in clause, (
+        "Marker substring 'cleanup:media_gc_removed' must be in the "
+        "exclusion clause — that's the common substring both the "
+        "original cleanup and any subsequent operator escape hatches "
+        "leave behind."
+    )
+
+
+def test_primary_sql_excludes_cleanup_marked_blueprints(script_module):
+    """The primary fresh-candidates SQL must include the cleanup-marker
+    exclusion so yesterday's --cancel-scheduled-stale actions don't get
+    silently undone by tonight's re-schedule."""
+    import inspect
+
+    body = inspect.getsource(script_module.pick_top_per_niche)
+    assert "_CLEANUP_MARKER_EXCLUSION_CLAUSE" in body, (
+        "Primary SQL missing _CLEANUP_MARKER_EXCLUSION_CLAUSE — anime "
+        "3bce4aec + movies 1507f01f already hit this exact regression "
+        "on 2026-07-19. Restoring it should not silently re-open the bug."
+    )
+
+
+def test_pullback_sql_excludes_cleanup_marked_blueprints(script_module):
+    """The pull-back SQL must ALSO honour the cleanup marker. If only
+    the primary path has it, an operator "cancel + auto-re-schedule"
+    incident silently returns via pull-back on subsequent nights."""
+    import inspect
+
+    body = inspect.getsource(script_module._pick_pullback_candidates)
+    assert "_CLEANUP_MARKER_EXCLUSION_CLAUSE" in body, (
+        "Pull-back SQL missing _CLEANUP_MARKER_EXCLUSION_CLAUSE — "
+        "asymmetric guard would let a cleanup-marked blueprint sneak "
+        "back via the far-future pull-back path."
+    )
+
+
 def test_refusal_where_clause_covers_pre_render_quality_prefixes(script_module):
     """Both SQL branches use _refusal_where_clause(). This test pins
     that the helper covers EVERY prefix from pre_render_quality's

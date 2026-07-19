@@ -90,6 +90,25 @@ NICHES = ("ai_creators", "gaming", "sports", "movies", "anime")
 # Now imports the canonical list. When pre_render_quality's list
 # grows, this filter grows automatically. Class-of-bug fix at the
 # source instead of the symptom.
+# 2026-07-19 lesson: yesterday's --cancel-scheduled-stale set
+# scheduled_for=NULL on 14 blueprints whose media was GC'd + source
+# lost (unrecoverable). Nightly scheduler re-picked 2 of them today
+# because the query filtered only ``action_taken NOT IN ('rejected',
+# 'archived')`` and these blueprints had ``action_taken='approved'``.
+# The cleanup-marker in ``error_message`` was the durable signal that
+# these are unrecoverable — schedulers need to honour it.
+#
+# Same marker is used by:
+#   * cleanup_stale_visual_ready.sh --cancel-scheduled-stale
+#     (writes ``cleanup:media_gc_removed_and_source_lost:...``)
+#   * The re-cancel operator escape hatch (writes ``recancel:...``)
+# LIKE '%cleanup:media_gc_removed%' catches both.
+_CLEANUP_MARKER_EXCLUSION_CLAUSE = (
+    "AND (error_message IS NULL "
+    "OR error_message NOT LIKE '%cleanup:media_gc_removed%')"
+)
+
+
 def _refusal_where_clause(field: str = "hook") -> str:
     """Return a SQL fragment excluding LLM-refusal-prefix hooks.
 
@@ -270,6 +289,7 @@ def pick_top_per_niche(
           AND status = 'VISUAL_READY'
           AND scheduled_for IS NULL
           AND (action_taken IS NULL OR action_taken NOT IN ('rejected', 'archived'))
+          {_CLEANUP_MARKER_EXCLUSION_CLAUSE}
           AND hook IS NOT NULL
 {_refusal_where_clause("hook")}
           AND length(hook) BETWEEN 15 AND 100
@@ -322,6 +342,7 @@ def _pick_pullback_candidates(
           AND status = 'VISUAL_READY'
           AND scheduled_for::date >= %s
           AND (action_taken IS NULL OR action_taken NOT IN ('rejected', 'archived'))
+          {_CLEANUP_MARKER_EXCLUSION_CLAUSE}
           AND hook IS NOT NULL
 {_refusal_where_clause("hook")}
           AND length(hook) BETWEEN 15 AND 100
