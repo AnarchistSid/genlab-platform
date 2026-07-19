@@ -122,12 +122,15 @@ def get_percentile_target(
                 )
                 values = [float(row[0]) for row in cur.fetchall()]
     except Exception as exc:
-        logger.debug(
-            "[percentile_targets] Query failed for %s/%s/%s: %s",
+        logger.warning(
+            "[percentile_targets] Query failed for %s/%s/%s — cache stamped "
+            "NULL for TTL window (reward norms stuck on hardcoded until "
+            "cache expires): %s",
             niche_id,
             platform,
             metric,
             exc,
+            exc_info=True,
         )
         _cache[key] = (None, now)
         return None

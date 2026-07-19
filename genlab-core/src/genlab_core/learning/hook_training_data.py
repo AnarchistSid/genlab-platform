@@ -247,7 +247,13 @@ def _lookup_skip_rate(
         return None
 
     except Exception as exc:
-        logger.debug("[hook_training] skip_rate lookup failed for %s: %s", content_id, exc)
+        logger.warning(
+            "[hook_training] skip_rate lookup failed for %s — training "
+            "data loses this row's skip signal: %s",
+            content_id,
+            exc,
+            exc_info=True,
+        )
         cache[content_id] = None
         return None
 

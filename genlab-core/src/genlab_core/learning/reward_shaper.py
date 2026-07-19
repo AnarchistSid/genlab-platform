@@ -302,7 +302,14 @@ class RewardShaper:
                             value,
                         )
             except Exception as exc:
-                logger.debug("[REWARD] Strategist override skipped: %s", exc)
+                logger.warning(
+                    "[REWARD] Strategist override skipped for niche=%s — "
+                    "reward weights stay on hardcoded defaults (Strategist "
+                    "meta-analysis feedback lost this pass): %s",
+                    self._niche_id,
+                    exc,
+                    exc_info=True,
+                )
 
         if channel_metrics is None and self._channel_metrics_fn is not None:
             try:
@@ -499,12 +506,15 @@ class RewardShaper:
         try:
             target = self._percentile_targets_fn(self._niche_id, platform, metric)
         except Exception as exc:
-            logger.debug(
-                "[REWARD] percentile_targets_fn raised for %s/%s/%s: %s; using hardcoded",
+            logger.warning(
+                "[REWARD] percentile_targets_fn raised for %s/%s/%s — reward "
+                "normalisation drops to hardcoded norms (Intel #10 signal "
+                "lost): %s",
                 self._niche_id,
                 platform,
                 metric,
                 exc,
+                exc_info=True,
             )
             return _normalise_metric(metric, value, platform)
         if target is None or target <= 0:
