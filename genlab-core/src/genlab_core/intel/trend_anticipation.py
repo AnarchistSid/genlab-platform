@@ -781,6 +781,13 @@ def _signal_news_lead(topic: str, niche_id: str) -> float | None:
         return None
 
     if n_articles == 0:
+        # Log-once per process — expected for obscure topics but
+        # covers the case where Google News RSS starts returning
+        # empty for everything (e.g., their end blocks GenLab UA).
+        _log_first_call(
+            "news_lead",
+            "Google News RSS returned 0 articles (per-topic; first miss surfaced)",
+        )
         return None
     score = min(1.0, math.log10(1 + n_articles) / 2.0)
     if cache is not None:
