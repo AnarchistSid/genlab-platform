@@ -404,12 +404,18 @@ def check_engagement_health() -> list[Alert]:
                             severity="warning",
                             message=(
                                 f"No pending_engagement writes in 48h AND no worker UPDATEs in 48h "
-                                f"(total table size: {total}). This is BEYOND steady-state dedup — "
-                                f"either the engagement-poller is silent OR the Dramatiq worker is "
-                                f"stuck. To distinguish: "
-                                f"`journalctl -u genlab-engagement-poller.service --since '2 hours ago' | grep '\\[POLLER\\]'` "
-                                f"— empty output = poller dead (check AGENT_ROOT + tracebacks); "
-                                f"non-empty = poller alive, check worker journal."
+                                f"(total table size: {total}). Three possible causes: "
+                                f"(A) poller dead, (B) worker stuck, or (C) no NEW comments coming "
+                                f"in but poller re-fetching the same comments — 100% idempotency "
+                                f"dedup at comment_processor. Case C is 'no engagement growth' — "
+                                f"not a bug, just a real signal that the channels aren't attracting "
+                                f"new comments. To distinguish: "
+                                f"`journalctl -u genlab-engagement-poller.service --since '2h ago' | grep '\\[POLLER\\]'` "
+                                f"— empty output = case A (poller dead, check AGENT_ROOT + tracebacks); "
+                                f"non-empty AND recent `.engagement_replied.jsonl` mtime = case C "
+                                f"(no new engagement — legit no-op); non-empty AND stale mtime = "
+                                f"case B (check worker journal for tracebacks). Investigation "
+                                f"pattern documented 2026-07-19."
                             ),
                             details={
                                 "total": int(total),
