@@ -21,6 +21,17 @@ trend_cycle_multipliers:
   declining: 0.5
   unknown: 0.7
 
+# Per-niche virality_scoring patterns for the pipeline stage
+# genlab_core.pipeline.stages.virality_scoring (2026-07-21 fix — see
+# ClutchWire/config/scoring_weights.yaml for the class-of-bug context;
+# same shape here for anime vocabulary).
+virality_scoring:
+  patterns:
+    # Studios, franchises, characters, publishers
+    pop_culture_reference: "\\b(shonen jump|toei|mappa|ufotable|madhouse|bones|kyoto animation|kyoani|wit studio|studio ghibli|sunrise|trigger|a-1|pierrot|crunchyroll|funimation|hidive|shueisha|kodansha|square enix|naruto|bleach|one piece|demon slayer|attack on titan|aot|jujutsu kaisen|jjk|my hero academia|mha|hunter x hunter|hxh|dragon ball|dragon ball z|dbz|dbs|chainsaw man|spy x family|solo leveling|frieren|oshi no ko|blue lock|kaiju no 8|dan da dan|re[:\\s]?zero)\\b"
+    # Anime-specific event/moment terms
+    named_tool: "\\b(season\\s*\\d+|s\\d+e\\d+|episode\\s*\\d+|arc|cour|opening|ending|op|ed|mv|amv|edit|manga|light novel|ln|isekai|shonen|shojo|seinen|josei|mecha|reincarnation|villainess|reverse harem|slice of life|character reveal|voice actor|seiyuu|premiere|dub|sub|simulcast|cover|adaptation|announcement|reveal|trailer|pv|promo video)\\b"
+
 dedup:
   similarity_threshold: 0.68
   time_window_hours: 48

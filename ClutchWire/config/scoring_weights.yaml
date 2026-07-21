@@ -23,6 +23,24 @@ clip_scoring:
   upset_multiplier: 1.4
   record_multiplier: 1.3
 
+# Per-niche virality_scoring patterns (2026-07-21 fix — the pipeline
+# stage genlab_core.pipeline.stages.virality_scoring falls back to
+# DEFAULT_PATTERNS which are 100% AI-industry vocabulary. Sports content
+# matched zero patterns → virality_score=0.0 → blueprints failed the
+# auto_approval_gate's >=0.05 virality floor. Same class-of-bug as the
+# composite_score contract regression fixed 2026-07-21.
+#
+# Only pop_culture_reference and named_tool need overriding — the other
+# 7 default patterns (hook_format_question, nostalgia_angle,
+# dollar_amount, before_after, controversy_debate, tutorial_how_to,
+# listicle_number) are genuinely niche-agnostic and work as-is.
+virality_scoring:
+  patterns:
+    # Sports leagues, competitions, franchises + governing bodies
+    pop_culture_reference: "\\b(nba|nfl|mlb|nhl|ufc|mma|wwe|zuffa|fifa|premier league|champions league|epl|la\\s*liga|serie a|bundesliga|f1|formula\\s*1|nascar|indycar|motogp|stanley cup|world series|super bowl|world cup|olympics|wimbledon|us open|the open|masters|ryder cup|q[123]|fp[123]|espn|bleacher|dazn)\\b"
+    # Sport-specific moments, actions, gear, terms
+    named_tool: "\\b(playoff|championship|semi(?:-|\\s)?final|final|game[-\\s]?winner|game[-\\s]?winning|walkoff|walk[-\\s]?off|buzzer[-\\s]?beater|hat[-\\s]?trick|touchdown|home\\s*run|homer|knockout|k\\.?o\\.|hail mary|clutch|overtime|extra time|penalty shootout|comeback|no[-\\s]?hitter|title|belt|cup|trophy|medal|ring|gym|fight|match|bout|round|shot|goal|score|win|victory|defeat|upset|record|training|workout|comeback|retirement|transfer|signing|draft|trade|shorts|onboard|pole|podium|lap)\\b"
+
 dedup:
   jaccard_threshold: 0.75
   tfidf_threshold: 0.70

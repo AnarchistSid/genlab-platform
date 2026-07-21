@@ -31,6 +31,17 @@ franchise_multipliers:
   Horror_Franchise: 1.2
   default: 1.0
 
+# Per-niche virality_scoring patterns for the pipeline stage
+# genlab_core.pipeline.stages.virality_scoring (2026-07-21 fix — see
+# ClutchWire/config/scoring_weights.yaml for the class-of-bug context;
+# same shape here for movies vocabulary).
+virality_scoring:
+  patterns:
+    # Studios, franchises, characters, streaming services
+    pop_culture_reference: "\\b(marvel|mcu|dc|dceu|star wars|disney|pixar|dreamworks|a24|blumhouse|netflix|hbo|amazon|apple tv|hulu|paramount|universal|warner|sony pictures|columbia|lucasfilm|marvel studios|dune|avatar|batman|superman|spider[-\\s]?man|iron man|thor|hulk|deadpool|wolverine|joker|godzilla|kong|barbie|oppenheimer|mission impossible|fast[-\\s]?furious|john wick|james bond|007|jurassic|indiana jones)\\b"
+    # Movie-specific terms + moments
+    named_tool: "\\b(trailer|teaser|first look|reboot|remake|prequel|sequel|spin[-\\s]?off|origin story|final trailer|red band|behind the scenes|box office|rotten tomatoes|rt|imdb|opening weekend|premiere|streaming|debut|breakout|blockbuster|sleeper hit|festival|sundance|cannes|tiff|oscars|academy award)\\b"
+
 dedup:
   similarity_threshold: 0.70
   time_window_hours: 48

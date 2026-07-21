@@ -84,6 +84,17 @@ compilation_scoring:
     flat_weight: 0.7
     descending_weight: 0.5
 
+# Per-niche virality_scoring patterns for the pipeline stage
+# genlab_core.pipeline.stages.virality_scoring (2026-07-21 fix — see
+# ClutchWire/config/scoring_weights.yaml for the full class-of-bug
+# context; same shape here for gaming vocabulary).
+virality_scoring:
+  patterns:
+    # Games, franchises, studios, platforms
+    pop_culture_reference: "\\b(steam|epic games|xbox|playstation|ps[45]|switch|nintendo|valve|activision|blizzard|bethesda|ubisoft|square enix|capcom|fromsoftware|riot|blizzard|call of duty|cod|fortnite|minecraft|roblox|elden ring|zelda|mario|halo|overwatch|valorant|counter[-\\s]?strike|dota|league of legends|lol|palworld|helldivers|gta|grand theft auto|witcher|cyberpunk)\\b"
+    # Gaming-specific moments + achievement terms
+    named_tool: "\\b(speedrun|nuzlocke|no[-\\s]?death|100%|any%|world record|glitch|exploit|meta|nerf|buff|update|patch|dlc|expansion|early access|beta|alpha|leak|leaked|hotfix|balance patch|clutch|ace|pentakill|1v[45])\\b"
+
 # Dedup thresholds (used by genlab_core.intelligence.dedup_engine)
 # Gaming uses slightly more aggressive thresholds than AI news because
 # 'Elden Ring Sets Record' and 'Elden Ring Breaks Record' should dedup
