@@ -108,7 +108,38 @@ def _process_blueprint(bp: dict, niche_id: str, backlog_client: Any, daily_cap: 
         return
 
     if _media_files_missing(fields):
-        logger.info("[publish] Skipping retry for %s — media files deleted", bp["id"][:8])
+        # 2026-07-21: archive the blueprint instead of just skipping. Prior
+        # behavior returned silently → publisher's next fire re-picked the
+        # same VISUAL_READY blueprint and retried the same doomed publish
+        # to every platform, generating N SKIPPED events per day per lost
+        # blueprint. Agent audit found 20 such SKIPPED events over 14d.
+        # Archive-on-missing-media stops the loop.
+        try:
+            backlog_client.blueprints.update(
+                bp["id"],
+                {
+                    "status": "ARCHIVED",
+                    "error_message": (
+                        (fields.get("error_message") or "")
+                        + " | archived:2026-07-21:media_missing_retry_pass"
+                    ).strip(" |"),
+                },
+            )
+            logger.warning(
+                "[publish] ARCHIVED %s — media files deleted (no recovery "
+                "path; stops daily-retry waste)",
+                bp["id"][:8],
+            )
+        except Exception as exc:
+            # Fail-open: if archive write fails, still skip the retry.
+            # Alarming — this is data-side, worth WARNING.
+            logger.warning(
+                "[publish] Archive-on-missing-media failed for %s: %s "
+                "(retry still skipped this pass)",
+                bp["id"][:8],
+                exc,
+                exc_info=True,
+            )
         return
 
     logger.info(
