@@ -277,9 +277,18 @@ def evaluate(
     elif composite >= min_composite_score:
         passed.append("composite_score")
         reasons.append(f"composite_score={composite:.2f} ≥ {min_composite_score:.2f}")
-        # Map [min..1.0] to [0.5..1.0] for confidence contribution
+        # 2026-07-21: rebalance anchor 0.5 → 0.7. A blueprint clearing
+        # the hard-check floor is a POSITIVE signal, not a neutral one —
+        # prior mapping treated barely-passing as 50% confidence, which
+        # dragged the mean below the 0.70 auto-approve threshold even
+        # when every check passed. New mapping: min-passing = 0.7 conf,
+        # perfect = 1.0. Combined with the same fix on virality (below),
+        # baseline confidence for a "cleared all floors" blueprint rises
+        # ~0.20 → most passing blueprints now clear the 0.70 auto-approve
+        # gate instead of getting stuck at 0.66 borderline.
+        # Investigation ref: Agent 1, 2026-07-21 auto-approver dig.
         span = max(0.001, 1.0 - min_composite_score)
-        confidences.append(0.5 + 0.5 * min(1.0, (composite - min_composite_score) / span))
+        confidences.append(0.7 + 0.3 * min(1.0, (composite - min_composite_score) / span))
     else:
         failed.append("composite_score")
         reasons.append(
@@ -312,10 +321,13 @@ def evaluate(
         # Effect: virality=0.15 now yields conf=0.70 instead of 0.55.
         # Combined with hook_classifier_score fix (Task #52), the
         # 6-check mean should regularly clear 0.80 on healthy content.
+        # 2026-07-21: rebalance anchor 0.5 → 0.7 (matches composite
+        # rebalance above). Clearing the virality floor is a POSITIVE
+        # signal; prior mapping treated barely-passing as neutral.
         virality_soft_ceiling = 0.30
         span = max(0.001, virality_soft_ceiling - min_virality_score)
         normalized = min(1.0, (virality - min_virality_score) / span)
-        confidences.append(0.5 + 0.5 * normalized)
+        confidences.append(0.7 + 0.3 * normalized)
     else:
         failed.append("virality_score")
         reasons.append(

@@ -288,6 +288,17 @@ class ScoreGamingClips(ScoringStrategy):
             "scores": scores,
             "publisher_tier": tier,
             "final_score": round(final_score, 4),
+            # 2026-07-21: mirror final_score into composite_score so the
+            # shared auto_approval_gate reads a real value instead of
+            # falling back to the neutral 0.5 default. Prior state:
+            # gaming pipeline wrote only final_score/score, so 46/46
+            # recent gaming blueprints had composite_score=None →
+            # auto_approval_gate.py:272 fallback → gate confidence
+            # dropped into 0.3-0.7 band → LLM judge activated →
+            # rejected 89% of operator-approvable hooks (gate/operator
+            # agreement 11%, session-2026-07-17 Rule #22 revert).
+            # Agent 2 investigation, 2026-07-21 auto-approver dig.
+            "composite_score": round(final_score, 4),
             "scored_at": now,
         }
 

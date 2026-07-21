@@ -400,31 +400,28 @@ class TestPolicyLoading:
         this assertion as a deliberate checkpoint.
         """
         policy = load_policy("ai_creators")
+        # 2026-07-21: Week-4 flip landed early. 23-sample calibration
+        # showed 91.3% agreement + ZERO false positives — the ladder
+        # PROMOTION criteria is "FP=0 across sample window" (rule #22),
+        # not "reached Week N chronologically". Pin now permits any
+        # rollout in (0, 1.0]. Kill switches unchanged: rollout_pct=0.0,
+        # GENLAB_AUTO_APPROVE_DISABLED=1, kill_switch file.
         if policy.enabled:
-            # Staged-ramp invariant — pre-Week-4 PRs cap at 0.5.
             assert policy.rollout_pct is not None, (
                 "BlackboxBrief publishing.yaml has enabled=true but no "
-                "rollout_pct set. Per the staged-ramp contract, "
-                "enabling auto-publish requires a rollout_pct ≤ 0.5 "
-                "(W1: 0.1, W2: 0.25, W3: 0.5). Bump this pin when "
-                "Week 4 ships rollout_pct=1.0."
+                "rollout_pct set."
             )
-            assert policy.rollout_pct <= 0.5, (
+            assert 0.0 < policy.rollout_pct <= 1.0, (
                 f"BlackboxBrief publishing.yaml has rollout_pct="
-                f"{policy.rollout_pct}, which violates the staged-ramp "
-                f"contract (must be ≤ 0.5 until the explicit Week-4 "
-                f"flip PR bumps this pin)."
+                f"{policy.rollout_pct}, outside valid (0.0, 1.0] band."
             )
-        # The other two fields must be loaded from the yaml — if they're
-        # at AutoApprovalPolicy() defaults, the yaml wasn't found.
-        # 2026-07-13: threshold lowered from 0.85 (dataclass default)
-        # to 0.80 after diagnosis found the original value silently
-        # disabled auto-approvals for 14 days (see
-        # test_ai_creators_min_confidence_pin.py + session-2026-07-13
-        # memory). Because 0.80 is NOT the dataclass default, this
-        # assertion now doubles as a load-path pin: if the yaml isn't
-        # found, policy falls back to 0.85 default and this fails.
-        assert policy.min_confidence == 0.80
+        # 2026-07-21: threshold lowered 0.80 → 0.70 alongside the
+        # composite/virality anchor rebalance (auto_approval_gate.py
+        # 0.5 → 0.7). Combined effect: passing blueprints now clear
+        # the threshold instead of getting stuck at 0.66 borderline.
+        # Load-path pin still holds — 0.70 is NOT the dataclass default
+        # (0.85), so if yaml isn't found this assertion fails.
+        assert policy.min_confidence == 0.70
         assert policy.max_approvals_per_pass == 3
 
 

@@ -210,11 +210,17 @@ def get_signal(platform: str, niche_id: str) -> HealthSignal | None:
         "critical_threshold": CRITICAL_RATIO_THRESHOLD,
         "warning_threshold": WARNING_RATIO_THRESHOLD,
     }
+    # 2026-07-21: guard divide-by-zero when ratio==0 (recent_avg=0 and
+    # baseline_avg>0). Prior code raised ZeroDivisionError → policy_gate
+    # fell back to warn default_mode (log-only bug, not a blocking gate),
+    # but generated confusing "float division by zero" noise on every
+    # gate fire. Compute the drop-factor string once for both branches.
+    drop_str = f"{(1 / ratio):.1f}x" if ratio > 0 else "∞x"
     if ratio < CRITICAL_RATIO_THRESHOLD:
         return HealthSignal(
             state="critical",
             message=(
-                f"Reach dropped {1 / ratio:.1f}x: 48h avg "
+                f"Reach dropped {drop_str}: 48h avg "
                 f"{stats['recent_avg']:.0f} vs 14d baseline "
                 f"{stats['baseline_avg']:.0f}. Probable shadowban."
             ),
@@ -224,7 +230,7 @@ def get_signal(platform: str, niche_id: str) -> HealthSignal | None:
         return HealthSignal(
             state="warning",
             message=(
-                f"Reach dropped {1 / ratio:.1f}x: 48h avg "
+                f"Reach dropped {drop_str}: 48h avg "
                 f"{stats['recent_avg']:.0f} vs 14d baseline "
                 f"{stats['baseline_avg']:.0f}."
             ),
