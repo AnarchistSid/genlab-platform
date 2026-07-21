@@ -178,14 +178,18 @@ def call_openai_fallback(
     import openai  # noqa: PLC0415 — lazy import; tests without openai still import
 
     client = openai.OpenAI(api_key=api_key)
+    # Skip system role when empty — some sites (e.g., caption_segments)
+    # only send a user prompt. OpenAI accepts an empty system message
+    # but including it as an empty string is wasteful/confusing.
+    messages: list[dict[str, str]] = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": user})
     kwargs: dict[str, Any] = {
         "model": model,
         "max_tokens": max_tokens,
         "temperature": temperature,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
+        "messages": messages,
     }
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}

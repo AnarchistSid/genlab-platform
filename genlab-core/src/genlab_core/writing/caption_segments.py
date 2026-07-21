@@ -362,36 +362,87 @@ def generate_caption_segments(
 
     prompt = _prompt_for_segments(niche_id, title, summary, hook)
 
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        resp = client.messages.create(
-            model=model,
-            max_tokens=800,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        # 2026-07-14 (cost audit F3): this Anthropic call site was
-        # bypassing cost accounting (spend invisible on dashboard).
-        # Same wire as router.py:_call_anthropic and every other
-        # messages.create() site in the codebase.
+    # 2026-07-21: OpenAI fallback on Anthropic exhaustion. Shares CB
+    # state with all other Anthropic-direct sites via
+    # `genlab_core.llm.fallback`. Caption segments are audience-facing
+    # so keeping them alive during Anthropic outages preserves content
+    # quality (fallback captions ≠ template captions).
+    from genlab_core.llm.fallback import (
+        call_openai_fallback,
+        cb_is_open as _cb_is_open,
+        cb_record_exhaustion as _cb_record_exhaustion,
+        cb_record_success as _cb_record_success,
+        fallback_enabled as _fallback_enabled,
+        should_fallback as _should_fallback,
+    )
+
+    _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    raw_text: str | None = None
+
+    if _fallback_enabled() and _cb_is_open() and _openai_key:
+        logger.debug("[caption_segments] CB open — routing to OpenAI")
         try:
-            from genlab_core.intelligence.cost_accumulator import (
-                record_anthropic_usage,
+            raw_text = call_openai_fallback("", prompt, 800, 0.7, _openai_key)
+        except Exception as exc:
+            logger.warning("[caption_segments] OpenAI fallback failed: %s", exc)
+            return None
+    else:
+        try:
+            client = anthropic.Anthropic(api_key=api_key)
+            resp = client.messages.create(
+                model=model,
+                max_tokens=800,
+                messages=[{"role": "user", "content": prompt}],
             )
+        except Exception as anthropic_exc:
+            if _fallback_enabled() and _should_fallback(anthropic_exc) and _openai_key:
+                _cb_record_exhaustion()
+                logger.warning(
+                    "[caption_segments] Anthropic %s → OpenAI fallback: %s",
+                    type(anthropic_exc).__name__,
+                    str(anthropic_exc)[:120],
+                )
+                try:
+                    raw_text = call_openai_fallback("", prompt, 800, 0.7, _openai_key)
+                except Exception as openai_exc:
+                    logger.warning(
+                        "[caption_segments] OpenAI fallback ALSO failed: %s",
+                        openai_exc,
+                    )
+                    return None
+            else:
+                # WARNING (not DEBUG) — silent failure here hid the OpenAI-
+                # spend-invisible bug for weeks. Same class-of-bug as YT #578.
+                logger.warning("[caption_segments] API call failed: %s", anthropic_exc)
+                return None
+        else:
+            _cb_record_success()
+            # 2026-07-14 (cost audit F3): this Anthropic call site was
+            # bypassing cost accounting (spend invisible on dashboard).
+            # Same wire as router.py:_call_anthropic and every other
+            # messages.create() site in the codebase.
+            try:
+                from genlab_core.intelligence.cost_accumulator import (
+                    record_anthropic_usage,
+                )
 
-            record_anthropic_usage(model, resp)
-        except Exception:  # noqa: BLE001
-            pass
-    except Exception as exc:
-        # WARNING (not DEBUG) — silent failure here hid the OpenAI-
-        # spend-invisible bug for weeks. Same class-of-bug as YT #578.
-        logger.warning("[caption_segments] API call failed: %s", exc)
-        return None
+                record_anthropic_usage(model, resp)
+            except Exception:  # noqa: BLE001
+                pass
 
-    # Extract text content from response.
-    try:
-        raw_text = resp.content[0].text  # type: ignore[union-attr]
-    except (AttributeError, IndexError):
-        logger.debug("[caption_segments] unexpected response shape")
+            # Extract text content from Anthropic response.
+            try:
+                raw_text = resp.content[0].text  # type: ignore[union-attr]
+            except (AttributeError, IndexError):
+                logger.debug("[caption_segments] unexpected response shape")
+                raw_text = None
+
+    # Guard against extraction failures on either path.
+    if not raw_text:
+        # Consolidated fall-through — reached when Anthropic response
+        # parse failed OR OpenAI returned empty. Matches the historical
+        # unexpected-shape return-None path.
+        logger.debug("[caption_segments] no text extracted from response")
         return None
 
     return parse_llm_response(raw_text)
