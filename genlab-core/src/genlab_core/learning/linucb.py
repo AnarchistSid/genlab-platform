@@ -218,11 +218,25 @@ def compute_softmax_probabilities(
 
 
 # Source type encoding map
+# 2026-07-21 Agent-3 fix: added scorebat/tmdb_trailer/anilist/
+# jikan_promos/youtube_trending/twitch_trending/steam_spike aliases
+# for the non-gaming niches' fetchers. Pre-fix, 4/5 niches' stories
+# fell through to _SOURCE_TYPE_DEFAULT=0.5 → LinUCB source-type
+# feature was constant across all non-gaming stories → bandit
+# context vector degraded to niche/hour/weekday only → learning
+# signal near-mean for all non-gaming.
 _SOURCE_TYPE_MAP: dict[str, float] = {
     "youtube": 0.0,
+    "youtube_trending": 0.0,
+    "tmdb_trailer": 0.0,  # TMDB trailers → YouTube video IDs
+    "anilist": 0.0,  # anime trailers → YouTube
+    "jikan_promos": 0.0,  # anime PVs → YouTube
     "reddit": 0.33,
     "rss": 0.66,
+    "scorebat": 0.66,  # sports RSS
+    "steam_spike": 0.66,  # gaming RSS-like feed
     "twitch": 1.0,
+    "twitch_trending": 1.0,
 }
 _SOURCE_TYPE_DEFAULT = 0.5
 
