@@ -8,6 +8,7 @@ creative reply; the persona YAML constrains its style.
 from __future__ import annotations
 
 import logging
+import os
 
 from genlab_core.engagement.persona_schema import NichePersona
 from genlab_core.engagement.toxicity_gate import ToxicityGate
@@ -131,6 +132,23 @@ class PersonaEngine:
             user_content += f"\n\nOriginal post was about: {post_context_clean}"
         user_content += "\n\nWrite a single reply (no quotes, no explanation):"
 
+        # 2026-07-21: OpenAI fallback on Anthropic exhaustion (see
+        # genlab_core.llm.fallback). Wraps the ANTHROPIC_CB.call so
+        # network-layer retries happen first; then if it still throws
+        # exhaustion, we fall back to OpenAI. Persona replies are
+        # audience-facing so keeping them alive during Anthropic
+        # outages preserves engagement growth.
+        from genlab_core.llm.fallback import (
+            call_openai_fallback,
+            cb_is_open as _cb_is_open,
+            cb_record_exhaustion as _cb_record_exhaustion,
+            cb_record_success as _cb_record_success,
+            fallback_enabled as _fallback_enabled,
+            should_fallback as _should_fallback,
+        )
+
+        _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+
         for attempt in range(max_retries + 1):
             try:
 
@@ -149,11 +167,35 @@ class PersonaEngine:
                         messages=[{"role": "user", "content": user_content}],
                     )
 
-                resp = ANTHROPIC_CB.call(_llm_call)
-                from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
+                # CB-open fast path: skip Anthropic entirely.
+                if _fallback_enabled() and _cb_is_open() and _openai_key:
+                    logger.debug("[PERSONA] LLM fallback CB open — routing to OpenAI")
+                    reply = call_openai_fallback(
+                        system, user_content, 150, 0.7, _openai_key
+                    ).strip()
+                else:
+                    try:
+                        resp = ANTHROPIC_CB.call(_llm_call)
+                    except Exception as anthropic_exc:
+                        if not (_fallback_enabled() and _should_fallback(anthropic_exc) and _openai_key):
+                            raise
+                        _cb_record_exhaustion()
+                        logger.warning(
+                            "[PERSONA] Anthropic %s → OpenAI fallback: %s",
+                            type(anthropic_exc).__name__,
+                            str(anthropic_exc)[:120],
+                        )
+                        reply = call_openai_fallback(
+                            system, user_content, 150, 0.7, _openai_key
+                        ).strip()
+                    else:
+                        _cb_record_success()
+                        from genlab_core.intelligence.cost_accumulator import (
+                            record_anthropic_usage,
+                        )
 
-                record_anthropic_usage("claude-haiku-4-5-20251001", resp)  # U-03
-                reply = resp.content[0].text.strip()
+                        record_anthropic_usage("claude-haiku-4-5-20251001", resp)  # U-03
+                        reply = resp.content[0].text.strip()
 
                 if self._toxicity_gate and not self._toxicity_gate.is_clean_outbound(reply):
                     logger.warning(
