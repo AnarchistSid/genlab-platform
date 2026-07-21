@@ -254,3 +254,39 @@ def test_missing_render_distinct_from_content_generic_file_not_found():
     Only the specific 'No valid media files' phrase from payload_builder.py
     is MISSING_RENDER."""
     assert classify("file not found: /tmp/video.mp4") == "CONTENT"
+
+
+# 2026-07-21 — POLICY_BLOCK class of bug (Meta code=368 temporary block).
+def test_classify_policy_block_fb_code_368():
+    """Pin the POLICY_BLOCK class from Meta's FB `code=368` message that
+    hit 6 times in the last 14 days across 4 niches (gaming, sports,
+    anime, ai_creators). Prior to elevation, this got mis-classified as
+    TRANSIENT (matched 'temporarily'), causing retry-pass to burn budget
+    on doomed re-attempts."""
+    msg = (
+        "code=368: You're temporarily blocked from using this feature "
+        "because you shared something that isn't allowed on Facebook. "
+        "Learn More."
+    )
+    assert classify(msg) == "POLICY_BLOCK"
+
+
+def test_should_retry_policy_block_is_false():
+    """POLICY_BLOCK must never be retried. Meta lifts the block on their
+    own timeline; retrying can escalate. Operator must appeal via Meta
+    Business Suite."""
+    assert should_retry("POLICY_BLOCK") is False
+
+
+def test_policy_block_priority_over_transient():
+    """The FB code=368 message contains 'temporarily' which matches the
+    TRANSIENT 'temporary' pattern. POLICY_BLOCK is checked first per
+    the priority order — if this regresses, retry-pass would burn
+    budget on Meta blocks."""
+    assert classify("code=368: temporarily blocked") == "POLICY_BLOCK"
+
+
+def test_policy_block_content_violation_variant():
+    """Meta also returns 'Content violates our policies' for hard
+    content strikes. Same handling — operator appeal, no retry."""
+    assert classify("Content violates our policies") == "POLICY_BLOCK"

@@ -12,6 +12,14 @@ Categories:
     publishing_analytics because the loud "FAILED" signal would drown out
     genuine platform breakage, and the retry pass shouldn't waste attempts
     on a blueprint whose files simply do not exist.
+  POLICY_BLOCK — platform's temporary block for policy strikes (2026-07-21
+    class from FB code=368 "You're temporarily blocked from using this
+    feature because you shared something that isn't allowed"). NOT a
+    credential issue (token is valid), NOT a content issue (a specific
+    post triggered it), NOT retryable (Meta lifts the block on its own
+    timeline). Needs operator: appeal in Meta Business Suite and audit
+    recent posts for policy triggers. Retry-suppressed at the platform
+    level for 24h so we don't burn budget on doomed requests.
   PERMANENT — don't retry ever (account suspended)
 """
 
@@ -86,6 +94,18 @@ _PATTERNS: dict[str, list[re.Pattern]] = {
             r"No valid media files",
         ]
     ],
+    # 2026-07-21: Meta policy block class. Retry-suppressed at the
+    # platform level; operator must appeal via Meta Business Suite.
+    "POLICY_BLOCK": [
+        re.compile(p, re.I)
+        for p in [
+            r"code=368",
+            r"temporarily blocked from using this feature",
+            r"you shared something that isn't allowed",
+            r"Content violates our policies",
+            r"Post violates.*community standards",
+        ]
+    ],
     "TRANSIENT": [
         re.compile(p, re.I)
         for p in [
@@ -120,16 +140,26 @@ def classify(error_message: str, platform: str = "") -> str:
     """Classify a publish error message.
 
     Returns one of: TRANSIENT, QUOTA, CREDENTIAL, CONTENT, MISSING_RENDER,
-    PERMANENT. Checks patterns in priority order
-    (CREDENTIAL > QUOTA > MISSING_RENDER > CONTENT > TRANSIENT). MISSING_RENDER
-    is checked before CONTENT so the specific "No valid media files" pattern
-    isn't accidentally caught by CONTENT's broader "media.*not.*found" pattern.
-    Falls back to TRANSIENT for unrecognized errors (prefer retry over abandon).
+    POLICY_BLOCK, PERMANENT. Checks patterns in priority order
+    (POLICY_BLOCK > CREDENTIAL > QUOTA > MISSING_RENDER > CONTENT > TRANSIENT).
+
+    POLICY_BLOCK first because Meta's `code=368` message otherwise gets
+    swallowed by TRANSIENT (contains 'temporarily'). MISSING_RENDER before
+    CONTENT so the specific "No valid media files" pattern isn't caught by
+    CONTENT's broader "media.*not.*found". Falls back to TRANSIENT for
+    unrecognized errors (prefer retry over abandon).
     """
     if not error_message:
         return "TRANSIENT"
 
-    for category in ("CREDENTIAL", "QUOTA", "MISSING_RENDER", "CONTENT", "TRANSIENT"):
+    for category in (
+        "POLICY_BLOCK",
+        "CREDENTIAL",
+        "QUOTA",
+        "MISSING_RENDER",
+        "CONTENT",
+        "TRANSIENT",
+    ):
         for pattern in _PATTERNS[category]:
             if pattern.search(error_message):
                 return category
@@ -173,7 +203,13 @@ def is_ambiguous_failure(error_message: str) -> bool:
 
 
 def should_retry(error_class: str) -> bool:
-    """Whether this error class should be retried."""
+    """Whether this error class should be retried.
+
+    POLICY_BLOCK is explicitly NOT retryable — Meta lifts blocks on their
+    own timeline (typically 24-72h). Retrying burns budget and can
+    escalate the block. Operator action required (appeal via Meta
+    Business Suite + audit recent posts).
+    """
     return error_class in ("TRANSIENT", "QUOTA")
 
 

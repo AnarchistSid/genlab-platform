@@ -442,7 +442,12 @@ class ThreadsClient:
                 continue
 
             if poll_after_create:
-                container_status = self._poll_container(container_id, max_seconds=120)
+                # 2026-07-21: bumped max_seconds 120→180 to match IG's poll
+                # budget. Meta backlog + slow CDN combined push some Threads
+                # containers past 120s regularly (1 timeout observed in prod
+                # 2026-07-13). Publish budget still fits (parallel_publish
+                # allocates 540s per platform).
+                container_status = self._poll_container(container_id, max_seconds=180)
                 if container_status == "ERROR":
                     last_failure_error = self._last_error or "Threads container processing error"
                     if external_url or not _cdn_rotation_worthwhile(last_failure_error):
@@ -463,7 +468,7 @@ class ThreadsClient:
                     return PublishResult(
                         platform=self.platform_id,
                         success=False,
-                        error="Threads container processing timeout (120s)",
+                        error="Threads container processing timeout (180s)",
                     )
 
             post_id = self._threads_publish(container_id=container_id)

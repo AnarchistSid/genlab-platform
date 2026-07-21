@@ -169,7 +169,15 @@ def _serve_via_tunnel(file_path: Path) -> str | None:
 def _upload_to_litterbox(file_path: Path, expiry: str, max_attempts: int) -> str | None:
     """Upload to litterbox.catbox.moe (free, best-effort)."""
     if not _litterbox_cb.can_attempt():
-        logger.info("[CDN] Circuit breaker open for litterbox, skipping")
+        # 2026-07-21: elevated INFO → WARNING. When breaker is open, this
+        # is a real degradation signal (only 1 remaining CDN provider
+        # left in the cascade for IG/Threads). Publisher error messages
+        # reference "exhausted providers" — operator needs to see WHY
+        # a provider was skipped, not just that it was.
+        logger.warning(
+            "[CDN] Circuit breaker OPEN for litterbox — skipping. Cascade "
+            "falls to tmpfiles only. Breaker retries hourly."
+        )
         return None
 
     file_size = file_path.stat().st_size
@@ -261,7 +269,12 @@ def _resolve_tmpfiles_direct_url(page_url: str) -> str | None:
 def _upload_to_tmpfiles(file_path: Path) -> str | None:
     """Fallback: tmpfiles.org (up to 100 MB)."""
     if not _tmpfiles_cb.can_attempt():
-        logger.info("[CDN] Circuit breaker open for tmpfiles, skipping")
+        # 2026-07-21: elevated INFO → WARNING (see litterbox site above).
+        logger.warning(
+            "[CDN] Circuit breaker OPEN for tmpfiles — skipping. If "
+            "litterbox is also open the cascade is empty. Breaker "
+            "retries hourly."
+        )
         return None
 
     file_size = file_path.stat().st_size

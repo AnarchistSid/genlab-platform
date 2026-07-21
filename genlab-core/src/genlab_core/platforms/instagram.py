@@ -830,26 +830,55 @@ class InstagramClient:
         """POST to /{ig_user_id}/media_publish to finalise the reel.
 
         Returns the published post ID on success, ``None`` on failure.
+
+        2026-07-21: retry-once on 'An unknown error has occurred' —
+        Meta sometimes returns this for containers that have transitioned
+        FINISHED → ERROR during a slow eventual-consistency window
+        (~10s). 3 IG failures in the last 14d matched this pattern.
+        Retry after 10s sleep. Never more than once — the retry itself
+        must be idempotent since Meta may have already accepted the publish.
         """
         url = f"{self._base_url}/{self._ig_user_id}/media_publish"
         data = {
             "creation_id": creation_id,
             "access_token": self._access_token,
         }
-        try:
-            resp = requests.post(url, data=data, timeout=60)
-            payload = _safe_json(resp)
-            if "id" in payload:
-                self._log.info("Reel published — post ID: %s", payload["id"])
-                return payload["id"]
-            error_msg = payload.get("error", {}).get("message", str(payload))
-            self._last_error = f"media_publish failed: {error_msg}"
-            self._log.error("Reel media_publish failed: %s", error_msg)
-            return None
-        except Exception as exc:
-            self._last_error = f"media_publish request error: {exc}"
-            self._log.error("Reel media_publish request error: %s", exc)
-            return None
+
+        def _attempt(attempt_num: int) -> tuple[str | None, str]:
+            """Return (post_id_or_None, error_message_if_any)."""
+            try:
+                resp = requests.post(url, data=data, timeout=60)
+                payload = _safe_json(resp)
+                if "id" in payload:
+                    self._log.info(
+                        "Reel published — post ID: %s (attempt %d)", payload["id"], attempt_num
+                    )
+                    return payload["id"], ""
+                error_msg = payload.get("error", {}).get("message", str(payload))
+                return None, error_msg
+            except Exception as exc:
+                return None, f"request error: {exc}"
+
+        post_id, error_msg = _attempt(1)
+        if post_id is not None:
+            return post_id
+
+        # Retry-once on the specific eventual-consistency pattern only.
+        # Other errors (403, invalid_request, etc.) are terminal.
+        if "unknown error" in error_msg.lower():
+            self._log.warning(
+                "Reel media_publish returned 'unknown error' — retrying once "
+                "after 10s (eventual-consistency window): %s",
+                error_msg,
+            )
+            time.sleep(10)
+            post_id, error_msg = _attempt(2)
+            if post_id is not None:
+                return post_id
+
+        self._last_error = f"media_publish failed: {error_msg}"
+        self._log.error("Reel media_publish failed: %s", error_msg)
+        return None
 
     def _graph_get(self, path: str, params: dict | None = None) -> dict:
         """GET request to the Graph API. Returns parsed JSON or empty dict."""
