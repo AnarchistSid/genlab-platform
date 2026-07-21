@@ -68,6 +68,17 @@ def test_missing_media_never_archives_scheduled_posts(tmp_path) -> None:
     # The scheduled-broken blueprint must still be surfaced (visibility, no archive).
     assert any(a.check == "missing_media_scheduled" for a in alerts), [a.check for a in alerts]
 
+    # 2026-07-21: archive UPDATE must ALSO write error_message with the
+    # operator-visible reason. Prior behavior was action_taken-only, leaving
+    # dashboard reviewers to guess why a blueprint was archived. Rule #5 sibling.
+    update_sql = update_calls[0].args[0]
+    assert "error_message" in update_sql, (
+        "archive UPDATE must set error_message so operator sees reason on dashboard"
+    )
+    assert "media_missing_monitor" in update_sql, (
+        "archive reason marker must be present in error_message"
+    )
+
 
 def test_missing_media_past_due_downgrades_to_warning(tmp_path) -> None:
     """Task #535: scheduled_for > 24h in the past downgrades to WARNING alert.

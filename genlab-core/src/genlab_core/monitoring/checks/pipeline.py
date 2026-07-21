@@ -663,9 +663,18 @@ def check_missing_media(niche_id: str) -> list[Alert]:
             _protected = set(scheduled_broken) | set(past_due_broken)
             unscheduled_broken = [b for b in broken if b not in _protected]
             if unscheduled_broken:
+                # 2026-07-21: append operator-visible reason to error_message.
+                # Prior behavior set action_taken but left error_message
+                # untouched — operator opening review dashboard saw ARCHIVED
+                # status with no reason column pointing to "media missing".
+                # Mirrors publish_all_platforms.py + retry_pass.py archive
+                # sites (both write | archived:2026-07-21:media_missing_...).
                 cur.execute(
                     "UPDATE blueprints SET status = 'ARCHIVED', "
-                    "action_taken = 'auto_archived_missing_media' "
+                    "action_taken = 'auto_archived_missing_media', "
+                    "error_message = TRIM(BOTH ' |' FROM "
+                    "COALESCE(error_message, '') || "
+                    "' | archived:2026-07-21:media_missing_monitor') "
                     "WHERE id = ANY(%s)",
                     (unscheduled_broken,),
                 )
@@ -712,7 +721,11 @@ def check_missing_media(niche_id: str) -> list[Alert]:
                 )
         conn.close()
     except Exception as e:
-        logger.debug("Missing media check failed: %s", e)
+        # 2026-07-21 (rule #19): DEBUG-swallow masks monitor failures.
+        # This check writes to blueprints (auto-archive); any exception
+        # here means an archive attempt may have partially applied — must
+        # be operator-visible.
+        logger.warning("[monitor] check_missing_media failed: %s", e, exc_info=True)
     return alerts
 
 
