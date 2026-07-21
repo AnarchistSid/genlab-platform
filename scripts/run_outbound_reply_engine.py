@@ -411,7 +411,24 @@ def main() -> int:
         "[outbound] Done: posted=%d failed=%d across %d niches",
         total_posted, total_failed, len(niches),
     )
-    return 2 if total_failed > 0 and total_posted == 0 else 0
+    # 2026-07-21: 4th instance of the systemd-alarm-cascade class-of-bug
+    # (rule #26 candidate: publisher-timeout / shared_ingestion /
+    # nightly_scheduler / outbound_reply_engine). Prior behaviour
+    # returned exit 2 when total_posted=0 AND total_failed>0, which
+    # fires on EVERY Anthropic outage (persona_engine circuit opens →
+    # all reply generations fail → 0 posted + N failed → exit 2 →
+    # systemd_unit_failed CRITICAL alarm on the dashboard).
+    #
+    # Anthropic exhaustion is an OPERATOR issue (budget top-up) that
+    # doesn't need a systemd auto-restart. The WARN-level per-reply log
+    # + INFO Done-line already carry the operator signal. Cascading it
+    # into systemd `Result=exit-code` on top of that is noise.
+    #
+    # New rule: exit 0 on "tried but everything failed" — the WARN
+    # logs are the signal. Exit 2 only reserved for hard tooling
+    # failures (import errors, DB unreachable, etc.) which currently
+    # already bubble up as uncaught exceptions.
+    return 0
 
 
 if __name__ == "__main__":
