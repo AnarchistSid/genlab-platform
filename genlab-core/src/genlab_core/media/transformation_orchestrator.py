@@ -50,6 +50,51 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _validate_stage_output(output_path: Path, stage_name: str) -> bool:
+    """Return True if the stage produced a valid video file. Return
+    False if the file's streams are missing/corrupt/zero-duration.
+
+    2026-07-21 (task #632 follow-up): motion_compositor added source
+    stream validation at commit `7f7741c1`, but that only catches the
+    degradation at the terminal concat step. Adding validation after
+    EACH transformation stage catches degradation at its source —
+    operator sees `[transformation] music_mood produced degraded
+    output (no_audio_stream)` immediately instead of `[motion] concat
+    -22 EINVAL` two stages later.
+
+    Delegates to `motion_compositor._validate_segment_streams` so
+    both validation call sites share ONE check (same criteria, same
+    fail-open behavior). If validation fails, the orchestrator's
+    stage loop treats it as `success=False` — keeps `current_path`
+    at the previous stage's output, appends to `stages_skipped`.
+
+    Opt-out via ``GENLAB_TRANSFORM_STAGE_VALIDATION=0`` env var.
+    Default ON. The existing test suite mocks transformation success
+    with 2KB non-MP4 fixture files that ffprobe correctly rejects —
+    tests set the flag to 0 in conftest to preserve pre-validation
+    assertions.
+    """
+    import os as _os
+
+    if _os.environ.get("GENLAB_TRANSFORM_STAGE_VALIDATION", "1").strip() == "0":
+        return True
+
+    from genlab_core.media.motion_compositor import _validate_segment_streams
+
+    validation_error = _validate_segment_streams(output_path)
+    if validation_error is None:
+        return True
+    logger.warning(
+        "[transformation_orchestrator] %s produced degraded output "
+        "(%s): %s — treating as SKIPPED so the concat + downstream "
+        "stages get the previous stage's valid output instead",
+        stage_name,
+        validation_error,
+        output_path,
+    )
+    return False
+
+
 @dataclass
 class TransformationResult:
     """Result of running the orchestrator on one reel.
@@ -294,6 +339,13 @@ def apply_transformations(
             if need_trim:
                 trim_path = temp_dir / "00_trim.mp4"
                 trim_success = _trim_video(current_path, trim_path, window.start_s, window.end_s)
+                # 2026-07-21: pre-concat validation. If trim produces a
+                # 0-audio-packet file (unusual but possible when the
+                # window boundary lands on a keyframe-only region),
+                # fall back to full video rather than propagating a
+                # degraded file to downstream stages.
+                if trim_success and not _validate_stage_output(trim_path, "highlight_moment"):
+                    trim_success = False
                 if trim_success:
                     current_path = trim_path
                     # Downstream caption timing must reflect the
@@ -337,6 +389,14 @@ def apply_transformations(
                     exc,
                 )
                 success = False
+            # 2026-07-21: pre-concat validation. If audio_replacer
+            # returned True but produced a file with no audio stream
+            # or 0-duration (the primary music_mood failure mode
+            # hypothesised in the 2026-07-09 investigation), treat as
+            # skipped so downstream motion_compositor concat doesn't
+            # hit -22 EINVAL.
+            if success and not _validate_stage_output(next_path, "music_mood"):
+                success = False
             if success:
                 current_path = next_path
                 result.stages_applied.append("music_mood")
@@ -357,6 +417,12 @@ def apply_transformations(
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.warning("[transformation_orchestrator] pan_zoom raised: %s", exc)
+                success = False
+            # 2026-07-21: pre-concat validation (same class as
+            # music_mood wrap above). pan_zoom is a video filter that
+            # can produce timestamp gaps or truncated streams; catch
+            # here so motion_compositor's concat doesn't hit -22 EINVAL.
+            if success and not _validate_stage_output(next_path, "pan_zoom"):
                 success = False
             if success:
                 current_path = next_path
@@ -431,6 +497,11 @@ def apply_transformations(
                     "[transformation_orchestrator] caption_animator raised: %s",
                     exc,
                 )
+                success = False
+            # 2026-07-21: pre-concat validation. Caption overlay is a
+            # video filter — same failure mode as pan_zoom (timestamp
+            # gaps, truncated streams).
+            if success and not _validate_stage_output(next_path, "caption_style"):
                 success = False
             if success:
                 current_path = next_path

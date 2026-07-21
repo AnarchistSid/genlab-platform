@@ -36,6 +36,14 @@ os.environ.pop("POSTGRES_PASSWORD", None)
 # is re-loaded during test discovery.
 os.environ["GENLAB_USE_POSTGRES"] = ""
 
+# 2026-07-21: disable transformation-stage output validation in tests.
+# Tests simulate transformation success with 2KB fake-MP4 fixture
+# files that ffprobe correctly rejects — validation would flip real
+# stage successes to skipped and break pre-validation test assertions.
+# Prod default is ON (validation catches real degraded intermediate
+# files that would otherwise cause motion_compositor -22 EINVAL).
+os.environ["GENLAB_TRANSFORM_STAGE_VALIDATION"] = "0"
+
 # ── Affiliate-network test tags ─────────────────────────────────────
 # ``genlab_core.monetization.network_registry`` builds a singleton
 # ``ADAPTERS`` dict at module import — each adapter captures its
