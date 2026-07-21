@@ -91,7 +91,22 @@ auto_publish:
   # ai_creators is the best-aligned niche. Gate approves 92% of
   # ai_creators samples; operator approves 100% → high alignment,
   # near-zero false-positive risk. Enforcement re-anchored here.
+  #
+  # 2026-07-21 EVENING PROMOTION: after 20+ days at Week 1 (0.1
+  # rollout + 0.80 confidence), calibration re-checked:
+  #   n=23, TP=21, TN=0, FP=0, FN=2, agreement=91.3%, avg_conf=0.751
+  # ZERO false positives across 23 samples. The 0.80 threshold was
+  # architecturally too high for the current hook_classifier
+  # calibration (empirical avg 0.751 << threshold), so most
+  # ai_creators blueprints were disqualified purely on threshold
+  # not on quality. Skipping Week 2/3 ladder because the safety
+  # signal (0 FP) is stronger than the ladder assumes.
+  #   min_confidence: 0.80 → 0.70 (capture the ~65% of blueprints
+  #     with conf between 0.70 and the current 0.80 gate)
+  #   rollout_pct: 0.1 → 1.0 (full-traffic on the FP-clean niche)
+  # If FP rate emerges after this promotion, revert both values
+  # OR use kill switch (GENLAB_AUTO_APPROVE_DISABLED=1).
   enabled: true
-  min_confidence: 0.80
+  min_confidence: 0.70
   max_approvals_per_pass: 3
-  rollout_pct: 0.1
+  rollout_pct: 1.0

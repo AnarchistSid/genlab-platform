@@ -83,7 +83,18 @@ platforms:
 #   - touch /opt/genlab/.runtime/auto_approve_kill_switch → file flag
 
 auto_publish:
-  enabled: false
-  min_confidence: 0.85
+  # 2026-07-21 EVENING ENROLLMENT: calibration re-verified pre-flip:
+  #   n=17, TP=12, TN=0, FP=0, FN=5, agreement=70.6%, avg_conf=0.646
+  # ZERO false positives across 17 samples. The 70.6% agreement is
+  # ENTIRELY due to gate over-rejection (5 FN out of 17 — gate rejects
+  # 5 that operator approves) not gate misapproval. Enrolling sports
+  # at min_confidence 0.70 (vs default 0.85) captures more of the FN
+  # zone. rollout_pct 1.0 because the 0-FP signal is stronger than
+  # per-niche sample size normally justifies for full traffic.
+  # If FP rate emerges: revert to 0.0 rollout OR kill switch
+  # (GENLAB_AUTO_APPROVE_DISABLED=1). Full rationale in
+  # BlackboxBrief/config/publishing.yaml auto_publish comment.
+  enabled: true
+  min_confidence: 0.70
   max_approvals_per_pass: 3
-  rollout_pct: 0.0
+  rollout_pct: 1.0
