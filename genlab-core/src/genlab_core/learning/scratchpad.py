@@ -248,30 +248,69 @@ def generate_weekly_scratchpad(
         model = route_decision("cross_run_reflection")
         client = anthropic.Anthropic()
 
+        _system = (
+            "You are a strategic reflection function for an autonomous "
+            "content agent. Be concrete + concise. Treat absent data as "
+            "absent — don't invent patterns."
+        )
+
         def _llm_call():
             return client.messages.create(
                 model=model,
                 max_tokens=2000,
-                system=(
-                    "You are a strategic reflection function for an autonomous "
-                    "content agent. Be concrete + concise. Treat absent data as "
-                    "absent — don't invent patterns."
-                ),
+                system=_system,
                 messages=[{"role": "user", "content": prompt}],
             )
 
         from genlab_core.http.circuit_breaker import ANTHROPIC_CB
 
-        resp = ANTHROPIC_CB.call(_llm_call)
-        text = resp.content[0].text.strip() if resp.content else ""
+        # 2026-07-21: OpenAI fallback on Anthropic exhaustion. Scratchpad
+        # runs weekly and drives strategic prompt-injection for other
+        # LLM sites (auto_approval_gate, hook_generator, persona_engine)
+        # — losing it means those sites lose their "recent learnings"
+        # context for the week.
+        from genlab_core.llm.fallback import (
+            call_openai_fallback as _call_openai_fallback,
+            cb_is_open as _cb_is_open,
+            cb_record_exhaustion as _cb_record_exhaustion,
+            cb_record_success as _cb_record_success,
+            fallback_enabled as _fallback_enabled,
+            should_fallback as _should_fallback,
+        )
 
-        # Cost tracking (best-effort)
-        try:
-            from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
+        _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        text = ""
 
-            record_anthropic_usage(model, resp)
-        except Exception:  # noqa: BLE001 — cost tracking failure must not block
-            pass
+        if _fallback_enabled() and _cb_is_open() and _openai_key:
+            text = _call_openai_fallback(_system, prompt, 2000, 0.7, _openai_key)
+        else:
+            try:
+                resp = ANTHROPIC_CB.call(_llm_call)
+            except Exception as anthropic_exc:
+                if _fallback_enabled() and _should_fallback(anthropic_exc) and _openai_key:
+                    _cb_record_exhaustion()
+                    logger.warning(
+                        "[scratchpad] Anthropic %s → OpenAI fallback",
+                        type(anthropic_exc).__name__,
+                    )
+                    text = _call_openai_fallback(_system, prompt, 2000, 0.7, _openai_key)
+                else:
+                    raise
+            else:
+                _cb_record_success()
+                text = resp.content[0].text.strip() if resp.content else ""
+
+                # Cost tracking (best-effort)
+                try:
+                    from genlab_core.intelligence.cost_accumulator import (
+                        record_anthropic_usage,
+                    )
+
+                    record_anthropic_usage(model, resp)
+                except Exception:  # noqa: BLE001 — cost tracking failure must not block
+                    pass
+
+        text = text.strip() if text else ""
 
         if not text:
             output.write_text(_fallback_markdown("LLM returned empty response"))

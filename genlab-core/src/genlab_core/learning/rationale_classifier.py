@@ -315,29 +315,62 @@ def classify_rejection(
         # keeps the call site future-proof without behavior change.
         from genlab_core.llm.prompt_cache import with_prompt_cache
 
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model=_HAIKU_MODEL,
-            max_tokens=200,
-            temperature=0.0,  # Deterministic verdict for same inputs.
-            system=with_prompt_cache(_CLASSIFIER_SYSTEM_PROMPT),
-            messages=[{"role": "user", "content": user_message}],
+        # 2026-07-21: OpenAI fallback on Anthropic exhaustion.
+        from genlab_core.llm.fallback import (
+            call_openai_fallback as _call_openai_fallback,
+            cb_is_open as _cb_is_open,
+            cb_record_exhaustion as _cb_record_exhaustion,
+            cb_record_success as _cb_record_success,
+            fallback_enabled as _fallback_enabled,
+            should_fallback as _should_fallback,
         )
 
-        # Cost tracking — mirrors post_rca.py pattern. Tracker failures
-        # must NEVER block the classifier; the calibration write path
-        # depends on this returning cleanly.
-        try:
-            from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
-
-            record_anthropic_usage(_HAIKU_MODEL, response)
-        except Exception:
-            pass
-
+        _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
         raw_text = ""
-        if response.content:
-            first = response.content[0]
-            raw_text = getattr(first, "text", "") or ""
+
+        if _fallback_enabled() and _cb_is_open() and _openai_key:
+            raw_text = _call_openai_fallback(
+                _CLASSIFIER_SYSTEM_PROMPT, user_message, 200, 0.0, _openai_key
+            )
+        else:
+            try:
+                client = anthropic.Anthropic(api_key=api_key)
+                response = client.messages.create(
+                    model=_HAIKU_MODEL,
+                    max_tokens=200,
+                    temperature=0.0,  # Deterministic verdict for same inputs.
+                    system=with_prompt_cache(_CLASSIFIER_SYSTEM_PROMPT),
+                    messages=[{"role": "user", "content": user_message}],
+                )
+            except Exception as anthropic_exc:
+                if _fallback_enabled() and _should_fallback(anthropic_exc) and _openai_key:
+                    _cb_record_exhaustion()
+                    logger.warning(
+                        "[rationale] Anthropic %s → OpenAI fallback",
+                        type(anthropic_exc).__name__,
+                    )
+                    raw_text = _call_openai_fallback(
+                        _CLASSIFIER_SYSTEM_PROMPT, user_message, 200, 0.0, _openai_key
+                    )
+                else:
+                    raise
+            else:
+                _cb_record_success()
+                # Cost tracking — mirrors post_rca.py pattern. Tracker failures
+                # must NEVER block the classifier; the calibration write path
+                # depends on this returning cleanly.
+                try:
+                    from genlab_core.intelligence.cost_accumulator import (
+                        record_anthropic_usage,
+                    )
+
+                    record_anthropic_usage(_HAIKU_MODEL, response)
+                except Exception:
+                    pass
+
+                if response.content:
+                    first = response.content[0]
+                    raw_text = getattr(first, "text", "") or ""
 
         category, confidence = _parse_haiku_response(raw_text)
         if category == UNCATEGORIZED:

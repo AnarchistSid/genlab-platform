@@ -65,10 +65,21 @@ class TestGateJudgeScratchpadWire:
         U-01 (2026-06-27): the literal kwarg became
         ``system=with_prompt_cache(judge_system)`` after prompt-caching
         wiring. Both forms count — assert that judge_system flows into
-        the system kwarg (directly or via the cache helper)."""
+        the system kwarg (directly or via the cache helper).
+
+        2026-07-21 fallback wire: extracted `cached_judge_system =
+        with_prompt_cache(judge_system)` as a local so both the
+        Anthropic + OpenAI-fallback paths can use it. The kwarg
+        became `system=cached_judge_system`. This test now accepts
+        any of the 3 equivalent forms — what matters is that
+        judge_system reaches the LLM."""
         assert (
             "system=judge_system" in self.content
             or "system=with_prompt_cache(judge_system)" in self.content
+            or (
+                "cached_judge_system = with_prompt_cache(judge_system)" in self.content
+                and "system=cached_judge_system" in self.content
+            )
         )
 
     def test_fail_open_on_scratchpad_read_error(self):

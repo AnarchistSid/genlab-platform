@@ -206,25 +206,61 @@ def analyze_post(
         # proof if the prompt grows or the threshold drops.
         from genlab_core.llm.prompt_cache import with_prompt_cache
 
-        user = json.dumps(context, indent=2)
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=200,
-            temperature=0.0,  # Deterministic verdict for same inputs
-            system=with_prompt_cache(_RCA_SYSTEM_PROMPT),
-            messages=[{"role": "user", "content": user}],
+        # 2026-07-21: OpenAI fallback on Anthropic exhaustion.
+        from genlab_core.llm.fallback import (
+            call_openai_fallback as _call_openai_fallback,
+            cb_is_open as _cb_is_open,
+            cb_record_exhaustion as _cb_record_exhaustion,
+            cb_record_success as _cb_record_success,
+            fallback_enabled as _fallback_enabled,
+            should_fallback as _should_fallback,
         )
 
-        # Cost tracking — match the pattern in other LLM call sites
-        try:
-            from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
+        user = json.dumps(context, indent=2)
+        _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        raw = ""
 
-            record_anthropic_usage("claude-haiku-4-5-20251001", response)
-        except Exception:
-            pass  # cost tracking failures must NEVER block the RCA
+        if _fallback_enabled() and _cb_is_open() and _openai_key:
+            raw = _call_openai_fallback(
+                _RCA_SYSTEM_PROMPT, user, 200, 0.0, _openai_key
+            )
+        else:
+            try:
+                client = anthropic.Anthropic(api_key=api_key)
+                response = client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=200,
+                    temperature=0.0,  # Deterministic verdict for same inputs
+                    system=with_prompt_cache(_RCA_SYSTEM_PROMPT),
+                    messages=[{"role": "user", "content": user}],
+                )
+            except Exception as anthropic_exc:
+                if _fallback_enabled() and _should_fallback(anthropic_exc) and _openai_key:
+                    _cb_record_exhaustion()
+                    logger.warning(
+                        "[post_rca] Anthropic %s → OpenAI fallback",
+                        type(anthropic_exc).__name__,
+                    )
+                    raw = _call_openai_fallback(
+                        _RCA_SYSTEM_PROMPT, user, 200, 0.0, _openai_key
+                    )
+                else:
+                    raise
+            else:
+                _cb_record_success()
+                # Cost tracking — match the pattern in other LLM call sites
+                try:
+                    from genlab_core.intelligence.cost_accumulator import (
+                        record_anthropic_usage,
+                    )
 
-        raw = response.content[0].text.strip() if response.content else ""
+                    record_anthropic_usage("claude-haiku-4-5-20251001", response)
+                except Exception:
+                    pass  # cost tracking failures must NEVER block the RCA
+
+                raw = response.content[0].text.strip() if response.content else ""
+
+        raw = raw.strip() if raw else ""
         if raw.startswith("```"):
             raw = raw.strip("`").strip()
             if raw.startswith("json"):
