@@ -722,7 +722,9 @@ class ThreadsClient:
         # If path is not an HTTP URL, upload to CDN first
         from genlab_core.platforms.cdn_upload import upload_to_cdn
 
-        cdn_url = upload_to_cdn(Path(path), require_external=True)
+        # 2026-07-21: require_external True → False (see IG comment).
+        # Meta user-agents verified 200 OK from Cloudflare tunnel.
+        cdn_url = upload_to_cdn(Path(path), require_external=False)
         if cdn_url:
             return cdn_url
         # CDN upload failed — return path as-is (will fail at API level)
@@ -750,9 +752,11 @@ class ThreadsClient:
 
         from genlab_core.platforms.cdn_upload import upload_to_cdn_full
 
+        # 2026-07-21: require_external True → False (see IG comment).
+        # Meta user-agents verified 200 OK from Cloudflare tunnel.
         result = upload_to_cdn_full(
             Path(path),
-            require_external=True,
+            require_external=False,
             exclude_providers=exclude_providers,
         )
         if result is None:

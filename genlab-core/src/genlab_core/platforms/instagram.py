@@ -328,9 +328,24 @@ class InstagramClient:
                     ),
                 )
 
+            # 2026-07-21: flipped require_external True → False after live
+            # test showed Meta user-agents (facebookexternalhit/1.1,
+            # InstagramProxy, Meta-ExternalAgent) all get HTTP/2 200 from
+            # the Cloudflare tunnel. Stale comment on cdn_upload.py:355
+            # said Meta can't fetch through Cloudflare bot protection —
+            # that's no longer true. Tunnel Tier 1 now available for IG,
+            # eliminating dependence on flaky litterbox/tmpfiles for
+            # every publish. HEAD reachability check inside _serve_via_
+            # tunnel (line 143) gracefully falls back to external CDN if
+            # the tunnel isn't reachable.
+            #
+            # Expected impact per Agent 5 analysis (2026-07-21):
+            # IG SUCCESS rate from ~2% → 60-75% (eliminates most of
+            # the 20 code=2207082 Meta CDN-fetch failures in last 60d
+            # + 3 tmpfiles wrapper text/html preflight rejections).
             cdn_result = upload_to_cdn_full(
                 video_url,
-                require_external=True,
+                require_external=False,
                 exclude_providers=excluded,
             )
             if cdn_result is None:
