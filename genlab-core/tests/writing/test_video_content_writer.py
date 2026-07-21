@@ -212,3 +212,177 @@ class TestHookStylePropagation:
         result = write_video_content(_make_video(), "sports", llm)
         assert result.get("hook") == ""
         assert "hook_style" not in result
+
+
+# ---------------------------------------------------------------------------
+# 2026-07-21 Policy-block learning loop L3 —
+#   RCA verdicts (from L2) must be injected into the writer system
+#   prompt as "AVOID PATTERNS" rules. Fail-open on every path so a
+#   broken RCA never blocks content generation.
+# ---------------------------------------------------------------------------
+
+
+class TestPolicyAvoidHintInjection:
+    """Closes the loop: writer -> block -> compliance_events (L1) ->
+    LLM RCA (L2) -> writer system prompt (this)."""
+
+    def _valid_json(self) -> str:
+        return (
+            '{"hook":"x","instagram_caption":"x #S #P #T","twitter_content":"x",'
+            '"youtube_content":"x","facebook_content":"x","threads_content":"x"}'
+        )
+
+    def test_no_verdicts_no_injection(self, monkeypatch) -> None:
+        """RCA returns [] (flag off by default) — system prompt must
+        NOT contain the POLICY-BLOCK AVOID PATTERNS marker."""
+        monkeypatch.setattr(
+            "genlab_core.compliance.policy_block_rca.analyze_recent_policy_blocks",
+            lambda *_a, **_k: [],
+        )
+        llm = _make_llm(self._valid_json())
+        write_video_content(_make_video(), "sports", llm)
+        system_prompt = llm.complete.call_args.kwargs.get("system", "")
+        assert "POLICY-BLOCK AVOID PATTERNS" not in system_prompt
+
+    def test_verdicts_inject_top_patterns(self, monkeypatch) -> None:
+        """Non-empty verdicts → top-3 by confidence flattened into
+        the AVOID PATTERNS section as bulleted 'Never do X' rules."""
+        from genlab_core.compliance.policy_block_rca import RCAVerdict
+
+        verdicts = [
+            RCAVerdict(
+                violation_category="spam_signals",
+                confidence=0.9,
+                avoid_patterns=[
+                    "avoid more than 4 hashtags in a row",
+                    "avoid stacking CTAs at end of caption",
+                ],
+                sample_blueprint_ids=["b1"],
+            ),
+            RCAVerdict(
+                violation_category="misleading_content",
+                confidence=0.7,
+                avoid_patterns=["avoid clickbait absolutes like 'will shock you'"],
+                sample_blueprint_ids=["b2"],
+            ),
+        ]
+        monkeypatch.setattr(
+            "genlab_core.compliance.policy_block_rca.analyze_recent_policy_blocks",
+            lambda *_a, **_k: verdicts,
+        )
+        llm = _make_llm(self._valid_json())
+        write_video_content(_make_video(), "sports", llm)
+        system_prompt = llm.complete.call_args.kwargs.get("system", "")
+        assert "POLICY-BLOCK AVOID PATTERNS" in system_prompt
+        # All 3 patterns present (well under the 5-cap)
+        assert "avoid more than 4 hashtags in a row" in system_prompt
+        assert "avoid stacking CTAs at end of caption" in system_prompt
+        assert "avoid clickbait absolutes like 'will shock you'" in system_prompt
+
+    def test_rca_exception_fails_open(self, monkeypatch) -> None:
+        """RCA call raises → writer proceeds without the AVOID PATTERNS
+        block. The whole point of the fail-open contract."""
+        def _boom(*_a, **_k):
+            raise RuntimeError("db down")
+
+        monkeypatch.setattr(
+            "genlab_core.compliance.policy_block_rca.analyze_recent_policy_blocks",
+            _boom,
+        )
+        llm = _make_llm(self._valid_json())
+        # Must NOT raise
+        result = write_video_content(_make_video(), "sports", llm)
+        assert "hook" in result
+        system_prompt = llm.complete.call_args.kwargs.get("system", "")
+        assert "POLICY-BLOCK AVOID PATTERNS" not in system_prompt
+
+    def test_dedup_and_max_5_cap(self, monkeypatch) -> None:
+        """Duplicate patterns dedupe (case-insensitive); flattened
+        pattern list caps at 5 to keep the system prompt cache-friendly."""
+        from genlab_core.compliance.policy_block_rca import RCAVerdict
+
+        # 3 verdicts × many patterns each — should cap at 5 total
+        # (+dedup on 'Avoid X' vs 'avoid x')
+        verdicts = [
+            RCAVerdict(
+                violation_category="spam_signals",
+                confidence=0.9,
+                avoid_patterns=[
+                    "avoid pattern one",
+                    "avoid pattern two",
+                    "avoid pattern three",
+                ],
+            ),
+            RCAVerdict(
+                violation_category="misleading_content",
+                confidence=0.8,
+                avoid_patterns=[
+                    "AVOID PATTERN ONE",  # dedup vs verdict-0 case-insensitive
+                    "avoid pattern four",
+                    "avoid pattern five",
+                    "avoid pattern six",  # should be dropped by 5-cap
+                ],
+            ),
+            RCAVerdict(
+                violation_category="unknown",
+                confidence=0.7,
+                avoid_patterns=["avoid pattern seven"],  # dropped by 5-cap
+            ),
+        ]
+        monkeypatch.setattr(
+            "genlab_core.compliance.policy_block_rca.analyze_recent_policy_blocks",
+            lambda *_a, **_k: verdicts,
+        )
+        llm = _make_llm(self._valid_json())
+        write_video_content(_make_video(), "sports", llm)
+        system_prompt = llm.complete.call_args.kwargs.get("system", "")
+        # 5 patterns injected — one/two/three from verdict-0 + four/five from
+        # verdict-1 (dedup drops the "AVOID PATTERN ONE" retry)
+        assert "avoid pattern one" in system_prompt
+        assert "avoid pattern two" in system_prompt
+        assert "avoid pattern three" in system_prompt
+        assert "avoid pattern four" in system_prompt
+        assert "avoid pattern five" in system_prompt
+        # Sixth + seventh are dropped by the 5-cap
+        assert "avoid pattern six" not in system_prompt
+        assert "avoid pattern seven" not in system_prompt
+
+    def test_confidence_ordering_top_3_verdicts(self, monkeypatch) -> None:
+        """4 verdicts supplied; only the top-3 by confidence contribute
+        avoid_patterns. Lowest-confidence verdict's patterns must NOT
+        appear in the system prompt."""
+        from genlab_core.compliance.policy_block_rca import RCAVerdict
+
+        verdicts = [
+            RCAVerdict(
+                violation_category="spam_signals",
+                confidence=0.3,  # LOWEST
+                avoid_patterns=["low_conf_pattern_MUST_NOT_APPEAR"],
+            ),
+            RCAVerdict(
+                violation_category="misleading_content",
+                confidence=0.9,
+                avoid_patterns=["top_conf_pattern_A"],
+            ),
+            RCAVerdict(
+                violation_category="copyright_flag",
+                confidence=0.8,
+                avoid_patterns=["top_conf_pattern_B"],
+            ),
+            RCAVerdict(
+                violation_category="unknown",
+                confidence=0.6,
+                avoid_patterns=["top_conf_pattern_C"],
+            ),
+        ]
+        monkeypatch.setattr(
+            "genlab_core.compliance.policy_block_rca.analyze_recent_policy_blocks",
+            lambda *_a, **_k: verdicts,
+        )
+        llm = _make_llm(self._valid_json())
+        write_video_content(_make_video(), "sports", llm)
+        system_prompt = llm.complete.call_args.kwargs.get("system", "")
+        assert "top_conf_pattern_A" in system_prompt
+        assert "top_conf_pattern_B" in system_prompt
+        assert "top_conf_pattern_C" in system_prompt
+        assert "low_conf_pattern_MUST_NOT_APPEAR" not in system_prompt

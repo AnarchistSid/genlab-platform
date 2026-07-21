@@ -450,6 +450,55 @@ def write_video_content(
     except Exception as exc:
         logger.debug("[%s] preference_hint skipped: %s", niche_id, exc)
 
+    # Policy-block learning loop L3 (2026-07-21): read recent LLM-judged
+    # RCA verdicts from L2 and inject their concrete `avoid_patterns` as
+    # "Never do X" rules the writer must obey. Foundation writer <->
+    # compliance closed loop — every Meta code=368 block becomes a
+    # labelled training signal that steers the next generation.
+    #
+    # Flag-gated OFF by default via GENLAB_POLICY_BLOCK_RCA_ENABLED, so
+    # this adopter is effectively a no-op in prod until the operator
+    # flips it. Fail-OPEN on every path — writer works exactly as before
+    # when RCA is disabled OR verdicts are empty OR DB unreachable.
+    policy_avoid_hint = ""
+    try:
+        from genlab_core.compliance.policy_block_rca import (
+            analyze_recent_policy_blocks,
+        )
+
+        _verdicts = analyze_recent_policy_blocks(niche_id, window_days=30)
+        # Top-3 confidence-ranked verdicts → flatten their avoid_patterns
+        # (dedup, max 5 patterns total). Bounded to keep the system
+        # prompt cache-friendly — every 100 chars of prompt burns cache.
+        seen: set[str] = set()
+        avoid_lines: list[str] = []
+        for v in sorted(_verdicts, key=lambda x: x.confidence, reverse=True)[:3]:
+            for p in v.avoid_patterns:
+                p_clean = p.strip()
+                if p_clean and p_clean.lower() not in seen:
+                    seen.add(p_clean.lower())
+                    avoid_lines.append(f"  - {p_clean}")
+                    if len(avoid_lines) >= 5:
+                        break
+            if len(avoid_lines) >= 5:
+                break
+        if avoid_lines:
+            policy_avoid_hint = (
+                "\nPOLICY-BLOCK AVOID PATTERNS "
+                "(platforms have blocked recent posts for these reasons — "
+                "MUST steer clear):\n"
+                + "\n".join(avoid_lines)
+                + "\n"
+            )
+            logger.info(
+                "[%s] policy_avoid_hint: %d patterns from %d verdicts",
+                niche_id,
+                len(avoid_lines),
+                len(_verdicts),
+            )
+    except Exception as exc:
+        logger.debug("[%s] policy_avoid_hint skipped: %s", niche_id, exc)
+
     # PR Strategist-3: append operator-approved learning findings (top 5)
     # into the system prompt so the writer leans on causal patterns the
     # operator has explicitly validated. Fail-closed: if strategy_phase
@@ -673,6 +722,7 @@ def write_video_content(
         + variant_hint
         + preference_hint
         + findings_hint
+        + policy_avoid_hint
         + series_context_hint
         + question_reveal_hint
         + watch_till_end_hint
