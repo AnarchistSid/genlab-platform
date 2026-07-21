@@ -91,9 +91,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 # Deploy timestamp — the exact moment PR #713 (reward-fetcher
 # exception hardening) landed on prod. Any pending_feedback row with
@@ -388,17 +391,33 @@ def _format_text(report: RecoveryReport) -> str:
 
 
 def _exit_code_for(report: RecoveryReport) -> int:
-    """Systemd-friendly exit code.
+    """Systemd-friendly exit code (rule #26 compliant, 2026-07-21).
 
-    * 0 — green (all platforms recovering or recovered)
-    * 3 — red (at least one platform regressed)
-    * 4 — amber (still recovering; informational, not a failure)
+    Always exit 0 unless a process-side error occurred. Verdict is a
+    DATA-side signal (a platform's reward has drifted) — it should
+    surface via stdout+log+pipeline_alerts, NOT via non-zero exit
+    which triggers systemd service_down CRITICAL alarms every fire.
+
+    Prior behavior (exit 3 on red, exit 4 on amber) fired
+    `genlab-reward-shaper-recovery.service` FAILED every timer fire
+    while IG had a real regression, drowning operator signal in
+    systemd noise. The `red` verdict is still visible in the stdout
+    report AND in the WARN log line here; the alerting layer can
+    grep for it if needed.
+
+    Same class as rule #26 (7 prior scripts fixed this session).
     """
     verdict = report.overall_verdict()
     if verdict == "red":
-        return 3
-    if verdict == "amber":
-        return 4
+        logger.warning(
+            "[reward-shaper-recovery] verdict=RED — at least one platform "
+            "regressed. Report on stdout; systemd exit 0 to avoid noise "
+            "alarm cascade (rule #26)."
+        )
+    elif verdict == "amber":
+        logger.info(
+            "[reward-shaper-recovery] verdict=AMBER — still recovering"
+        )
     return 0
 
 

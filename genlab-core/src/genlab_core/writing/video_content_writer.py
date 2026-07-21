@@ -1142,6 +1142,19 @@ def write_video_content(
             "youtube_content": title[:40],  # YT title format — no credit here
             "facebook_content": _with_credit(f"{title} — what do you think?"),
             "threads_content": _with_credit(title[:200])[:300],
+            # 2026-07-21 Agent-1 fix: fallback path must set
+            # source_attribution so push_to_backlog._credit() can
+            # re-append the credit line AFTER platform rules strip
+            # URLs (_enforce_instagram_rules + _enforce_facebook_rules
+            # unconditionally URL-strip via _URL_RE.sub()). LLM-success
+            # path already sets this at video_content_writer.py:1007;
+            # fallback path was silently missing it → 3 of 4 tomorrow-
+            # scheduled blueprints (ai_creators, anime, sports) shipped
+            # `🎬 Original: @X —` with empty URL after emdash. With
+            # source_attribution set, base_writing:406 propagates to
+            # push_to_backlog:2495 which re-appends the intact credit
+            # line, matching gaming's LLM-success behavior.
+            "source_attribution": _credit_line,
         }
         # The degraded path ships too — sentence-case it (R-50) so a lowercase
         # source title doesn't read as a shitpost.

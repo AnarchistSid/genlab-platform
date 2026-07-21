@@ -455,6 +455,32 @@ class BaseHookStrategy(HookStrategy):
             content["hook_category"] = category
             content["hook_specificity"] = specificity
 
+            # 2026-07-21 Agent-3 fix: unconditional hook_classifier
+            # scoring at end-of-loop covers all 5 hook-generation paths
+            # (LLM primary, LLM validate fast-path, salvage, template
+            # regen, title-recovered). Pre-fix, only paths A + B set
+            # this — 3 paths silently produced hooks without scores →
+            # 39-80% of blueprints per niche were missing
+            # hook_classifier_score → gate confidence dragged neutral.
+            # `not in` guard preserves the deliberate writes upstream
+            # (paths A + B set it during generation with more context).
+            if "hook_classifier_score" not in story:
+                try:
+                    from genlab_core.learning.hook_classifier import HookClassifier
+
+                    clf = HookClassifier(niche_id=self._niche_id)
+                    if clf._loaded:
+                        story["hook_classifier_score"] = float(clf.score_hook(hook))
+                except Exception as exc:  # noqa: BLE001
+                    # Rule #19: WARN not DEBUG. Silent-fail here means
+                    # gate loses signal for this blueprint.
+                    logger.warning(
+                        "[%s] hook_classifier scoring skipped: %s",
+                        self._niche_id,
+                        exc,
+                        exc_info=True,
+                    )
+
             categories_used[category] = categories_used.get(category, 0) + 1
             hooked_count += 1
 
