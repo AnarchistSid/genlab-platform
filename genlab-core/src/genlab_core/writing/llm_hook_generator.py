@@ -573,7 +573,26 @@ def generate_hook(
 
     cached_system = with_prompt_cache(system)
 
-    for _ in range(3):
+    # 2026-07-21: OpenAI fallback on Anthropic exhaustion. Hooks are
+    # audience-facing (they're the first thing viewers see); losing
+    # them during Anthropic outages means falling back to template
+    # or bare-title hooks which get rejected by pre_render_quality.
+    from genlab_core.llm.fallback import (
+        call_openai_fallback,
+        cb_is_open as _cb_is_open,
+        cb_record_exhaustion as _cb_record_exhaustion,
+        cb_record_success as _cb_record_success,
+        fallback_enabled as _fallback_enabled,
+        should_fallback as _should_fallback,
+    )
+
+    _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+
+    def _call_hook_api() -> str:
+        """Call Anthropic; fall back to OpenAI on exhaustion. Returns
+        the raw response text (str). Raises on unrecoverable failure."""
+        if _fallback_enabled() and _cb_is_open() and _openai_key:
+            return call_openai_fallback(system, user, 80, 0.7, _openai_key)
         try:
             response = client.messages.create(
                 model="claude-haiku-4-5-20251001",
@@ -582,10 +601,27 @@ def generate_hook(
                 messages=[{"role": "user", "content": user}],
                 system=cached_system,
             )
+        except Exception as anthropic_exc:
+            if not (_fallback_enabled() and _should_fallback(anthropic_exc) and _openai_key):
+                raise
+            _cb_record_exhaustion()
+            logger.warning(
+                "[%s] hook_generator Anthropic %s → OpenAI fallback: %s",
+                niche_id,
+                type(anthropic_exc).__name__,
+                str(anthropic_exc)[:120],
+            )
+            return call_openai_fallback(system, user, 80, 0.7, _openai_key)
+        else:
+            _cb_record_success()
             from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
 
             record_anthropic_usage("claude-haiku-4-5-20251001", response)  # U-03
-            hook = response.content[0].text.strip().strip('"').strip("'")
+            return response.content[0].text
+
+    for _ in range(3):
+        try:
+            hook = _call_hook_api().strip().strip('"').strip("'")
             hook = hook.replace("\u2019", "'").replace("\u2018", "'")
             hook = hook.replace("\u201c", '"').replace("\u201d", '"')
             if len(hook) > 60:
