@@ -81,9 +81,26 @@ class TestHealthDetailed:
         assert "checked_at" in data
 
     @patch("server.api.health._check_services", side_effect=Exception("kaboom"))
-    def test_returns_500_on_unexpected_error(self, mock_services, client):
+    def test_section_failure_returns_200_with_degraded_flag(self, mock_services, client):
+        """2026-07-14 (dashboard audit F8) refactored the endpoint to
+        fail-open per-section. Prior behavior was 500-ing the whole
+        endpoint on any exception, which defeated the point of the
+        per-section `_check_*` fail-opens.
+
+        Now: exception in one section -> that section carries
+        {"degraded": True, "error": "..."}; sibling sections still
+        render normally; response stays 200. Pin this contract so a
+        future refactor doesn't accidentally revert to 500.
+        """
         resp = client.get("/api/v1/health/detailed")
-        assert resp.status_code == 500
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        # Failing section (services) must carry degraded + error
+        assert data["services"]["degraded"] is True
+        assert "kaboom" in data["services"]["error"]
+        # Sibling sections should NOT have degraded=True (they render as
+        # normal) — proves fail-open isolates per-section.
+        assert data.get("checked_at") is not None
 
 
 class TestHealthServiceChecks:
