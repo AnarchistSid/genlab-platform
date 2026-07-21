@@ -46,6 +46,27 @@ REQUEST_TIMEOUT = 10  # seconds
 RATE_LIMIT_SLEEP = 0.5  # seconds between requests
 USER_AGENT = "GenLab-LinkChecker/1.0"
 
+# 2026-07-21: some endpoints are HEAD/GET-hostile — they return 4xx/5xx to
+# automated probes but work fine in real browsers. Marking them broken
+# creates noise in the daily report. The URL substrings below indicate
+# a request pattern that we KNOW is misleading:
+#
+# - `amazon.com/s?k=` — Amazon search endpoints throttle automated GET/HEAD
+#   requests with 503 even though the same URL loads in a browser
+# - `amazon.in/s?k=` — same, on the India TLD
+# - `claude.ai/` — the bare product page returns 403 to unauthenticated
+#   HEAD/GET but the URL is real + resolves for real users
+#
+# Any URL matching these substrings is treated as "not check-able via
+# HEAD" (skipped in the broken-rate calculation) rather than counted
+# as broken. Add new patterns here only after manually confirming the
+# URL is fine when opened in a browser.
+HEAD_HOSTILE_URL_PATTERNS = (
+    "amazon.com/s?k=",
+    "amazon.in/s?k=",
+    "claude.ai/",
+)
+
 
 # ---------------------------------------------------------------------------
 # Core functions
@@ -233,9 +254,23 @@ def main() -> None:
     print(f"Checking {total} affiliate URLs ...\n")
 
     healthy_count = 0
+    skipped_head_hostile = 0
     broken: list[dict] = []
 
     for i, entry in enumerate(entries, start=1):
+        # 2026-07-21: skip URLs known to be HEAD/GET-hostile — Amazon
+        # search endpoints + auth-required product pages that return
+        # 4xx/5xx to automated probes but work fine in browsers. Count
+        # them as skipped so they don't inflate the broken count.
+        if any(pat in entry["url"] for pat in HEAD_HOSTILE_URL_PATTERNS):
+            skipped_head_hostile += 1
+            if verbose:
+                print(
+                    f"  [{i:>2}/{total}] SKIP   HEAD-hostile "
+                    f"{entry['niche']}/{entry['network']}  {entry['product']}"
+                )
+            continue
+
         result = check_url(entry["url"])
 
         if result["healthy"]:
@@ -263,10 +298,13 @@ def main() -> None:
             time.sleep(RATE_LIMIT_SLEEP)
 
     # Summary
+    checked = total - skipped_head_hostile
     print("\n--- Summary ---")
-    print(f"  Total checked : {total}")
-    print(f"  Healthy       : {healthy_count}")
-    print(f"  Broken        : {len(broken)}")
+    print(f"  Total in catalog : {total}")
+    print(f"  Skipped (HEAD-hostile): {skipped_head_hostile}")
+    print(f"  Checked          : {checked}")
+    print(f"  Healthy          : {healthy_count}")
+    print(f"  Broken           : {len(broken)}")
 
     if broken:
         print("\nBroken links:")
@@ -289,8 +327,9 @@ def main() -> None:
         # already reported via stdout above; exit code only signals a
         # genuine incident (mass outage / merchant removal spree) so
         # systemd doesn't service_down-CRITICAL every hour on the
-        # 2-3 known-dead URLs.
-        broken_rate = len(broken) / total
+        # 2-3 known-dead URLs. Uses `checked` (excludes HEAD-hostile
+        # skips) so the denominator matches what was actually probed.
+        broken_rate = len(broken) / max(checked, 1)
         BROKEN_RATE_THRESHOLD = 0.10
         if broken_rate >= BROKEN_RATE_THRESHOLD:
             print(

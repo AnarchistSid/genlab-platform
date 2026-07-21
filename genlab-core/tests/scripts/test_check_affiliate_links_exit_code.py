@@ -70,3 +70,50 @@ class TestExitCodeThreshold:
         assert "sys.exit(1)" in src, (
             "must retain a sys.exit(1) path for the >=10% incident case"
         )
+
+
+class TestHeadHostileAllowList:
+    """The HEAD_HOSTILE_URL_PATTERNS allow-list skips URLs known to
+    return 4xx/5xx to automated probes but work in real browsers.
+    Without this, Amazon-search + auth-required product pages
+    inflated the broken count and tripped the >=10% threshold."""
+
+    def test_allowlist_constant_exists_with_expected_patterns(self):
+        """The 3 currently-known HEAD-hostile domains must all be
+        in the allow-list. If any of these regresses, the daily
+        report shows false CRITICAL immediately."""
+        assert hasattr(mod, "HEAD_HOSTILE_URL_PATTERNS")
+        patterns = mod.HEAD_HOSTILE_URL_PATTERNS
+        assert "amazon.com/s?k=" in patterns, (
+            "Amazon.com search endpoints throttle HEAD; must skip"
+        )
+        assert "amazon.in/s?k=" in patterns, (
+            "Amazon.in search endpoints throttle HEAD; must skip"
+        )
+        assert "claude.ai/" in patterns, (
+            "claude.ai/ requires auth for HEAD; must skip"
+        )
+
+    def test_main_uses_allowlist_before_check_url(self):
+        """The skip check must happen BEFORE check_url is called so
+        we don't waste network on doomed probes AND don't count them
+        as broken."""
+        import inspect
+
+        src = inspect.getsource(mod.main)
+        assert "HEAD_HOSTILE_URL_PATTERNS" in src
+        assert "skipped_head_hostile" in src
+
+    def test_denominator_excludes_skipped_from_broken_rate(self):
+        """Broken rate must divide by `checked` (post-skip), not
+        `total` (pre-skip). Otherwise skipping URLs inflates the
+        denominator + hides genuine incidents."""
+        import inspect
+
+        src = inspect.getsource(mod.main)
+        # Must divide by max(checked, 1) — the max prevents divide-by-zero
+        # if EVERY URL is HEAD-hostile
+        assert "len(broken) / max(checked, 1)" in src, (
+            "broken rate denominator must be `checked` (excludes skips), "
+            "with max(checked, 1) to prevent divide-by-zero"
+        )
