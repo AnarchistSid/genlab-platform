@@ -106,6 +106,43 @@ def _connect():
         return None
 
 
+def _has_recent_success(platform: str, niche_id: str) -> bool:
+    """Return True iff at least 1 successful publish for this niche+platform
+    in the last 48h. Used to guard shadowban detection against false
+    positives when the pipeline has been dark for reasons unrelated to
+    platform suppression (e.g., scheduler outage, LLM exhaustion).
+
+    Fail-OPEN: on DB error, return True — we'd rather miss a false
+    negative (real shadowban going undetected briefly) than trigger a
+    false-positive auto-pause on a whole niche.
+    """
+    conn_cm = _connect()
+    if conn_cm is None:
+        return True
+    try:
+        with conn_cm as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) AS n
+                FROM publishing_analytics
+                WHERE niche_id = %s AND platform = %s
+                  AND status IN ('SUCCESS', 'INSIGHTS_48H', 'INSIGHTS_168H')
+                  AND created_at > NOW() - INTERVAL '48 hours'
+                """,
+                (niche_id, platform),
+            ).fetchone()
+        return int((row and row["n"]) or 0) > 0
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "[account_health] recent-success check failed for (%r, %r): %s "
+            "— defaulting True (fail-open) to avoid false-positive pause",
+            platform,
+            niche_id,
+            exc,
+        )
+        return True
+
+
 def _compute_reach_stats(platform: str, niche_id: str) -> dict | None:
     """Query analytics for baseline (14d) + recent (48h) avg reach.
 
@@ -199,6 +236,28 @@ def get_signal(platform: str, niche_id: str) -> HealthSignal | None:
         return None
     # baseline=0 makes ratio undefined; treat as no signal
     if stats["baseline_avg"] <= 0:
+        return None
+    # 2026-07-21: false-positive shadowban guard. If we haven't
+    # PUBLISHED in the 48h window, `recent_avg=0` doesn't mean
+    # shadowban — it means we didn't post. The analytics table
+    # still holds re-collected reach rows for OLD posts (each
+    # analytics fire re-samples), so `recent_n` may be non-zero
+    # even without any fresh publishes. Detected live 2026-07-21
+    # when auto-approver was falsely paused for ai_creators +
+    # sports right after the 2-day scheduler-regression outage:
+    # "Reach dropped ∞x — probable shadowban" fired on niches
+    # that had ZERO successful publishes in 48h (not because
+    # Meta suppressed reach — just no source signal).
+    # Guard: require ≥1 successful publish in the recent window
+    # before we can meaningfully compare recent-vs-baseline reach.
+    if not _has_recent_success(platform, niche_id):
+        logger.debug(
+            "[account_health] no successful publishes for %r/%r in 48h "
+            "window — skipping shadowban detection (can't distinguish "
+            "suppression from no-post)",
+            platform,
+            niche_id,
+        )
         return None
     ratio = stats["recent_avg"] / stats["baseline_avg"]
     evidence = {
