@@ -217,7 +217,11 @@ def _vote_bandit(blueprint: dict, niche_id: str) -> EnsembleVote:
             return EnsembleVote("bandit", None, weight, "no bandit_arms proxy")
         arms = load_all_arms(proxy, niche_id)
     except Exception as exc:
-        logger.debug("[ensemble] bandit load failed: %s", exc)
+        # 2026-07-21 (rule #19): DEBUG-swallow masks a load-bearing
+        # ensemble vote failure. If bandit consistently fails to load,
+        # the ensemble silently degrades to voters-minus-bandit —
+        # a behavior change without operator visibility.
+        logger.warning("[ensemble] bandit load failed: %s", exc, exc_info=True)
         return EnsembleVote("bandit", None, weight, f"load error: {exc}")
 
     row = arms.get(arm_id)
@@ -262,7 +266,10 @@ def _vote_hook_classifier(blueprint: dict, niche_id: str) -> EnsembleVote:
             return EnsembleVote("hook_classifier", None, weight, "abstain (score=0.5)")
         return EnsembleVote("hook_classifier", float(score), weight, f"proba={score:.3f}")
     except Exception as exc:
-        logger.debug("[ensemble] hook_classifier vote failed: %s", exc)
+        # 2026-07-21 (rule #19): elevated from DEBUG. Silent vote
+        # failure would mask hook_classifier degradation and cause
+        # ensemble drift without operator signal.
+        logger.warning("[ensemble] hook_classifier vote failed: %s", exc, exc_info=True)
         return EnsembleVote("hook_classifier", None, weight, f"error: {exc}")
 
 
@@ -281,7 +288,9 @@ def _vote_bayesian_gate(blueprint: dict, niche_id: str) -> EnsembleVote:
             return EnsembleVote("bayesian_gate", None, weight, "abstain (mean=0.5)")
         return EnsembleVote("bayesian_gate", float(p_mean), weight, f"p_mean={p_mean:.3f}")
     except Exception as exc:
-        logger.debug("[ensemble] bayesian_gate vote failed: %s", exc)
+        # 2026-07-21 (rule #19): elevated from DEBUG. Silent vote
+        # failure would mask bayesian gate degradation.
+        logger.warning("[ensemble] bayesian_gate vote failed: %s", exc, exc_info=True)
         return EnsembleVote("bayesian_gate", None, weight, f"error: {exc}")
 
 
@@ -327,7 +336,9 @@ def _vote_conformal_router(blueprint: dict, niche_id: str) -> EnsembleVote:
             f"abstain ({action}: {result.reason[:60]})",
         )
     except Exception as exc:
-        logger.debug("[ensemble] conformal vote failed: %s", exc)
+        # 2026-07-21 (rule #19): elevated from DEBUG. Silent vote
+        # failure would mask conformal router degradation.
+        logger.warning("[ensemble] conformal vote failed: %s", exc, exc_info=True)
         return EnsembleVote("conformal_router", None, weight, f"error: {exc}")
 
 
@@ -384,7 +395,11 @@ def _vote_llm_judge(
             f"(confidence={judged.confidence:.3f})",
         )
     except Exception as exc:
-        logger.debug("[ensemble] llm_judge vote failed: %s", exc)
+        # 2026-07-21 (rule #19): elevated from DEBUG. LLM judge is
+        # the tiebreaker for borderline cases — silent failure means
+        # borderline blueprints default to whatever the mean says
+        # without the LLM's tiebreak signal.
+        logger.warning("[ensemble] llm_judge vote failed: %s", exc, exc_info=True)
         return EnsembleVote("llm_judge", None, weight, f"error: {exc}")
 
 

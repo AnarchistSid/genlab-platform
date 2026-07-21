@@ -1668,7 +1668,10 @@ class PushToBacklog:
                     non_blocking_skipped,
                 )
         except Exception as e:
-            logger.debug("[PUSH] Could not load existing hooks: %s", e)
+            # 2026-07-21 (rule #19): elevated. hook-dedup load failure
+            # means dedup runs against smaller/empty set → duplicate
+            # hooks slip through as new blueprints.
+            logger.warning("[PUSH] Could not load existing hooks: %s", e, exc_info=True)
         context["existing_hooks"] = existing_hooks
 
         # PR #400 (extending PR #399): pre-load EXTENDED bandit-arm
@@ -1900,7 +1903,10 @@ class PushToBacklog:
                     _recent_stories.append(s)
             _existing_stories_for_titles = _recent_stories
         except Exception as e:
-            logger.debug("[PUSH] Could not load existing story URLs: %s", e)
+            # 2026-07-21 (rule #19): elevated. story-URL-dedup load
+            # failure means URL dedup runs against smaller set →
+            # same story can be re-blueprinted.
+            logger.warning("[PUSH] Could not load existing story URLs: %s", e, exc_info=True)
 
         # content_memory used to be a second URL-level dedup layer, seeded
         # from every blueprint ever created. But content_memory entries are
@@ -1923,7 +1929,10 @@ class PushToBacklog:
                     len(active_bps),
                 )
         except Exception as e:
-            logger.debug("[PUSH] content_memory load failed (non-fatal): %s", e)
+            # 2026-07-21 (rule #19): elevated. content_memory feeds
+            # title-level dedup; load failure risks title-similar
+            # dupes slipping through.
+            logger.warning("[PUSH] content_memory load failed (non-fatal): %s", e, exc_info=True)
 
         # Collect titles for title-level dedup (Layer 4.5)
         # Seeded only from blueprints in blocking states — stories and
@@ -1977,7 +1986,10 @@ class PushToBacklog:
                                 existing_titles.add(row[0].strip().lower())
                 logger.info("[PUSH] Loaded %d titles for cross-dedup", len(existing_titles))
         except Exception as exc:
-            logger.debug("[PUSH] Failed to load titles for cross-dedup: %s", exc)
+            # 2026-07-21 (rule #19): elevated. cross-dedup title-load
+            # failure means cross-niche title dedup runs against empty
+            # set → same title can appear across niches simultaneously.
+            logger.warning("[PUSH] Failed to load titles for cross-dedup: %s", exc, exc_info=True)
         context["existing_titles"] = existing_titles
 
         existing_titles = context.get("existing_titles", set())

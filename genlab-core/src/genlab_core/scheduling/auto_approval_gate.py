@@ -172,7 +172,13 @@ def evaluate(
                     override_composite,
                 )
         except Exception as exc:
-            logger.debug("[gate] Strategist override lookup failed (%s)", exc)
+            # 2026-07-21 (rule #19): elevated from DEBUG. Strategist
+            # override is used by the active auto-approver; silent
+            # failure means the ratchet threshold silently reverts to
+            # the phase default without operator visibility.
+            logger.warning(
+                "[gate] Strategist override lookup failed (%s)", exc, exc_info=True
+            )
 
         if min_composite_score is None:
             min_composite_score = (
