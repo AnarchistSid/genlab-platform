@@ -87,6 +87,7 @@ def _pick_next_available_slot(
     niche_id: str,
     exclude_record_id: str = "",
     canonical_slot_ist: str = "12:00",
+    in_flight_slot_counts: dict[str, int] | None = None,
 ) -> str | None:
     """Return the next available scheduled_for ISO string for ``niche_id``.
 
@@ -152,6 +153,21 @@ def _pick_next_available_slot(
             posts_per_day[day_key] = posts_per_day.get(day_key, 0) + 1
         except (ValueError, TypeError):
             pass
+
+    # 2026-07-21: same-pass collision guard. When the caller (outer
+    # loop over N candidates) processes multiple approvals in one pass,
+    # each `_pick_next_available_slot` call re-queries the DB — but
+    # depending on Postgres visibility/isolation/connection-pool state,
+    # the prior iteration's `blueprints.update(scheduled_for=X)` may
+    # not be visible yet → collision (2+ blueprints scheduled for
+    # same day per niche). Live-observed 2026-07-21: after tonight's
+    # auto-approver expansion, 6 approvals piled onto 3 days instead
+    # of 6. `in_flight_slot_counts` is a per-pass in-memory dict
+    # {day_key: count} the caller maintains + passes in, immune to
+    # DB visibility semantics.
+    if in_flight_slot_counts:
+        for day_key, extra_count in in_flight_slot_counts.items():
+            posts_per_day[day_key] = posts_per_day.get(day_key, 0) + extra_count
 
     # Walk forward, picking first day with headroom.
     now_ist = datetime.now(ist)
@@ -735,6 +751,12 @@ def run_pass(
 
     result.candidates_examined = len(candidates)
 
+    # 2026-07-21: per-pass in-memory counter for slot collision guard.
+    # See _pick_next_available_slot docstring for rationale — Postgres
+    # visibility semantics can delay the sibling iteration's DB query
+    # from seeing this iteration's blueprints.update() write.
+    _in_flight_slot_counts: dict[str, int] = {}
+
     for raw in candidates:
         if len(result.auto_approved) >= policy.max_approvals_per_pass:
             result.cap_reached = True
@@ -929,16 +951,34 @@ def run_pass(
             result.auto_approved.append(record_id)
             continue
 
-        if not _execute_approval(
+        scheduled_iso = _execute_approval(
             backlog_client=backlog_client,
             record_id=record_id,
             decision=decision,
             niche_id=niche_id,
             result=result,
-        ):
+            in_flight_slot_counts=_in_flight_slot_counts,
+        )
+        if scheduled_iso is None:
             # _execute_approval already recorded the error; move on
             continue
         result.auto_approved.append(record_id)
+        # Track the day-key we just consumed so the next iteration in
+        # this pass doesn't collide (rule #26 sibling: shared DB read
+        # between siblings in one loop). See _pick_next_available_slot
+        # docstring for full rationale.
+        try:
+            from datetime import datetime as _dt
+            from zoneinfo import ZoneInfo as _Z
+
+            _dt_ist = (
+                _dt.fromisoformat(scheduled_iso.replace("Z", "+00:00"))
+                .astimezone(_Z("Asia/Kolkata"))
+            )
+            _day_key = _dt_ist.strftime("%Y-%m-%d")
+            _in_flight_slot_counts[_day_key] = _in_flight_slot_counts.get(_day_key, 0) + 1
+        except (ValueError, TypeError):
+            pass
 
     return result
 
@@ -950,7 +990,8 @@ def _execute_approval(
     decision: AutoApprovalDecision,
     niche_id: str,
     result: AutoApprovalPassResult,
-) -> bool:
+    in_flight_slot_counts: dict[str, int] | None = None,
+) -> str | None:
     """Write the auto-approval to the backlog. Returns True on success.
 
     Mirrors the on-approve side effects of the dashboard's
@@ -974,6 +1015,7 @@ def _execute_approval(
             backlog_client=backlog_client,
             niche_id=niche_id,
             exclude_record_id=record_id,
+            in_flight_slot_counts=in_flight_slot_counts,
         )
     except Exception as slot_exc:  # noqa: BLE001
         # Fail-CLOSED: cap-lookup failure must NEVER let the worker
@@ -989,7 +1031,7 @@ def _execute_approval(
             file=sys.stderr,
             flush=True,
         )
-        return False
+        return None
 
     if scheduled_for is None:
         logger.info(
@@ -998,7 +1040,7 @@ def _execute_approval(
             record_id,
         )
         result.errors.append(f"no slot available for {record_id}")
-        return False
+        return None
 
     update_fields = {
         "action_taken": "approved",
@@ -1023,7 +1065,7 @@ def _execute_approval(
             file=sys.stderr,
             flush=True,
         )
-        return False
+        return None
 
     # Structured audit log — the v1 audit surface. Operators can grep
     # the JSONL logs for `event=auto_approval`. A future v2 migrates to
@@ -1043,7 +1085,9 @@ def _execute_approval(
             "source": AUTO_APPROVAL_SOURCE_TAG,
         },
     )
-    return True
+    # 2026-07-21: return the scheduled_for ISO so outer loop can
+    # maintain in_flight_slot_counts across sibling iterations.
+    return scheduled_for
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────
