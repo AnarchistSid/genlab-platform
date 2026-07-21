@@ -448,6 +448,45 @@ def run_publish(
         except Exception as exc:
             logger.warning("[publish] Failed to set PUBLISHING status: %s", exc)
 
+    # 2026-07-21: pre-flight media check. If ALL visual_paths point to
+    # files that no longer exist on disk (disk-cleanup cascade / GC),
+    # fan-out to N platforms is doomed — each will hit MISSING_RENDER
+    # in payload_builder and record a SKIPPED analytics row. Better to
+    # archive the blueprint here and skip the entire publish loop.
+    #
+    # Mirrors the retry_pass._media_files_missing + archive-on-fail
+    # logic (`fad1245e` 2026-07-21). Fresh publish path was the missing
+    # counterpart — retry_pass caught retries but fresh publishes still
+    # burned platform-attempt budget on doomed blueprints.
+    from genlab_core.publishing.retry_pass import _media_files_missing
+
+    if _media_files_missing(fields):
+        logger.warning(
+            "[publish] ARCHIVING %s pre-publish — media files deleted "
+            "(no recovery path; skipping N-platform fan-out to save budget)",
+            record_id[:8],
+        )
+        try:
+            backlog_client.blueprints.update(
+                record_id,
+                {
+                    "status": "ARCHIVED",
+                    "error_message": (
+                        (fields.get("error_message") or "")
+                        + " | archived:2026-07-21:media_missing_pre_publish"
+                    ).strip(" |"),
+                },
+                typecast=True,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[publish] Pre-publish archive failed for %s: %s (continuing)",
+                record_id[:8],
+                exc,
+                exc_info=True,
+            )
+        return  # Skip publish entirely — blueprint archived.
+
     # 6. Per-platform parallel publish. The ParallelPublishOutcome carries the
     # per-platform status map, this-run success flag, and the post_ids dict
     # (so step 8 can register PendingFeedback without re-iterating futures).
