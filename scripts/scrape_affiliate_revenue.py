@@ -350,14 +350,23 @@ def main() -> int:
             browser.close()
 
     except ImportError:
-        logger.error(
-            "Playwright not installed: pip install playwright && playwright install chromium"
+        # 2026-07-21: downgraded from error → warning. Playwright is a soft
+        # dep — the API-only path (Admitad) still works without it. Repeated
+        # `error` fires each timer run were tripping the systemd-failure
+        # alerter every hour.
+        logger.warning(
+            "Playwright not installed (soft-dep): "
+            "pip install playwright && playwright install chromium"
         )
     except Exception as e:
         logger.error("Browser scraping failed: %s", e)
 
     logger.info("Scraped %d/%d networks successfully", successes, total)
-    return 0 if successes == total else 1
+    # 2026-07-21: graceful degradation. Exit 0 when ≥1 network succeeded so
+    # the systemd unit doesn't fail (which was firing service_down alerts
+    # every hour). Exit 1 only when EVERYTHING failed — that's the real
+    # signal an operator needs.
+    return 0 if successes >= 1 else 1
 
 
 if __name__ == "__main__":

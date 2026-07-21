@@ -142,7 +142,10 @@ def _shortlist_from_campaigns(campaigns: list[dict], *, top_n: int = _TOP_BY_EPC
             {
                 "id": c.get("id"),
                 "name": c.get("name") or c.get("campaign_name") or "?",
-                "category": c.get("category") or c.get("categories", ["?"])[0],
+                # 2026-07-21: `c.get("categories", ["?"])[0]` was IndexError when
+                # categories == [] (empty list ≠ missing key). Coalesce empty
+                # list to fallback list so [0] indexing is always safe.
+                "category": c.get("category") or (c.get("categories") or ["?"])[0],
                 "country": c.get("country") or c.get("geo") or "IN",
                 "access_status": c.get("access_status", "open"),
                 "epc_7d": epc_7d(c),

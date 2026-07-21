@@ -204,11 +204,30 @@ def _classify_platform(status: PlatformStatus) -> None:
 
     Rules (checked in order):
 
+      0. platform is out of 4-platform focus (rule #23) AND has zero samples
+         → ``sparse`` (was previously classified as ``red`` for Twitter,
+         causing the systemd service to exit-3 every run despite Twitter
+         being explicitly out-of-scope per 2026-07-17 operator directive)
       1. sample_count < _MIN_SAMPLE_COUNT → ``sparse``
       2. positive_rate < baseline - _REGRESSION_MARGIN → ``red``
       3. positive_rate >= target → ``green``
       4. else → ``amber`` (recovering, but not yet at target)
     """
+    # Rule 0: out-of-scope platforms with zero samples are informational.
+    # Prior behavior classified them as ``red`` because 0.0 positive-rate
+    # trivially trips the regression check. CLAUDE.md rule #23 defines the
+    # 4-platform focus (YT/FB/IG/Threads); Twitter+TikTok are explicitly
+    # out of scope — a zero-sample Twitter row shouldn't trigger a systemd
+    # exit-3 recovery-red alert. Applied 2026-07-21.
+    _OUT_OF_SCOPE_PLATFORMS = frozenset({"twitter", "tiktok"})
+    if status.platform in _OUT_OF_SCOPE_PLATFORMS and status.sample_count == 0:
+        status.verdict = "sparse"
+        status.reason = (
+            f"out-of-scope per rule #23 (4-platform focus is YT/FB/IG/Threads); "
+            f"zero samples in window is expected"
+        )
+        return
+
     if status.sample_count < _MIN_SAMPLE_COUNT:
         status.verdict = "sparse"
         status.reason = f"only {status.sample_count} sample(s) in window — waiting for more data"
