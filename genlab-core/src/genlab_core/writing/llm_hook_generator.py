@@ -896,22 +896,59 @@ def _critique_hook_grounded(hook: str, story: dict, niche_id: str) -> tuple[bool
         # threshold gate fires.
         from genlab_core.llm.prompt_cache import with_prompt_cache
 
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=80,
-            temperature=0.0,  # Deterministic — same hook+story → same verdict
-            system=with_prompt_cache(critic_system),
-            messages=[{"role": "user", "content": user}],
+        # 2026-07-21: OpenAI fallback on Anthropic exhaustion.
+        from genlab_core.llm.fallback import (
+            call_openai_fallback as _call_openai_fallback,
+            cb_is_open as _cb_is_open,
+            cb_record_exhaustion as _cb_record_exhaustion,
+            cb_record_success as _cb_record_success,
+            fallback_enabled as _fallback_enabled,
+            should_fallback as _should_fallback,
         )
 
-        # Cost tracking — match the pattern in other LLM call sites
-        try:
-            from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
+        _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        raw = ""
 
-            record_anthropic_usage("claude-haiku-4-5-20251001", response)
-        except Exception:
-            pass  # Cost tracking failures must NEVER block the critic
+        if _fallback_enabled() and _cb_is_open() and _openai_key:
+            raw = _call_openai_fallback(
+                critic_system, user, 80, 0.0, _openai_key
+            )
+        else:
+            try:
+                client = anthropic.Anthropic(api_key=api_key)
+                response = client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=80,
+                    temperature=0.0,  # Deterministic — same hook+story → same verdict
+                    system=with_prompt_cache(critic_system),
+                    messages=[{"role": "user", "content": user}],
+                )
+            except Exception as anthropic_exc:
+                if _fallback_enabled() and _should_fallback(anthropic_exc) and _openai_key:
+                    _cb_record_exhaustion()
+                    logger.warning(
+                        "[%s] hook_critic Anthropic %s → OpenAI fallback",
+                        niche_id,
+                        type(anthropic_exc).__name__,
+                    )
+                    raw = _call_openai_fallback(
+                        critic_system, user, 80, 0.0, _openai_key
+                    )
+                else:
+                    raise
+            else:
+                _cb_record_success()
+                # Cost tracking — match the pattern in other LLM call sites
+                try:
+                    from genlab_core.intelligence.cost_accumulator import (
+                        record_anthropic_usage,
+                    )
+
+                    record_anthropic_usage("claude-haiku-4-5-20251001", response)
+                except Exception:
+                    pass  # Cost tracking failures must NEVER block the critic
+
+                raw = response.content[0].text.strip() if response.content else ""
 
     except Exception as exc:
         # API error, network error, etc. — fail open BEFORE we've even
@@ -924,7 +961,7 @@ def _critique_hook_grounded(hook: str, story: dict, niche_id: str) -> tuple[bool
     # operators tell whether the critic is broken (api) vs misbehaving
     # (returning malformed JSON).
     try:
-        raw = response.content[0].text.strip() if response.content else ""
+        raw = raw.strip() if raw else ""
 
         # Be tolerant of LLM wrapping the JSON in code fences.
         if raw.startswith("```"):
@@ -1048,20 +1085,58 @@ def _rewrite_hook(
     )
 
     try:
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=80,
-            temperature=0.5,  # Lower than generation (0.7) — we want correction, not diversity
-            messages=[{"role": "user", "content": rewrite_prompt}],
+        # 2026-07-21: OpenAI fallback on Anthropic exhaustion.
+        from genlab_core.llm.fallback import (
+            call_openai_fallback as _call_openai_fallback,
+            cb_is_open as _cb_is_open,
+            cb_record_exhaustion as _cb_record_exhaustion,
+            cb_record_success as _cb_record_success,
+            fallback_enabled as _fallback_enabled,
+            should_fallback as _should_fallback,
         )
-        # Cost tracking — match the pattern in other LLM call sites.
-        try:
-            from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
 
-            record_anthropic_usage("claude-haiku-4-5-20251001", response)
-        except Exception:
-            pass  # Cost tracking failures must NEVER block the rewriter
+        _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        rewritten_raw = ""
+
+        if _fallback_enabled() and _cb_is_open() and _openai_key:
+            rewritten_raw = _call_openai_fallback(
+                "", rewrite_prompt, 80, 0.5, _openai_key
+            )
+        else:
+            try:
+                client = anthropic.Anthropic(api_key=api_key)
+                response = client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=80,
+                    temperature=0.5,  # Lower than generation (0.7) — we want correction, not diversity
+                    messages=[{"role": "user", "content": rewrite_prompt}],
+                )
+            except Exception as anthropic_exc:
+                if _fallback_enabled() and _should_fallback(anthropic_exc) and _openai_key:
+                    _cb_record_exhaustion()
+                    logger.warning(
+                        "[%s] hook_rewriter Anthropic %s → OpenAI fallback",
+                        niche_id,
+                        type(anthropic_exc).__name__,
+                    )
+                    rewritten_raw = _call_openai_fallback(
+                        "", rewrite_prompt, 80, 0.5, _openai_key
+                    )
+                else:
+                    raise
+            else:
+                _cb_record_success()
+                # Cost tracking — match the pattern in other LLM call sites.
+                try:
+                    from genlab_core.intelligence.cost_accumulator import (
+                        record_anthropic_usage,
+                    )
+
+                    record_anthropic_usage("claude-haiku-4-5-20251001", response)
+                except Exception:
+                    pass  # Cost tracking failures must NEVER block the rewriter
+
+                rewritten_raw = response.content[0].text
 
         logger.info(
             "[%s] Hook rewriter round invoked (round %d of %d, cumulative=%d)",
@@ -1071,7 +1146,7 @@ def _rewrite_hook(
             _attempts_used + 1,
         )
 
-        rewritten = response.content[0].text.strip().strip('"').strip("'")
+        rewritten = rewritten_raw.strip().strip('"').strip("'")
         rewritten = rewritten.replace("’", "'").replace("‘", "'")
         rewritten = rewritten.replace("“", '"').replace("”", '"')
         if len(rewritten) > 60:
@@ -1204,19 +1279,53 @@ def generate_platform_hooks(
     user = f"Base hook: {base_hook}\nStory: {title}"
 
     try:
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=200,
-            temperature=0.6,
-            messages=[{"role": "user", "content": user}],
-            system=system,
+        # 2026-07-21: OpenAI fallback on Anthropic exhaustion.
+        from genlab_core.llm.fallback import (
+            call_openai_fallback as _call_openai_fallback,
+            cb_is_open as _cb_is_open,
+            cb_record_exhaustion as _cb_record_exhaustion,
+            cb_record_success as _cb_record_success,
+            fallback_enabled as _fallback_enabled,
+            should_fallback as _should_fallback,
         )
-        from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
 
-        record_anthropic_usage("claude-haiku-4-5-20251001", response)  # U-03
+        _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        text = ""
 
-        text = response.content[0].text.strip()
+        if _fallback_enabled() and _cb_is_open() and _openai_key:
+            text = _call_openai_fallback(system, user, 200, 0.6, _openai_key)
+        else:
+            try:
+                client = anthropic.Anthropic(api_key=api_key)
+                response = client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=200,
+                    temperature=0.6,
+                    messages=[{"role": "user", "content": user}],
+                    system=system,
+                )
+            except Exception as anthropic_exc:
+                if _fallback_enabled() and _should_fallback(anthropic_exc) and _openai_key:
+                    _cb_record_exhaustion()
+                    logger.warning(
+                        "[%s] platform_hooks Anthropic %s → OpenAI fallback",
+                        niche_id,
+                        type(anthropic_exc).__name__,
+                    )
+                    text = _call_openai_fallback(system, user, 200, 0.6, _openai_key)
+                else:
+                    raise
+            else:
+                _cb_record_success()
+                from genlab_core.intelligence.cost_accumulator import (
+                    record_anthropic_usage,
+                )
+
+                record_anthropic_usage("claude-haiku-4-5-20251001", response)  # U-03
+
+                text = response.content[0].text
+
+        text = text.strip() if text else ""
         result = {}
         for line in text.split("\n"):
             line = line.strip()
