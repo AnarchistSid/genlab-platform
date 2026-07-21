@@ -687,8 +687,17 @@ class PublishingQueueManager:
         try:
             record = self.client.blueprints.get(record_id)
             return (record.get("fields", {}).get("niche_id") or "").strip()
-        except Exception:
-            logger.debug("[QUEUE] Could not fetch niche_id for %s", record_id)
+        except Exception as exc:
+            # 2026-07-21 (rule #19): elevated from DEBUG. Returning "" on
+            # failure means niche-scoped downstream logic treats the
+            # blueprint as niche-less — can break per-niche filters and
+            # daily-cap accounting.
+            logger.warning(
+                "[QUEUE] Could not fetch niche_id for %s: %s",
+                record_id,
+                exc,
+                exc_info=True,
+            )
         return ""
 
     def _get_scheduled_for(self, record_id: str) -> str | None:
@@ -697,8 +706,21 @@ class PublishingQueueManager:
             record = self.client.blueprints.get(record_id)
             val = record.get("fields", {}).get("scheduled_for", "")
             return val if val else None
-        except Exception:
-            logger.debug("[QUEUE] Could not check scheduled_for for %s", record_id)
+        except Exception as exc:
+            # 2026-07-21 (rule #19): elevated — critical safety path.
+            # Returning None on failure means the caller thinks the
+            # blueprint is UNscheduled and may allow demoting/rejecting
+            # it, violating cleanup_safety.md "scheduled posts are
+            # sacred" invariant. WARN so operator sees the hit + can
+            # investigate before a scheduled post gets clobbered.
+            logger.warning(
+                "[QUEUE] Could not check scheduled_for for %s: %s "
+                "(defaulting None — CAUTION: cleanup_safety.md relies "
+                "on this being accurate)",
+                record_id,
+                exc,
+                exc_info=True,
+            )
         return None
 
     def hold(

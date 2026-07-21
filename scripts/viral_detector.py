@@ -267,7 +267,14 @@ def detect_viral(
                         mem_hash = _make_hash(text)
                         _flag_viral(mem_hash, multiplier, platform)
                     except Exception as e:
-                        logger.debug("Could not flag viral in memory: %s", e)
+                        # 2026-07-21 (rule #19): elevated from DEBUG.
+                        # Load-bearing for learning capability #3 —
+                        # silent write failure means the bandit misses
+                        # a viral signal + can't reinforce winning
+                        # patterns.
+                        logger.warning(
+                            "Could not flag viral in memory: %s", e, exc_info=True
+                        )
 
                     _send_notification(
                         f"VIRAL on {platform.upper()}",
@@ -297,7 +304,13 @@ def detect_viral(
                         mem_hash = _make_hash(text)
                         _flag_viral(mem_hash, multiplier, platform)
                     except Exception as e:
-                        logger.debug("Could not flag trending in memory: %s", e)
+                        # 2026-07-21 (rule #19): elevated from DEBUG.
+                        # Same rationale as the viral branch above —
+                        # trending is a weaker signal but still feeds
+                        # the learning loop.
+                        logger.warning(
+                            "Could not flag trending in memory: %s", e, exc_info=True
+                        )
 
                     _send_notification(
                         f"Trending on {platform.upper()}",
