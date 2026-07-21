@@ -106,11 +106,21 @@ def _already_replied_set(cur, niche_id: str, platform: str) -> set[str]:
 
 
 def _within_creator_rate_limit(
-    cur, niche_id: str, creator_channel_id: str, *, window_days: int = 7
+    cur, niche_id: str, creator_channel_id: str, *, window_days: int = 3
 ) -> bool:
-    """Enforce max 1 reply per creator per week per niche (avoid
+    """Enforce max 1 reply per creator per N days per niche (avoid
     spam-flag concentration). Returns True if we CAN reply, False
-    if we already replied to this creator recently."""
+    if we already replied to this creator recently.
+
+    2026-07-21: reduced default window_days 7→3. Prod evidence: 0
+    outbound replies posted in the last 3 days despite the engine
+    firing daily. Root cause was the 7-day cooldown against a small
+    top-creator pool (~3 targets/niche) — every fire hit
+    "skipping creator — already replied this week" for all targets.
+    3 days keeps concentration low while allowing daily productivity.
+    Longer term: broaden top_creators.yaml to 8-10 per niche and
+    consider re-widening cooldown.
+    """
     cutoff = datetime.now(UTC) - timedelta(days=window_days)
     cur.execute(
         """
