@@ -232,3 +232,97 @@ class TestSharedStateAcrossSites:
         # Site X succeeds → CB closes for everyone
         cb_record_success()
         assert cb_is_open() is False
+
+
+class TestBothProvidersExhausted:
+    """The 2026-07-21 live scenario: Anthropic AND OpenAI both exhausted.
+    Pin the behavior so a future refactor doesn't accidentally swallow
+    the OpenAI failure OR the Anthropic failure — operator needs BOTH
+    surfaced in one journal entry."""
+
+    def test_openai_also_fails_re_raises_original_anthropic(self, monkeypatch):
+        """When OpenAI fallback ALSO fails, re-raise the ORIGINAL
+        Anthropic exception (not the OpenAI one). Downstream error
+        classifiers were built against Anthropic exceptions; if we
+        swap in the OpenAI exception mid-flight they misclassify
+        the failure."""
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+
+        anthropic_exc = Exception("credit balance is too low")
+        openai_exc = Exception("You exceeded your current quota (429)")
+
+        def failing_anthropic():
+            raise anthropic_exc
+
+        with patch(
+            "genlab_core.llm.fallback.call_openai_fallback",
+            side_effect=openai_exc,
+        ):
+            with pytest.raises(Exception) as exc_info:
+                with_openai_fallback(
+                    failing_anthropic,
+                    system="s",
+                    user="u",
+                    max_tokens=100,
+                    temperature=0.5,
+                    site_label="test-both-exhausted",
+                )
+
+        # Original Anthropic error is re-raised (not the OpenAI 429).
+        # `from openai_exc` attaches the OpenAI cause on __cause__ so
+        # `logger.exception` still surfaces both in traceback.
+        assert str(exc_info.value) == "credit balance is too low"
+        assert exc_info.value.__cause__ is openai_exc
+
+    def test_exhaustion_still_counted_when_openai_also_fails(self, monkeypatch):
+        """Even when the OpenAI fallback fails, the Anthropic exhaustion
+        counter must still increment — this is what shortcuts subsequent
+        calls to the CB-open fast path, saving Anthropic burn."""
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+
+        def failing_anthropic():
+            raise Exception("credit balance is too low")
+
+        with patch(
+            "genlab_core.llm.fallback.call_openai_fallback",
+            side_effect=Exception("openai also down"),
+        ):
+            for _ in range(3):
+                try:
+                    with_openai_fallback(
+                        failing_anthropic,
+                        system="s",
+                        user="u",
+                        max_tokens=100,
+                        temperature=0.5,
+                    )
+                except Exception:
+                    pass
+        # CB should be open after 3 counted exhaustions
+        assert cb_is_open() is True
+
+
+class TestCBCooldownExpiry:
+    """The CB is TIME-BOUNDED (opens for _CB_COOLDOWN_S seconds).
+    Pin that it auto-closes after cooldown — this is what lets
+    Anthropic recovery be detected automatically without operator
+    intervention."""
+
+    def test_cb_auto_closes_after_cooldown_deadline(self):
+        """Set the deadline in the past → CB reports closed."""
+        fb_module._ANTHROPIC_CB_OPEN_UNTIL = time.time() - 1
+        assert cb_is_open() is False, (
+            "expired CB deadline must report as closed — otherwise "
+            "Anthropic recovery is invisible until process restart"
+        )
+
+    def test_cb_open_at_current_time_still_open(self):
+        """Deadline strictly in the future = still open."""
+        fb_module._ANTHROPIC_CB_OPEN_UNTIL = time.time() + 300
+        assert cb_is_open() is True
+
+    def test_cb_default_cooldown_is_600s(self):
+        """The 600s (10-min) cooldown is the operator-facing latency
+        budget — how quickly Anthropic recovery gets picked up.
+        Bumping this needs a deliberate operator decision."""
+        assert fb_module._CB_COOLDOWN_S == 600
