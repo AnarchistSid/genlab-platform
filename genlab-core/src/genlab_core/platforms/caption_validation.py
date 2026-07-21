@@ -85,8 +85,22 @@ def validate_caption_has_attribution(
     string suitable for logging into compliance_events.
     """
     lowered = (caption or "").lower()
-    if _MARKER_ORIGINAL in lowered or _MARKER_FOOTAGE in lowered:
-        return (True, None)
+    # 2026-07-21 Agent 1 side-finding: substring-only check accepts
+    # truncated markers like `🎬 Original: @` (empty handle) or
+    # `🎬 Original: @OpenAI —` (missing URL). Live-observed in tonight's
+    # 4 scheduled blueprints: gaming + sports have NO marker (blocked),
+    # ai_creators has `@OpenAI` handle but empty URL (passes lax check).
+    # Now require at least ONE non-whitespace character after the
+    # marker (handle OR URL). Retains substring compatibility for
+    # legit variants like `🎬 Original creator: @X`.
+    for marker in (_MARKER_ORIGINAL, _MARKER_FOOTAGE):
+        idx = lowered.find(marker)
+        if idx == -1:
+            continue
+        tail = lowered[idx + len(marker):].strip()
+        # Must have SOMETHING after marker beyond a bare '@' handle-prefix
+        if len(tail) >= 3 and tail != "@":
+            return (True, None)
     return (False, "missing_attribution_line")
 
 

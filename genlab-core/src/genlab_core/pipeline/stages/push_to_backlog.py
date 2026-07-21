@@ -2595,6 +2595,18 @@ class PushToBacklog:
                         # into the field set so they persist.
                         "virality_score": story.get("virality_score", 0.0),
                         "virality_features": json.dumps(story.get("virality_features", {})),
+                        # 2026-07-21 Agent 2 finding: QCGates writes
+                        # `story["validation_status"]` in-memory at
+                        # qc_gates.py:157, and auto_approval_gate reads
+                        # `extra.get("validation_status")` at :243 (the
+                        # qc_passed check). But this fields dict never
+                        # persisted the field — reader always got None
+                        # → gate degraded to `qc_unknown` fallback for
+                        # every blueprint × every niche × entire lifetime
+                        # of loop-2 auto-approval. Serialize as JSON
+                        # since validation_status is a dict (matches
+                        # virality_features pattern above).
+                        "validation_status": json.dumps(story.get("validation_status") or {}),
                         # Granular origin (espn_news, youtube_trending, scorebat,
                         # rss, twitch_trending, ...). Previously only the derived
                         # `topic` was stored, so blueprints.source was always

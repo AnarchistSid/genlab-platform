@@ -437,3 +437,45 @@ def test_tiktok_block_branch_raises(monkeypatch):
                 "/tmp/test-l4-block.mp4",
                 "Just a plain caption. No credit line at all.",
             )
+
+
+class TestTruncatedMarkerRejection:
+    """2026-07-21 (Agent 1 side-finding): substring-only check was
+    accepting truncated markers like `🎬 Original: @` with no handle.
+    Live-observed in scheduled blueprints. Tightened to reject when
+    tail after marker is empty OR just a bare '@' prefix."""
+
+    def test_bare_at_symbol_rejected(self):
+        """Tail = '@' → rejected (Agent 1's live-observed case)."""
+        from genlab_core.platforms.caption_validation import (
+            validate_caption_has_attribution,
+        )
+        ok, reason = validate_caption_has_attribution("check this out 🎬 Original: @")
+        assert ok is False
+        assert reason == "missing_attribution_line"
+
+    def test_marker_alone_rejected(self):
+        """Tail is empty → rejected."""
+        from genlab_core.platforms.caption_validation import (
+            validate_caption_has_attribution,
+        )
+        ok, _ = validate_caption_has_attribution("check this out 🎬 Original:")
+        assert ok is False
+
+    def test_short_handle_still_accepted(self):
+        """Tail with real 3+ char content → accepted."""
+        from genlab_core.platforms.caption_validation import (
+            validate_caption_has_attribution,
+        )
+        ok, _ = validate_caption_has_attribution("great video 🎬 Original: @xyz")
+        assert ok is True
+
+    def test_url_only_accepted(self):
+        """Tail with just a URL (no @-handle) → accepted."""
+        from genlab_core.platforms.caption_validation import (
+            validate_caption_has_attribution,
+        )
+        ok, _ = validate_caption_has_attribution(
+            "nice moment 🎬 Original: https://youtube.com/watch?v=abc"
+        )
+        assert ok is True
