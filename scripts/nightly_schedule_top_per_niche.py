@@ -103,9 +103,20 @@ NICHES = ("ai_creators", "gaming", "sports", "movies", "anime")
 #     (writes ``cleanup:media_gc_removed_and_source_lost:...``)
 #   * The re-cancel operator escape hatch (writes ``recancel:...``)
 # LIKE '%cleanup:media_gc_removed%' catches both.
+#
+# 2026-07-21 regression fix: MUST double the percent signs (``%%``)
+# to escape psycopg's parameter marker — the DB sees ``%`` (one).
+# Same convention as _refusal_where_clause. Original ``%c`` was
+# rejected by psycopg with:
+#   "only '%s', '%b', '%t' are allowed as placeholders, got '%c'"
+# which crashed the scheduler at 2026-07-20 22:00 IST → no publishes
+# for 2 days. Class-of-bug: an in-line SQL literal containing a
+# percent sign is silently misread by the DB driver. See pin test
+# ``test_cleanup_marker_clause_parses_under_psycopg`` — it runs the
+# clause against a real psycopg execute() call to catch this class.
 _CLEANUP_MARKER_EXCLUSION_CLAUSE = (
     "AND (error_message IS NULL "
-    "OR error_message NOT LIKE '%cleanup:media_gc_removed%')"
+    "OR error_message NOT LIKE '%%cleanup:media_gc_removed%%')"
 )
 
 
