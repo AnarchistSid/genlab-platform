@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import genlab_core.writing.llm_client as llm_client_module
+import genlab_core.llm.fallback as llm_client_module  # shared CB state lives here now
 from genlab_core.writing.llm_client import (
     AnthropicLLMClient,
     _is_exhaustion_error,
@@ -27,7 +27,9 @@ from genlab_core.writing.llm_client import (
 @pytest.fixture(autouse=True)
 def _reset_circuit_breaker():
     """Clear module-level CB state between tests so ordering doesn't
-    contaminate assertions."""
+    contaminate assertions. Resets the SHARED state in
+    ``genlab_core.llm.fallback`` (moved 2026-07-21 for cross-site
+    sharing) — ``llm_client`` module now re-exports these names."""
     llm_client_module._ANTHROPIC_EXHAUSTION_COUNT = 0
     llm_client_module._ANTHROPIC_CB_OPEN_UNTIL = 0.0
     yield

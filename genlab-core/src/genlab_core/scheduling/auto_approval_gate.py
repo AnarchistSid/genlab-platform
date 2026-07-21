@@ -585,24 +585,80 @@ def _llm_judge_borderline(
         # auto-skips (zero behavior change).
         from genlab_core.llm.prompt_cache import with_prompt_cache
 
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model=model,
-            max_tokens=80,
-            temperature=0.0,  # Deterministic verdict for the same inputs
-            system=with_prompt_cache(judge_system),
-            messages=[{"role": "user", "content": signals}],
+        # 2026-07-21: fallback to OpenAI on Anthropic exhaustion. The LLM
+        # judge is the highest-stakes call in the pipeline (its verdict
+        # ships content); losing it during Anthropic outages means
+        # falling back to rule-based scoring for every borderline
+        # decision. Shared circuit breaker via `genlab_core.llm.fallback`
+        # so this counts toward the same exhaustion budget as other
+        # sites — total Anthropic burn is bounded.
+        from genlab_core.llm.fallback import (
+            call_openai_fallback,
+            cb_is_open,
+            cb_record_exhaustion,
+            cb_record_success,
+            fallback_enabled,
+            should_fallback,
         )
 
-        # Cost tracking — match the pattern used elsewhere
-        try:
-            from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
+        openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        cached_judge_system = with_prompt_cache(judge_system)
+        raw = ""
 
-            record_anthropic_usage(model, response)
-        except Exception:
-            pass  # Cost tracking failures MUST NOT block the judge
+        if fallback_enabled() and cb_is_open() and openai_key:
+            # CB-open fast path: straight to OpenAI, no Anthropic attempt.
+            logger.debug("[gate] LLM judge CB open — routing to OpenAI")
+            raw = call_openai_fallback(
+                judge_system,
+                signals,
+                max_tokens=80,
+                temperature=0.0,
+                api_key=openai_key,
+            )
+        else:
+            try:
+                client = anthropic.Anthropic(api_key=api_key)
+                response = client.messages.create(
+                    model=model,
+                    max_tokens=80,
+                    temperature=0.0,  # Deterministic verdict for the same inputs
+                    system=cached_judge_system,
+                    messages=[{"role": "user", "content": signals}],
+                )
+            except Exception as anthropic_exc:
+                if not (fallback_enabled() and should_fallback(anthropic_exc) and openai_key):
+                    # Re-raise — either not exhaustion-class, fallback disabled,
+                    # or OpenAI not configured. Outer try/except in this fn
+                    # catches + returns None → judge disabled for this call.
+                    raise
+                cb_record_exhaustion()
+                logger.warning(
+                    "[gate] LLM judge Anthropic %s → OpenAI fallback: %s",
+                    type(anthropic_exc).__name__,
+                    str(anthropic_exc)[:120],
+                )
+                raw = call_openai_fallback(
+                    judge_system,
+                    signals,
+                    max_tokens=80,
+                    temperature=0.0,
+                    api_key=openai_key,
+                )
+            else:
+                cb_record_success()
+                # Cost tracking — match the pattern used elsewhere
+                try:
+                    from genlab_core.intelligence.cost_accumulator import (
+                        record_anthropic_usage,
+                    )
 
-        raw = response.content[0].text.strip() if response.content else ""
+                    record_anthropic_usage(model, response)
+                except Exception:
+                    pass  # Cost tracking failures MUST NOT block the judge
+
+                raw = response.content[0].text.strip() if response.content else ""
+
+        raw = raw.strip() if raw else ""
         if raw.startswith("```"):
             raw = raw.strip("`").strip()
             if raw.startswith("json"):

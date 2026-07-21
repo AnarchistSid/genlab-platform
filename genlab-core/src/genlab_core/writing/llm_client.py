@@ -43,114 +43,36 @@ from __future__ import annotations
 
 import logging
 import os
-import time
 
-logger = logging.getLogger(__name__)
-
-
-# Fallback observability + circuit-breaker state. Module-level so state
-# persists across writer invocations within one process (typical: 5-30
-# writer calls per pipeline run per niche).
-_ANTHROPIC_EXHAUSTION_COUNT: int = 0
-_ANTHROPIC_CB_OPEN_UNTIL: float = 0.0
-_CB_THRESHOLD: int = 3
-_CB_COOLDOWN_S: int = 600  # 10 min
-
-# Sentinel strings that identify Anthropic-side credit exhaustion vs
-# other errors. Anthropic returns this as BadRequestError (400) with
-# a body message. Rate limits are RateLimitError (429). Both should
-# trigger fallback.
-_ANTHROPIC_EXHAUSTION_MARKERS = (
-    "credit balance is too low",
-    "credit balance too low",
-    "insufficient credits",
-    "insufficient_quota",
+# 2026-07-21 refactor: fallback machinery moved to genlab_core.llm.fallback
+# so all 8 Anthropic-direct sites share ONE circuit breaker (otherwise
+# each site would need 3 exhaustions before its own CB opens = 24 total
+# exhaustion attempts before any site stops trying).
+#
+# The `_call_openai_fallback` / `_is_exhaustion_error` / `_cb_*` /
+# `_fallback_enabled` names are re-exported here so tests +
+# call-site code that predates the extraction keep working. New sites
+# should import directly from `genlab_core.llm.fallback`.
+from genlab_core.llm.fallback import (
+    call_openai_fallback as _call_openai_fallback,
+)
+from genlab_core.llm.fallback import (
+    cb_is_open as _cb_is_open,
+)
+from genlab_core.llm.fallback import (
+    cb_record_exhaustion as _cb_record_exhaustion,
+)
+from genlab_core.llm.fallback import (
+    cb_record_success as _cb_record_success,
+)
+from genlab_core.llm.fallback import (
+    fallback_enabled as _fallback_enabled,
+)
+from genlab_core.llm.fallback import (
+    should_fallback as _is_exhaustion_error,
 )
 
-
-def _is_exhaustion_error(exc: Exception) -> bool:
-    """True when the exception clearly indicates Anthropic exhaustion
-    or rate-limit (fallback-worthy). False for auth / network / other
-    errors that OpenAI can't help with."""
-    exc_name = type(exc).__name__
-    # RateLimitError from anthropic SDK: always fallback-worthy
-    if exc_name in ("RateLimitError", "APIStatusError"):
-        return True
-    msg = str(exc).lower()
-    return any(marker in msg for marker in _ANTHROPIC_EXHAUSTION_MARKERS)
-
-
-def _cb_is_open() -> bool:
-    """True if the Anthropic circuit breaker is currently open (skip
-    the Anthropic attempt, go straight to OpenAI)."""
-    return time.time() < _ANTHROPIC_CB_OPEN_UNTIL
-
-
-def _cb_record_exhaustion() -> None:
-    """Increment exhaustion counter. Open the breaker if we hit
-    threshold. Idempotent within a single process."""
-    global _ANTHROPIC_EXHAUSTION_COUNT, _ANTHROPIC_CB_OPEN_UNTIL
-    _ANTHROPIC_EXHAUSTION_COUNT += 1
-    if _ANTHROPIC_EXHAUSTION_COUNT >= _CB_THRESHOLD:
-        _ANTHROPIC_CB_OPEN_UNTIL = time.time() + _CB_COOLDOWN_S
-        logger.warning(
-            "[llm-fallback] Anthropic circuit breaker OPEN for %ds after "
-            "%d consecutive exhaustion errors — routing writer calls "
-            "directly to OpenAI",
-            _CB_COOLDOWN_S,
-            _ANTHROPIC_EXHAUSTION_COUNT,
-        )
-
-
-def _cb_record_success() -> None:
-    """Reset the counter + close the breaker on any successful call."""
-    global _ANTHROPIC_EXHAUSTION_COUNT, _ANTHROPIC_CB_OPEN_UNTIL
-    if _ANTHROPIC_EXHAUSTION_COUNT > 0 or _ANTHROPIC_CB_OPEN_UNTIL > 0:
-        logger.info(
-            "[llm-fallback] Anthropic recovered — resetting circuit "
-            "breaker (was %d consecutive exhaustions)",
-            _ANTHROPIC_EXHAUSTION_COUNT,
-        )
-    _ANTHROPIC_EXHAUSTION_COUNT = 0
-    _ANTHROPIC_CB_OPEN_UNTIL = 0.0
-
-
-def _fallback_enabled() -> bool:
-    """Env-flag opt-in (default ON). Operator can disable if OpenAI
-    budget also runs dry, so we don't cascade a second outage."""
-    return os.environ.get("GENLAB_LLM_FALLBACK_ENABLED", "1").strip() != "0"
-
-
-def _call_openai_fallback(
-    system: str,
-    user: str,
-    max_tokens: int,
-    temperature: float,
-    api_key: str,
-) -> str:
-    """Call OpenAI GPT-4o-mini as writer fallback. Mirror shape of
-    ``genlab_core.llm.router._call_openai``. Reuses cost accumulator
-    so fallback spend is visible on the same ledger.
-    """
-    import openai  # noqa: PLC0415 — lazy so tests without openai still import
-
-    client = openai.OpenAI(api_key=api_key)
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        max_tokens=max_tokens,
-        temperature=temperature,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-    )
-    try:
-        from genlab_core.intelligence.cost_accumulator import record_openai_usage
-
-        record_openai_usage("gpt-4o-mini", response)
-    except Exception:  # noqa: BLE001 — cost tracking never blocks
-        pass
-    return response.choices[0].message.content
+logger = logging.getLogger(__name__)
 
 
 class AnthropicLLMClient:
