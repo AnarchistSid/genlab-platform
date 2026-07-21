@@ -122,12 +122,36 @@ class ViralityScoring:
         )
         if not isinstance(virality_cfg, dict):
             virality_cfg = {}
+
+        # 2026-07-21: defensive WARN when a non-ai_creators niche falls
+        # back to DEFAULT_PATTERNS. Silent fallback here caused months
+        # of virality_score=0.0 on sports/gaming/movies/anime → blueprints
+        # gate-rejected → stuck at VISUAL_READY. DEFAULT_PATTERNS are
+        # AI-industry vocabulary; only ai_creators content matches them.
+        # This WARN alerts operators immediately when a new niche is
+        # added without its own virality_scoring section (rule #17 sibling
+        # — never elevate silent fallback to fail-open without a log).
+        patterns_override = virality_cfg.get("patterns")
+        if not patterns_override:
+            niche_id = context.get("niche_id", "unknown")
+            if niche_id != "ai_creators":
+                logger.warning(
+                    "[ViralityScoring] niche=%s has NO virality_scoring.patterns "
+                    "override — falling back to AI-industry DEFAULT_PATTERNS "
+                    "which will not match this niche's vocabulary. Every "
+                    "blueprint will likely score 0.0 and be gate-rejected. "
+                    "Add a virality_scoring: section to the niche's "
+                    "scoring_weights.yaml. See ClutchWire/config/"
+                    "scoring_weights.yaml for the reference shape.",
+                    niche_id,
+                )
+
         weights = virality_cfg.get("weights") or (
             virality_cfg
             if all(isinstance(v, (int, float)) for v in virality_cfg.values())
             else DEFAULT_WEIGHTS
         )
-        patterns = _compile_patterns(virality_cfg.get("patterns"))
+        patterns = _compile_patterns(patterns_override)
 
         scored = 0
         total_score = 0.0
