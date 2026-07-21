@@ -47,8 +47,20 @@ def _fetch_trending_movie_ids(api_key: str, max_movies: int = 20) -> list[dict]:
             timeout=15,
         )
         r.raise_for_status()
+        # 2026-07-21 Agent-1 fix: also propagate `overview` (movie plot
+        # summary from TMDB). Without it, every movies story got an empty
+        # summary field → fell below the 40-char writable-context floor
+        # in base_writing._has_writable_context → marked _skip_llm=True
+        # → dropped in push_to_backlog. Result: 100% zero blueprints for
+        # movies for months. `overview` is present in the trending
+        # response body — free lift.
         return [
-            {"id": m["id"], "title": m.get("title", ""), "release_date": m.get("release_date", "")}
+            {
+                "id": m["id"],
+                "title": m.get("title", ""),
+                "release_date": m.get("release_date", ""),
+                "overview": m.get("overview", ""),
+            }
             for m in r.json().get("results", [])[:max_movies]
         ]
     except Exception as e:
@@ -90,6 +102,12 @@ def _fetch_movie_trailer_ids(api_key: str, movie_ids: list[dict]) -> list[dict]:
                             "release_date": movie.get("release_date", ""),
                             "source": "tmdb_trailer",
                             "_trending_video": True,
+                            # 2026-07-21 Agent-1 fix: carry `overview`
+                            # forward so downstream story.summary is
+                            # populated (see _fetch_trending_movie_ids
+                            # comment). Empty string preserves behavior
+                            # when TMDB omits overview for the movie.
+                            "overview": movie.get("overview", ""),
                         }
                     )
                     break  # Take first official trailer per movie
@@ -153,7 +171,10 @@ class FetchTMDBTrailers(FetcherStage):
                         "canonical_url": t["url"],
                         "published_at": t.get("release_date") or now_iso,
                         "fetched_at": now_iso,
-                        "summary": "",
+                        # 2026-07-21 Agent-1 fix: was hardcoded to ""
+                        # → all movies fell below the 40-char writable-
+                        # context floor → 100% zero_blueprints.
+                        "summary": (t.get("overview") or "")[:300],
                         "video_id": t["video_id"],
                         "video_source": "tmdb_trailer",
                         "niche_id": niche_id,

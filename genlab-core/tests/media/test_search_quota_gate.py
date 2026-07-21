@@ -57,11 +57,15 @@ def _sample_video(vid: str = "abc123") -> TrendingVideo:
 
 
 def test_can_afford_respects_ceiling(state_file: Path) -> None:
-    # daily_quota=200 -> hard_stop = int(200 * 0.98) = 196.
+    # 2026-07-21: HARD_STOP_PCT bumped 0.98 → 1.00 on 2026-07-16 (see
+    # youtube_quota.py:88 history comment). Test updated to match.
+    # daily_quota=200 -> hard_stop = int(200 * 1.00) = 200.
     t = YouTubeQuotaTracker(state_path=state_file, daily_quota=200)
-    assert t.can_afford("search") is True  # 0 + 100 <= 196
+    assert t.can_afford("search") is True  # 0 + 100 <= 200
     t.record("search")  # used = 100
-    assert t.can_afford("search") is False  # 100 + 100 = 200 > 196
+    assert t.can_afford("search") is True  # 100 + 100 = 200 exactly, not >
+    t.record("search")  # used = 200
+    assert t.can_afford("search") is False  # 200 + 100 > 200
 
 
 def test_can_afford_unknown_op_is_free(state_file: Path) -> None:

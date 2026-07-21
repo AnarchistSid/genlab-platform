@@ -125,6 +125,13 @@ _PATTERNS: dict[str, list[re.Pattern]] = {
             r"2207026",  # IG container expired
             r"2207076",  # IG "video file not supported" — transient Meta processor issue
             r"2207077",  # IG "media upload failed" — transient CDN/processor issue
+            # 2026-07-21 Agent-2 fix: 2207082 = Meta "media upload has
+            # failed" (aliased downstream retryable event). Dominant IG
+            # failure in prod PA over last 30d (13 of 28 IG FAILED rows).
+            # Was falling through to UNKNOWN default which retry_pass
+            # DOES retry, but this makes intent explicit + matches the
+            # 2207076/2207077 sibling class.
+            r"2207082",  # IG "media upload has failed" — Meta CDN-side transient
             r"container.*(?:expired|timed?\s*out|processing.*error)",
             r"Publish timed out",
             r"NameResolutionError",  # DNS failure — transient

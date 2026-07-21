@@ -1248,7 +1248,19 @@ class FetchTrendingVideos(FetcherStage):
                           AND status = 'available'
                           AND video_url IS NOT NULL AND video_url != ''
                         ORDER BY view_velocity DESC NULLS LAST, fetched_at DESC
-                        LIMIT 20
+                        -- 2026-07-21 Agent-2 fix: bumped 20 → 60.
+                        -- Prod audit found 695 of 795 pool items rot
+                        -- per week (87% waste). Gaming/movies/sports
+                        -- were saturating the LIMIT=20 cap daily
+                        -- (verified: 20/20/20 claims yesterday).
+                        -- Downstream DailyCapEnforcer still enforces
+                        -- 1 publish/channel/day, so bumping the fetch
+                        -- LIMIT just gives the ranking layer more
+                        -- candidates to sort by view_velocity DESC.
+                        -- Throughput multiplier: ~3× for saturating
+                        -- niches, no impact on ai_creators/anime
+                        -- (already under the cap).
+                        LIMIT 60
                         FOR UPDATE SKIP LOCKED
                         """,
                         (niche_id,),
