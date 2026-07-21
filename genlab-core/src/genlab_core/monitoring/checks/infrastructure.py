@@ -499,6 +499,91 @@ def check_git_drift() -> list[Alert]:
     return alerts
 
 
+def check_git_ownership_drift() -> list[Alert]:
+    """Detect files in ``/opt/genlab/.git/`` not owned by ``genlab:genlab``.
+
+    Class-of-bug shipped 2026-07-19 + 2026-07-21 (this session): git
+    commands run via ``sudo git`` or as root leave objects with
+    ``root:root`` ownership. Subsequent ``sudo -u genlab git fetch``
+    fails with:
+
+        error: insufficient permission for adding an object to
+        repository database .git/objects
+        fatal: failed to write object
+        fatal: unpack-objects failed
+
+    This blocked deploy for ~40 min today when 365 objects had drifted
+    to root ownership since July 17. Manual `chown -R genlab:genlab
+    /opt/genlab/.git` restored the state, but the drift is recurring
+    (41 files 2026-07-18 → 2 files 2026-07-19 → 365 files today).
+    Detection here means operator sees the drift BEFORE it blocks
+    the next deploy.
+
+    Thresholds:
+      * ≥ 1 non-genlab-owned file → WARNING (early signal)
+      * ≥ 100 non-genlab-owned files → CRITICAL (deploy-blocking imminent)
+
+    Fail-open on any error (git dir missing / permission-denied on
+    the check itself / etc.) — never crash the monitor loop.
+    """
+    alerts: list[Alert] = []
+    project_root = os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab")
+    git_dir = f"{project_root}/.git"
+
+    try:
+        # `find ... -not -group genlab -o -not -user genlab | wc -l`
+        # gives us a fast count without materialising the full list.
+        # Use ! -group + ! -user with OR semantics (default) — matches
+        # any file where EITHER user or group is wrong.
+        result = subprocess.run(
+            [
+                "find",
+                git_dir,
+                "-not",
+                "-group",
+                "genlab",
+                "-o",
+                "-not",
+                "-user",
+                "genlab",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            # find failed — could be missing .git, permission denied on
+            # some paths (we run as any user, not necessarily root), etc.
+            # Silent skip; not worth alarming on tooling failure.
+            return alerts
+
+        lines = [ln for ln in result.stdout.split("\n") if ln.strip()]
+        count = len(lines)
+        if count == 0:
+            return alerts
+
+        severity = "critical" if count >= 100 else "warning"
+        # Sample 3 paths for the details payload so operator can spot-
+        # check what got drifted.
+        sample = lines[:3]
+        alerts.append(
+            Alert(
+                check="git_ownership_drift",
+                severity=severity,
+                message=(
+                    f"{count} file(s) in {git_dir} not owned by genlab:genlab "
+                    f"— next `sudo -u genlab git fetch` will hit "
+                    f"'insufficient permission' + block deploy"
+                ),
+                details={"count": count, "sample": sample, "git_dir": git_dir},
+                auto_fix=f"sudo chown -R genlab:genlab {git_dir}",
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 — monitor must never crash
+        logger.debug("[check_git_ownership_drift] failed: %s", exc)
+    return alerts
+
+
 def check_swap() -> list[Alert]:
     """Check if swap usage is high AND RAM is also under pressure.
 
