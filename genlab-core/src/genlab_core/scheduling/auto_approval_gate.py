@@ -435,6 +435,39 @@ def evaluate(
         # judge doesn't drown the logs.
         logger.debug("[gate] LLM judge raised (using rule-based decision): %s", exc)
 
+    # 2026-07-21: shadow-mode ensemble persistence. Every gate evaluation
+    # also invokes ensemble_decide which records per-component votes to
+    # `ensemble_votes` (via ensemble_persist.record_decision). Pre-fix,
+    # ensemble data only accrued from dashboard preview clicks — 7 total
+    # rows in 6 weeks. Now every publish attempt + gate evaluation writes
+    # a row, expected 10-100x throughput.
+    #
+    # Safe by construction:
+    # - ensemble_decide is env-flag-gated (`GENLAB_ENSEMBLE_DECISION_
+    #   ENABLED`); disabled state returns neutral EnsembleDecision.
+    # - Every component vote (`_vote_bandit`, `_vote_hook_classifier`,
+    #   etc.) is itself try/except with fail-open.
+    # - LLM judge path is NOT enabled here (enable_llm_judge=False) —
+    #   no LLM cost path from the gate's shadow call.
+    # - Bare except so ensemble import/adapter failures NEVER block the
+    #   gate. Rule #19: WARN with exc_info so operator sees it.
+    try:
+        from genlab_core.scheduling.ensemble_decide import ensemble_decide
+
+        niche_id_for_ensemble = (blueprint.get("niche_id") or "").strip()
+        # Fire + forget — ensemble_decide records to ensemble_votes
+        # internally via record_decision. Return value discarded because
+        # the gate's `decision` is authoritative.
+        ensemble_decide(blueprint, niche_id_for_ensemble, enable_llm_judge=False)
+    except Exception as exc:
+        # Ensemble MUST NEVER block the gate. WARN elevation so operator
+        # sees systematic ensemble breakage without gate degradation.
+        logger.warning(
+            "[gate] shadow-mode ensemble_decide failed (decision unaffected): %s",
+            exc,
+            exc_info=True,
+        )
+
     return decision
 
 

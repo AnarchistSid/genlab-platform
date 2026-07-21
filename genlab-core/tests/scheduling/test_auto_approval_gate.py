@@ -340,3 +340,69 @@ class TestVisualPathsStringDecodeInGate:
         }
         decision = evaluate(bp)
         assert "has_video" in decision.failed_checks
+
+
+class TestShadowModeEnsembleWire:
+    """2026-07-21: `evaluate()` invokes `ensemble_decide` as shadow-mode
+    observability call. Locks in that the gate's decision is UNAFFECTED
+    by ensemble outcomes (safety) AND that ensemble failure NEVER blocks
+    the gate (fail-open)."""
+
+    def _bp(self):
+        return {
+            "id": "bp-shadow-1",
+            "niche_id": "gaming",
+            "status": "VISUAL_READY",
+            "hook_text": "hook",
+            "extra": {
+                "visual_paths": ["/tmp/x.mp4"],
+                "composite_score": 0.6,
+                "virality_score": 0.5,
+                "validation_status": {"all_passed": True},
+            },
+        }
+
+    def test_ensemble_decide_is_called(self):
+        """evaluate() must invoke ensemble_decide with the same blueprint
+        + niche_id. Otherwise the shadow-mode data flow is broken and
+        ensemble_votes stops growing."""
+        from unittest.mock import patch
+
+        with patch(
+            "genlab_core.scheduling.ensemble_decide.ensemble_decide"
+        ) as mock_ensemble:
+            evaluate(self._bp())
+        mock_ensemble.assert_called_once()
+        args, kwargs = mock_ensemble.call_args
+        # blueprint positional, niche_id positional, enable_llm_judge kwarg
+        assert args[0]["id"] == "bp-shadow-1"
+        assert args[1] == "gaming"
+        # LLM judge must be DISABLED — cost bound
+        assert kwargs.get("enable_llm_judge") is False
+
+    def test_ensemble_exception_does_not_break_gate(self):
+        """Ensemble raising an exception must NOT propagate — the gate's
+        decision is authoritative and must always return."""
+        from unittest.mock import patch
+
+        with patch(
+            "genlab_core.scheduling.ensemble_decide.ensemble_decide",
+            side_effect=RuntimeError("ensemble broken"),
+        ):
+            decision = evaluate(self._bp())
+        # Gate still returned a decision
+        assert decision is not None
+        assert isinstance(decision.confidence, float)
+
+    def test_llm_judge_never_enabled_from_gate_shadow(self):
+        """Source-grep pin: the shadow call must pass
+        `enable_llm_judge=False`. Cost anchor — if enabled, every gate
+        evaluation could hit Anthropic on borderline decisions."""
+        import inspect
+        from genlab_core.scheduling.auto_approval_gate import evaluate
+
+        src = inspect.getsource(evaluate)
+        assert "enable_llm_judge=False" in src, (
+            "shadow-mode ensemble_decide call must explicitly disable "
+            "the LLM judge to keep cost bounded"
+        )
