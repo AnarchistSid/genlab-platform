@@ -490,17 +490,17 @@ def main() -> int:
                         f"score={p['priority_score']:.4f}  "
                         f"hook={p['hook'][:60]!r}"
                     )
-                # 2026-07-21: partial-success = exit 0. Prior behaviour
-                # returned 1 when ANY niche was missing → systemd saw
-                # `Result: exit-code` → `service_down` CRITICAL alarms
-                # firing every 30 min despite the other 4 niches being
-                # scheduled correctly. Class-of-bug flagged today: any
-                # script invoked by systemd MUST distinguish "hard
-                # error" (exit non-zero) from "partial success" (exit
-                # 0 + WARN log). Missing niches already logged as
-                # "No schedulable candidate for: ['movies']" — that's
-                # the operator signal; systemd-alarm-cascade is noise.
-                return 0 if picks else 1
+                # 2026-07-21: return 0 unconditionally when scheduler ran
+                # successfully. Empty-queue niches are a DATA-side signal
+                # (pipeline stalled for that niche) already logged as
+                # "No schedulable candidate for: [...]" — that's the
+                # operator signal; systemd-alarm-cascade is noise.
+                # A first-pass fix that gated on picks emptiness STILL
+                # failed when 4/5 niches were pre-scheduled + 5th had no
+                # candidate: picks=[] but this is a legitimate no-op,
+                # NOT a hard error. Any code-side exception raises out
+                # and hits the `except` → exit 3, which IS a real fault.
+                return 0
 
             rows = schedule_blueprints(cur, picks, target_slot)
             conn.commit()
@@ -511,8 +511,8 @@ def main() -> int:
                     f"hook={r['hook'][:60]!r}"
                 )
 
-            # 2026-07-21: partial-success = exit 0 (see dry-run branch above).
-            return 0 if picks else 1
+            # 2026-07-21: return 0 unconditionally (see dry-run branch above).
+            return 0
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 3

@@ -698,30 +698,48 @@ def test_auto_approver_no_longer_dry_run():
 # Prior behaviour returned 1 when ANY niche had no picks → systemd
 # `Result: exit-code` → `service_down` CRITICAL alerts firing every
 # 30 min despite the other 4 niches being scheduled correctly.
+#
+# Post-deploy retest revealed the first fix (`return 0 if picks
+# else 1`) STILL failed for the "4 niches pre-scheduled + 5th has
+# no candidate → picks=[] → exit 1" case. Empty picks is a valid
+# no-op when the scheduler ran successfully — data-side signal
+# already logged as "No schedulable candidate for: [...]".
+# Corrected same day to `return 0` unconditionally on non-exception
+# path; hard failures raise out to the outer `except` → exit 3.
 
 
 def test_scheduler_exit_code_returns_zero_on_partial_success(script_module):
-    """Pin the 2026-07-21 exit-code fix.
+    """Pin the 2026-07-21 exit-code fix (second iteration).
 
-    Grep the source (via inspect) for the exit-code return statement.
-    Must be `return 0 if picks else 1` shape (partial success = 0),
-    NOT `return 1 if missing else 0` (partial success = 1).
+    Grep the source (via inspect) for both exit-code return statements.
+    Must be `return 0` (unconditional non-exception success), NOT the
+    prior `return 0 if picks else 1` shape which regressed on the
+    empty-picks-with-no-work-needed case.
 
     If this regresses, systemd sees exit-1 on every nightly run where
-    movies (or any niche) has empty queue → `service_down` alarms
-    every 30 min → operator-facing false CRITICAL. Class-of-bug from
-    the 2026-07-21 exhaustive audit.
+    all niches are pre-scheduled + no fresh work → `service_down`
+    alarms every 30 min → operator-facing false CRITICAL. Class-of-bug
+    from the 2026-07-21 exhaustive audit + post-deploy retest.
     """
     import inspect
     body = inspect.getsource(script_module.main)
-    # Must contain the partial-success = 0 form (from today's fix)
-    assert "return 0 if picks else 1" in body, (
-        "nightly scheduler main() no longer returns 0 on partial "
-        "success — regression of 2026-07-21 fix. systemd will alarm "
-        "every 30 min when any niche has no schedulable candidate."
+    # Both exit points (dry-run + real-write) must be `return 0` shape.
+    # We assert exactly 2 occurrences (dry-run branch + main branch)
+    # so a partial regression that fixes one but not the other fails.
+    assert body.count("return 0\n") >= 2, (
+        "nightly scheduler main() must return 0 unconditionally on the "
+        "non-exception path (both dry-run + real-write branches). "
+        "Regression of 2026-07-21 second-iteration fix. systemd will "
+        "alarm every 30 min when all niches pre-scheduled + no fresh work."
     )
-    # Must NOT contain the old shape (which was the bug)
+    # Must NOT contain the OLD shape (which was the first bug)
     assert "return 1 if missing else 0" not in body, (
         "Old exit-code shape (returns 1 when ANY niche missing) is "
-        "back in the source. That was the 2026-07-21 bug."
+        "back in the source. That was the 2026-07-21 first bug."
+    )
+    # Must NOT contain the intermediate broken shape either
+    assert "return 0 if picks else 1" not in body, (
+        "Intermediate broken shape (`return 0 if picks else 1`) is "
+        "back — that still failed for the 4-pre-scheduled + 5th-empty "
+        "case. Use unconditional `return 0`; hard errors raise out."
     )
