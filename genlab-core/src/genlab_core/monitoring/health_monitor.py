@@ -53,6 +53,7 @@ from genlab_core.monitoring.checks.bandit_engagement import (
 from genlab_core.monitoring.checks.infrastructure import (
     _attempt_warp_restart,
     _check_warp_port_listening,
+    check_anthropic_credit,
     check_disk,
     check_foreign_host_writes,
     check_git_drift,
@@ -131,6 +132,7 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_foreign_host_writes())
         all_alerts.extend(check_git_drift())
         all_alerts.extend(check_git_ownership_drift())  # 2026-07-21: prevent deploy-blocking root-owned .git files
+        all_alerts.extend(check_anthropic_credit())  # 2026-07-21: 1-token probe; prevents 4th exhaustion-class outage
         all_alerts.extend(check_warp_health())
         # PR #516 (2026-06-24): infrastructure-half-wired audit probes
         all_alerts.extend(check_engagement_health())
@@ -400,6 +402,7 @@ __all__ = [
     "archive_orphan_drafts",
     "archive_orphan_intake_stories",
     "archive_stranded_engagement_reviews",
+    "check_anthropic_credit",
     "check_bandit_posterior_drift",
     "check_bandit_staleness",
     "check_content_gap",

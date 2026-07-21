@@ -584,6 +584,88 @@ def check_git_ownership_drift() -> list[Alert]:
     return alerts
 
 
+def check_anthropic_credit() -> list[Alert]:
+    """Probe Anthropic API with a minimal request to detect credit exhaustion.
+
+    Class-of-bug shipped 2026-07-21 (this session): the 2026-07-18→21
+    outage was caused by Anthropic credit exhausting silently. Symptoms
+    were downstream — writers returned refusal preambles, auto_approval
+    gate silently failed, dashboards showed VISUAL_READY blueprints
+    stuck. Nothing surfaced "Anthropic is broken" until manual
+    investigation.
+
+    This check makes a 1-token request to Anthropic. If it returns
+    with the exhaustion markers from ``llm/fallback.py``, we alert.
+
+    Fires once per monitor cycle so cost is negligible:
+      * Anthropic Haiku input pricing: $1.00 / 1M tokens
+      * 1 token/probe × 24 fires/day = 24 tokens/day = < $0.0001/day
+
+    Thresholds:
+      * Credit exhaustion detected → CRITICAL
+      * Auth failure / rate-limit / network → silent skip (fail-open)
+
+    Kill switch: ``GENLAB_ANTHROPIC_HEALTHCHECK_DISABLED=1`` env var.
+    Skip if ``ANTHROPIC_API_KEY`` env is unset (test/dev environments).
+
+    Detection horizon: prevents 4th recurrence of the exhaustion class
+    (2026-06-XX first hit, 2026-07-06 hit, 2026-07-18 hit).
+    """
+    alerts: list[Alert] = []
+
+    if os.environ.get("GENLAB_ANTHROPIC_HEALTHCHECK_DISABLED") == "1":
+        return alerts
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return alerts  # dev/test env — no key configured
+
+    try:
+        # Import inside the try so monitor still works if anthropic pkg
+        # is somehow uninstalled (fail-open on tooling missing).
+        import anthropic
+
+        from genlab_core.llm.fallback import should_fallback
+
+        client = anthropic.Anthropic(api_key=api_key, timeout=10.0)
+        try:
+            # 1-token probe against the cheapest model
+            client.messages.create(
+                model="claude-haiku-4-5",
+                max_tokens=1,
+                messages=[{"role": "user", "content": "hi"}],
+            )
+        except Exception as api_exc:  # noqa: BLE001
+            # Only alert on the exhaustion-class exceptions; auth/network
+            # errors are separately investigated + would just add noise.
+            if should_fallback(api_exc):
+                alerts.append(
+                    Alert(
+                        check="anthropic_credit_exhausted",
+                        severity="critical",
+                        message=(
+                            "Anthropic API probe returned exhaustion signal: "
+                            f"{type(api_exc).__name__}: {str(api_exc)[:200]}. "
+                            "Writer + auto_approval_gate + persona_engine "
+                            "will silently degrade to OpenAI fallback until "
+                            "credit is topped up. Fallback is 7-8x cheaper "
+                            "per token but may produce lower-creative-quality "
+                            "hooks."
+                        ),
+                        details={
+                            "exception_type": type(api_exc).__name__,
+                            "error_snippet": str(api_exc)[:500],
+                        },
+                        auto_fix=(
+                            "Top up Anthropic API credits at "
+                            "https://console.anthropic.com/settings/billing"
+                        ),
+                    )
+                )
+    except Exception as exc:  # noqa: BLE001 — monitor must never crash
+        logger.debug("[check_anthropic_credit] failed: %s", exc)
+    return alerts
+
+
 def check_swap() -> list[Alert]:
     """Check if swap usage is high AND RAM is also under pressure.
 
