@@ -155,7 +155,12 @@ note "8. Writer wire — recent captions carry credit marker"
 # 5-15/day and the 24h window may catch a lull. If no publishes have
 # happened, we can't judge — pass with a note. Below-threshold
 # fires only when there ARE publishes AND >20% lack the marker.
-attribution_check=$(sudo -u genlab $VENV - <<'PY' 2>&1 || echo "PY_ERROR"
+# 2026-07-21: pass DATABASE_URL explicitly via `env` to the subprocess.
+# `sudo -u genlab` strips the parent env by default → the Python heredoc
+# below fell through to `dbname=genlab` and hit the non-existent Unix
+# socket, silent-passing the check every time. Same class-of-bug as
+# scripts/verify_writer_wire_and_flip_l4.sh fixed 2026-07-14 → `9ebc4023`.
+attribution_check=$(sudo -u genlab env DATABASE_URL="$DB_URL" $VENV - <<'PY' 2>&1 || echo "PY_ERROR"
 import os, psycopg
 dsn = os.environ.get("DATABASE_URL") or "dbname=genlab"
 try:

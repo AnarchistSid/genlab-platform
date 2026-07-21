@@ -388,11 +388,32 @@ def schedule_blueprints(
     """
     if not picks:
         return []
+    # 2026-07-21: tag action_taken_source='nightly_scheduler' so the
+    # calibration confusion matrix can distinguish automation-approvals
+    # from operator-approvals. Prior state: nightly scheduler wrote
+    # `action_taken='approved'` with NULL source — the calibration_logger
+    # would count these as operator agreement with the gate (if it ever
+    # saw them), inflating the agreement rate. Now they carry a source
+    # tag mirroring the auto-approver pattern
+    # (AUTO_APPROVAL_SOURCE_TAG = "auto_approver_v1"). Downstream:
+    # `calibration_helper.stats()` should exclude
+    # `action_taken_source = 'nightly_scheduler'` from operator-vs-gate
+    # comparison (safety-net approvals are a different signal class).
+    #
+    # Discovery: 22 days of zero calibration writes surfaced by the
+    # 2026-07-21 exhaustive audit — nightly scheduler + auto_approver
+    # together handle 90%+ of throughput, leaving the human-review
+    # calibration corpus stagnant. This tag makes the split VISIBLE
+    # in DB queries. Real fix (grow calibration samples) is a design
+    # question — options include forcing a canary control-group of
+    # blueprints through operator review even when automation would
+    # approve.
     ids = [row["id"] for row in picks]
     cur.execute(
         """
         UPDATE blueprints
         SET action_taken = 'approved',
+            action_taken_source = 'nightly_scheduler',
             reviewed_at = now(),
             scheduled_for = %s,
             updated_at = now()
