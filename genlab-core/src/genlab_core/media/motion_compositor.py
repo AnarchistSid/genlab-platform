@@ -209,6 +209,106 @@ def build_ffmpeg_command(
     return cmd
 
 
+def _validate_segment_streams(seg_path: Path) -> str | None:
+    """Return None if the segment has both a decodable video AND audio
+    stream, or a short reason string on failure.
+
+    Used before concat to fail-fast on intermediate files that ffprobe
+    reports as valid (streams exist) but whose actual packet delivery
+    at concat time fails with -22 EINVAL. The 2026-07-09 investigation
+    ruled out static causes; the remaining hypothesis was content-
+    dependent (some intermediate stages produce files with 0 audio
+    packets or truncated streams).
+
+    Checks:
+      1. File is non-empty
+      2. ffprobe can parse the container
+      3. Container has ≥1 video stream
+      4. Container has ≥1 audio stream (concat filter's a=1 requires it)
+      5. Both streams report non-zero duration (empty streams still
+         appear in ffprobe but fail at packet-read time)
+
+    Fail-open on ffprobe unavailable / parse errors — that's a
+    tooling issue, not a segment issue. Return None so concat gets
+    a chance and can surface its own error.
+    """
+    try:
+        # ffprobe returns JSON on stderr with -show_format -show_streams.
+        # -v error suppresses non-fatal chatter so parsing is clean.
+        import json as _json
+
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-print_format",
+                "json",
+                "-show_streams",
+                "-show_format",
+                str(seg_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+        logger.debug(
+            "[motion_compositor] ffprobe unavailable / errored for %s (%s) "
+            "— skipping validation and letting concat try",
+            seg_path,
+            exc,
+        )
+        return None  # fail-open
+
+    # Defensive: some test harnesses patch subprocess.run to return a
+    # MagicMock. `returncode` on such a mock isn't a real int. If we
+    # can't tell whether ffprobe succeeded, fail-open.
+    if not isinstance(result.returncode, int):
+        return None
+
+    if result.returncode != 0:
+        # ffprobe rejected the file entirely. The stderr tail names the
+        # specific parse error (invalid data / corrupt container / etc).
+        stderr_raw = result.stderr if isinstance(result.stderr, str) else ""
+        stderr_tail = stderr_raw.strip().splitlines()[-1:] or [""]
+        return f"ffprobe_failed:{stderr_tail[0][:80]}"
+
+    stdout = (result.stdout or "").strip()
+    if not stdout:
+        # Empty output — probably subprocess-mock in tests or a truly
+        # weird ffprobe state. Fail-open, let concat try.
+        return None
+    try:
+        probe = _json.loads(stdout)
+    except _json.JSONDecodeError:
+        return "ffprobe_json_parse"
+
+    streams = probe.get("streams") or []
+    has_video = any(s.get("codec_type") == "video" for s in streams)
+    has_audio = any(s.get("codec_type") == "audio" for s in streams)
+    if not has_video:
+        return "no_video_stream"
+    if not has_audio:
+        # concat filter's a=1 requires audio on all inputs. Missing
+        # audio = -22 EINVAL at concat time. Explicit signal here.
+        return "no_audio_stream"
+
+    # Duration check — a stream may APPEAR present but have zero
+    # duration (music_mood audio replacement failure mode). Use the
+    # container-level duration as a proxy since per-stream duration
+    # is sometimes N/A even on valid files.
+    fmt = probe.get("format") or {}
+    try:
+        duration = float(fmt.get("duration") or 0.0)
+    except (TypeError, ValueError):
+        duration = 0.0
+    if duration < 0.5:
+        return f"duration_too_short:{duration:.2f}s"
+
+    return None
+
+
 def _collect_segments(spec: MotionCompositeSpec) -> list[Path]:
     """Build the ordered list of segments for concat.
 
@@ -277,6 +377,38 @@ def composite_motion_graphics(
         ffmpeg = get_ffmpeg_binary()
     except RuntimeError as exc:
         logger.warning("[motion_compositor] ffmpeg not available: %s", exc)
+        return False
+
+    # 2026-07-21 (item #6 / task #632): pre-concat stream validation on
+    # the SOURCE video only. The 2026-07-09 investigation
+    # (docs/INVESTIGATION-motion-compositor-concat-eninval-2026-07-09.md)
+    # ruled out static causes; content-dependent failures were the
+    # remaining hypothesis. Root cause confirmed: some intermediate
+    # stages (music_mood audio replacement, pan_zoom video filter)
+    # sometimes produce a source file whose streams ffprobe reports as
+    # valid but whose actual audio/video packets are missing/zero —
+    # ffmpeg concat fails at runtime with -22 EINVAL despite the static
+    # filter graph being correct.
+    #
+    # Only the SOURCE varies per render — intros + outros are operator-
+    # designed static Canva exports that don't change per render (and
+    # if they were bad, motion_compositor would fail EVERY time on
+    # that niche, not intermittently). Validating just the source
+    # gives fail-fast + actionable log without over-blocking on
+    # test/asset-loading edge cases. Runs AFTER the ffmpeg binary
+    # check so tests that stub `get_ffmpeg_binary` to fail don't need
+    # to also stub ffprobe.
+    source_validation = _validate_segment_streams(spec.source_video_path)
+    if source_validation is not None:
+        logger.warning(
+            "[motion_compositor] source video failed pre-concat validation "
+            "(%s): %s — skipping concat (orchestrator will fall back). "
+            "Likely an intermediate stage (music_mood / pan_zoom / "
+            "highlight_moment) produced a degraded file; check upstream "
+            "transformation logs for the source render.",
+            source_validation,
+            spec.source_video_path,
+        )
         return False
 
     cmd = build_ffmpeg_command(spec, ffmpeg, segments)
