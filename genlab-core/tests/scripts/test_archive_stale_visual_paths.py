@@ -440,3 +440,107 @@ class TestFutureStaleAlerts:
                 pass
 
         return _Conn(rows)
+
+
+# ── 2026-07-21: min-age gate — prevent self-inflicted sweep ─────────
+
+
+class TestMinAgeGate:
+    """Pin the 2026-07-21 min-age gate. The audit found this script
+    swept 11 blueprints in a single day (2026-07-16) — some created
+    same day as the sweep, before nightly_scheduler could pick them.
+    Min-age gate prevents that."""
+
+    def _fake_conn_6col(self, rows):
+        """Same fake conn shape as _fake_conn_with_rows but 6-tuple
+        rows (adds created_at column). Prod SELECT returns 6 cols."""
+
+        class _C:
+            def __init__(self, rows):
+                self._rows = rows
+                self._fetched = False
+
+            def execute(self, *a, **kw):
+                pass
+
+            def fetchall(self):
+                if self._fetched:
+                    return []
+                self._fetched = True
+                return self._rows
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                pass
+
+        class _Conn:
+            def cursor(self):
+                return _C(rows)
+
+            def commit(self):
+                pass
+
+        return _Conn()
+
+    def test_recent_blueprint_skipped(self, monkeypatch):
+        """A blueprint created 1h ago must NOT be archived even if its
+        media is missing — nightly_scheduler hasn't had a chance."""
+        import os
+        from datetime import UTC, datetime, timedelta
+        from uuid import uuid4
+
+        # Force os.path.exists → False so media appears missing
+        monkeypatch.setattr(os.path, "exists", lambda p: False)
+
+        recent = datetime.now(UTC) - timedelta(hours=1)
+        rows = [
+            (
+                str(uuid4()),
+                "gaming",
+                "VISUAL_READY",
+                None,
+                ["/tmp/nonexistent.mp4"],
+                recent,
+            )
+        ]
+        conn = self._fake_conn_6col(rows)
+        records = mod.find_stale_blueprints(conn, min_age_hours=72)
+        assert records == [], (
+            "recent (1h old) blueprint should NOT be archived — "
+            "nightly_scheduler runs every 24h; needs 72h grace"
+        )
+
+    def test_old_blueprint_archived(self, monkeypatch):
+        """A blueprint older than min_age_hours WITH missing media
+        should still be archived — it had its chance."""
+        import os
+        from datetime import UTC, datetime, timedelta
+        from uuid import uuid4
+
+        monkeypatch.setattr(os.path, "exists", lambda p: False)
+
+        old = datetime.now(UTC) - timedelta(hours=100)  # older than default 72
+        rows = [
+            (
+                str(uuid4()),
+                "gaming",
+                "VISUAL_READY",
+                None,
+                ["/tmp/nonexistent.mp4"],
+                old,
+            )
+        ]
+        conn = self._fake_conn_6col(rows)
+        records = mod.find_stale_blueprints(conn, min_age_hours=72)
+        assert len(records) == 1, "old blueprint with missing media should be archived"
+
+    def test_cli_flag_wired(self):
+        """The --min-age-hours CLI flag must reach find_stale_blueprints."""
+        import inspect
+
+        # Grep source for both the CLI addition AND the call-site kwarg
+        src = inspect.getsource(mod.main)
+        assert "--min-age-hours" in src, "CLI arg missing"
+        assert "min_age_hours=args.min_age_hours" in src, "CLI arg not wired to function"

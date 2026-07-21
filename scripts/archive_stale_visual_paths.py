@@ -89,6 +89,7 @@ def find_stale_blueprints(
     include_scheduled: bool = False,
     archive_past_scheduled: bool = True,
     past_grace_seconds: int = 3600,
+    min_age_hours: int = 72,
 ) -> list[dict]:
     """Return every blueprint whose visual_paths reference deleted files.
 
@@ -109,6 +110,16 @@ def find_stale_blueprints(
             normal publisher window — gives the 12:05 IST publisher
             time to land its post before we'd flag a 12:00 IST
             schedule as past.
+        min_age_hours: minimum blueprint age BEFORE we consider
+            archiving. 2026-07-21 exhaustive audit found this script
+            swept 11 blueprints in one day (2026-07-16) — recent
+            blueprints that hadn't been given a chance to publish yet.
+            The nightly scheduler picks 1/niche/day; a blueprint
+            created today at 06:00 UTC won't get scheduled until
+            tomorrow's nightly run at 16:30 UTC → its media gets
+            purged BEFORE publisher touches it. 72h default (three
+            nightly-scheduler windows) gives every blueprint at least
+            2 chances to be picked before we clean up its media.
 
     Returns:
         List of dicts with keys: id, niche_id, status, scheduled_for,
@@ -121,18 +132,42 @@ def find_stale_blueprints(
     out: list[dict] = []
     now = datetime.now(UTC)
     grace = timedelta(seconds=past_grace_seconds)
+    min_age = timedelta(hours=min_age_hours)
     with conn.cursor() as cur:
         cur.execute("SET app.niche_id TO 'all'")
         cur.execute(
             """
-            SELECT id, niche_id, status, scheduled_for, extra->'visual_paths'
+            SELECT id, niche_id, status, scheduled_for, extra->'visual_paths', created_at
             FROM blueprints
             WHERE status IN ('VISUAL_READY', 'DRAFTED')
               AND extra ? 'visual_paths'
             ORDER BY niche_id, created_at
             """
         )
-        for bp_id, niche_id, status, scheduled_for, vp_raw in cur.fetchall():
+        for row in cur.fetchall():
+            # 2026-07-21: backward-compat — test fixtures still return
+            # 5-tuple rows (no created_at). In prod the SELECT always
+            # returns 6 columns. When created_at is missing, skip the
+            # min-age gate (preserves existing test-fixture behaviour).
+            if len(row) == 6:
+                bp_id, niche_id, status, scheduled_for, vp_raw, created_at = row
+            else:
+                bp_id, niche_id, status, scheduled_for, vp_raw = row
+                created_at = None
+            # 2026-07-21: min-age gate. Recent blueprints haven't had
+            # their chance yet; skip.
+            if created_at is not None:
+                age = now - created_at
+                if age < min_age:
+                    logger.debug(
+                        "[archive_stale] SKIPPING young bp=%s niche=%s "
+                        "(age=%s < min_age=%dh) — hasn't been scheduled yet",
+                        str(bp_id)[:8],
+                        niche_id,
+                        age,
+                        min_age_hours,
+                    )
+                    continue
             paths = _decode_visual_paths(vp_raw)
             if not paths:
                 continue
@@ -374,6 +409,19 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--min-age-hours",
+        type=int,
+        default=72,
+        help=(
+            "Minimum blueprint age BEFORE considering it for archival. "
+            "Default 72h (three nightly-scheduler windows). Recent "
+            "blueprints haven't had their chance to be scheduled yet — "
+            "archiving them wastes the render work. 2026-07-21 audit "
+            "found this script swept 11 blueprints in one day (some "
+            "created same day as sweep) — added min-age gate to prevent."
+        ),
+    )
+    parser.add_argument(
         "--backup-dir",
         type=Path,
         default=Path("/opt/genlab/.tmp/backups"),
@@ -398,6 +446,7 @@ def main(argv: list[str] | None = None) -> int:
             include_scheduled=args.include_scheduled,
             archive_past_scheduled=not args.no_past_scheduled,
             past_grace_seconds=args.past_grace_seconds,
+            min_age_hours=args.min_age_hours,
         )
 
         print(f"# {datetime.now(UTC).isoformat()} — {len(records)} stale blueprint(s) found")
