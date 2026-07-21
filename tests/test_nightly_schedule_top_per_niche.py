@@ -692,3 +692,36 @@ def test_auto_approver_no_longer_dry_run():
         "regression. If enforce is genuinely broken, revert via env var "
         "GENLAB_AUTO_APPROVE_DISABLED=1 instead."
     )
+
+
+# 2026-07-21: nightly scheduler exit-code partial-success fix.
+# Prior behaviour returned 1 when ANY niche had no picks → systemd
+# `Result: exit-code` → `service_down` CRITICAL alerts firing every
+# 30 min despite the other 4 niches being scheduled correctly.
+
+
+def test_scheduler_exit_code_returns_zero_on_partial_success(script_module):
+    """Pin the 2026-07-21 exit-code fix.
+
+    Grep the source (via inspect) for the exit-code return statement.
+    Must be `return 0 if picks else 1` shape (partial success = 0),
+    NOT `return 1 if missing else 0` (partial success = 1).
+
+    If this regresses, systemd sees exit-1 on every nightly run where
+    movies (or any niche) has empty queue → `service_down` alarms
+    every 30 min → operator-facing false CRITICAL. Class-of-bug from
+    the 2026-07-21 exhaustive audit.
+    """
+    import inspect
+    body = inspect.getsource(script_module.main)
+    # Must contain the partial-success = 0 form (from today's fix)
+    assert "return 0 if picks else 1" in body, (
+        "nightly scheduler main() no longer returns 0 on partial "
+        "success — regression of 2026-07-21 fix. systemd will alarm "
+        "every 30 min when any niche has no schedulable candidate."
+    )
+    # Must NOT contain the old shape (which was the bug)
+    assert "return 1 if missing else 0" not in body, (
+        "Old exit-code shape (returns 1 when ANY niche missing) is "
+        "back in the source. That was the 2026-07-21 bug."
+    )

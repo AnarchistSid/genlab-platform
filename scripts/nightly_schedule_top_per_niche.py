@@ -490,7 +490,17 @@ def main() -> int:
                         f"score={p['priority_score']:.4f}  "
                         f"hook={p['hook'][:60]!r}"
                     )
-                return 1 if missing else 0
+                # 2026-07-21: partial-success = exit 0. Prior behaviour
+                # returned 1 when ANY niche was missing → systemd saw
+                # `Result: exit-code` → `service_down` CRITICAL alarms
+                # firing every 30 min despite the other 4 niches being
+                # scheduled correctly. Class-of-bug flagged today: any
+                # script invoked by systemd MUST distinguish "hard
+                # error" (exit non-zero) from "partial success" (exit
+                # 0 + WARN log). Missing niches already logged as
+                # "No schedulable candidate for: ['movies']" — that's
+                # the operator signal; systemd-alarm-cascade is noise.
+                return 0 if picks else 1
 
             rows = schedule_blueprints(cur, picks, target_slot)
             conn.commit()
@@ -501,7 +511,8 @@ def main() -> int:
                     f"hook={r['hook'][:60]!r}"
                 )
 
-            return 1 if missing else 0
+            # 2026-07-21: partial-success = exit 0 (see dry-run branch above).
+            return 0 if picks else 1
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 3

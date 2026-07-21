@@ -42,11 +42,17 @@ platforms:
       Pending TikTok developer app approval.
       Set enabled: true and add TIKTOK_ACCESS_TOKEN to .env when approved.
   threads:
-    # Disabled 2026-06-05: see ClutchWire/config/publishing.yaml — 100%
-    # container-creation failures since tokens expired; engagement was
-    # single-digit anyway for movies.
-    enabled: false
-    account_id: null  # TODO: Generate Threads token for @splicereel
+    # 2026-07-21 re-enabled after exhaustive throughput audit found the
+    # `enabled: false` yaml + valid tokens-cache combo was silently
+    # blocking a whole platform. Threads token cache at
+    # `/opt/genlab/.threads_tokens.json` has a valid movies token
+    # (expires 2026-08-15). Prior disable rationale (2026-06-05 token
+    # expiry + single-digit engagement) is stale — tokens have been
+    # refreshed via the auto-refresh timer. Re-open the channel; if
+    # container-creation failures return, flip back to false and file
+    # for token/permission diagnosis.
+    enabled: true
+    account_id: null  # Token resolved via /opt/genlab/.threads_tokens.json cache
     content_types: [video_post, text_post]
     aspect_ratio: "1:1"
 

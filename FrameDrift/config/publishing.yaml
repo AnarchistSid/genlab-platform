@@ -42,11 +42,15 @@ platforms:
       Pending TikTok developer app approval.
       Set enabled: true and add TIKTOK_ACCESS_TOKEN to .env when approved.
   threads:
-    # Disabled 2026-06-05: see ClutchWire/config/publishing.yaml — 100%
-    # container-creation failures since tokens expired; engagement was
-    # ~24 avg for anime.
-    enabled: false
-    account_id: null  # TODO: Generate Threads token for @theframedrift
+    # 2026-07-21 re-enabled after exhaustive throughput audit. Same
+    # rationale as SpliceReel — Threads token cache
+    # `/opt/genlab/.threads_tokens.json` has valid anime token (expires
+    # 2026-08-15). Prior disable rationale (2026-06-05 token expiry)
+    # is stale after the auto-refresh timer landed. Anime's ~24 avg
+    # engagement pre-2026-06 was actually the second-highest across
+    # niches — worth reopening this channel.
+    enabled: true
+    account_id: null  # Token resolved via /opt/genlab/.threads_tokens.json cache
     content_types: [video_post, text_post]
     aspect_ratio: "1:1"
 
