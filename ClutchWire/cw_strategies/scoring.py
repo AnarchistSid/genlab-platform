@@ -132,6 +132,11 @@ class SportScoringStrategy(BaseScoringStrategy):
             "scores": scores,
             "score": round(final_score, 4),
             "final_score": round(final_score, 4),
+            # 2026-07-21: mirror final_score into composite_score so
+            # shared auto_approval_gate reads a real value instead of
+            # falling back to 0.5 neutral. Same class-of-bug as gaming
+            # ScoreGamingClips (fixed same commit). Agent 2 investigation.
+            "composite_score": round(final_score, 4),
             "game_type": game_type,
             "magnitude_multiplier": magnitude_mult,
             "scored_at": datetime.now(UTC).isoformat(),

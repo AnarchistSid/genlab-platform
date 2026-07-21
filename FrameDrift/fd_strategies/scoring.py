@@ -116,6 +116,10 @@ class AnimeScoringStrategy(BaseTimeBasedScoringStrategy):
             "scores": scores,
             "score": round(final_score, 4),
             "final_score": round(final_score, 4),
+            # 2026-07-21: mirror final_score into composite_score (shared
+            # auto_approval_gate contract). Same class-of-bug as gaming/
+            # sports/movies. Agent 2 investigation.
+            "composite_score": round(final_score, 4),
             "trend_cycle_multiplier": cycle_mult,
             "scored_at": datetime.now(UTC).isoformat(),
         }
