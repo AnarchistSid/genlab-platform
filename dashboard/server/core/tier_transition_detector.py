@@ -93,7 +93,13 @@ def _read_last_known_tiers(dsn: str, niche_ids: list[str]) -> dict[str, str]:
                 rows = cur.fetchall()
         return {nid: tier for nid, tier in rows}
     except Exception as exc:
-        logger.debug("[tier_transition] last-known-tier read failed: %s", exc)
+        # 2026-07-21 (rule #19): elevated. Silent read failure returns
+        # empty dict → detector treats ALL current tiers as new →
+        # spurious "everything transitioned" storm to tier_history.
+        # Load-bearing for sponsorship-readiness intelligence.
+        logger.warning(
+            "[tier_transition] last-known-tier read failed: %s", exc, exc_info=True
+        )
         return {}
 
 
@@ -129,7 +135,13 @@ def _insert_transitions(dsn: str, transitions: list[dict[str, Any]]) -> None:
                 )
                 conn.commit()
     except Exception as exc:
-        logger.debug("[tier_transition] insert failed: %s", exc)
+        # 2026-07-21 (rule #19): elevated. Silent write failure means
+        # tier transitions never persist → tier_history gap → next
+        # detector run re-detects the same transition (dupes) or
+        # misses it entirely.
+        logger.warning(
+            "[tier_transition] insert failed: %s", exc, exc_info=True
+        )
 
 
 def record_tier_transitions(
@@ -232,5 +244,11 @@ def fetch_recent_transitions(
             for niche_id, tier, prev_tier, nearest, observed_at in rows
         ]
     except Exception as exc:
-        logger.debug("[tier_transition] recent_transitions read failed: %s", exc)
+        # 2026-07-21 (rule #19): elevated. Silent read failure returns
+        # empty list — dashboard shows "no transitions" indistinguishable
+        # from a genuine no-op period; operator can't tell if the
+        # sponsorship-readiness engine is quiet or broken.
+        logger.warning(
+            "[tier_transition] recent_transitions read failed: %s", exc, exc_info=True
+        )
         return []

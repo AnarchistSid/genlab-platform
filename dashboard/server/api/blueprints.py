@@ -851,8 +851,18 @@ def review_action(record_id):
                         existing_extra = _json.loads(existing_extra) if existing_extra else {}
                     existing_extra["editorial"] = editorial
                     client.blueprints.update(record_id, {"extra": _json.dumps(existing_extra)})
-            except Exception:
-                logger.debug("Editorial metadata write failed for %s (non-blocking)", record_id)
+            except Exception as exc:
+                # 2026-07-21 (rule #19): elevated from DEBUG. Editorial
+                # metadata captures the operator's tag+rationale+source
+                # on every review click. Silent write failure means the
+                # operator's classification is lost — no way for them
+                # to know their input didn't stick.
+                logger.warning(
+                    "Editorial metadata write failed for %s (non-blocking): %s",
+                    record_id,
+                    exc,
+                    exc_info=True,
+                )
 
         # Emit socket event for live badge updates
         try:
