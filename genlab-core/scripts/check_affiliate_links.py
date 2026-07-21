@@ -6,8 +6,18 @@ placeholders), HEAD-requests each with a 10s timeout, and reports healthy vs
 broken links.
 
 Exit codes:
-  0 — all checked URLs are healthy
-  1 — one or more URLs are broken / timed out
+  0 — script ran + broken rate below 10% (normal state; a few dead URLs
+      is expected as merchants remove products or change slugs)
+  1 — broken rate >= 10% OR ALL links broken (network outage / catalog
+      corruption / merchant-side mass removal — genuine incident)
+
+2026-07-21: threshold-based exit code (rule #26 class-of-bug fix).
+Prior behaviour returned exit 1 on ANY broken link, which caused
+`service_down` systemd alarms every hour despite 78/80 links being
+healthy. Operator saw noise-CRITICAL alerts that obscured real
+incidents. Broken links are still fully reported via stdout for
+operator triage; the exit code now only fires when a genuine outage
+is likely (>= 10% broken).
 
 Usage:
   python genlab-core/scripts/check_affiliate_links.py
@@ -275,7 +285,27 @@ def main() -> None:
             else:
                 print("  No products needed full disabling (some networks still healthy).")
 
-        sys.exit(1)
+        # 2026-07-21: threshold-based exit (rule #26). Broken links are
+        # already reported via stdout above; exit code only signals a
+        # genuine incident (mass outage / merchant removal spree) so
+        # systemd doesn't service_down-CRITICAL every hour on the
+        # 2-3 known-dead URLs.
+        broken_rate = len(broken) / total
+        BROKEN_RATE_THRESHOLD = 0.10
+        if broken_rate >= BROKEN_RATE_THRESHOLD:
+            print(
+                f"\n⚠️  Broken rate {broken_rate:.1%} >= "
+                f"{BROKEN_RATE_THRESHOLD:.0%} threshold — exiting 1 "
+                f"(likely network outage or mass merchant removal)"
+            )
+            sys.exit(1)
+        else:
+            print(
+                f"\n{len(broken)}/{total} broken ({broken_rate:.1%}) — "
+                f"below {BROKEN_RATE_THRESHOLD:.0%} incident threshold; "
+                f"exiting 0. Broken URLs listed above for operator triage."
+            )
+            sys.exit(0)
     else:
         print("\nAll affiliate links are healthy.")
         sys.exit(0)

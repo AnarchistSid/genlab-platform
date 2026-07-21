@@ -331,7 +331,21 @@ def collect_recovery_report(
         )
         # Empty post-deploy AND had baseline samples → regression (fetch
         # broken again). Empty AND zero baseline → sparse.
-        if status.baseline_positive_rate > 0 and _BASELINE_POSITIVE_RATES[platform] > 0:
+        # 2026-07-21: honor rule #23 (4-platform focus) in the
+        # empty-post-deploy branch too. Prior behavior classified
+        # Twitter with historical baseline as ``red``, tripping the
+        # systemd service to exit-3 every fire despite Twitter being
+        # explicitly out-of-scope. Rule 0 in _classify_platform covers
+        # the non-empty case; this branch is the missing symmetric
+        # coverage for the zero-samples-with-baseline case.
+        _OUT_OF_SCOPE_PLATFORMS = frozenset({"twitter", "tiktok"})
+        if platform in _OUT_OF_SCOPE_PLATFORMS:
+            status.verdict = "sparse"
+            status.reason = (
+                f"out-of-scope per rule #23 (4-platform focus is YT/FB/IG/Threads); "
+                f"zero samples post-deploy is expected"
+            )
+        elif status.baseline_positive_rate > 0 and _BASELINE_POSITIVE_RATES[platform] > 0:
             # We know the platform had data pre-deploy from
             # the baseline dict — zero data post-deploy is a
             # regression (fetcher writes broken again).

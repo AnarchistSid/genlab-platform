@@ -101,17 +101,31 @@ for path in compliance/stats scheduling/pauses source-discovery/proposals; do
     fi
 done
 
-note "5. /etc/genlab/version.env present and current"
-if [ -f /etc/genlab/version.env ]; then
-    deployed_sha=$(grep ^GENLAB_GIT_COMMIT= /etc/genlab/version.env | cut -d= -f2-)
+# 2026-07-21: version.env path was moved 2026-06-26 from
+# /etc/genlab/version.env → /opt/genlab/.version.env (genlab user
+# can't write to root-owned /etc/genlab). deploy.sh:330 writes the
+# new path; this verify script was never updated. Result: post-deploy
+# checks reported version drift every hour on every deploy → hourly
+# systemd `service_down` alarm despite deploys being fine.
+# Check the new path first; fall back to the legacy path for backward
+# compat with any stale servers that haven't run the new deploy.sh.
+note "5. /opt/genlab/.version.env present and current"
+VERSION_ENV_PATH=""
+if [ -f /opt/genlab/.version.env ]; then
+    VERSION_ENV_PATH="/opt/genlab/.version.env"
+elif [ -f /etc/genlab/version.env ]; then
+    VERSION_ENV_PATH="/etc/genlab/version.env"
+fi
+if [ -n "$VERSION_ENV_PATH" ]; then
+    deployed_sha=$(grep ^GENLAB_GIT_COMMIT= "$VERSION_ENV_PATH" | cut -d= -f2-)
     git_head_sha=$(sudo -u genlab git -C $GENLAB rev-parse --short HEAD)
     if [ "$deployed_sha" = "$git_head_sha" ]; then
-        pass "/etc/genlab/version.env matches git HEAD ($deployed_sha)"
+        pass "$VERSION_ENV_PATH matches git HEAD ($deployed_sha)"
     else
-        fail "/etc/genlab/version.env=$deployed_sha but git HEAD=$git_head_sha (re-run deploy.sh)"
+        fail "$VERSION_ENV_PATH=$deployed_sha but git HEAD=$git_head_sha (re-run deploy.sh)"
     fi
 else
-    fail "/etc/genlab/version.env MISSING"
+    fail "/opt/genlab/.version.env MISSING (and legacy /etc/genlab/version.env also absent)"
 fi
 
 note "6. Env flags activated (set in .env AND loaded into dashboard process)"

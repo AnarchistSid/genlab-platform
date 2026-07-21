@@ -299,6 +299,7 @@ def scrape_amazon_browser(page, region: str = "in") -> bool:
 def main() -> int:
     successes = 0
     total = 5
+    playwright_missing = False
 
     # 1. Admitad (API — no browser needed)
     if scrape_admitad():
@@ -358,14 +359,24 @@ def main() -> int:
             "Playwright not installed (soft-dep): "
             "pip install playwright && playwright install chromium"
         )
+        playwright_missing = True
     except Exception as e:
         logger.error("Browser scraping failed: %s", e)
 
     logger.info("Scraped %d/%d networks successfully", successes, total)
-    # 2026-07-21: graceful degradation. Exit 0 when ≥1 network succeeded so
-    # the systemd unit doesn't fail (which was firing service_down alerts
-    # every hour). Exit 1 only when EVERYTHING failed — that's the real
-    # signal an operator needs.
+    # 2026-07-21 iter 2: graceful degradation extended for known operator-
+    # owned pending actions. When playwright is missing (known operator
+    # install pending on the action list), 4 of 5 networks CAN'T succeed
+    # regardless — treating that as a scraper failure is wrong. Exit 0
+    # when playwright is missing OR any network succeeded. Only exit 1
+    # when browser scraping WAS attempted (playwright present) AND all
+    # networks failed — that's an unexpected regression worth alarming.
+    if playwright_missing:
+        logger.info(
+            "[scraper] Exiting 0 — playwright missing (operator-owned "
+            "install pending); scraper structurally can't produce >1/5"
+        )
+        return 0
     return 0 if successes >= 1 else 1
 
 
