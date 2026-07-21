@@ -201,6 +201,128 @@ class TestFailedPublish:
 
 
 # ---------------------------------------------------------------------------
+# 2026-07-21 policy-block learning loop L1 —
+#   POLICY_BLOCK failures must emit a compliance_events row so RCA
+#   modules have durable ground truth to learn from. Non-POLICY_BLOCK
+#   failures MUST NOT emit (audit-log noise degrades learning signal).
+# ---------------------------------------------------------------------------
+
+
+class TestPolicyBlockAuditLog:
+    """The policy-block learning loop starts at this call site — every
+    POLICY_BLOCK error must land in compliance_events with the
+    (blueprint content features, platform error) pair that downstream
+    RCA + writer-avoid-pattern modules will train on.
+    """
+
+    def test_policy_block_writes_compliance_event(self) -> None:
+        """Meta code=368 → error_classifier POLICY_BLOCK → helper writes
+        a `platform_policy_block` compliance_events row carrying the
+        blueprint's hook, caption, hashtag count, video_url presence,
+        and the error snippet."""
+        patches = _stack_patches()
+        with (
+            patches["resolve"] as resolve,
+            patches["client"] as get_client_mock,
+            patches["build"],
+            patches["affiliate"],
+            patches["record"],
+            patch(
+                "genlab_core.compliance.events.log_compliance_event"
+            ) as log_event,
+        ):
+            resolve.return_value = {"access_token": "tok"}
+            get_client_mock.return_value.publish.return_value = _failure(
+                "facebook",
+                error=(
+                    "Publish error (code=368, subcode=1404078): You're "
+                    "temporarily blocked from using this feature because "
+                    "you shared something that isn't allowed."
+                ),
+            )
+            log_event.return_value = True
+
+            _run(
+                platforms_to_publish=["facebook"],
+                fields={
+                    "hook": "This clip breaks the internet",
+                    "caption_ig": "Wild scene! Watch till end. #anime #viral #mustsee",
+                    "video_url": "https://youtu.be/abc123",
+                },
+            )
+
+        # Exactly one write, correct event_type + decision + platform.
+        log_event.assert_called_once()
+        kwargs = log_event.call_args.kwargs
+        assert kwargs["event_type"] == "platform_policy_block"
+        assert kwargs["decision"] == "block"
+        assert kwargs["platform"] == "facebook"
+        assert kwargs["niche_id"] == "gaming"
+        # Content features RCA will train on — all present + truncated.
+        md = kwargs["metadata"]
+        assert md["hook"] == "This clip breaks the internet"
+        assert "Wild scene" in md["caption_fragment"]
+        assert md["hashtag_count"] == 3
+        assert md["has_video_url"] is True
+        assert "code=368" in md["error_snippet"]
+
+    def test_non_policy_block_failure_does_not_write(self) -> None:
+        """TRANSIENT / CREDENTIAL / QUOTA failures MUST NOT emit a
+        policy-block audit row — the learning signal degrades if noise
+        floods the table. Only genuine platform policy blocks land."""
+        patches = _stack_patches()
+        with (
+            patches["resolve"] as resolve,
+            patches["client"] as get_client_mock,
+            patches["build"],
+            patches["affiliate"],
+            patches["record"],
+            patch(
+                "genlab_core.compliance.events.log_compliance_event"
+            ) as log_event,
+        ):
+            resolve.return_value = {"access_token": "tok"}
+            get_client_mock.return_value.publish.return_value = _failure(
+                "instagram",
+                error="Read timed out",  # TRANSIENT
+            )
+
+            _run(platforms_to_publish=["instagram"])
+
+        log_event.assert_not_called()
+
+    def test_audit_write_failure_never_breaks_publish(self) -> None:
+        """Rule: audit-log write is observability, not enforcement.
+        A raise from log_compliance_event MUST be swallowed — the
+        publish state machine already recorded FAILED, breaking it
+        again with an audit exception would cascade into orchestrator
+        error paths."""
+        patches = _stack_patches()
+        with (
+            patches["resolve"] as resolve,
+            patches["client"] as get_client_mock,
+            patches["build"],
+            patches["affiliate"],
+            patches["record"],
+            patch(
+                "genlab_core.compliance.events.log_compliance_event",
+                side_effect=RuntimeError("db down"),
+            ),
+        ):
+            resolve.return_value = {"access_token": "tok"}
+            get_client_mock.return_value.publish.return_value = _failure(
+                "facebook",
+                error="code=368: temporarily blocked",
+            )
+
+            # Must NOT raise — the outer publish flow keeps running.
+            outcome = _run(platforms_to_publish=["facebook"])
+
+        assert outcome.any_success is False
+        assert outcome.platform_status["facebook"]["error_class"] == "POLICY_BLOCK"
+
+
+# ---------------------------------------------------------------------------
 # R-29 prior-published pre-seed
 # ---------------------------------------------------------------------------
 

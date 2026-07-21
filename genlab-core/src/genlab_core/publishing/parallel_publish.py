@@ -185,6 +185,23 @@ def execute_parallel_publish(
                     result=result,
                     error_class=error_class,
                 )
+                # 2026-07-21: policy-block learning loop L1.
+                # POLICY_BLOCK is the class-of-failure operators can
+                # actually LEARN from (unlike TRANSIENT or QUOTA which
+                # are noise on the retry / next-day timescales). Persist
+                # the (blueprint content features, platform error) pair
+                # to compliance_events now so later RCA + writer-avoid-
+                # pattern modules have durable ground truth to train on.
+                # Fail-OPEN: the write helper never raises; observability
+                # loss must never block the publish state machine.
+                if error_class == "POLICY_BLOCK":
+                    _record_policy_block_event(
+                        niche_id=niche_id,
+                        platform=platform,
+                        record_id=record_id,
+                        fields=fields,
+                        error_message=result.error,
+                    )
 
             # Record to Publishing_Analytics. SKIPPED for both CREDENTIAL and
             # QUOTA failures — neither represents a real platform outage, and
@@ -329,3 +346,65 @@ def _on_failure(
         "ambiguous": is_ambiguous_failure(result.error),
     }
     logger.error("[publish] %s: FAILED error=%s", platform, result.error)
+
+
+def _record_policy_block_event(
+    *,
+    niche_id: str,
+    platform: str,
+    record_id: str,
+    fields: dict[str, Any],
+    error_message: str,
+) -> None:
+    """Durable audit log for POLICY_BLOCK failures — the L1 of the
+    policy-block learning loop (see CLAUDE.md rule for the full arc).
+
+    Writes a `platform_policy_block` compliance_events row carrying:
+      * niche_id + blueprint_id + platform (RLS + join keys)
+      * error_snippet (first 500 chars — Meta error code + message)
+      * hook, caption fragment, hashtag_count, has_video_url
+        (blueprint content features RCA modules train on)
+
+    Fail-OPEN by construction: log_compliance_event never raises and
+    returns False on any DB or validation error. A failed audit write
+    must never break the publish state machine — the caller already
+    has bigger problems (an actual policy block).
+    """
+    try:
+        # Lazy import — compliance is a peer package; keep publishing
+        # free of import-time coupling.
+        from genlab_core.compliance.events import log_compliance_event
+
+        # Content features. Kept tight (≤1KB total metadata JSON) so
+        # the compliance_events table doesn't balloon; RCA can request
+        # the full blueprint by record_id when it wants context.
+        hook = str(fields.get("hook") or fields.get("Title") or "")[:120]
+        caption = str(fields.get("caption_ig") or fields.get("caption") or "")[:280]
+        hashtag_count = 0
+        for candidate in (caption, fields.get("caption_ig"), fields.get("hashtags")):
+            if isinstance(candidate, str) and "#" in candidate:
+                hashtag_count = candidate.count("#")
+                break
+        has_video_url = bool(fields.get("video_url") or fields.get("Video_URL"))
+
+        log_compliance_event(
+            niche_id=niche_id,
+            event_type="platform_policy_block",
+            decision="block",
+            blueprint_id=record_id,
+            platform=platform,
+            reasons=["platform_policy_block"],
+            metadata={
+                "error_snippet": (error_message or "")[:500],
+                "hook": hook,
+                "caption_fragment": caption,
+                "hashtag_count": hashtag_count,
+                "has_video_url": has_video_url,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.warning(
+            "[publish] policy_block audit write failed (non-blocking) for %s: %s",
+            platform,
+            exc,
+        )

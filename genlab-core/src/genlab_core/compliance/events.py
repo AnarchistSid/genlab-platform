@@ -68,6 +68,13 @@ VALID_EVENT_TYPES: frozenset[str] = frozenset(
         "account_health_warning",
         "auto_publish_block",
         "manual_override",
+        # 2026-07-21: platform-side policy block (Meta code=368 class).
+        # Emitted by parallel_publish when error_classifier returns
+        # POLICY_BLOCK. Foundation for the policy-block learning loop:
+        # future post_rca-style module reads these rows + blueprint
+        # content features from metadata to identify recurring triggers
+        # and feeds them back to the writer as "avoid patterns."
+        "platform_policy_block",
         # Catch-all for new check types in development — should be
         # promoted to a real type before the new check ships
         "unknown",
