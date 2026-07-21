@@ -620,3 +620,100 @@ class TestCostAccumulatorHook:
             result = client.generate_report("s", "u")
         assert isinstance(result, CallResult)
         assert result.text == '{"ok": true}'
+
+
+# === OpenAI fallback on Anthropic exhaustion (2026-07-21) ==========
+
+
+class _FakeAnthropicExhaustion(Exception):
+    """Mimics Anthropic BadRequestError 400 credit-balance body — matches
+    `llm/fallback.should_fallback` classifier."""
+
+    def __str__(self):
+        return "credit balance is too low"
+
+
+class TestOpenAIFallback:
+    """Strategist was the 9th Anthropic-direct site — wired to OpenAI
+    fallback on 2026-07-21 after Anthropic-exhaustion outage caused the
+    strategist systemd service to fail every Sunday for 2 weeks.
+
+    gpt-4o (not gpt-4o-mini like the other 8 sites) because Strategist
+    is a reasoning task with JSON-schema-adherence requirements — mini
+    is too small for meta-cognition prompts.
+    """
+
+    def test_exhaustion_triggers_openai_fallback(self, monkeypatch):
+        """Anthropic 400 credit-low → OpenAI gpt-4o returns CallResult."""
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-fake")
+        exc = _FakeAnthropicExhaustion()
+        mock_client = _mk_client(side_effect=exc)
+        client = AnthropicStrategistClient(client_factory=lambda: mock_client)
+        with patch(
+            "genlab_core.llm.fallback.call_openai_fallback",
+            return_value='{"proposals": []}',
+        ) as mock_openai:
+            result = client.generate_report("sys", "user")
+        assert isinstance(result, CallResult)
+        assert result.text == '{"proposals": []}'
+        assert "fallback" in result.model.lower()
+        # gpt-4o (not mini) is the required tier for reasoning
+        assert mock_openai.call_args.kwargs["model"] == "gpt-4o"
+        # JSON mode required — strategist output must be parseable
+        assert mock_openai.call_args.kwargs["json_mode"] is True
+
+    def test_no_openai_key_re_raises_anthropic_error(self, monkeypatch):
+        """Without OPENAI_API_KEY, exhaustion re-raises original Anthropic
+        exception — no silent degradation."""
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        exc = _FakeAnthropicExhaustion()
+        mock_client = _mk_client(side_effect=exc)
+        client = AnthropicStrategistClient(client_factory=lambda: mock_client)
+        with pytest.raises(_FakeAnthropicExhaustion):
+            client.generate_report("sys", "user")
+
+    def test_non_exhaustion_error_does_not_trigger_fallback(self, monkeypatch):
+        """Non-exhaustion errors (auth, network) skip fallback path even
+        when OPENAI_API_KEY is set. Auth errors need operator, not
+        another provider."""
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-fake")
+
+        class _AuthError(Exception):
+            def __str__(self):
+                return "401 unauthorized"
+
+        mock_client = _mk_client(side_effect=_AuthError())
+        client = AnthropicStrategistClient(client_factory=lambda: mock_client)
+        with patch("genlab_core.llm.fallback.call_openai_fallback") as mock_openai:
+            with pytest.raises(_AuthError):
+                client.generate_report("sys", "user")
+        mock_openai.assert_not_called()
+
+    def test_openai_fallback_also_fails_re_raises_anthropic(self, monkeypatch):
+        """Belt-and-suspenders: if OpenAI ALSO fails during fallback,
+        re-raise the ORIGINAL Anthropic error so downstream error
+        classifiers behave as they did pre-fallback."""
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-fake")
+        exc = _FakeAnthropicExhaustion()
+        mock_client = _mk_client(side_effect=exc)
+        client = AnthropicStrategistClient(client_factory=lambda: mock_client)
+        with patch(
+            "genlab_core.llm.fallback.call_openai_fallback",
+            side_effect=RuntimeError("OpenAI also down"),
+        ):
+            # Fallback returns None → falls into _is_transient check.
+            # _FakeAnthropicExhaustion isn't transient → re-raise.
+            with pytest.raises(_FakeAnthropicExhaustion):
+                client.generate_report("sys", "user")
+
+    def test_fallback_kill_switch(self, monkeypatch):
+        """GENLAB_LLM_FALLBACK_ENABLED=0 bypasses fallback entirely."""
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-fake")
+        monkeypatch.setenv("GENLAB_LLM_FALLBACK_ENABLED", "0")
+        exc = _FakeAnthropicExhaustion()
+        mock_client = _mk_client(side_effect=exc)
+        client = AnthropicStrategistClient(client_factory=lambda: mock_client)
+        with patch("genlab_core.llm.fallback.call_openai_fallback") as mock_openai:
+            with pytest.raises(_FakeAnthropicExhaustion):
+                client.generate_report("sys", "user")
+        mock_openai.assert_not_called()

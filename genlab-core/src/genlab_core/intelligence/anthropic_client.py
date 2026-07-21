@@ -160,6 +160,17 @@ class AnthropicStrategistClient:
                 )
             except Exception as exc:
                 last_exc = exc
+                # 2026-07-21: Anthropic-exhaustion fallback to OpenAI gpt-4o.
+                # Sonnet-4-6-quality reasoning task, so we use gpt-4o (not
+                # gpt-4o-mini like the writer/reply fallback sites) to keep
+                # the JSON-schema-adherence + reasoning depth. Fallback
+                # returns text only; cost accumulator picks up the OpenAI
+                # spend on that side.
+                fallback_result = self._try_openai_fallback(
+                    exc, system_prompt, user_prompt, t0
+                )
+                if fallback_result is not None:
+                    return fallback_result
                 # Retry once on transient classes; bail immediately on others.
                 if not self._is_transient(exc):
                     raise
@@ -168,6 +179,77 @@ class AnthropicStrategistClient:
                 )
 
         raise RuntimeError(f"Strategist LLM call failed after 2 attempts: {last_exc}")
+
+    def _try_openai_fallback(
+        self,
+        anthropic_exc: Exception,
+        system_prompt: str,
+        user_prompt: str,
+        t0: float,
+    ) -> CallResult | None:
+        """Return CallResult from OpenAI gpt-4o fallback if Anthropic is
+        exhausted AND OPENAI_API_KEY is set. Return None otherwise so the
+        caller falls through to its regular error/retry path.
+
+        Kept as its own method for readability + testability. gpt-4o
+        chosen over gpt-4o-mini because Strategist is a reasoning task
+        with JSON-schema-adherence requirements — mini is too small for
+        the meta-cognition prompt shape.
+        """
+        from genlab_core.llm.fallback import (
+            call_openai_fallback,
+            cb_record_exhaustion,
+            fallback_enabled,
+            should_fallback,
+        )
+
+        if not (fallback_enabled() and should_fallback(anthropic_exc)):
+            return None
+        openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if not openai_key:
+            logger.warning(
+                "strategist.fallback_skip reason=no_openai_key exc=%s",
+                type(anthropic_exc).__name__,
+            )
+            return None
+        cb_record_exhaustion()
+        try:
+            text = call_openai_fallback(
+                system_prompt,
+                user_prompt,
+                max_tokens=MAX_OUTPUT_TOKENS,
+                temperature=0.3,
+                api_key=openai_key,
+                model="gpt-4o",  # sonnet-4-6-equivalent reasoning tier
+                json_mode=True,  # strategist output must be parseable JSON
+            )
+            duration = time.monotonic() - t0
+            logger.warning(
+                "strategist.llm_call_fallback_openai reason=%s cost_tracked_openai t=%.2fs",
+                type(anthropic_exc).__name__,
+                duration,
+            )
+            # Cost is tracked inside call_openai_fallback via
+            # record_openai_usage. Returning 0 tokens here is a mild lie
+            # (they were consumed on OpenAI's side), but CallResult's
+            # anthropic-specific fields don't cleanly map to an OpenAI
+            # call. Downstream persistence uses `text` + `model` fields;
+            # cost dashboards read cost_accumulator directly.
+            return CallResult(
+                text=text,
+                model="gpt-4o (fallback)",
+                input_tokens=0,
+                output_tokens=0,
+                cost_usd=0.0,
+                duration_sec=round(duration, 2),
+            )
+        except Exception as openai_exc:
+            logger.warning(
+                "strategist.fallback_openai_failed openai_exc=%s — "
+                "returning None to re-raise original Anthropic error",
+                openai_exc,
+            )
+            return None
 
     def _get_client(self) -> Any:
         if self._client_factory is not None:
