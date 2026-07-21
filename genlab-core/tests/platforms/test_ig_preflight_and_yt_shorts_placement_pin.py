@@ -36,7 +36,7 @@ def test_ig_preflight_accepts_video_content_type() -> None:
     client._log = MagicMock()
 
     mock_resp = MagicMock(status_code=200, headers={"Content-Type": "video/mp4"})
-    with patch("genlab_core.platforms.instagram.requests.head", return_value=mock_resp):
+    with patch("genlab_core.platforms.instagram._META_SESSION.head", return_value=mock_resp):
         result = client._preflight_video_url("https://cdn.example.com/reel.mp4")
     assert result is None, (
         f"200 + video/mp4 should preflight OK, got: {result!r}"
@@ -53,7 +53,7 @@ def test_ig_preflight_accepts_octet_stream() -> None:
     mock_resp = MagicMock(
         status_code=200, headers={"Content-Type": "application/octet-stream"}
     )
-    with patch("genlab_core.platforms.instagram.requests.head", return_value=mock_resp):
+    with patch("genlab_core.platforms.instagram._META_SESSION.head", return_value=mock_resp):
         result = client._preflight_video_url("https://cdn.example.com/reel.mp4")
     assert result is None
 
@@ -65,7 +65,7 @@ def test_ig_preflight_rejects_404() -> None:
     client._log = MagicMock()
 
     mock_resp = MagicMock(status_code=404, headers={})
-    with patch("genlab_core.platforms.instagram.requests.head", return_value=mock_resp):
+    with patch("genlab_core.platforms.instagram._META_SESSION.head", return_value=mock_resp):
         result = client._preflight_video_url("https://cdn.example.com/dead.mp4")
     assert result is not None
     assert "404" in result
@@ -81,7 +81,7 @@ def test_ig_preflight_rejects_wrong_content_type() -> None:
     mock_resp = MagicMock(
         status_code=200, headers={"Content-Type": "text/html; charset=utf-8"}
     )
-    with patch("genlab_core.platforms.instagram.requests.head", return_value=mock_resp):
+    with patch("genlab_core.platforms.instagram._META_SESSION.head", return_value=mock_resp):
         result = client._preflight_video_url("https://cdn.example.com/error-page.html")
     assert result is not None
     assert "Content-Type" in result
@@ -94,7 +94,7 @@ def test_ig_preflight_handles_network_exception() -> None:
     client._log = MagicMock()
 
     with patch(
-        "genlab_core.platforms.instagram.requests.head",
+        "genlab_core.platforms.instagram._META_SESSION.head",
         side_effect=ConnectionError("DNS resolution failed"),
     ):
         result = client._preflight_video_url("https://dead-cdn.example.com/reel.mp4")

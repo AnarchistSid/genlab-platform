@@ -307,7 +307,7 @@ def test_facebook_block_branch_short_circuits(monkeypatch):
     with (
         _patch.object(client, "_validate_token_preflight", return_value=True),
         _patch(
-            "genlab_core.platforms.facebook.requests.post",
+            "genlab_core.platforms.facebook._META_SESSION.post",
             side_effect=_NoHTTPRaise("Layer 4 block failed to short-circuit"),
         ),
     ):
@@ -330,7 +330,7 @@ def test_instagram_block_branch_short_circuits(monkeypatch):
             side_effect=_NoHTTPRaise("L4 block failed"),
         ),
         _patch(
-            "genlab_core.platforms.instagram.requests.post",
+            "genlab_core.platforms.instagram._META_SESSION.post",
             side_effect=_NoHTTPRaise("L4 block failed"),
         ),
     ):
@@ -372,7 +372,7 @@ def test_threads_block_branch_short_circuits(monkeypatch):
     with (
         _patch.object(client, "_validate_token_preflight", return_value=True, create=True),
         _patch(
-            "genlab_core.platforms.threads.requests.post",
+            "genlab_core.platforms.threads._META_SESSION.post",
             side_effect=_NoHTTPRaise("L4 block failed"),
         ),
     ):

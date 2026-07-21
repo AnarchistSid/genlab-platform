@@ -17,6 +17,7 @@ from typing import Any
 import requests
 
 from genlab_core.platforms.meta_api import META_GRAPH_API_VERSION
+from genlab_core.platforms.meta_http import extract_usage, get_shared_session
 from genlab_core.platforms.models import (
     PlatformMetrics,
     PublishPayload,
@@ -28,6 +29,30 @@ from genlab_core.platforms.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# 2026-07-22 anti-fingerprint (item B + A): module-level Session with
+# User-Agent header + X-App-Usage capture hook. Every Meta HTTP call
+# below routes through this session so we (1) stop identifying as
+# anonymous Python-urllib/requests to Meta's WAF, and (2) capture
+# the rate-limit telemetry Meta returns on every response.
+_META_SESSION = get_shared_session()
+
+
+def _log_usage_if_present(response: requests.Response, *, endpoint: str, niche_id: str = "") -> None:
+    """Log X-App-Usage to structured log if the response carried it.
+    Fail-open — telemetry loss must never break the caller."""
+    try:
+        usage = extract_usage(response)
+        if usage:
+            logger.info(
+                "[meta_usage] endpoint=%s niche=%s app=%s buc=%s",
+                endpoint,
+                niche_id or "unknown",
+                usage.get("x_app_usage") or "",
+                (usage.get("x_business_use_case_usage") or "")[:200],
+            )
+    except Exception as exc:  # noqa: BLE001 — telemetry never breaks caller
+        logger.debug("[meta_usage] log failed: %s", exc)
 
 # Facebook Graph API post insight metric names
 #
@@ -244,7 +269,7 @@ class FacebookClient:
             )
             return False
         try:
-            resp = requests.get(
+            resp = _META_SESSION.get(
                 f"{self._base_url}/me",
                 params={"access_token": self._access_token},
                 timeout=10,
@@ -295,7 +320,7 @@ class FacebookClient:
         try:
             if is_url:
                 data["file_url"] = video_url
-                resp = requests.post(url, data=data, timeout=300)
+                resp = _META_SESSION.post(url, data=data, timeout=300)
             else:
                 # Local file multipart upload
                 from pathlib import Path
@@ -308,7 +333,7 @@ class FacebookClient:
                         error=f"Video file not found: {video_url}",
                     )
                 with open(local_path, "rb") as fh:
-                    resp = requests.post(
+                    resp = _META_SESSION.post(
                         url,
                         data=data,
                         files={"source": (local_path.name, fh, "video/mp4")},
@@ -358,7 +383,7 @@ class FacebookClient:
         }
 
         try:
-            resp = requests.post(url, data=data, timeout=60)
+            resp = _META_SESSION.post(url, data=data, timeout=60)
             response_data = _safe_json(resp)
 
             if "id" in response_data:
@@ -409,7 +434,7 @@ class FacebookClient:
         """
         url = f"{self._base_url}/{parent_id}/comments"
         try:
-            resp = requests.post(
+            resp = _META_SESSION.post(
                 url,
                 data={"message": text, "access_token": self._access_token},
                 timeout=15,
@@ -440,7 +465,7 @@ class FacebookClient:
         """
         url = f"{self._base_url}/{target_id}/likes"
         try:
-            resp = requests.post(
+            resp = _META_SESSION.post(
                 url,
                 data={"access_token": self._access_token},
                 timeout=15,
@@ -486,7 +511,7 @@ class FacebookClient:
         }
 
         try:
-            resp = requests.get(url, params=params, timeout=30)
+            resp = _META_SESSION.get(url, params=params, timeout=30)
             response_data = _safe_json(resp)
 
             if resp.status_code != 200 or "error" in response_data:
@@ -599,7 +624,7 @@ class FacebookClient:
 
         url = f"{self._base_url}/{clean_id}"
         try:
-            resp = requests.get(
+            resp = _META_SESSION.get(
                 url,
                 params={"fields": "id", "access_token": self._access_token},
                 timeout=15,
@@ -676,7 +701,7 @@ class FacebookClient:
         """
         url = f"{self._base_url}/me"
         try:
-            resp = requests.get(
+            resp = _META_SESSION.get(
                 url,
                 params={"access_token": self._access_token},
                 timeout=15,

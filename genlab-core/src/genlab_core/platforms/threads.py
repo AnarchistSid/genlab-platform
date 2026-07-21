@@ -37,11 +37,17 @@ from typing import Any
 import requests
 
 from genlab_core.config.tuning import get_tuning_config
+from genlab_core.platforms.meta_http import get_shared_session
 from genlab_core.platforms.models import PublishPayload, PublishResult, TokenStatus
 from genlab_core.platforms.models import safe_json as _safe_json
 from genlab_core.ratelimit.token_bucket import TokenBucket
 
 logger = logging.getLogger(__name__)
+
+# 2026-07-22 anti-fingerprint (item B + A): shared Meta HTTP session
+# with User-Agent header + X-App-Usage capture hook. Threads also
+# uses graph.facebook.com endpoints, so same fingerprint concerns apply.
+_META_SESSION = get_shared_session()
 
 # Threads long-lived token lifecycle constants
 _TOKEN_LIFETIME_DAYS = 60
@@ -302,7 +308,7 @@ class ThreadsClient:
         """
         url = f"{self._base_url}/me"
         try:
-            resp = requests.get(
+            resp = _META_SESSION.get(
                 url,
                 params={"access_token": self._access_token},
                 timeout=15,
@@ -507,7 +513,7 @@ class ThreadsClient:
         if media_type == "VIDEO":
             post_url = f"https://www.threads.net/post/{post_id}"
             try:
-                permalink_resp = requests.get(
+                permalink_resp = _META_SESSION.get(
                     f"{self._base_url}/{post_id}",
                     params={"fields": "permalink", "access_token": self._access_token},
                     timeout=10,
@@ -592,7 +598,7 @@ class ThreadsClient:
             data["reply_to_id"] = reply_to_id
 
         try:
-            resp = requests.post(url, data=data, timeout=30)
+            resp = _META_SESSION.post(url, data=data, timeout=30)
             payload = _safe_json(resp)
             if resp.ok and "id" in payload:
                 self._log.debug("Threads: created %s container %s", media_type, payload["id"])
@@ -617,7 +623,7 @@ class ThreadsClient:
             "access_token": self._access_token,
         }
         try:
-            resp = requests.post(url, data=data, timeout=30)
+            resp = _META_SESSION.post(url, data=data, timeout=30)
             payload = _safe_json(resp)
             if resp.ok and "id" in payload:
                 return payload["id"]
@@ -642,7 +648,7 @@ class ThreadsClient:
         consecutive_errors = 0
         for _ in range(max_seconds // 5):
             try:
-                resp = requests.get(
+                resp = _META_SESSION.get(
                     f"{self._base_url}/{container_id}",
                     params={
                         "fields": "status,error_message",
@@ -696,7 +702,7 @@ class ThreadsClient:
         already published, the permalink is just for dashboard display).
         """
         try:
-            resp = requests.get(
+            resp = _META_SESSION.get(
                 f"{self._base_url}/{post_id}",
                 params={"fields": "permalink", "access_token": self._access_token},
                 timeout=10,
@@ -812,7 +818,7 @@ class ThreadsClient:
             return True
 
         try:
-            resp = requests.get(
+            resp = _META_SESSION.get(
                 "https://graph.threads.net/refresh_access_token",
                 params={
                     "grant_type": "th_refresh_token",

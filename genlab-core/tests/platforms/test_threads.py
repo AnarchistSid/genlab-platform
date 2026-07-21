@@ -88,7 +88,7 @@ class TestPublish:
                     ok=True, json=lambda: {"permalink": "https://www.threads.net/@user/post/456"}
                 )
 
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             with patch("genlab_core.platforms.threads.time"):
                 mock_req.post.side_effect = mock_post
                 mock_req.get.side_effect = mock_get
@@ -122,7 +122,7 @@ class TestPublish:
                 ok=True, json=lambda: {"permalink": "https://www.threads.net/@user/post/99"}
             )
 
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             with patch("genlab_core.platforms.threads.time"):
                 mock_req.post.side_effect = mock_post
                 mock_req.get.side_effect = mock_get
@@ -147,7 +147,7 @@ class TestPublish:
                 return MagicMock(ok=True, json=lambda: {"id": "ctr_text_1"})
             return MagicMock(ok=True, json=lambda: {"id": "post_text_1"})
 
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             mock_req.post.side_effect = mock_post
             mock_req.get.return_value = MagicMock(
                 ok=True,
@@ -171,7 +171,7 @@ class TestPublish:
                 return MagicMock(ok=True, json=lambda: {"id": "ctr_t"})
             return MagicMock(ok=True, json=lambda: {"id": "post_t"})
 
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             with patch("genlab_core.platforms.threads.time") as mock_time:
                 mock_req.post.side_effect = mock_post
                 mock_req.get.return_value = MagicMock(ok=True, json=lambda: {"permalink": ""})
@@ -205,7 +205,7 @@ class TestPublish:
                 return MagicMock(ok=True, json=lambda: {"id": "ctr_img_1"})
             return MagicMock(ok=True, json=lambda: {"id": "post_img_1"})
 
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             with patch("genlab_core.platforms.threads.time") as mock_time:
                 mock_req.post.side_effect = mock_post
                 mock_req.get.return_value = MagicMock(ok=True, json=lambda: {"permalink": ""})
@@ -231,7 +231,7 @@ class TestPublish:
             captured_data.append(data)
             return MagicMock(ok=True, json=lambda: {"id": "ctr_chk"})
 
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             with patch("genlab_core.platforms.threads.time"):
                 mock_req.post.side_effect = capture_post
                 mock_req.get.return_value = MagicMock(ok=True, json=lambda: {"permalink": ""})
@@ -250,7 +250,7 @@ class TestPublish:
             media_type="video",
         )
 
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             with patch("genlab_core.platforms.threads.time"):
                 mock_req.post.return_value = MagicMock(
                     ok=False,
@@ -281,7 +281,7 @@ class TestPublish:
                 return MagicMock(ok=True, json=lambda: {"id": "ctr_url"})
             return MagicMock(ok=True, json=lambda: {"id": "post_url"})
 
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             mock_req.post.side_effect = capture_post
             mock_req.get.return_value = MagicMock(ok=True, json=lambda: {"permalink": ""})
             threads_client.publish(payload)
@@ -308,7 +308,7 @@ class TestReply:
                 # Publish the reply container
                 return MagicMock(ok=True, json=lambda: {"id": "reply_post_1"})
 
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             mock_req.post.side_effect = mock_post
             ok = threads_client.post_reply(
                 parent_id="thread_123",
@@ -327,7 +327,7 @@ class TestReply:
                 return MagicMock(ok=True, json=lambda: {"id": "reply_ctr_2"})
             return MagicMock(ok=True, json=lambda: {"id": "reply_post_2"})
 
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             mock_req.post.side_effect = mock_post
             # No context_id passed
             ok = threads_client.post_reply(
@@ -351,7 +351,7 @@ class TestReply:
                 return MagicMock(ok=True, json=lambda: {"id": "reply_ctr_3"})
             return MagicMock(ok=True, json=lambda: {"id": "reply_post_3"})
 
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             mock_req.post.side_effect = capture_post
             threads_client.post_reply(parent_id="thread_parent_789", text="Hello!")
 
@@ -361,7 +361,7 @@ class TestReply:
 
     def test_post_reply_failure_returns_false(self, threads_client):
         """API error on reply → returns False."""
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             mock_req.post.return_value = MagicMock(
                 ok=False,
                 status_code=400,
@@ -373,7 +373,7 @@ class TestReply:
 
     def test_post_reply_exception_returns_false(self, threads_client):
         """Network exception on reply → returns False without raising."""
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             mock_req.post.side_effect = ConnectionError("Network unreachable")
             ok = threads_client.post_reply(parent_id="thread_err", text="Hi")
 
@@ -388,7 +388,7 @@ class TestReply:
 class TestTokenHealth:
     def test_valid_token(self, threads_client):
         """GET /me returns 200 → TokenStatus valid=True."""
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
                 ok=True,
@@ -401,7 +401,7 @@ class TestTokenHealth:
 
     def test_invalid_token(self, threads_client):
         """GET /me returns 401 → TokenStatus valid=False."""
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=401,
                 ok=False,
@@ -414,7 +414,7 @@ class TestTokenHealth:
 
     def test_token_health_message_non_empty_on_success(self, threads_client):
         """TokenStatus.message is non-empty when token is valid."""
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
                 ok=True,
@@ -426,7 +426,7 @@ class TestTokenHealth:
 
     def test_token_health_needs_refresh_false_when_no_issued_at(self, threads_client):
         """Without THREADS_TOKEN_ISSUED_AT, needs_refresh stays False (can't know age)."""
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             with patch.dict(os.environ, {}, clear=False):
                 # Ensure env var is absent
                 os.environ.pop("THREADS_TOKEN_ISSUED_AT", None)
@@ -446,7 +446,7 @@ class TestTokenHealth:
 
         old_date = (datetime.now(UTC) - timedelta(days=51)).isoformat()
 
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             with patch.dict(os.environ, {"THREADS_TOKEN_ISSUED_AT": old_date}):
                 mock_req.get.return_value = MagicMock(
                     status_code=200,
@@ -463,7 +463,7 @@ class TestTokenHealth:
 
         fresh_date = (datetime.now(UTC) - timedelta(days=5)).isoformat()
 
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             with patch.dict(os.environ, {"THREADS_TOKEN_ISSUED_AT": fresh_date}):
                 mock_req.get.return_value = MagicMock(
                     status_code=200,
@@ -476,7 +476,7 @@ class TestTokenHealth:
 
     def test_token_health_exception_returns_invalid(self, threads_client):
         """Network exception → valid=False, no raise."""
-        with patch("genlab_core.platforms.threads.requests") as mock_req:
+        with patch("genlab_core.platforms.threads._META_SESSION") as mock_req:
             mock_req.get.side_effect = ConnectionError("Timeout")
             status = threads_client.check_token_health()
 

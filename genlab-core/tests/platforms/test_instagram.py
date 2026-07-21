@@ -60,7 +60,7 @@ class TestPublish:
             platform_specific=InstagramSpecific(share_to_feed=True),
         )
 
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             # Mock container creation
             mock_req.post.return_value = MagicMock(
                 status_code=200,
@@ -114,7 +114,7 @@ class TestPublish:
                 # media_publish call
                 return MagicMock(status_code=200, json=lambda: {"id": "post_xyz"})
 
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.post.side_effect = mock_post
             mock_req.get.return_value = MagicMock(
                 status_code=200,
@@ -144,7 +144,7 @@ class TestPublish:
             platform_specific=InstagramSpecific(),
         )
 
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.post.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "ctr_already"},
@@ -175,7 +175,7 @@ class TestPublish:
             niche_id="ai_creators",
         )
 
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.post.return_value = MagicMock(
                 status_code=400,
                 json=lambda: {"error": {"message": "Invalid video_url"}},
@@ -196,7 +196,7 @@ class TestPublish:
             niche_id="ai_creators",
         )
 
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.post.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "ctr_err"},
@@ -228,7 +228,7 @@ class TestPublish:
                 return MagicMock(status_code=200, json=lambda: {"id": "ctr_url"})
             return MagicMock(status_code=200, json=lambda: {"id": "post_url"})
 
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.post.side_effect = capture_post
             mock_req.get.return_value = MagicMock(
                 status_code=200,
@@ -255,7 +255,7 @@ class TestPublish:
             ),
         )
 
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.post.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "ctr_cover"},
@@ -277,7 +277,7 @@ class TestPublish:
 
 class TestEngagement:
     def test_post_reply(self, ig_client):
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.post.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "reply_456"},
@@ -291,7 +291,7 @@ class TestEngagement:
 
     def test_post_reply_failure(self, ig_client):
         """HTTP error from reply endpoint → returns False."""
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.post.return_value = MagicMock(
                 status_code=400,
                 json=lambda: {"error": {"message": "Invalid comment"}},
@@ -304,7 +304,7 @@ class TestEngagement:
         assert ok is False
 
     def test_like(self, ig_client):
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.post.return_value = MagicMock(status_code=200, json=lambda: {"success": True})
             ok = ig_client.like(target_id="comment_789")
         assert ok is True
@@ -312,7 +312,7 @@ class TestEngagement:
     def test_post_reply_uses_facebook_url(self, ig_client):
         """Reply endpoint must use graph.facebook.com."""
         captured = []
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
 
             def cap(url, *a, **kw):
                 captured.append(url)
@@ -327,7 +327,7 @@ class TestEngagement:
 
 class TestHealthCheck:
     def test_valid_token(self, ig_client):
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "17841400000000001", "name": "Test"},
@@ -337,7 +337,7 @@ class TestHealthCheck:
         assert status.platform == "instagram"
 
     def test_invalid_token(self, ig_client):
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=400,
                 json=lambda: {"error": {"message": "Invalid token"}},
@@ -347,7 +347,7 @@ class TestHealthCheck:
 
     def test_health_check_message_contains_info(self, ig_client):
         """TokenStatus.message should be non-empty on success."""
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "17841400000000001", "name": "BB Page"},
@@ -607,7 +607,7 @@ class TestNicheLoggerAdapter:
 class TestVerifyChannel:
     def test_verify_channel_success(self, ig_client):
         """verify_channel returns True when the IG account is accessible."""
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "17841400000000001", "username": "blackboxbrief"},
@@ -617,7 +617,7 @@ class TestVerifyChannel:
 
     def test_verify_channel_failure_invalid_account(self, ig_client):
         """verify_channel returns False when the API returns an error."""
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=400,
                 json=lambda: {"error": {"message": "Object does not exist"}},
@@ -627,7 +627,7 @@ class TestVerifyChannel:
 
     def test_verify_channel_exception(self, ig_client):
         """verify_channel returns False on network exception."""
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.get.side_effect = Exception("Connection timeout")
             ok = ig_client.verify_channel()
         assert ok is False
@@ -635,7 +635,7 @@ class TestVerifyChannel:
     def test_verify_channel_uses_graph_facebook_url(self, ig_client):
         """verify_channel must use graph.facebook.com."""
         captured = []
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
 
             def cap(url, *a, **kw):
                 captured.append(url)
@@ -649,7 +649,7 @@ class TestVerifyChannel:
 
     def test_verify_channel_requests_id_and_username(self, ig_client):
         """verify_channel requests fields=id,username."""
-        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "17841400000000001", "username": "bb"},

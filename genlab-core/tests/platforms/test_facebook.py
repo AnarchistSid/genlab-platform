@@ -61,7 +61,7 @@ def text_payload():
 class TestPublish:
     def test_publish_video_returns_facebook_platform(self, fb_client, video_payload):
         """publish() with video returns PublishResult with platform='facebook'."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.post.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "794399560387686"},
@@ -72,7 +72,7 @@ class TestPublish:
 
     def test_publish_video_success(self, fb_client, video_payload):
         """publish() with video URL returns success=True with post_id."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.post.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "794399560387686"},
@@ -86,7 +86,7 @@ class TestPublish:
         """Video publish uses /{page_id}/videos endpoint."""
         captured_urls = []
 
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
 
             def capture_post(url, *args, **kwargs):
                 captured_urls.append(url)
@@ -104,7 +104,7 @@ class TestPublish:
 
     def test_publish_video_api_error(self, fb_client, video_payload):
         """API error response returns success=False."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.post.return_value = MagicMock(
                 status_code=400,
                 json=lambda: {"error": {"message": "Invalid video", "code": 100}},
@@ -116,7 +116,7 @@ class TestPublish:
 
     def test_publish_no_media_rejected(self, fb_client, text_payload):
         """No media → rejected (video-first mandate, Sprint 67)."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             # Token pre-flight passes
             mock_req.get.return_value = MagicMock(status_code=200, json=lambda: {"id": "123"})
             result = fb_client.publish(text_payload)
@@ -127,7 +127,7 @@ class TestPublish:
 
     def test_publish_no_media_blocked_by_video_guard(self, fb_client, text_payload):
         """No media → blocked by video-first mandate (Sprint 67)."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(status_code=200, json=lambda: {"id": "123"})
             result = fb_client.publish(text_payload)
         assert result.success is False
@@ -135,7 +135,7 @@ class TestPublish:
 
     def test_publish_no_media_does_not_call_feed(self, fb_client, text_payload):
         """No media → no API calls made (blocked before network)."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(status_code=200, json=lambda: {"id": "123"})
             fb_client.publish(text_payload)
         # Only the pre-flight GET /me should be called, no POST
@@ -145,7 +145,7 @@ class TestPublish:
         """All publish requests go to graph.facebook.com, not graph.instagram.com."""
         captured_urls = []
 
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
 
             def capture_post(url, *args, **kwargs):
                 captured_urls.append(url)
@@ -170,7 +170,7 @@ class TestPublish:
 class TestEngagement:
     def test_post_reply_to_comment(self, fb_client):
         """post_reply(parent_id=comment_id, text) posts to /{comment_id}/comments."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.post.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "reply_comment_456"},
@@ -184,7 +184,7 @@ class TestEngagement:
 
     def test_post_reply_no_context_id_needed(self, fb_client):
         """post_reply works without context_id (Facebook replies don't need it)."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.post.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "reply_no_ctx"},
@@ -198,7 +198,7 @@ class TestEngagement:
         """post_reply posts to /{parent_id}/comments."""
         captured_urls = []
 
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
 
             def capture_post(url, *args, **kwargs):
                 captured_urls.append(url)
@@ -217,7 +217,7 @@ class TestEngagement:
 
     def test_post_reply_failure(self, fb_client):
         """HTTP error from reply endpoint returns False."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.post.return_value = MagicMock(
                 status_code=400,
                 json=lambda: {"error": {"message": "Invalid comment ID"}},
@@ -228,7 +228,7 @@ class TestEngagement:
 
     def test_post_reply_exception_returns_false(self, fb_client):
         """Exception during reply returns False (no propagation)."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.post.side_effect = Exception("Network error")
             ok = fb_client.post_reply(parent_id="comment_abc", text="Hi!")
 
@@ -238,7 +238,7 @@ class TestEngagement:
         """Reply uses graph.facebook.com."""
         captured = []
 
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
 
             def cap(url, *a, **kw):
                 captured.append(url)
@@ -267,7 +267,7 @@ class TestMetrics:
 
         published_at = self._old_published_at()
 
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {
@@ -296,7 +296,7 @@ class TestMetrics:
         captured_urls = []
         published_at = self._old_published_at()
 
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
 
             def capture_get(url, *args, **kwargs):
                 captured_urls.append(url)
@@ -319,7 +319,7 @@ class TestMetrics:
         """API error response returns None (graceful degradation)."""
         published_at = self._old_published_at()
 
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=400,
                 json=lambda: {"error": {"message": "Unsupported request"}},
@@ -335,7 +335,7 @@ class TestMetrics:
         """Exception during metrics fetch returns None."""
         published_at = self._old_published_at()
 
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.get.side_effect = Exception("Connection timeout")
             metrics = fb_client.get_metrics(
                 post_id="post_abc",
@@ -353,7 +353,7 @@ class TestMetrics:
 class TestHealthCheck:
     def test_valid_token_returns_true(self, fb_client):
         """EAA token validated via /me returns valid=True."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "422278584555262", "name": "Blackbox Brief"},
@@ -365,7 +365,7 @@ class TestHealthCheck:
 
     def test_valid_token_eaa_never_expires(self, fb_client):
         """EAA token: expires_at=None, needs_refresh=False."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "422278584555262", "name": "Blackbox Brief"},
@@ -377,7 +377,7 @@ class TestHealthCheck:
 
     def test_invalid_token_returns_false(self, fb_client):
         """HTTP 400 / error body returns valid=False."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=400,
                 json=lambda: {"error": {"message": "Invalid OAuth access token"}},
@@ -388,7 +388,7 @@ class TestHealthCheck:
 
     def test_token_health_message_is_informative(self, fb_client):
         """TokenStatus.message is non-empty on success."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
                 json=lambda: {"id": "422278584555262", "name": "BB Page"},
@@ -401,7 +401,7 @@ class TestHealthCheck:
         """check_token_health calls /me on graph.facebook.com."""
         captured = []
 
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
 
             def cap(url, *args, **kwargs):
                 captured.append(url)
@@ -418,7 +418,7 @@ class TestHealthCheck:
 
     def test_token_health_exception_returns_invalid(self, fb_client):
         """Exception during health check returns valid=False."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+        with patch("genlab_core.platforms.facebook._META_SESSION") as mock_req:
             mock_req.get.side_effect = Exception("Network error")
             status = fb_client.check_token_health()
 
@@ -501,7 +501,7 @@ def _mock_resp(status_code, json_data=None):
 class TestCheckPostAlive:
     def test_returns_true_on_200_with_id(self, fb_client):
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(200, {"id": "1234567890"}),
         ):
             assert fb_client.check_post_alive("1234567890") is True
@@ -510,7 +510,7 @@ class TestCheckPostAlive:
         # The one unambiguous "resource retired" signal Graph emits.
         body = {"error": {"code": 410, "message": "Gone"}}
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(410, body),
         ):
             assert fb_client.check_post_alive("1234") is False
@@ -527,7 +527,7 @@ class TestCheckPostAlive:
             }
         }
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(404, body),
         ):
             assert fb_client.check_post_alive("1234") is None
@@ -540,7 +540,7 @@ class TestCheckPostAlive:
             }
         }
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(400, body),
         ):
             assert fb_client.check_post_alive("1234") is None
@@ -553,7 +553,7 @@ class TestCheckPostAlive:
             }
         }
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(400, body),
         ):
             assert fb_client.check_post_alive("1234") is None
@@ -564,7 +564,7 @@ class TestCheckPostAlive:
         # code 100 → was the root cause of the 2026-06-10 prod
         # false-positive incident. The fix strips the prefix.
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(200, {"id": "1234"}),
         ) as mock_get:
             result = fb_client.check_post_alive("facebook:1234")
@@ -577,7 +577,7 @@ class TestCheckPostAlive:
     def test_returns_none_on_500(self, fb_client):
         # Server-side blip — must NOT false-positive removal.
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(500, {"error": {"message": "Internal"}}),
         ):
             assert fb_client.check_post_alive("1234") is None
@@ -592,7 +592,7 @@ class TestCheckPostAlive:
             }
         }
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(400, body),
         ):
             assert fb_client.check_post_alive("1234") is None
@@ -602,14 +602,14 @@ class TestCheckPostAlive:
         import requests
 
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             side_effect=requests.ConnectionError("DNS"),
         ):
             assert fb_client.check_post_alive("1234") is None
 
     def test_calls_correct_url_with_fields_and_token(self, fb_client):
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(200, {"id": "1234"}),
         ) as mock_get:
             fb_client.check_post_alive("1234")
@@ -648,7 +648,7 @@ class TestCheckPostAlive:
             }
         }
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(400, body),
         ):
             assert fb_client.check_post_alive("852436037816438") is False
@@ -664,7 +664,7 @@ class TestCheckPostAlive:
             }
         }
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(400, body),
         ):
             assert fb_client.check_post_alive("1234") is None
@@ -681,7 +681,7 @@ class TestCheckPostAlive:
             }
         }
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(400, body),
         ):
             assert fb_client.check_post_alive("1234") is None
@@ -698,7 +698,7 @@ class TestCheckPostAlive:
             }
         }
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(403, body),
         ):
             assert fb_client.check_post_alive("1234") is None
@@ -715,7 +715,7 @@ class TestCheckPostAlive:
             }
         }
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(400, body),
         ):
             assert fb_client.check_post_alive("1234") is None
@@ -731,7 +731,7 @@ class TestCheckPostAlive:
             }
         }
         with patch(
-            "genlab_core.platforms.facebook.requests.get",
+            "genlab_core.platforms.facebook._META_SESSION.get",
             return_value=_mock_resp(400, body),
         ):
             assert fb_client.check_post_alive("1234") is False

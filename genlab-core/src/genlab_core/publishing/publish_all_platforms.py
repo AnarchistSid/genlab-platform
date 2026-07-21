@@ -25,7 +25,10 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
+import random
 import sys
+import time
 
 from genlab_core.publishing.blueprint_selector import select_blueprint
 from genlab_core.publishing.crash_recovery import (
@@ -735,8 +738,32 @@ def main() -> int:
     shared_client = BacklogClient()
 
     total_exit = 0
+    # 2026-07-22 anti-fingerprint (item C): inter-niche jitter breaks
+    # Meta's "5 Pages publishing in the same clockwork rhythm" detector.
+    # Historical: publisher fires at 12:05 IST once daily, processes
+    # niches sequentially → Meta sees ai_creators post at ~min:37, anime
+    # at ~min:52, sports at ~min:45 EVERY SINGLE DAY for weeks. Adding
+    # 30-180s random offset per niche breaks the per-niche minute-slot
+    # regularity (Agent 2 finding, 2026-07-22 Meta audit).
+    # Skipped on the very first niche of the run — the initial
+    # timer-driven fire already establishes t0 variance across days
+    # (RandomizedDelaySec can be added on the systemd side in a
+    # follow-up if needed).
+    # Env-overridable for tests and operator debugging (set to 0 to
+    # disable): GENLAB_PUBLISH_INTER_NICHE_JITTER_MIN/MAX seconds.
+    jitter_min = int(os.environ.get("GENLAB_PUBLISH_INTER_NICHE_JITTER_MIN", "30"))
+    jitter_max = int(os.environ.get("GENLAB_PUBLISH_INTER_NICHE_JITTER_MAX", "180"))
+    first_niche = True
     for nid in niches:
         nid = _validate_niche(nid)
+        if not first_niche and jitter_max > jitter_min > 0:
+            delay = random.uniform(jitter_min, jitter_max)
+            logger.info(
+                "[publish] Inter-niche jitter: sleeping %.1fs before niche=%s "
+                "(anti-fingerprint, 2026-07-22)", delay, nid,
+            )
+            time.sleep(delay)
+        first_niche = False
         logger.info("=" * 60)
         logger.info("Publishing for niche: %s", nid)
         logger.info("=" * 60)

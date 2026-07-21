@@ -104,7 +104,7 @@ class TestInstagramCdnRetryOn2207077(unittest.TestCase):
         ig_client = _make_ig_client()
 
         def _fake_upload(_path, *, require_external, exclude_providers=frozenset()):
-            assert require_external is True
+            assert require_external is False  # 2026-07-21 flip: Cloudflare tunnel unlock
             if PROVIDER_LITTERBOX not in exclude_providers:
                 return CdnUploadResult(
                     url="https://litter.catbox.moe/abc.mp4",
@@ -257,7 +257,7 @@ class TestThreadsCdnRetryOn2207077(unittest.TestCase):
         threads_client = _make_threads_client()
 
         def _fake_upload(_path, *, require_external, exclude_providers=frozenset()):
-            assert require_external is True
+            assert require_external is False  # 2026-07-21 flip: Cloudflare tunnel unlock
             if PROVIDER_LITTERBOX not in exclude_providers:
                 return CdnUploadResult(
                     url="https://litter.catbox.moe/abc.mp4",
@@ -313,7 +313,7 @@ class TestThreadsCdnRetryOn2207077(unittest.TestCase):
                 threads_client, "_threads_publish", side_effect=_stub_publish
             ) as mock_publish,
             patch(
-                "genlab_core.platforms.threads.requests.get",
+                "genlab_core.platforms.threads._META_SESSION.get",
                 return_value=MagicMock(ok=True, json=lambda: {"permalink": ""}),
             ),
         ):

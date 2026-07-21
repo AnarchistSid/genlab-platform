@@ -17,6 +17,7 @@ from typing import Any
 import requests
 
 from genlab_core.platforms.meta_api import META_GRAPH_API_VERSION
+from genlab_core.platforms.meta_http import extract_usage, get_shared_session
 from genlab_core.platforms.models import (
     InstagramSpecific,
     PublishPayload,
@@ -28,6 +29,28 @@ from genlab_core.platforms.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# 2026-07-22 anti-fingerprint (item B + A): shared Meta HTTP session
+# with User-Agent header + X-App-Usage capture. See
+# genlab_core.platforms.facebook for the reference wire — same
+# pattern applied here since IG uses graph.facebook.com too.
+_META_SESSION = get_shared_session()
+
+
+def _log_usage_if_present(response: requests.Response, *, endpoint: str, niche_id: str = "") -> None:
+    """Log X-App-Usage to structured log if present. Fail-open."""
+    try:
+        usage = extract_usage(response)
+        if usage:
+            logger.info(
+                "[meta_usage] endpoint=%s niche=%s app=%s buc=%s",
+                endpoint,
+                niche_id or "unknown",
+                usage.get("x_app_usage") or "",
+                (usage.get("x_business_use_case_usage") or "")[:200],
+            )
+    except Exception as exc:  # noqa: BLE001 — telemetry never breaks caller
+        logger.debug("[meta_usage] log failed: %s", exc)
 
 # Poll config (kept short for tests; real use is fine because it's mocked)
 _DEFAULT_MAX_POLL_SECONDS = 480
@@ -486,7 +509,7 @@ class InstagramClient:
         """
         url = f"{self._base_url}/{parent_id}/replies"
         try:
-            resp = requests.post(
+            resp = _META_SESSION.post(
                 url,
                 data={"message": text, "access_token": self._access_token},
                 timeout=15,
@@ -531,7 +554,7 @@ class InstagramClient:
         """
         url = f"{self._base_url}/me"
         try:
-            resp = requests.get(
+            resp = _META_SESSION.get(
                 url,
                 params={"access_token": self._access_token},
                 timeout=15,
@@ -581,7 +604,7 @@ class InstagramClient:
         """
         url = f"{self._base_url}/{self._ig_user_id}"
         try:
-            resp = requests.get(
+            resp = _META_SESSION.get(
                 url,
                 params={
                     "fields": "id,username",
@@ -709,7 +732,7 @@ class InstagramClient:
         None on success.
         """
         try:
-            head = requests.head(video_url, timeout=15, allow_redirects=True)
+            head = _META_SESSION.head(video_url, timeout=15, allow_redirects=True)
         except Exception as exc:
             return f"CDN URL preflight failed ({type(exc).__name__}): {exc}"
         if head.status_code != 200:
@@ -759,7 +782,7 @@ class InstagramClient:
             data["cover_url"] = cover_url
 
         try:
-            resp = requests.post(url, data=data, timeout=60)
+            resp = _META_SESSION.post(url, data=data, timeout=60)
             payload = _safe_json(resp)
             if "id" in payload:
                 self._log.info("Reel container created: %s", payload["id"])
@@ -806,7 +829,7 @@ class InstagramClient:
                 return None
 
             try:
-                resp = requests.get(status_url, params=status_params, timeout=30)
+                resp = _META_SESSION.get(status_url, params=status_params, timeout=30)
                 data = _safe_json(resp)
                 status_code = data.get("status_code", "UNKNOWN")
 
@@ -862,7 +885,7 @@ class InstagramClient:
         def _attempt(attempt_num: int) -> tuple[str | None, str]:
             """Return (post_id_or_None, error_message_if_any)."""
             try:
-                resp = requests.post(url, data=data, timeout=60)
+                resp = _META_SESSION.post(url, data=data, timeout=60)
                 payload = _safe_json(resp)
                 if "id" in payload:
                     self._log.info(
@@ -902,7 +925,7 @@ class InstagramClient:
         if params:
             all_params.update(params)
         try:
-            resp = requests.get(url, params=all_params, timeout=15)
+            resp = _META_SESSION.get(url, params=all_params, timeout=15)
             return _safe_json(resp)
         except Exception as exc:
             # WARNING (not silent {}): callers (token verify, media
