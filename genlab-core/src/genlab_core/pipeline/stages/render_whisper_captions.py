@@ -78,10 +78,29 @@ class RenderWhisperCaptions:
                 stats["skipped"] += 1
                 continue
 
-            # Get caption text -- try hook_text, then hook, then title
-            caption_text = (
-                media.get("hook_text") or story.get("hook") or story.get("title", "")
-            ).strip()
+            # Get caption text -- try hook_text, then hook, then title.
+            #
+            # Layer 3 S7 phase F (2026-07-22): for storytime variant, the
+            # composited video's audio track is the TTS-generated narration
+            # (compose_storytime replaces source audio). Whisper alignment
+            # against hook text over narration audio would be nonsensical —
+            # use variant_payload.narration_text so whisper aligns against
+            # what was actually said. Falls back to hook/title when
+            # narration_text is empty (edge case: pre-phase-F blueprint
+            # somehow marked variant_type=storytime without payload).
+            if story.get("variant_type") == "storytime":
+                _vp = story.get("variant_payload") or {}
+                _narration = str(_vp.get("narration_text", "")).strip()
+                caption_text = (
+                    _narration
+                    or media.get("hook_text")
+                    or story.get("hook")
+                    or story.get("title", "")
+                ).strip()
+            else:
+                caption_text = (
+                    media.get("hook_text") or story.get("hook") or story.get("title", "")
+                ).strip()
 
             if not caption_text:
                 stats["skipped"] += 1
