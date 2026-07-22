@@ -102,10 +102,21 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
         "-o",
         output_path,
         "--no-playlist",
+        # 2026-07-22 WARP-flap safety net: bumped from 30→60 sec socket timeout
+        # and 2→4 retries. Today's 09:00 IST + 15:51 IST WARP outages killed
+        # 100% of movies-pipeline downloads because SOCKS5 host-unreachable
+        # errors exhausted retries in ~90 sec while WARP was down for 20-30
+        # min. yt-dlp's built-in backoff between retries scales up to ~30 sec
+        # each, so 4 retries at 60s timeout gives ~5 min coverage — catches
+        # short flaps without punishing the healthy path. Longer WARP outages
+        # still hit the ERROR path at line 799 → rule #26 exit-code 2 →
+        # OnFailure alert. Deeper defense (raise-on-SOCKS5 to trigger the
+        # stage-runner retry loop; template retry_delay_seconds 30→180)
+        # deferred to a dedicated session per 2026-07-22 audit.
         "--socket-timeout",
-        "30",
+        "60",
         "--retries",
-        "2",
+        "4",
         "--extractor-args",
         extractor_args,
         # User agent matching a real Android YouTube app
