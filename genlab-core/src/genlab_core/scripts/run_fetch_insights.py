@@ -190,6 +190,8 @@ def _fetch_platform_insights(
             return _fetch_youtube(raw_id)
         elif platform == "facebook":
             return _fetch_facebook(raw_id, niche_id=niche_id)
+        elif platform == "threads":
+            return _fetch_threads(raw_id, niche_id=niche_id)
         elif platform in ("x", "twitter", "x_twitter"):
             return _fetch_twitter(raw_id)
         else:
@@ -234,6 +236,18 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
     from genlab_core.platforms.metrics import fetch_facebook as _canonical
 
     return add_legacy_aliases(_canonical(post_id, niche_id=niche_id), "facebook")
+
+
+def _fetch_threads(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
+    """Fetch Threads metrics — thin delegate to the canonical implementation.
+
+    2026-07-22 wire-gap fix: prior to this, Threads was NOT wired into
+    `_fetch_platform_insights` at all — every Threads SUCCESS row stayed
+    at SUCCESS forever, denying the learning loop 40% of publish signal.
+    """
+    from genlab_core.platforms.metrics import fetch_threads as _canonical
+
+    return add_legacy_aliases(_canonical(post_id, niche_id=niche_id), "threads")
 
 
 def _fetch_twitter(post_id: str) -> dict[str, Any] | None:

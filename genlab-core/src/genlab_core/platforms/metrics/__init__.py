@@ -19,6 +19,7 @@ later changes once their return-shape contracts are unified.
 
 from .facebook import fetch_facebook
 from .instagram import fetch_instagram
+from .threads import fetch_threads
 from .twitter import fetch_twitter
 from .types import PlatformMetrics
 from .youtube import fetch_youtube
@@ -27,6 +28,7 @@ __all__ = [
     "PlatformMetrics",
     "fetch_facebook",
     "fetch_instagram",
+    "fetch_threads",
     "fetch_twitter",
     "fetch_youtube",
 ]
