@@ -1,0 +1,30 @@
+[Unit]
+Description=GenLab meta_usage morning-fire verification — post-publisher hook check
+After=network-online.target genlab-publisher.service
+
+# 2026-07-22: shipped the meta_http hook (1b25aff0) + metric-collector
+# adoption (d6f5222a). Post-fire verification via the retry-only path was
+# inconclusive because R-21 ambiguous-failure skipped every candidate.
+# This timer runs post-publisher-fresh-fire to confirm the hook is
+# actually firing at scale.
+#
+# Rule #26 compliant: script exits 0 always (data-side signal, operator
+# reads stdout / grep from journalctl). Add --strict if wiring into
+# pipeline_alerts.
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# Look at the last 2h so the check covers both the noon publisher fire
+# and any 16:00 retry-only fire on the same day.
+Environment=MU_SINCE=2 hours ago
+ExecStart=/opt/genlab/scripts/verify_meta_usage_morning.sh
+TimeoutSec=60
+
+[Install]
+WantedBy=multi-user.target

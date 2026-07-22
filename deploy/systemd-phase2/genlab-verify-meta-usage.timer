@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab meta_usage morning-fire verification (12:15 IST daily, 10 min post-publisher)
+
+[Timer]
+# Publisher fires 12:05 IST daily. Give 10-min buffer for HTTP + logging
+# to flush, then run verification.
+# 12:15 IST = 06:45 UTC.
+OnCalendar=*-*-* 06:45:00 UTC
+Persistent=true
+AccuracySec=30s
+Unit=genlab-verify-meta-usage.service
+
+[Install]
+WantedBy=timers.target
