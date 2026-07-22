@@ -594,6 +594,7 @@ def write_video_content(
 
             if is_watch_till_end_eligible(video):
                 watch_till_end_hint = format_watch_till_end_prompt_section()
+                variant_selected = True
                 logger.info(
                     "[%s] watch_till_end eligible: title=%r duration=%s",
                     niche_id,
@@ -602,6 +603,31 @@ def write_video_content(
                 )
         except Exception as exc:
             logger.debug("[%s] watch_till_end selection skipped: %s", niche_id, exc)
+
+    # Layer 3 S6 (2026-07-22): split_screen variant selector. For content
+    # whose title carries an explicit comparison signal ("X vs Y",
+    # before/after, "reacting to X"), the LLM produces a hook that leans
+    # into the two-sided frame. Priority position: below question_reveal +
+    # watch_till_end — checked only when neither of the two higher variants
+    # matched. Compositor renders vstack (top+bottom) via S6b.
+    split_screen_hint = ""
+    if not variant_selected:
+        try:
+            from genlab_core.writing.split_screen_selector import (
+                format_split_screen_prompt_section,
+                is_split_screen_eligible,
+            )
+
+            if is_split_screen_eligible(video):
+                split_screen_hint = format_split_screen_prompt_section()
+                logger.info(
+                    "[%s] split_screen eligible: title=%r duration=%s",
+                    niche_id,
+                    (video.get("title") or "")[:60],
+                    video.get("duration_seconds"),
+                )
+        except Exception as exc:
+            logger.debug("[%s] split_screen selection skipped: %s", niche_id, exc)
 
     age_hours = video.get("age_hours", 1)
     if not age_hours:
@@ -726,6 +752,7 @@ def write_video_content(
         + series_context_hint
         + question_reveal_hint
         + watch_till_end_hint
+        + split_screen_hint
         + "OUTPUT FORMAT — strictly enforced:\n"
         "Respond ONLY with valid JSON. ALL SIX KEYS ARE REQUIRED and must\n"
         "have non-empty string values:\n"

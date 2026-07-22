@@ -249,14 +249,38 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
             # non-empty reveal_text to landscape/square logs INFO but
             # falls back to hook-only rendering.
             _reveal_text = (story.get("content") or {}).get("reveal") or ""
-            composite_path = compositor.compose(
-                source_video_path=str(clip_path),
-                hook_text=hook_text,
-                output_path=output_path,
-                duration_seconds=dur,
-                source_credit=_source_credit,
-                reveal_text=_reveal_text,
-            )
+
+            # Layer 3 S6 (2026-07-22): split_screen variant compositor.
+            # Flag-gated OFF by default — enables opting a single niche
+            # in for canary testing before flipping globally. Reads
+            # variant_payload for left/right labels; falls back to
+            # generic A/B when not present. Any exception or
+            # missing-flag path falls through to the default compose().
+            import os as _os
+            _variant_type = (story.get("variant_type") or "").lower()
+            _split_flag = _os.environ.get("GENLAB_SPLIT_SCREEN_COMPOSITOR_ENABLED", "0") == "1"
+            if _variant_type == "split_screen" and _split_flag:
+                _vp = story.get("variant_payload") or {}
+                _left = str(_vp.get("left_label") or "A")[:24]
+                _right = str(_vp.get("right_label") or "B")[:24]
+                composite_path = compositor.compose_split_screen(
+                    source_video_path=str(clip_path),
+                    hook_text=hook_text,
+                    output_path=output_path,
+                    left_label=_left,
+                    right_label=_right,
+                    duration_seconds=dur,
+                    source_credit=_source_credit,
+                )
+            else:
+                composite_path = compositor.compose(
+                    source_video_path=str(clip_path),
+                    hook_text=hook_text,
+                    output_path=output_path,
+                    duration_seconds=dur,
+                    source_credit=_source_credit,
+                    reveal_text=_reveal_text,
+                )
             if not composite_path:
                 # 2026-07-14 (media audit F10): persist a render_error so
                 # `check_stale_drafted` + `push_to_backlog._derive_render_

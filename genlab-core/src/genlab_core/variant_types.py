@@ -181,6 +181,24 @@ def choose_variant(story: dict) -> tuple[str, dict]:
     except Exception:
         pass
 
+    # 2026-07-22 S6 addition — split_screen sits below watch_till_end in
+    # priority (weaker mechanistic signal: comparison keyword vs explicit
+    # question or compilation frame). If the payload builder returns an
+    # empty dict (missing video_id, etc.), fall through to single_clip
+    # rather than shipping an invalid payload that fails validate_payload.
+    try:
+        from genlab_core.writing.split_screen_selector import (
+            build_split_screen_payload,
+            is_split_screen_eligible,
+        )
+
+        if is_split_screen_eligible(story):
+            payload = build_split_screen_payload(story)
+            if payload:
+                return ("split_screen", payload)
+    except Exception:
+        pass
+
     return (DEFAULT_VARIANT, {})
 
 

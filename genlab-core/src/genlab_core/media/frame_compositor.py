@@ -459,6 +459,149 @@ class FrameCompositor:
         # Local execution — historical default for all 5 niches.
         run_ffmpeg(cmd, timeout=timeout, fallback_preset=fallback_preset)
 
+    def compose_split_screen(
+        self,
+        source_video_path: str,
+        hook_text: str,
+        output_path: str,
+        left_label: str = "A",
+        right_label: str = "B",
+        duration_seconds: float | None = None,
+        trim_start: float = 0.0,
+        crf: int = 20,
+        preset: str | None = None,
+        force_fps: int = 30,
+        source_credit: str = "",
+    ) -> str:
+        """Render a split-screen (vstack) reel for the ``split_screen`` variant.
+
+        Layer 3 S6 (2026-07-22). Portrait 1080x1920 target with two halves:
+        top 1080x960 shows the source video, bottom 1080x960 shows the
+        source video mirror-flipped horizontally. Hook overlays top-center,
+        left_label + right_label overlay each half, logo watermarks the
+        bottom-right corner.
+
+        The self-referenced clip_b (per ``split_screen_selector`` design)
+        is compensated visually by the horizontal flip — viewers perceive
+        two comparable frames rather than a duplicate. When the pipeline
+        pair-fetcher lands, this method's signature accepts a separate
+        ``source_video_path_b`` and the flip fallback is skipped.
+
+        Arguments mirror ``compose()`` where applicable. See ``compose()``
+        docstring for shared arg semantics (crf, preset, force_fps, etc.).
+
+        Feature-flag gate: this method IS called by ``compose()`` when
+        ``variant_type == split_screen`` AND
+        ``os.environ.get("GENLAB_SPLIT_SCREEN_COMPOSITOR_ENABLED") == "1"``.
+        Before the flag flips, split_screen blueprints fall through to the
+        default single-clip rendering path — no visual regression.
+        """
+        # R-26: enforce logo invariant, same as compose().
+        if not (self.branding.logo_path and os.path.exists(self.branding.logo_path)):
+            raise RuntimeError(
+                f"[{self.branding.niche_id}] Channel logo missing for split_screen "
+                f"(logo_path={self.branding.logo_path!r})"
+            )
+
+        # Escape label text for drawtext — colons, apostrophes, backslashes.
+        def _esc(text: str) -> str:
+            return (
+                text.replace("\\", "\\\\")
+                .replace(":", "\\:")
+                .replace("'", "\\'")
+                .replace("\n", " ")
+            )
+
+        left_esc = _esc(left_label[:24])
+        right_esc = _esc(right_label[:24])
+        hook_esc = _esc((hook_text or "")[:60])
+
+        # Build the ffmpeg filter graph. Base pattern:
+        # 1. Scale source to 1080x960 → clip_top
+        # 2. Same source, hflip, scale to 1080x960 → clip_bottom
+        # 3. vstack → 1080x1920
+        # 4. Draw hook text top-center at y=40
+        # 5. Draw left_label at top-half center (y=880)
+        # 6. Draw right_label at bottom-half center (y=1840)
+        # 7. Overlay logo bottom-right (matches compose() branding)
+        # 8. Draw source_credit watermark bottom-right if set.
+        filter_parts: list[str] = [
+            # Scale each half preserving aspect + pad to fill 1080x960 exactly.
+            "[0:v]scale=1080:960:force_original_aspect_ratio=decrease,"
+            "pad=1080:960:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1[top]",
+            "[0:v]hflip,scale=1080:960:force_original_aspect_ratio=decrease,"
+            "pad=1080:960:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1[bot]",
+            "[top][bot]vstack=inputs=2[stacked]",
+        ]
+
+        # Draw hook top-center (y=40). Fontsize keeps hook readable across
+        # the 1080-wide frame; box background gives contrast on video.
+        if hook_esc:
+            filter_parts.append(
+                f"[stacked]drawtext=text='{hook_esc}':"
+                "x=(w-text_w)/2:y=40:fontsize=44:fontcolor=white:"
+                "box=1:boxcolor=black@0.6:boxborderw=8[with_hook]"
+            )
+            last_label = "with_hook"
+        else:
+            last_label = "stacked"
+
+        # Draw left/right labels — bottom of each half so they don't overlap the video content.
+        # Top half y-range 0-960; label at y=880 keeps it inside top half.
+        # Bottom half y-range 960-1920; label at y=1840 keeps it inside bottom half.
+        filter_parts.append(
+            f"[{last_label}]drawtext=text='{left_esc}':"
+            "x=(w-text_w)/2:y=880:fontsize=54:fontcolor=white:"
+            "box=1:boxcolor=black@0.7:boxborderw=10[with_left]"
+        )
+        filter_parts.append(
+            "[with_left]drawtext=text='" + right_esc + "':"
+            "x=(w-text_w)/2:y=1840:fontsize=54:fontcolor=white:"
+            "box=1:boxcolor=black@0.7:boxborderw=10[with_right]"
+        )
+
+        # Logo overlay — bottom-right corner of the whole frame.
+        logo_path = self.branding.logo_path
+        logo_height = getattr(self.branding, "logo_height", 60)
+        filter_complex = ";".join(filter_parts)
+        filter_complex += (
+            f";[1:v]scale=-1:{logo_height}[logo];"
+            "[with_right][logo]overlay=W-w-24:H-h-24[with_logo]"
+        )
+        map_label = "with_logo"
+
+        # Assemble ffmpeg command. Mirror compose() choices: libx264 CRF 20,
+        # preset=fast (from PLATFORM_SPECS default), bt709 color, 30 fps.
+        _preset = preset or "fast"
+        cmd: list[str] = [
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-ss", str(trim_start),
+            "-i", source_video_path,
+            "-i", logo_path,
+            "-filter_complex", filter_complex,
+            "-map", f"[{map_label}]",
+            "-map", "0:a?",
+            "-c:v", "libx264",
+            "-crf", str(crf),
+            "-preset", _preset,
+            "-r", str(force_fps),
+            "-pix_fmt", "yuv420p",
+            "-colorspace", "bt709",
+            "-color_primaries", "bt709",
+            "-color_trc", "bt709",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-ar", "48000",
+        ]
+        if duration_seconds is not None:
+            cmd.extend(["-t", str(duration_seconds)])
+        cmd.append(output_path)
+
+        # Run through the same sandbox / local path selector compose() uses.
+        # Timeout ~180s to accommodate 60s output at CRF 20 on the 4 GB VPS.
+        self._run_ffmpeg(cmd, timeout=180, fallback_preset=None)
+        return output_path
+
     def compose(
         self,
         source_video_path: str,

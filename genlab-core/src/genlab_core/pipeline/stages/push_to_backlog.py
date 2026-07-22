@@ -2806,6 +2806,7 @@ class PushToBacklog:
                             if is_watch_till_end_eligible(story):
                                 fields["variant_type"] = "watch_till_end"
                                 fields["variant_payload"] = {}
+                                variant_assigned = True
                                 logger.info(
                                     "[PUSH] variant=watch_till_end eligible: title=%r duration=%s",
                                     (story.get("title") or "")[:60],
@@ -2814,6 +2815,46 @@ class PushToBacklog:
                         except Exception as exc:  # noqa: BLE001
                             logger.debug(
                                 "[PUSH] watch_till_end selection skipped for story=%s: %s",
+                                story.get("story_id", "<no-id>"),
+                                exc,
+                            )
+
+                    # Layer 3 S6 (2026-07-22): split_screen variant selector.
+                    # Only fires when NO higher-priority variant already
+                    # claimed this blueprint (series > question_reveal >
+                    # watch_till_end > split_screen). Selector short-circuits
+                    # on all three defensively. `build_split_screen_payload`
+                    # populates clip_a_video_id + clip_b_video_id (self-
+                    # reference until pair-fetcher sourcing lands) + optional
+                    # left_label/right_label/layout that the compositor's
+                    # `_compose_split_screen` reads for the vstack render.
+                    # Empty payload from the builder means missing video_id →
+                    # skip the variant assignment (falls through to
+                    # single_clip default via the storage layer).
+                    if not variant_assigned:
+                        try:
+                            from genlab_core.writing.split_screen_selector import (
+                                build_split_screen_payload,
+                                is_split_screen_eligible,
+                            )
+
+                            if is_split_screen_eligible(story):
+                                _ss_payload = build_split_screen_payload(story)
+                                if _ss_payload:
+                                    fields["variant_type"] = "split_screen"
+                                    fields["variant_payload"] = _ss_payload
+                                    variant_assigned = True
+                                    logger.info(
+                                        "[PUSH] variant=split_screen eligible: "
+                                        "title=%r duration=%s labels=%s/%s",
+                                        (story.get("title") or "")[:60],
+                                        story.get("duration_seconds"),
+                                        _ss_payload.get("left_label"),
+                                        _ss_payload.get("right_label"),
+                                    )
+                        except Exception as exc:  # noqa: BLE001
+                            logger.debug(
+                                "[PUSH] split_screen selection skipped for story=%s: %s",
                                 story.get("story_id", "<no-id>"),
                                 exc,
                             )
