@@ -602,6 +602,176 @@ class FrameCompositor:
         self._run_ffmpeg(cmd, timeout=180, fallback_preset=None)
         return output_path
 
+    def compose_storytime(
+        self,
+        source_video_path: str,
+        hook_text: str,
+        output_path: str,
+        narration_text: str,
+        duration_seconds: float | None = None,
+        trim_start: float = 0.0,
+        crf: int = 20,
+        preset: str | None = None,
+        force_fps: int = 30,
+        source_credit: str = "",
+    ) -> str:
+        """Render a storytime reel: source video (visual) + TTS narration audio.
+
+        Layer 3 S7 phase E (2026-07-22, MVP). Portrait 1080x1920 with the
+        source video as the visual backdrop and TTS-generated narration
+        as the primary audio track — source video's own audio is muted.
+        Hook overlays top-center, logo bottom-right (same branding as
+        compose()). Word-timed caption overlays are deferred to a
+        follow-up phase F — this MVP ships the core narration-over-visual
+        experience without adding whisper-alignment complexity.
+
+        The TTS cascade (ElevenLabs → OpenAI → Edge-TTS → gTTS) auto-
+        falls-back per `genlab_core.tts.factory.build_tts_cascade`. Cost
+        control: ElevenLabs at ~$0.18/1K chars would blow the <$5/day cap
+        on 20+ publishes if narration_text runs long, so the cascade
+        respects circuit-breaker + rate limits already built in.
+
+        Feature-flag gate: this method IS called by base_visual_render
+        when ``variant_type == storytime`` AND
+        ``GENLAB_STORYTIME_COMPOSITOR_ENABLED=1``. Off by default;
+        blueprints fall through to compose() (default single-clip path)
+        until the flag flips. Same rollout pattern as S6 split_screen used.
+
+        Raises RuntimeError on: missing logo, empty narration_text, TTS
+        cascade complete failure (all 4 providers down). All other
+        failures degrade to warnings and continue (matches compose()).
+        """
+        if not (self.branding.logo_path and os.path.exists(self.branding.logo_path)):
+            raise RuntimeError(
+                f"[{self.branding.niche_id}] Channel logo missing for storytime "
+                f"(logo_path={self.branding.logo_path!r})"
+            )
+        if not narration_text or not narration_text.strip():
+            raise RuntimeError(
+                f"[{self.branding.niche_id}] storytime narration_text is empty — "
+                "cannot render without narration source"
+            )
+
+        # 1. Generate TTS narration via the cascade. Cascade handles
+        #    provider failures internally — either returns a result with
+        #    success=True or an all-providers-down failure that raises.
+        import tempfile
+
+        from genlab_core.tts.factory import build_tts_cascade
+
+        cascade = build_tts_cascade()
+
+        tts_dir = tempfile.mkdtemp(prefix="genlab_storytime_tts_")
+        tts_output = os.path.join(tts_dir, "narration.mp3")
+
+        # Cap narration to 1500 chars — respects Threads-style short-form limits
+        # and matches build_storytime_payload's trim floor.
+        narration_capped = narration_text.strip()[:1500]
+        tts_result = cascade.synthesize(narration_capped, tts_output)
+
+        if not tts_result.success or not os.path.exists(tts_output):
+            raise RuntimeError(
+                f"[{self.branding.niche_id}] TTS cascade failed for storytime "
+                f"narration ({tts_result.error or 'no output'}). "
+                f"Provider tried: {tts_result.provider or 'none'}"
+            )
+
+        logger.info(
+            "[%s] storytime TTS: provider=%s duration=%.1fs cost=$%.4f",
+            self.branding.niche_id,
+            tts_result.provider,
+            tts_result.duration,
+            tts_result.cost_estimate,
+        )
+
+        # 2. Escape hook for drawtext filter.
+        def _esc(text: str) -> str:
+            return (
+                text.replace("\\", "\\\\")
+                .replace(":", "\\:")
+                .replace("'", "\\'")
+                .replace("\n", " ")
+            )
+
+        hook_esc = _esc((hook_text or "")[:60])
+
+        # 3. Build the ffmpeg filter graph:
+        #    - Source video scaled to 1080x1920 with letterbox padding
+        #    - Hook drawtext at top-center (y=80)
+        #    - Logo overlay bottom-right
+        #    - Source audio DROPPED, TTS narration in its place
+        #
+        # Use `-shortest` so the output duration matches whichever stream
+        # ends first (usually the TTS narration since we trim source video
+        # too when duration_seconds is set).
+        filter_parts: list[str] = [
+            "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,"
+            "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1[base]",
+        ]
+        if hook_esc:
+            filter_parts.append(
+                f"[base]drawtext=text='{hook_esc}':"
+                "x=(w-text_w)/2:y=80:fontsize=52:fontcolor=white:"
+                "box=1:boxcolor=black@0.6:boxborderw=10[with_hook]"
+            )
+            last_label = "with_hook"
+        else:
+            last_label = "base"
+
+        logo_height = getattr(self.branding, "logo_height", 60)
+        filter_parts.append(
+            f"[2:v]scale=-1:{logo_height}[logo]"
+        )
+        filter_parts.append(
+            f"[{last_label}][logo]overlay=W-w-24:H-h-24[with_logo]"
+        )
+
+        filter_complex = ";".join(filter_parts)
+
+        # 4. Assemble ffmpeg command. Input 0 = source video; input 1 =
+        #    TTS narration; input 2 = logo image.
+        _preset = preset or "fast"
+        cmd: list[str] = [
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-ss", str(trim_start),
+            "-i", source_video_path,
+            "-i", tts_output,
+            "-i", self.branding.logo_path,
+            "-filter_complex", filter_complex,
+            "-map", "[with_logo]",
+            "-map", "1:a",  # TTS audio, drop source audio
+            "-c:v", "libx264",
+            "-crf", str(crf),
+            "-preset", _preset,
+            "-r", str(force_fps),
+            "-pix_fmt", "yuv420p",
+            "-colorspace", "bt709",
+            "-color_primaries", "bt709",
+            "-color_trc", "bt709",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-ar", "48000",
+            "-shortest",
+        ]
+        if duration_seconds is not None:
+            cmd.extend(["-t", str(duration_seconds)])
+        cmd.append(output_path)
+
+        # 5. Run ffmpeg via the same sandbox / local runner compose() uses.
+        # Longer timeout (300s) than compose() because TTS+re-encode+overlay
+        # is heavier than plain single-clip.
+        self._run_ffmpeg(cmd, timeout=300, fallback_preset=None)
+
+        # 6. Cleanup — remove the temp TTS file. Best-effort; leftover
+        # files clean up eventually via the .tmp/ prune cycle.
+        try:
+            os.remove(tts_output)
+            os.rmdir(tts_dir)
+        except OSError:
+            pass
+
+        return output_path
+
     def compose(
         self,
         source_video_path: str,

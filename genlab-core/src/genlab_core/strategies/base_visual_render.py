@@ -259,6 +259,8 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
             import os as _os
             _variant_type = (story.get("variant_type") or "").lower()
             _split_flag = _os.environ.get("GENLAB_SPLIT_SCREEN_COMPOSITOR_ENABLED", "0") == "1"
+            _storytime_flag = _os.environ.get("GENLAB_STORYTIME_COMPOSITOR_ENABLED", "0") == "1"
+
             if _variant_type == "split_screen" and _split_flag:
                 _vp = story.get("variant_payload") or {}
                 _left = str(_vp.get("left_label") or "A")[:24]
@@ -272,6 +274,42 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                     duration_seconds=dur,
                     source_credit=_source_credit,
                 )
+            elif _variant_type == "storytime" and _storytime_flag:
+                # Layer 3 S7 phase E (2026-07-22): storytime variant compositor
+                # — TTS narration replaces source audio. Word-timed caption
+                # overlays deferred to phase F follow-up. narration_text
+                # comes from variant_payload (populated by
+                # build_storytime_payload from summary / description_snippet).
+                _vp = story.get("variant_payload") or {}
+                _narration = (_vp.get("narration_text") or "").strip()
+                if _narration:
+                    composite_path = compositor.compose_storytime(
+                        source_video_path=str(clip_path),
+                        hook_text=hook_text,
+                        output_path=output_path,
+                        narration_text=_narration,
+                        duration_seconds=dur,
+                        source_credit=_source_credit,
+                    )
+                else:
+                    # Payload missing narration → degrade to default compose()
+                    # rather than raising. Rare but possible when payload
+                    # was populated in a legacy run before the S7 field
+                    # contract was tightened.
+                    logger.warning(
+                        "%s storytime variant missing narration_text — falling "
+                        "back to default compose() for story %s",
+                        self._log_prefix,
+                        sid[:16],
+                    )
+                    composite_path = compositor.compose(
+                        source_video_path=str(clip_path),
+                        hook_text=hook_text,
+                        output_path=output_path,
+                        duration_seconds=dur,
+                        source_credit=_source_credit,
+                        reveal_text=_reveal_text,
+                    )
             else:
                 composite_path = compositor.compose(
                     source_video_path=str(clip_path),
