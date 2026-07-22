@@ -2859,6 +2859,45 @@ class PushToBacklog:
                                 exc,
                             )
 
+                    # Layer 3 S7 (2026-07-22, writer-only slice): storytime
+                    # variant selector. Bottom of the priority chain — fires
+                    # only when NONE of series_part, question_reveal,
+                    # watch_till_end, or split_screen already claimed this
+                    # blueprint. Requires narrative-arc title signal + 60-120s
+                    # duration + narration source (summary/description). Empty
+                    # payload → fall through to single_clip. Phase E compositor
+                    # (TTS narration + timed word overlays) deferred to a
+                    # fresh session — until it lands, storytime blueprints
+                    # render via the default compose() path (no TTS, no
+                    # timed overlays, hook only). Data collection now,
+                    # compositor investment later.
+                    if not variant_assigned:
+                        try:
+                            from genlab_core.writing.storytime_selector import (
+                                build_storytime_payload,
+                                is_storytime_eligible,
+                            )
+
+                            if is_storytime_eligible(story):
+                                _st_payload = build_storytime_payload(story)
+                                if _st_payload:
+                                    fields["variant_type"] = "storytime"
+                                    fields["variant_payload"] = _st_payload
+                                    variant_assigned = True
+                                    logger.info(
+                                        "[PUSH] variant=storytime eligible: "
+                                        "title=%r duration=%s narration_len=%d",
+                                        (story.get("title") or "")[:60],
+                                        story.get("duration_seconds"),
+                                        len(_st_payload.get("narration_text", "")),
+                                    )
+                        except Exception as exc:  # noqa: BLE001
+                            logger.debug(
+                                "[PUSH] storytime selection skipped for story=%s: %s",
+                                story.get("story_id", "<no-id>"),
+                                exc,
+                            )
+
                     if publishable:
                         fields["visual_paths"] = json.dumps([rendered_path])
                         # 2026-06-15 audit fix: DO NOT pre-set scheduled_for here.

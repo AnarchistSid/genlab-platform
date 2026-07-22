@@ -199,6 +199,24 @@ def choose_variant(story: dict) -> tuple[str, dict]:
     except Exception:
         pass
 
+    # 2026-07-22 S7 writer-only slice — storytime at the bottom of the
+    # priority chain, above single_clip default. Requires narrative-arc
+    # title signal + 60-120s duration. Payload seeds narration_text from
+    # story summary; phase E compositor consumes for TTS + timed overlays.
+    # Missing narration source → empty payload → fall through.
+    try:
+        from genlab_core.writing.storytime_selector import (
+            build_storytime_payload,
+            is_storytime_eligible,
+        )
+
+        if is_storytime_eligible(story):
+            payload = build_storytime_payload(story)
+            if payload:
+                return ("storytime", payload)
+    except Exception:
+        pass
+
     return (DEFAULT_VARIANT, {})
 
 

@@ -620,6 +620,7 @@ def write_video_content(
 
             if is_split_screen_eligible(video):
                 split_screen_hint = format_split_screen_prompt_section()
+                variant_selected = True
                 logger.info(
                     "[%s] split_screen eligible: title=%r duration=%s",
                     niche_id,
@@ -628,6 +629,30 @@ def write_video_content(
                 )
         except Exception as exc:
             logger.debug("[%s] split_screen selection skipped: %s", niche_id, exc)
+
+    # Layer 3 S7 (2026-07-22, writer-only slice): storytime variant selector.
+    # Bottom of the priority chain — fires only when NONE of series_part,
+    # question_reveal, watch_till_end, or split_screen matched. Requires
+    # narrative-arc title signal + 60-120s duration. Compositor E deferred
+    # to a fresh session (TTS + timed overlays scope).
+    storytime_hint = ""
+    if not variant_selected:
+        try:
+            from genlab_core.writing.storytime_selector import (
+                format_storytime_prompt_section,
+                is_storytime_eligible,
+            )
+
+            if is_storytime_eligible(video):
+                storytime_hint = format_storytime_prompt_section()
+                logger.info(
+                    "[%s] storytime eligible: title=%r duration=%s",
+                    niche_id,
+                    (video.get("title") or "")[:60],
+                    video.get("duration_seconds"),
+                )
+        except Exception as exc:
+            logger.debug("[%s] storytime selection skipped: %s", niche_id, exc)
 
     age_hours = video.get("age_hours", 1)
     if not age_hours:
@@ -753,6 +778,7 @@ def write_video_content(
         + question_reveal_hint
         + watch_till_end_hint
         + split_screen_hint
+        + storytime_hint
         + "OUTPUT FORMAT — strictly enforced:\n"
         "Respond ONLY with valid JSON. ALL SIX KEYS ARE REQUIRED and must\n"
         "have non-empty string values:\n"
