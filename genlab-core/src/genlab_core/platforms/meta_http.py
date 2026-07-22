@@ -64,6 +64,36 @@ def _get_user_agent() -> str:
     return os.environ.get("GENLAB_META_USER_AGENT") or _DEFAULT_UA
 
 
+# 2026-07-22 alarm thresholds — first live telemetry showed 15% app
+# call_count from a single metric collection cycle, so 80% is a real
+# risk within days. Escalate log level as we approach Meta's undocumented
+# but observed rate limits. Operator can grep for [meta_usage] WARN/ERROR
+# specifically instead of scanning every INFO line.
+_APP_USAGE_WARN_THRESHOLD_PCT = 80
+_APP_USAGE_ERROR_THRESHOLD_PCT = 95
+
+
+def _parse_app_usage_max_pct(app_usage_json: str) -> int:
+    """Return the max of call_count / total_cputime / total_time from
+    Meta's X-App-Usage payload. All three are percentages 0-100
+    (Meta's undocumented shape). Returns 0 on parse failure so alarm
+    logic can't false-fire on garbage."""
+    if not app_usage_json:
+        return 0
+    try:
+        import json as _json
+        data = _json.loads(app_usage_json)
+        if not isinstance(data, dict):
+            return 0
+        vals = [
+            int(data.get(k, 0) or 0)
+            for k in ("call_count", "total_cputime", "total_time")
+        ]
+        return max(vals) if vals else 0
+    except (ValueError, TypeError):
+        return 0
+
+
 def _capture_usage_headers(response: requests.Response, *args: Any, **kwargs: Any) -> requests.Response:
     """Response hook — extract Meta rate-limit telemetry onto the
     response for upstream extraction + log directly. Fail-OPEN:
@@ -76,6 +106,11 @@ def _capture_usage_headers(response: requests.Response, *args: Any, **kwargs: An
     the hook itself means every Meta API response gets logged
     automatically — no per-call-site wiring needed. Same fail-open
     contract; log write can't break the response.
+
+    2026-07-22 alarm ladder: log level escalates from INFO → WARNING
+    → ERROR as the max X-App-Usage percentage crosses 80% / 95%.
+    Operator can grep `[meta_usage]` at WARN+ for early rate-limit
+    warning without scanning every INFO line.
     """
     try:
         app_usage = response.headers.get("X-App-Usage")
@@ -92,13 +127,26 @@ def _capture_usage_headers(response: requests.Response, *args: Any, **kwargs: An
             }
             # Log directly from hook — every Meta response with usage
             # headers gets one line. Includes URL host+path (truncated)
-            # so operator can grep by endpoint.
+            # so operator can grep by endpoint. Level escalates based
+            # on max X-App-Usage %.
             try:
                 url = str(getattr(response, "url", "") or "")[:150]
-                logger.info(
-                    "[meta_usage] url=%s status=%d app=%s buc=%s",
+                max_pct = _parse_app_usage_max_pct(app_usage or "")
+                if max_pct >= _APP_USAGE_ERROR_THRESHOLD_PCT:
+                    log_fn = logger.error
+                    level_tag = " CRITICAL"
+                elif max_pct >= _APP_USAGE_WARN_THRESHOLD_PCT:
+                    log_fn = logger.warning
+                    level_tag = " WARN"
+                else:
+                    log_fn = logger.info
+                    level_tag = ""
+                log_fn(
+                    "[meta_usage]%s url=%s status=%d max_app_pct=%d app=%s buc=%s",
+                    level_tag,
                     url,
                     getattr(response, "status_code", 0),
+                    max_pct,
                     app_usage or "",
                     (buc_usage or "")[:200],
                 )

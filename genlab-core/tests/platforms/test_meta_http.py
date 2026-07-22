@@ -183,3 +183,90 @@ class TestHookLogsUsage:
         assert not info, (
             f"Should not log when no usage headers present, got: {[r.message for r in info]}"
         )
+
+
+class TestAlarmThresholds:
+    """Pin the escalation ladder (INFO < 80% < WARN < 95% < ERROR).
+    First live telemetry showed 15% call_count from ONE metric cycle —
+    real risk of crossing thresholds within days without warning."""
+
+    def _make_response(self, app_usage: str) -> object:
+        class _FakeResp:
+            def __init__(self, hdrs):
+                self.headers = hdrs
+                self.url = "https://graph.facebook.com/v22.0/12345/videos"
+                self.status_code = 200
+        return _FakeResp({"X-App-Usage": app_usage})
+
+    def test_below_80_pct_logs_at_info(self, caplog) -> None:
+        import logging as _logging
+        resp = self._make_response('{"call_count":15,"total_cputime":0,"total_time":5}')
+        with caplog.at_level(_logging.INFO, logger="genlab_core.platforms.meta_http"):
+            _capture_usage_headers(resp)
+        info = [r for r in caplog.records if r.levelno == _logging.INFO
+                and "meta_usage" in r.message]
+        warn = [r for r in caplog.records if r.levelno >= _logging.WARNING
+                and "meta_usage" in r.message]
+        assert info and not warn, (
+            f"15% max should log INFO not WARN/ERROR. Got INFO={len(info)}, WARN+={len(warn)}"
+        )
+        # Also assert max_app_pct correctly parsed and reported
+        assert "max_app_pct=15" in info[0].message
+
+    def test_at_80_pct_escalates_to_warning(self, caplog) -> None:
+        """Exactly 80% should trigger WARNING (>= threshold)."""
+        import logging as _logging
+        resp = self._make_response('{"call_count":80,"total_cputime":40,"total_time":30}')
+        with caplog.at_level(_logging.WARNING, logger="genlab_core.platforms.meta_http"):
+            _capture_usage_headers(resp)
+        warn = [r for r in caplog.records if r.levelno == _logging.WARNING
+                and "meta_usage" in r.message]
+        error = [r for r in caplog.records if r.levelno == _logging.ERROR]
+        assert warn and not error, (
+            f"80% max should log WARN not ERROR. Got WARN={len(warn)}, ERROR={len(error)}"
+        )
+        assert "WARN" in warn[0].message
+        assert "max_app_pct=80" in warn[0].message
+
+    def test_at_95_pct_escalates_to_error(self, caplog) -> None:
+        """Exactly 95% should trigger ERROR — critical rate-limit
+        approach, operator should be paged."""
+        import logging as _logging
+        resp = self._make_response('{"call_count":95,"total_cputime":50,"total_time":80}')
+        with caplog.at_level(_logging.INFO, logger="genlab_core.platforms.meta_http"):
+            _capture_usage_headers(resp)
+        error = [r for r in caplog.records if r.levelno == _logging.ERROR
+                 and "meta_usage" in r.message]
+        assert error, (
+            f"95% max should log ERROR. Got: {[(r.levelname, r.message[:100]) for r in caplog.records]}"
+        )
+        assert "CRITICAL" in error[0].message
+        assert "max_app_pct=95" in error[0].message
+
+    def test_uses_max_of_three_metrics(self, caplog) -> None:
+        """Meta's X-App-Usage exposes call_count, total_cputime,
+        total_time — all 0-100 %. Alarm should fire on MAX not just
+        call_count (any of the 3 can hit limit)."""
+        import logging as _logging
+        # call_count low, but total_cputime high
+        resp = self._make_response('{"call_count":10,"total_cputime":88,"total_time":5}')
+        with caplog.at_level(_logging.WARNING, logger="genlab_core.platforms.meta_http"):
+            _capture_usage_headers(resp)
+        warn = [r for r in caplog.records if r.levelno == _logging.WARNING
+                and "meta_usage" in r.message]
+        assert warn, "Should WARN when total_cputime=88 even if call_count low"
+        assert "max_app_pct=88" in warn[0].message
+
+    def test_bad_json_does_not_break_hook(self, caplog) -> None:
+        """Meta could ship a schema change; garbage app_usage payload
+        must not break the log-at-INFO fallback (still logs, just at
+        max_pct=0)."""
+        import logging as _logging
+        resp = self._make_response('not-valid-json-{{')
+        with caplog.at_level(_logging.INFO, logger="genlab_core.platforms.meta_http"):
+            _capture_usage_headers(resp)
+        # Still emits at INFO (max_pct=0 fallback)
+        info = [r for r in caplog.records if r.levelno == _logging.INFO
+                and "meta_usage" in r.message]
+        assert info, "Bad-JSON x_app_usage must still emit INFO log"
+        assert "max_app_pct=0" in info[0].message
