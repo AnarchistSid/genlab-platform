@@ -22,7 +22,7 @@ Environment=GENLAB_PROJECT_ROOT=/opt/genlab
 Environment=HOME=/opt/genlab
 # Look at the last 2h so the check covers both the noon publisher fire
 # and any 16:00 retry-only fire on the same day.
-Environment=MU_SINCE=2 hours ago
+Environment="MU_SINCE=2 hours ago"
 ExecStart=/opt/genlab/scripts/verify_meta_usage_morning.sh
 TimeoutSec=60
 
