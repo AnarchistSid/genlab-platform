@@ -397,7 +397,23 @@ def generate_hook(
     from genlab_core.cache.text_sanitizer import check_for_injection, sanitize_text
 
     raw_title = story.get("title", "")
-    raw_summary = story.get("summary", "") or ""
+    # 2026-07-22 movies backlog-starvation fix: previously read only
+    # `story["summary"]`, but the thin-context filter
+    # `_has_writable_context` passes stories where ANY of the 3 fields
+    # `summary` / `description_snippet` / `description` clears the
+    # 40-char floor. Movies stories from `TrendingVideoFetcher`
+    # populate `description_snippet` but leave `summary` empty →
+    # writer sends "Summary: [empty]" → Claude refuses → refusal
+    # preamble becomes the hook → gets archived. Same class-of-bug
+    # as `_story_to_video_dict` sibling fix; belt-and-suspenders here
+    # so the base_hooks fallback path (which passes the raw story
+    # dict directly, bypassing `_story_to_video_dict`) is also safe.
+    raw_summary = (
+        story.get("summary")
+        or story.get("description_snippet")
+        or story.get("description")
+        or ""
+    )
     title = sanitize_text(raw_title, max_length=300)
     summary = sanitize_text(raw_summary, max_length=300)
 

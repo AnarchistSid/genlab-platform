@@ -171,7 +171,25 @@ class BaseWritingStrategy(WritingStrategy):
             clip_info = clip_index.get("clips", {}).get(story_id, {})
 
         raw_title = story.get("title", "")
-        raw_summary = story.get("summary", "")
+        # 2026-07-22 movies backlog-starvation fix: `_has_writable_context`
+        # (see line 95) passes stories where ANY of `summary` /
+        # `description_snippet` / `description` clears the 40-char floor,
+        # but the LLM prompt at `llm_hook_generator.py:400` reads ONLY
+        # `summary`. Movies stories from `TrendingVideoFetcher` populate
+        # `description_snippet` (via YouTube API) and leave `summary`
+        # empty — so the writer sends "Summary: [empty]" to Claude, which
+        # sensibly refuses ("I need the Story Summary to write a hook..."),
+        # and the refusal preamble lands as a hook that gets archived.
+        # Symptom: SpliceReel dark for 6 days, backlog depleted, 6/6 archived
+        # blueprints showed refusal-preamble hooks. Class-of-bug: shared
+        # contract, N implementers, silent divergence (see MEMORY.md).
+        # Fix: same 3-field precedence as the filter.
+        raw_summary = (
+            story.get("summary")
+            or story.get("description_snippet")
+            or story.get("description")
+            or ""
+        )
         # Bug A fix (2026-07-13 audit W1 trace): previously read
         # ``story.get("source")`` — but ``source`` is the source TYPE
         # (``"youtube_trending"``, ``"twitch_trending"``, etc.), NOT
