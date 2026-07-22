@@ -38,10 +38,23 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from pathlib import Path
 from typing import Any
+
+# Load root .env early — pg_connect reads DATABASE_URL, niche fetchers
+# read per-platform tokens. Same pattern as run_fetch_insights.py.
+try:
+    from dotenv import load_dotenv
+
+    _ROOT = Path(__file__).resolve().parents[2]
+    _ENV_FILE = _ROOT / ".env"
+    if _ENV_FILE.exists():
+        load_dotenv(_ENV_FILE, override=False)
+except ImportError:
+    pass
 
 _STATE_PATH = Path("/opt/genlab/.runtime/zombie_backfill_state.json")
 _SLEEP_S = 3.0
