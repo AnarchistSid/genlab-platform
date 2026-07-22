@@ -327,6 +327,12 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
         first_comment_text = (fields.get("instagram_first_comment", "") or "").strip()
     elif platform == "youtube":
         first_comment_text = (fields.get("youtube_first_comment", "") or "").strip()
+    elif platform == "threads":
+        # 2026-07-22 (Layer 2 monetization): threads_first_comment wire.
+        # Threads reply payload; posted after successful parent publish
+        # by ThreadsClient.publish's post_reply call. Same CTR-boost
+        # pattern as FB/IG/YT. Populated by cta_engine.py:504-518.
+        first_comment_text = (fields.get("threads_first_comment", "") or "").strip()
 
     return PublishPayload(
         caption=caption,

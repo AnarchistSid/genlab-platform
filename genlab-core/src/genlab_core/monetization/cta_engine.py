@@ -461,10 +461,12 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
         fields["twitter_first_comment"] = reply_text
 
     # ── Threads content ─────────────────────────────────────────────────────
-    # Threads doesn't support clickable links in posts, but we mention the
-    # product so the affiliate reply (posted separately) has context.
-    # Bandit-selected variant for the CTA text; hardcoded fallback if no
-    # variants configured.
+    # Threads doesn't support clickable links in the main post body, but
+    # replies DO carry URLs. Same first-comment pattern as FB/IG/YT: main
+    # post mentions the product with a "check first reply" hint, then a
+    # separate reply carries the actual affiliate URL (posted by
+    # `ThreadsClient.post_reply` after successful publish — wired
+    # 2026-07-22 via `payload_builder.py:329-330`).
     th_content: str = fields.get("threads_content", "") or ""
     if product_name and th_content:
         if product_name.lower() not in th_content.lower():
@@ -485,6 +487,31 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
                 overage = len(th_content) - 500
                 th_content = th_content[: len(th_content) - len(th_cta) - overage] + th_cta
             fields["threads_content"] = th_content
+
+    # ── Threads first-comment (2026-07-22 Layer 2 monetization) ───────────
+    # Wire gap: previously, `threads_content` got the "check first reply"
+    # hint but no `threads_first_comment` was ever set — the reply
+    # never got posted (payload_builder had no elif, threads.py had no
+    # post_reply call after publish). Same class-of-bug as tonights
+    # Threads-dispatch fixes (f9f186c2, 2898cc1e — insights fetcher).
+    #
+    # Follow the FB/IG shape verbatim: bare URL + product name, no
+    # disclosure duplicated (already in the main post). Bandit-selected
+    # variant hookup mirrors YT.
+    if url and product_name:
+        th_first_comment = f"🔗 Get {product_name}: {url}"
+        if bandit:
+            try:
+                variant = bandit.select(platform="threads_reply")
+                if variant.arm_id != "default":
+                    th_first_comment = variant.format(product_name=product_name, url=url)
+                    selected_variants.append(variant.arm_id)
+            except Exception as e:
+                logger.debug("[CTAEngine] Bandit select failed for threads_reply: %s", e)
+        # Threads reply cap: 500 chars (same as parent post)
+        if len(th_first_comment) > 500:
+            th_first_comment = th_first_comment[:497].rstrip() + "..."
+        fields["threads_first_comment"] = th_first_comment
 
     # Store the selected variant arm_id for downstream attribution
     if selected_variants:

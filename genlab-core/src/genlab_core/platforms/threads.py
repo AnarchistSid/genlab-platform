@@ -220,12 +220,44 @@ class ThreadsClient:
 
         try:
             if media_type == "video" and media_paths:
-                return self._publish_video(caption=caption, media_paths=media_paths)
+                result = self._publish_video(caption=caption, media_paths=media_paths)
             elif media_type == "image" and media_paths:
-                return self._publish_image(caption=caption, media_paths=media_paths)
+                result = self._publish_image(caption=caption, media_paths=media_paths)
             else:
                 # Text-only (or fallback when media_type mismatch)
-                return self._publish_text(caption=caption)
+                result = self._publish_text(caption=caption)
+
+            # 2026-07-22 (Layer 2 monetization): post affiliate link as
+            # first reply to the parent thread. Threads doesnt allow
+            # clickable links in the main post but replies DO carry URLs;
+            # same 20-80x CTR pattern as FB/IG/YT that we shipped 2026-07-17.
+            # Best-effort: a reply failure doesnt fail the publish itself
+            # (mirrors platforms/facebook.py:233-249 exactly).
+            if result.success and payload.first_comment_text and result.post_id:
+                try:
+                    reply_ok = self.post_reply(
+                        parent_id=result.post_id,
+                        text=payload.first_comment_text,
+                        context_id=result.post_id,
+                    )
+                    if reply_ok:
+                        self._log.info(
+                            "Threads: affiliate first-reply posted under %s",
+                            result.post_id,
+                        )
+                    else:
+                        self._log.warning(
+                            "Threads: first-reply post returned False for %s",
+                            result.post_id,
+                        )
+                except Exception as reply_exc:
+                    self._log.warning(
+                        "Threads: first-reply exception for %s: %s",
+                        result.post_id,
+                        reply_exc,
+                    )
+
+            return result
         except Exception as exc:
             self._log.error("Threads: publish error: %s", exc)
             return PublishResult(
