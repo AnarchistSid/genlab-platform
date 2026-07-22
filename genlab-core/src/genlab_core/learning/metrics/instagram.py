@@ -24,8 +24,17 @@ split (after metrics/youtube.py). Backward compatibility via re-export shim
 in metric_collector.py.
 """
 
-from __future__ import annotations
 
+
+from __future__ import annotations
+from genlab_core.platforms.meta_http import get_shared_session as _get_shared_session
+
+# 2026-07-22 anti-fingerprint extension: metric collectors call
+# graph.facebook.com to fetch reel insights. Reusing the shared
+# Meta HTTP session gives us (1) identified User-Agent header + (2)
+# X-App-Usage capture via the response hook. Same rationale as
+# platforms/facebook.py adopted in 8c02b266.
+_META_SESSION = _get_shared_session()
 import logging
 from typing import Any
 
@@ -43,8 +52,6 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
     ``skip_rate`` aren't directly available from the basic insights
     endpoints; stubbed as 0.
     """
-    import requests
-
     from genlab_core.publishing.niche_credentials import resolve_meta_credentials
 
     token = resolve_meta_credentials(niche_id).get("ig_access_token", "")
@@ -72,7 +79,7 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
     ]:
         warn_if_deprecated(metric_set, context="ig_basic")
         try:
-            resp = requests.get(
+            resp = _META_SESSION.get(
                 f"{META_GRAPH_BASE_URL}/{post_id}/insights",
                 params={"metric": metric_set, "access_token": token},
                 timeout=15,
@@ -127,8 +134,6 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
 
 def _fetch_instagram_reels_6h(post_id: str, niche_id: str = "") -> dict:
     """IG Reels-specific metrics for early 6h skip-rate signal."""
-    import requests
-
     from genlab_core.publishing.niche_credentials import resolve_meta_credentials
 
     token = resolve_meta_credentials(niche_id).get("ig_access_token", "")
@@ -141,7 +146,7 @@ def _fetch_instagram_reels_6h(post_id: str, niche_id: str = "") -> dict:
 
     metric_set = "ig_reels_avg_watch_time,ig_reels_video_view_total_time,plays"
     warn_if_deprecated(metric_set, context="ig_reels_6h")
-    resp = requests.get(
+    resp = _META_SESSION.get(
         f"{META_GRAPH_BASE_URL}/{post_id}/insights",
         params={
             "metric": metric_set,

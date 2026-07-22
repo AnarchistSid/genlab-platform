@@ -31,8 +31,17 @@ metric_collector.py. The 3 helpers move together because they form a
 coherent unit — they all share the same token + endpoint base.
 """
 
-from __future__ import annotations
 
+
+from __future__ import annotations
+from genlab_core.platforms.meta_http import get_shared_session as _get_shared_session
+
+# 2026-07-22 anti-fingerprint extension: metric collectors call
+# graph.facebook.com to fetch reel insights. Reusing the shared
+# Meta HTTP session gives us (1) identified User-Agent header + (2)
+# X-App-Usage capture via the response hook. Same rationale as
+# platforms/facebook.py adopted in 8c02b266.
+_META_SESSION = _get_shared_session()
 import logging
 from typing import Any
 
@@ -55,11 +64,9 @@ def _fetch_facebook_reel_insights(reel_id: str, token: str) -> dict:
     Used to compute completion_rate (avg_time / length) and recover
     the shares signal that's not exposed on the video object directly.
     """
-    import requests
-
     metrics_param = "post_video_view_time,post_video_avg_time_watched,post_video_social_actions"
     try:
-        resp = requests.get(
+        resp = _META_SESSION.get(
             f"{META_GRAPH_BASE_URL}/{reel_id}/video_insights",
             params={"metric": metrics_param, "access_token": token},
             timeout=15,
@@ -117,10 +124,8 @@ def _fetch_facebook_video_object(post_id: str, token: str) -> dict:
     page-level Reels Insights endpoint surfaces it under a different
     auth surface — wiring that is a separate task.
     """
-    import requests
-
     try:
-        resp = requests.get(
+        resp = _META_SESSION.get(
             f"{META_GRAPH_BASE_URL}/{post_id}",
             params={
                 "fields": "likes.summary(true).limit(0),comments.summary(true).limit(0),views,length",
@@ -162,8 +167,6 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
     soft-fails to the existing stub zero rather than crashing the
     fetch — keeps the engagement bandit moving on partial data.
     """
-    import requests
-
     from genlab_core.publishing.niche_credentials import resolve_fb_credentials
 
     token, _page_id = resolve_fb_credentials(niche_id)
@@ -207,7 +210,7 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
     warn_if_deprecated(fb_feed_metrics, context="fb_feed_insights")
     reels_total_plays: int | None = None  # tracked so we can prefer it
     try:
-        resp = requests.get(
+        resp = _META_SESSION.get(
             f"{META_GRAPH_BASE_URL}/{post_id}/insights",
             params={
                 "metric": fb_feed_metrics,

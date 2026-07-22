@@ -16,8 +16,17 @@ module in the metric_collector split. After this PR + the matching cleanup,
 ``process_pending_task``, ``collect_metrics``, ``_default_bandit_updater``).
 """
 
-from __future__ import annotations
 
+
+from __future__ import annotations
+from genlab_core.platforms.meta_http import get_shared_session as _get_shared_session
+
+# 2026-07-22 anti-fingerprint extension: metric collectors call
+# graph.facebook.com to fetch reel insights. Reusing the shared
+# Meta HTTP session gives us (1) identified User-Agent header + (2)
+# X-App-Usage capture via the response hook. Same rationale as
+# platforms/facebook.py adopted in 8c02b266.
+_META_SESSION = _get_shared_session()
 import logging
 from typing import Any
 
@@ -31,15 +40,13 @@ def _fetch_threads(post_id: str, niche_id: str = "") -> dict:
     ``views, replies, reposts, discovery_share``. ``discovery_share``
     isn't exposed by the Threads insights endpoint — stubbed as 0.
     """
-    import requests
-
     from genlab_core.publishing.niche_credentials import resolve_threads_credentials
 
     token, _user_id = resolve_threads_credentials(niche_id)
     if not token:
         return {}
     try:
-        resp = requests.get(
+        resp = _META_SESSION.get(
             f"https://graph.threads.net/v1.0/{post_id}/insights",
             params={
                 "metric": "views,likes,replies,reposts,quotes",
