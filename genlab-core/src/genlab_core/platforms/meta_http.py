@@ -66,8 +66,16 @@ def _get_user_agent() -> str:
 
 def _capture_usage_headers(response: requests.Response, *args: Any, **kwargs: Any) -> requests.Response:
     """Response hook — extract Meta rate-limit telemetry onto the
-    response for upstream extraction. Fail-OPEN: hook exceptions
-    never propagate (real response must be preserved intact).
+    response for upstream extraction + log directly. Fail-OPEN:
+    hook exceptions never propagate (real response must be
+    preserved intact).
+
+    2026-07-22 wire-fix: original design required callers to invoke
+    _log_usage_if_present() after each response, but the caller-side
+    wire was forgotten in commit 8c02b266. Moving the log call into
+    the hook itself means every Meta API response gets logged
+    automatically — no per-call-site wiring needed. Same fail-open
+    contract; log write can't break the response.
     """
     try:
         app_usage = response.headers.get("X-App-Usage")
@@ -82,6 +90,20 @@ def _capture_usage_headers(response: requests.Response, *args: Any, **kwargs: An
                 "x_business_use_case_usage": buc_usage,
                 "x_ad_account_usage": ad_usage,
             }
+            # Log directly from hook — every Meta response with usage
+            # headers gets one line. Includes URL host+path (truncated)
+            # so operator can grep by endpoint.
+            try:
+                url = str(getattr(response, "url", "") or "")[:150]
+                logger.info(
+                    "[meta_usage] url=%s status=%d app=%s buc=%s",
+                    url,
+                    getattr(response, "status_code", 0),
+                    app_usage or "",
+                    (buc_usage or "")[:200],
+                )
+            except Exception as log_exc:  # noqa: BLE001 — log must fail-open
+                logger.debug("[meta_http] usage-log emit failed: %s", log_exc)
     except Exception as exc:  # noqa: BLE001 — hook must fail-open
         logger.debug("[meta_http] usage-header capture failed: %s", exc)
     return response

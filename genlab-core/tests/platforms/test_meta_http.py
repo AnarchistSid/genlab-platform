@@ -139,3 +139,47 @@ class TestExtractUsage:
         """Bare response (no hook fired) must not raise."""
         resp = MagicMock(spec=[])  # spec=[] means no attributes
         assert extract_usage(resp) is None
+
+
+class TestHookLogsUsage:
+    """Pin the 2026-07-22 wire-fix — hook must LOG usage at INFO
+    (not just attach to response). Callers no longer need explicit
+    _log_usage_if_present() invocations."""
+
+    def _make_response(self, **hdrs) -> object:
+        class _FakeResp:
+            def __init__(self, h):
+                self.headers = h
+                self.url = "https://graph.facebook.com/v22.0/12345/videos"
+                self.status_code = 200
+        return _FakeResp(hdrs)
+
+    def test_hook_emits_info_log_when_usage_present(self, caplog) -> None:
+        import logging as _logging
+        resp = self._make_response(
+            **{"X-App-Usage": '{"call_count":42,"total_cputime":13}'}
+        )
+        with caplog.at_level(_logging.INFO, logger="genlab_core.platforms.meta_http"):
+            _capture_usage_headers(resp)
+        info = [r for r in caplog.records if r.levelno == _logging.INFO]
+        assert any("meta_usage" in r.message for r in info), (
+            f"Expected [meta_usage] INFO log, got: {[r.message for r in caplog.records]}"
+        )
+        # URL and status should be in the log
+        msg = next(r.message for r in info if "meta_usage" in r.message)
+        assert "graph.facebook.com" in msg
+        assert "status=200" in msg
+        assert "call_count" in msg  # X-App-Usage payload leaked in
+
+    def test_hook_does_not_log_when_no_usage_headers(self, caplog) -> None:
+        """Non-Meta responses (no usage headers) must not emit log
+        lines — otherwise we'd flood on every non-Meta HTTP call."""
+        import logging as _logging
+        resp = self._make_response()  # no usage headers
+        with caplog.at_level(_logging.INFO, logger="genlab_core.platforms.meta_http"):
+            _capture_usage_headers(resp)
+        info = [r for r in caplog.records if r.levelno == _logging.INFO
+                and "meta_usage" in r.message]
+        assert not info, (
+            f"Should not log when no usage headers present, got: {[r.message for r in info]}"
+        )
