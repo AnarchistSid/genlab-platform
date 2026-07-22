@@ -27,6 +27,58 @@ from typing import Any
 
 from genlab_core.config.tuning import get_tuning_config  # noqa: E402
 
+
+# 2026-07-22 late: WARP flap resilience via stage-runner retry.
+#
+# `LocalStageRunner` in `pipeline/stage_runner.py:164` fires the
+# `retries: N, retry_delay_seconds: N` config from niche.yaml ONLY on
+# `Exception`. `DownloadTopVideos.execute()` used to catch every download
+# error internally (returns `{success: False, error: ...}` in the entries
+# dict), never raising. Result: `retries: 1, retry_delay_seconds: 30` at
+# `pipeline_template.yaml:92` has been a DEAD KNOB since it landed.
+#
+# This exception makes the knob live. `execute()` raises after the download
+# loop when EVERY download failed AND at least one carries a SOCKS5-shaped
+# error string (Host unreachable, SOCKS5, connection refused). The stage
+# runner then triggers its retry with the configured delay, giving WARP
+# a chance to recover before the pipeline gives up.
+class ProxyOutageDetected(RuntimeError):
+    """All downloads failed with SOCKS5-shaped errors — likely WARP outage.
+
+    Raised from `DownloadTopVideos.execute()` when 100% of attempted
+    downloads returned SOCKS5-family failures. Caught + retried by
+    `LocalStageRunner` per the stage's `retries:` config in niche.yaml.
+
+    Passing this to the runner's retry path (rather than catching it
+    internally) is the whole reason the `retries: N, retry_delay_seconds: N`
+    config in the pipeline template exists — before this fix that config
+    was dormant because `execute()` never raised.
+    """
+
+
+# Match tokens that indicate a proxy-layer failure vs a real YouTube block
+# or a per-video 404. Anchored to lowercase substring match.
+_SOCKS5_ERROR_TOKENS: tuple[str, ...] = (
+    "host unreachable",
+    "socks5",
+    "connection refused",
+    "connect timeout",
+    "errno 4",  # POSIX EHOSTUNREACH — surfaced by the socket layer under WARP flap
+)
+
+
+def _is_socks5_shaped_error(err: str) -> bool:
+    """True if the error string looks like a proxy/WARP failure.
+
+    Explicitly EXCLUDES per-video errors (404, bot-detection wall,
+    signature-decryption failures) — those wouldn't benefit from a
+    proxy-recovery retry.
+    """
+    if not err:
+        return False
+    low = err.lower()
+    return any(token in low for token in _SOCKS5_ERROR_TOKENS)
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -718,6 +770,39 @@ class DownloadTopVideos:
 
         context["clip_index"] = clip_index
         context["clip_index_path"] = str(clip_index_path)
+
+        # 2026-07-22 late: activate the stage-runner retry knob on
+        # all-SOCKS5 failure. When every attempted download hit a
+        # SOCKS5-shaped error, the culprit is almost always WARP flap
+        # (as verified by the 09:00 IST + 15:51 IST movies-pipeline
+        # incidents earlier today). Raising here triggers the
+        # `retries: N, retry_delay_seconds: N` config in
+        # `pipeline_template.yaml:92` — retry gives WARP a chance to
+        # recover before we give up on the whole run. If the second
+        # attempt still returns all-SOCKS5, we raise again → stage
+        # runner marks failed → rule #26 exit-code 2 → operator paged.
+        #
+        # We only raise when EVERY entry has a SOCKS5-shaped error. A
+        # partial success (some downloaded, some hit SOCKS5) is treated
+        # as a normal partial result — those often mean per-video quirks
+        # rather than a systemic proxy outage.
+        if entries and clip_index["videos_downloaded"] == 0:
+            all_socks5 = all(
+                _is_socks5_shaped_error(entry.get("error") or "")
+                for entry in entries.values()
+                if not entry.get("success")
+            )
+            if all_socks5:
+                logger.error(
+                    "[DownloadTopVideos] All %d downloads failed with "
+                    "SOCKS5-shaped errors — raising ProxyOutageDetected to "
+                    "trigger stage-runner retry. WARP proxy likely down.",
+                    len(entries),
+                )
+                raise ProxyOutageDetected(
+                    f"All {len(entries)} downloads failed with SOCKS5 errors "
+                    f"(likely WARP outage). Triggering stage-runner retry."
+                )
 
         return context
 
