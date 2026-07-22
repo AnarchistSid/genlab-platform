@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab whisper_sync canary post-BB-fire verification (09:30 IST daily)
+
+[Timer]
+# BB pipeline fires 03:30 UTC (09:00 IST) daily. Typical duration ~5 min.
+# Verify at 09:30 IST = 04:00 UTC — 30 min buffer for pipeline to finish
+# writing run_report.json + rendering _captioned.mp4 files.
+OnCalendar=*-*-* 04:00:00 UTC
+Persistent=true
+AccuracySec=30s
+Unit=genlab-verify-whisper-canary.service
+
+[Install]
+WantedBy=timers.target

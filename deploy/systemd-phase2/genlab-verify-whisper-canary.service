@@ -1,0 +1,22 @@
+[Unit]
+Description=GenLab whisper_sync canary verification — post-BB-pipeline caption check
+After=network-online.target genlab-pipeline-ai-creators.service
+
+# 2026-07-22: after flipping BB's whisper_sync.enabled to true, verify
+# RenderWhisperCaptions actually ran and produced _captioned.mp4
+# artifacts. Silent skip = canary regression.
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment="GENLAB_RUNS_DIR=/opt/genlab/.tmp/runs"
+ExecStart=/opt/genlab/scripts/verify_whisper_canary_morning.sh
+TimeoutSec=60
+
+[Install]
+WantedBy=multi-user.target
