@@ -38,15 +38,33 @@ _TIMEOUT_S: Final[int] = 15
 
 # v23.0+ canonical Reels metrics. `fb_reels_total_plays` is the primary
 # views metric (counts replays); `blue_reels_play_count` is initial-plays
-# only and serves as a fallback when the former is empty. `post_impressions_unique`
-# is the reach number for Reels (the legacy `total_video_views_unique` is
-# for non-Reels video posts). `post_video_social_actions` lumps comments
-# + shares together — for a breakdown we hit the post node separately.
+# only and serves as a fallback when the former is empty.
+# `post_video_social_actions` lumps comments + shares together — for a
+# breakdown we hit the post node separately.
+#
+# 2026-07-22: REMOVED `post_impressions_unique`. Meta v22 API rejects it
+# on the `/video_insights` endpoint with HTTP 400 code 100 "The value must
+# be a valid insights metric" — and because Meta rejects the ENTIRE batch
+# when any one metric is invalid, the whole insights call was returning 400
+# → PlatformMetrics=None → publishing_analytics stayed at SUCCESS forever
+# for every FB row across all 5 niches (0/8 SUCCESS→INSIGHTS transitions
+# in the 7-day pre-fix window). Verified via per-metric probe against
+# facebook:1726457395148308 (ai_creators, 2026-07-22 fire):
+#     fb_reels_total_plays            -> 200
+#     blue_reels_play_count           -> 200
+#     post_impressions_unique         -> 400 (#100) invalid metric
+#     post_video_likes_by_reaction_type -> 200
+#     post_video_social_actions       -> 200
+#     post_video_view_time            -> 200
+#     post_video_avg_time_watched     -> 200
+# Downstream fallback at line 207 `reach = reach_unique or views` means
+# reach silently degrades to views (conservative, correct choice) rather
+# than crashing anything. If Meta re-exposes a Reels-reach metric under a
+# new name, add it here.
 _REELS_INSIGHTS_METRICS: Final[str] = ",".join(
     [
         "fb_reels_total_plays",
         "blue_reels_play_count",
-        "post_impressions_unique",
         "post_video_likes_by_reaction_type",
         "post_video_social_actions",
         "post_video_view_time",

@@ -307,9 +307,16 @@ def main():
                 insights = fetch_youtube(post_id)
             elif platform == "facebook":
                 insights = fetch_facebook(post_id, niche_id)
+            elif platform == "threads":
+                # 2026-07-22: Threads DOES have an insights API — the prior
+                # `# threads: no insights API` comment was wrong. Delegate to
+                # the canonical fetcher (proven live via probe returning real
+                # views). Sibling gap to the run_fetch_insights.py Threads
+                # dispatch shipped tonight in `f9f186c2`.
+                from genlab_core.platforms.metrics import fetch_threads as _canonical_threads
+                insights = _canonical_threads(_strip_prefix(post_id), niche_id=niche_id)
             elif platform in ("twitter", "x_twitter"):
                 insights = fetch_twitter(post_id)
-            # threads: no insights API
         except Exception as e:
             logger.warning("Fetch failed for %s/%s: %s", platform, post_id[:20], e)
             errors += 1

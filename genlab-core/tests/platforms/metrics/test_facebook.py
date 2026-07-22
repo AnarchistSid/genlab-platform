@@ -120,7 +120,10 @@ class TestFetchFacebookHappyPath:
         metric_csv = params["metric"]
         assert "fb_reels_total_plays" in metric_csv
         assert "blue_reels_play_count" in metric_csv
-        assert "post_impressions_unique" in metric_csv
+        # 2026-07-22: `post_impressions_unique` REMOVED — Meta v22 rejects
+        # it as invalid, poisoning the entire batch with a 400. Pinned NOT
+        # to be present via test_facebook_metric_list_v22.py.
+        assert "post_impressions_unique" not in metric_csv
         assert "post_video_likes_by_reaction_type" in metric_csv
         assert "post_video_social_actions" in metric_csv
 
