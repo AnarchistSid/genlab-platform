@@ -162,5 +162,102 @@ class TestConfigUpdaterFilterRoundTrip:
         assert "48h" in task.completed_windows
 
 
+class TestContentIdRoundTrip:
+    """Pin the 2026-07-22 uuid5-seed fix: `_from_sharepoint_item` must
+    hydrate ``content_id`` from the candidate_id embedded in ``task_id``
+    (shape ``{candidate_id}__{platform}``), NOT from ``post_id`` (the
+    platform post ID string).
+
+    Prior bug (production 2026-06→07): read set ``content_id=post_id``
+    while write set ``content_id=candidate_id``. Effect on downstream:
+    ``metric_collector.record_engagement_window`` used
+    ``task_record.content_id`` as the ``blueprint_id`` seed for the
+    ``post_decision_trace`` UPSERT. The uuid5 derived from ``post_id``
+    (like ``"facebook:433310..."``) never collided with the uuid5 derived
+    from ``candidate_id`` (SHA256 hex) that ``push_to_backlog`` wrote via
+    ``record_bandit_pick``. Result: 74/181 trace rows in the 30-day
+    window ended up all-NULL — the metric collector wrote before metrics
+    existed, using an orphaned uuid5 seed no bandit-pick row would ever
+    match. bandit_arm_id fill rate stayed at 16-31% masked by this
+    disjoint-row bloat.
+
+    These pins lock the round-trip so a future refactor of ``task_id``
+    encoding surfaces the shape change before it silently reintroduces
+    the orphan-row class-of-bug.
+    """
+
+    def test_content_id_hydrates_from_task_id_candidate_prefix(self):
+        """The exact fix: task_id split on ``__`` returns candidate_id."""
+        sha256_candidate = "4dc42ae0f91aad4d1817292c1c28eeb198c963985b98c740bba4ad10388128bd"
+        item = {
+            "id": "row-ci-1",
+            "fields": {
+                "task_id": f"{sha256_candidate}__facebook",
+                "post_id": "facebook:4333104963605624",
+                "platform": "facebook",
+                "niche_id": "gaming",
+                "collection_status": "awaiting_24h",
+                "publish_time": datetime.now(UTC) - timedelta(hours=6),
+            },
+        }
+        task = PendingFeedbackStore._from_sharepoint_item(item)
+        assert task.content_id == sha256_candidate, (
+            "content_id must be candidate_id (uuid5 seed for trace-row "
+            "collision), not post_id"
+        )
+
+    def test_content_id_falls_back_to_post_id_when_task_id_malformed(self):
+        """Defensive: legacy rows without the ``__`` separator degrade to
+        post_id (matches prior behavior for those rows — they were already
+        orphaned; the fix doesn't regress them)."""
+        item = {
+            "id": "row-ci-2",
+            "fields": {
+                "task_id": "legacy_no_separator",
+                "post_id": "yt:LEGACY_ID",
+                "platform": "youtube",
+                "niche_id": "gaming",
+                "collection_status": "awaiting_6h",
+                "publish_time": datetime.now(UTC) - timedelta(hours=2),
+            },
+        }
+        task = PendingFeedbackStore._from_sharepoint_item(item)
+        assert task.content_id == "yt:LEGACY_ID"
+
+    def test_content_id_uuid5_matches_push_to_backlog_seed(self):
+        """The load-bearing invariant: uuid5(namespace, content_id) MUST
+        equal what push_to_backlog would compute for the same candidate_id.
+        If this fails, the trace-table ON CONFLICT (blueprint_id) will
+        never merge push-decisions with metric-collector-engagement writes,
+        and the orphan-row class-of-bug resurfaces."""
+        import uuid as _uuid
+
+        sha256_candidate = "02fcbe5ffcfb7e4bc735f890240630c6808d109002a4bfb7105997c4cf557fc1"
+        ns = _uuid.UUID("6f8b3e3d-4b7f-4c9c-8e3f-c1b3e5d1a4b2")  # matches _GENLAB_NAMESPACE_UUID
+        expected_uuid5 = str(_uuid.uuid5(ns, sha256_candidate))
+
+        item = {
+            "id": "row-ci-4",
+            "fields": {
+                "task_id": f"{sha256_candidate}__instagram",
+                "post_id": "ig:reelXYZ",
+                "platform": "instagram",
+                "niche_id": "ai_creators",
+                "collection_status": "awaiting_24h",
+                "publish_time": datetime.now(UTC) - timedelta(hours=6),
+            },
+        }
+        task = PendingFeedbackStore._from_sharepoint_item(item)
+
+        # Compute the uuid5 that record_engagement_window WOULD write with
+        # after the fix — it must equal what push_to_backlog wrote with.
+        actual_uuid5 = str(_uuid.uuid5(ns, task.content_id))
+        assert actual_uuid5 == expected_uuid5, (
+            "content_id uuid5 seed must round-trip to the candidate_id-based "
+            f"uuid5 push_to_backlog uses (expected={expected_uuid5}, "
+            f"got={actual_uuid5} from content_id={task.content_id!r})"
+        )
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])

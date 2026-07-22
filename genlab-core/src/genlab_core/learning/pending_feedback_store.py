@@ -280,6 +280,23 @@ class PendingFeedbackStore:
 
         post_id = _f(fields, "PostID", "post_id", default="")
 
+        # 2026-07-22: content_id must round-trip to the SAME candidate_id
+        # used by push_to_backlog's record_bandit_pick. Prior code set
+        # content_id=post_id (the platform post ID string), which produced
+        # a DIFFERENT uuid5 seed than push_to_backlog's uuid5(candidate_id).
+        # Effect: metric_collector's engagement writes at record_engagement_window
+        # landed on ORPHAN post_decision_trace rows disjoint from the
+        # arm-decision rows push_to_backlog wrote. 74/181 trace rows in the
+        # 30-day window were all-NULL (metric collector wrote before metrics
+        # existed) with a uuid5(post_id) seed that never matched
+        # uuid5(candidate_id). Extract candidate_id from task_id shape
+        # ``{candidate_id}__{platform}`` so ON CONFLICT (blueprint_id) in
+        # record_engagement_window merges into the row push_to_backlog
+        # already wrote. Falls back to post_id when task_id is malformed
+        # (defensive; rsplit means candidate_ids containing `__` still parse).
+        task_id = _f(fields, "TaskID", "task_id", default="")
+        content_id = task_id.rsplit("__", 1)[0] if "__" in task_id else post_id
+
         # 2026-06-14: hydrate reward_48h. Without this, every consumer of
         # _from_sharepoint_item (config_updater, backfill scripts, the
         # store's own list_pending caller chain) silently saw
@@ -330,7 +347,7 @@ class PendingFeedbackStore:
             arm_ids_by_dim = {}
 
         return PendingFeedbackTask(
-            content_id=post_id,
+            content_id=content_id,
             platform=_f(fields, "Platform", "platform", default=""),
             niche_id=_f(fields, "NicheId", "niche_id", default="gaming"),
             published_at=published_at,
