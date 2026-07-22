@@ -377,6 +377,65 @@ def check_warp_health() -> list[Alert]:
                     details={"active_state": "active", "port_40000_listening": False},
                 )
             )
+            return alerts
+
+        # 2026-07-22: reachability probe. History — today's WARP outage:
+        # warp-svc.service was "active" + port 40000 was LISTENing, but
+        # actual HTTP requests through the SOCKS5 endpoint returned
+        # "Errno 4 Host unreachable" for youtube.com and v.redd.it.
+        # Result: all 5 niche pipelines silently failed downloads this
+        # morning (0 blueprints across the board) despite the prior
+        # daemon+port check reporting healthy. Prior check gave FALSE
+        # NEGATIVES for the exact class of outage it existed to catch.
+        #
+        # Now: after confirming port LISTENs, actually try to fetch a
+        # trivial resource through the SOCKS5 proxy. If that fails,
+        # alert with critical severity — pipelines about to run will
+        # burn ~5 min each hitting the same wall.
+        try:
+            probe = subprocess.run(
+                [
+                    "curl",
+                    "-sI",
+                    "--max-time",
+                    "5",
+                    "--socks5",
+                    "127.0.0.1:40000",
+                    "https://www.youtube.com/",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            first_line = probe.stdout.split("\n", 1)[0] if probe.stdout else ""
+            # Any HTTP response line (HTTP/x YYY) counts as reachable —
+            # YouTube may 301 or 200 but NOT connection-refused.
+            reachable = first_line.startswith("HTTP/")
+            if not reachable:
+                alerts.append(
+                    Alert(
+                        check="warp_unreachable",
+                        severity="critical",
+                        message=(
+                            "WARP daemon active + port 40000 LISTENs but "
+                            "SOCKS5 reachability probe to youtube.com failed "
+                            "(no HTTP response). Downloads will fail with "
+                            "'Host unreachable' Socks5 errors. WARP may be "
+                            "flapping / rate-limited / routing broken. "
+                            "Test: curl --socks5 127.0.0.1:40000 -sI https://www.youtube.com/"
+                        ),
+                        details={
+                            "active_state": "active",
+                            "port_40000_listening": True,
+                            "curl_returncode": probe.returncode,
+                            "curl_stderr_tail": (probe.stderr or "")[-200:],
+                        },
+                    )
+                )
+        except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+            # curl missing or hung — log at DEBUG (not critical) because
+            # this is a check-side issue, not a real WARP outage.
+            logger.debug("[warp] reachability probe couldn't run: %s", exc)
     except Exception as e:
         logger.debug("WARP health check failed: %s", e)
     return alerts

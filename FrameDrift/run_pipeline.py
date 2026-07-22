@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import sys
 
-from genlab_core.pipeline.cli import build_parser, run_pipeline
+from genlab_core.pipeline.cli import _exit_code_for_ctx, build_parser, run_pipeline
 
 
 def main() -> int:
@@ -32,7 +32,11 @@ def main() -> int:
     )
     print(f"\nRun complete: {ctx.run_id}")
     print(f"Stories: {len(ctx.stories)}, Errors: {len(ctx.errors)}")
-    return 1 if ctx.is_aborted else 0
+    # 2026-07-22 rule #26 sibling fix: use canonical exit-code
+    # derivation from run_report.status. Prior form treated 0
+    # blueprints + status=failed as exit 0, hiding data-side
+    # failures (e.g. today's WARP outage) from systemd OnFailure.
+    return _exit_code_for_ctx(ctx)
 
 
 if __name__ == "__main__":
