@@ -163,8 +163,31 @@ def check_meta_token() -> dict:
 
         data = verify_resp.json()
         page_name = data.get("name", "unknown")
-        ig_acct = data.get("instagram_business_account", {})
-        ig_username = ig_acct.get("username", "unknown")
+        # 2026-07-22 audit fix: verify IG business account is ACTUALLY
+        # connected, not just that the token is well-formed. When
+        # operator removes/reconnects IG under the FB page, the page
+        # token stays valid but `instagram_business_account` becomes
+        # null/empty. Prior check returned "healthy @unknown" while
+        # all IG publishes hard-failed with "no IG account linked" —
+        # exactly the class-of-bug that explains the 3% IG success
+        # rate hiding in plain sight. Same shape as WARP outage today:
+        # "credential well-formed" ≠ "publish path works."
+        ig_acct = data.get("instagram_business_account") or {}
+        ig_id = ig_acct.get("id", "")
+        ig_username = ig_acct.get("username", "")
+        if not ig_id:
+            return {
+                "platform": "instagram",
+                "status": "error",
+                "message": (
+                    f"Page token valid but IG business account not linked "
+                    f"(page: {page_name}). All IG publishes will fail. "
+                    "Reconnect Instagram in Meta Business Suite → "
+                    "Business assets → Instagram accounts."
+                ),
+                "page_name": page_name,
+                "ig_business_account_id": None,
+            }
 
         debug_resp = requests.get(
             f"{META_GRAPH_BASE_URL}/debug_token",
