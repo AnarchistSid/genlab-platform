@@ -928,12 +928,54 @@ def check_facebook() -> dict:
 # YOUTUBE OAUTH CHECK (formerly in BlackboxBrief)
 # ══════════════════════════════════════════════════════════════
 
+# Any of these scopes grants upload capability. The token is publish-ready
+# iff at least one appears in the granted-scope list. Broader-first order:
+# `youtube` and `youtube.force-ssl` both include upload transitively.
+_YOUTUBE_UPLOAD_SCOPES = frozenset(
+    {
+        "https://www.googleapis.com/auth/youtube",
+        "https://www.googleapis.com/auth/youtube.force-ssl",
+        "https://www.googleapis.com/auth/youtube.upload",
+    }
+)
+
+
+def _yt_token_has_upload_scope(access_token: str) -> tuple[bool, list[str]]:
+    """Query Google's tokeninfo endpoint and return (has_upload, granted_scopes).
+
+    Fails open — returns (True, []) on any network/parse error, matching the
+    FB `debug_token` scope-check pattern where a broken side-channel MUST NOT
+    trip a token-health false alarm. The empty scope list is the sentinel for
+    "we couldn't verify" so callers can log-once rather than assume ok.
+    """
+    try:
+        resp = requests.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"access_token": access_token},
+            timeout=10,
+        )
+        data = resp.json()
+        granted = data.get("scope", "").split()
+        has_upload = any(s in _YOUTUBE_UPLOAD_SCOPES for s in granted)
+        return has_upload, granted
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("YouTube tokeninfo call failed: %s", exc)
+        return True, []
+
 
 def check_youtube() -> dict:
     """Test YouTube OAuth connection.
 
     Uses google-auth + googleapiclient directly — no BlackboxBrief dependency.
     Falls back to a lightweight token-exchange check when google-auth is unavailable.
+
+    2026-07-22 hardening: also verifies the granted scope list includes at
+    least one upload-capable scope (`youtube`, `youtube.force-ssl`, or
+    `youtube.upload`). Prior contract only verified `channels.list(mine=True)`
+    worked — that needs only `youtube.readonly`. A token stripped of upload
+    scope but retaining readonly would report healthy while every publish
+    would 403 with insufficientPermissions. Same class-of-bug as the IG
+    `business_account` fix earlier today.
     """
     client_id = os.getenv("YOUTUBE_CLIENT_ID", "").strip()
     client_secret = os.getenv("YOUTUBE_CLIENT_SECRET", "").strip()
@@ -979,11 +1021,28 @@ def check_youtube() -> dict:
 
         channel_id = items[0]["id"]
         subs = int(items[0].get("statistics", {}).get("subscriberCount", 0))
+
+        # Verify upload scope is still granted. `creds.token` is populated
+        # by the channels.list call above (google-auth refreshes lazily).
+        has_upload, granted = _yt_token_has_upload_scope(creds.token or "")
+        if not has_upload and granted:
+            return {
+                "platform": "youtube",
+                "status": "error",
+                "message": (
+                    f"Channel {channel_id} readable but token MISSING upload scope. "
+                    f"Granted: {granted}. Re-authorize with youtube.upload / youtube.force-ssl / youtube."
+                ),
+                "subscribers": subs,
+                "granted_scopes": granted,
+            }
+
         return {
             "platform": "youtube",
             "status": "healthy",
             "message": f"Channel {channel_id} connected, {subs} subscribers",
             "subscribers": subs,
+            "granted_scopes": granted,
         }
 
     except ImportError:
@@ -1012,10 +1071,25 @@ def check_youtube() -> dict:
         )
         data = token_resp.json()
         if "access_token" in data:
+            # Refresh response includes `scope` (space-separated) — use it
+            # directly rather than a second tokeninfo call.
+            granted = data.get("scope", "").split()
+            has_upload = any(s in _YOUTUBE_UPLOAD_SCOPES for s in granted)
+            if granted and not has_upload:
+                return {
+                    "platform": "youtube",
+                    "status": "error",
+                    "message": (
+                        f"Token exchange OK but MISSING upload scope. "
+                        f"Granted: {granted}. Re-authorize with youtube.upload / youtube.force-ssl / youtube."
+                    ),
+                    "granted_scopes": granted,
+                }
             return {
                 "platform": "youtube",
                 "status": "healthy",
                 "message": "YouTube OAuth token valid (token-exchange check — google-auth not installed)",
+                "granted_scopes": granted,
             }
         error = data.get("error_description", data.get("error", "Unknown error"))
         return {
