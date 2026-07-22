@@ -30,21 +30,23 @@ ffmpeg:
 
 
 # Word-by-word caption animation
-# Disabled 2026-06-13 across all 5 channels until the text_optimizer regression
-# is properly fixed. The module that did adaptive font sizing (`execution/utils/
-# text_optimizer.py`) was silently dropped during the 2026-04-04 monorepo
-# conversion, so word_animator.py's fallback fontsize=160 has been overlaying
-# huge text on top of the actual video clip for 2.3 months. See
-# [[session-2026-06-13-render-audit-findings]] for the full audit.
 #
-# To re-enable: restore text_optimizer (or inline the algorithm into word_animator),
-# fix render_whisper_captions.py:226 to pass text_type="caption" instead of "hook",
-# add a regression pin that asserts rendered_bottom <= canvas_height, then flip
-# this flag back to true.
+# 2026-07-22: whisper_sync CANARY on ai_creators only (this file) —
+# rest of the 5 niches stay disabled. All 3 checklist items from the
+# 2026-06-13 audit shipped:
+#   1. text_optimizer restored (inlined at word_animator.py:21-46)
+#   2. render_whisper_captions.py:231 passes text_type="caption" (was "hook")
+#   3. Regression pin ships at
+#      genlab-core/tests/rendering/test_whisper_caption_canvas_bounds.py
+#      — 9 parametric cases assert caption bottom_y <= 1920 for texts
+#      up to the audit's canonical overflow crash-case.
+# Rollback: flip back to `enabled: false` and restart the affected pipeline
+# service. Historical audit context preserved in
+# [[session-2026-06-13-render-audit-findings]].
 animation:
   word_by_word:
     whisper_sync:
-      enabled: false
+      enabled: true  # 2026-07-22 CANARY — ai_creators only
       model_size: "base"
       fallback: "wpm"
       silence_threshold_db: -40
