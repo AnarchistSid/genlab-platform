@@ -1,0 +1,19 @@
+[Unit]
+Description=GenLab 2026-07-22 fixes verification (12:30 IST tomorrow, 25 min post-publisher)
+
+[Timer]
+# Publisher fires 12:05 IST = 06:35 UTC.
+# Movies pipeline fires 09:00 IST = 03:30 UTC.
+# Verification fires 12:30 IST = 07:00 UTC — 25-min buffer after publisher.
+#
+# OnCalendar is anchored to tomorrow (2026-07-23) rather than daily —
+# this is a one-shot verification for the specific fixes, not an
+# ongoing monitor. If verification catches regressions, the fixes
+# get real ongoing coverage; if clean, the timer can be removed.
+OnCalendar=2026-07-23 07:00:00 UTC
+Persistent=true
+AccuracySec=30s
+Unit=genlab-verify-2026-07-22-fixes.service
+
+[Install]
+WantedBy=timers.target
