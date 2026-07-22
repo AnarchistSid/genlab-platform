@@ -354,7 +354,11 @@ class TestContentTypeShowcaseFeature:
         assert ctx[12] == pytest.approx(0.0)
 
     def test_dim_12_is_zero_when_content_type_unset(self):
-        ctx = build_content_context({}, "ai_creators")
+        # 2026-07-22: ai_creators default IS showcase now via niche-based
+        # fallback (see test_linucb_content_type_showcase_fallback.py).
+        # Test the unset case on a non-ai_creators niche where the
+        # fallback correctly stays 0.0.
+        ctx = build_content_context({}, "gaming")
         assert ctx[12] == pytest.approx(0.0)
 
     def test_dim_12_reads_gallery_metadata(self):

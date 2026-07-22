@@ -764,6 +764,24 @@ def build_content_context(
         hashtags = hashtags.split()
 
     content_type = _extract_content_type(story)
+    # 2026-07-22: niche-based fallback for the content_type_showcase feature.
+    # Agent 3's audit (see [[audit-2026-07-22-comprehensive-followups]]) found
+    # NO fetcher stage propagates `content_type` into story dicts across ANY
+    # niche — so this feature had been a constant-zero dimension since the
+    # 13-D bump landed. LinUCB can't learn from a constant feature.
+    #
+    # BlackboxBrief `_fetch.py:252` filters sources.yaml for
+    # `content_type: showcase` — every ai_creators story that survives
+    # `creator_only_mode` is definitionally showcase content. Backfill the
+    # signal here rather than plumbing it through every fetcher's
+    # `to_story()` shape (which would touch 5+ files and risk regressions).
+    #
+    # Other 4 niches genuinely aren't showcase (they're highlight/trailer/
+    # clip/gameplay). Feature correctly stays 0.0 for them; a future v3
+    # feature bump could add per-niche content-type dimensions if the
+    # bandit benefits from it.
+    if not content_type and niche_id == "ai_creators":
+        content_type = "showcase"
 
     return np.array(
         [
