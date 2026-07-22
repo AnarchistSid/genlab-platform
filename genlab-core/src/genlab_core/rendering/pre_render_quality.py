@@ -172,6 +172,59 @@ _VERB_TOKENS: frozenset[str] = frozenset(
 _MIN_HOOK_LENGTH = 15
 
 
+def _is_title_verbatim(hook: str, title: str) -> bool:
+    """True if the hook is EXACTLY the title (case-insensitive, whitespace-stripped).
+
+    Writer-bug survivor signature (2026-07-19 → 2026-07-22 outage): when
+    the writer fell back on empty ``summary`` fields, it repopulated
+    ``content["hook"]`` from ``video["title"]`` verbatim. Ships as a
+    hook with zero editorial value — the video overlay reads exactly
+    the same as the caption title.
+
+    Fixed at the writer in ``544cf0e9``. This gate is defense-in-depth
+    against future recurrence of the same class-of-bug.
+    """
+    if not hook or not title:
+        return False
+    return hook.strip().casefold() == title.strip().casefold()
+
+
+def _is_title_truncation(hook: str, title: str) -> bool:
+    """True if the hook is the title mechanically truncated at 60 chars with ``...``.
+
+    Second writer-bug shape: writer's 60-char hook cap fires on a
+    story where no real hook was generated → title gets sliced to fit
+    with ``...`` suffix. Ships as an incomplete-thought hook that
+    tells the audience nothing.
+
+    Detected shape:
+      1. Hook ends with ``...`` (any ellipsis-suffix)
+      2. Hook length ≥ 20 (short cliffhanger hooks are stylistic, keep them)
+      3. Everything before the ``...`` is a prefix of the title
+
+    (3) is the safety belt: legitimate cliffhanger hooks like
+    ``"You won't believe what happens next..."`` are NOT prefixes of
+    any source title, so they pass. Only mechanical title-slice
+    truncation matches all 3.
+    """
+    if not hook or not title:
+        return False
+    hook_stripped = hook.strip()
+    title_stripped = title.strip()
+    if not hook_stripped.endswith("..."):
+        return False
+    if len(hook_stripped) < 20:
+        return False
+    prefix = hook_stripped[:-3].rstrip()
+    if not prefix:
+        return False
+    # Case-insensitive prefix match. Title unicode/curly-quote
+    # normalisation would be more defensive but the callers pass raw
+    # story.title / story.content.hook without prior normalisation, so
+    # the exact-prefix check is what we want.
+    return title_stripped.casefold().startswith(prefix.casefold())
+
+
 @dataclass(frozen=True)
 class QualityCheck:
     """Result of the pre-render gate. ``ok=True`` means safe to render."""
@@ -239,7 +292,9 @@ def _has_verb_signal(text: str) -> bool:
     return False
 
 
-def check_pre_render_quality(hook: str, *, niche_id: str = "") -> QualityCheck:
+def check_pre_render_quality(
+    hook: str, *, niche_id: str = "", title: str = ""
+) -> QualityCheck:
     """Run all pre-render checks on the hook.
 
     Returns ``QualityCheck(ok=True, ...)`` if safe to render, or
@@ -249,6 +304,12 @@ def check_pre_render_quality(hook: str, *, niche_id: str = "") -> QualityCheck:
 
     ``niche_id`` is passed to enrich the log line only. It has no
     effect on the check outcome — quality is niche-agnostic.
+
+    ``title`` is optional (default empty). When passed, rules 4 & 5
+    activate — they catch the 2026-07-19 → 2026-07-22 writer-bug
+    shape (hook = title verbatim OR hook = title truncated at 60
+    chars with ``...``). Existing callers that don't pass title
+    continue to get the pre-2026-07-22 behavior (rules 1-3 only).
     """
     if not hook or not isinstance(hook, str):
         return QualityCheck(
@@ -280,6 +341,37 @@ def check_pre_render_quality(hook: str, *, niche_id: str = "") -> QualityCheck:
             detail=(
                 f"Hook is {len(hook_stripped)} chars (min {_MIN_HOOK_LENGTH}). "
                 f"Truncation bug or placeholder leftover: {hook_stripped!r}"
+            ),
+        )
+
+    # Rule 4: Title verbatim — writer-bug survivor (2026-07-22).
+    # Checked BEFORE bare-title so operator sees the specific writer
+    # failure shape (not a stylistic critique) when both trigger.
+    # Only fires when title is passed — legacy callers skip.
+    if title and _is_title_verbatim(hook_stripped, title):
+        return QualityCheck(
+            ok=False,
+            reason="hook_equals_title",
+            detail=(
+                f"Hook is the title verbatim: {hook_stripped!r}. "
+                "Writer produced no real hook — this is the "
+                "writer-bug-544cf0e9 shape (empty summary + "
+                "populated description_snippet fallback)."
+            ),
+        )
+
+    # Rule 5: Title-truncation-with-ellipsis — same writer-bug shape,
+    # different symptom. Hook is the title mechanically sliced to 60
+    # chars with ``...`` suffix. Only fires when title is passed.
+    if title and _is_title_truncation(hook_stripped, title):
+        return QualityCheck(
+            ok=False,
+            reason="hook_title_truncation",
+            detail=(
+                f"Hook is the title truncated at 60 chars with `...`: "
+                f"{hook_stripped!r}. Writer produced no real hook — "
+                "same class-of-bug as hook_equals_title, different "
+                "symptom (title long enough to trigger 60-char cap)."
             ),
         )
 

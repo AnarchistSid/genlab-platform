@@ -170,7 +170,15 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
         # sets it in __init__). Base + stub tests may not have it — use
         # a defensive fetch so the gate stays niche-agnostic. The value
         # only enriches the log line; it has no effect on the outcome.
-        _qc = check_pre_render_quality(hook_text, niche_id=getattr(self, "_niche_id", ""))
+        # 2026-07-22: pass ``title`` so rules 4 (hook_equals_title) + 5
+        # (hook_title_truncation) can catch the writer-bug-544cf0e9
+        # shape. Legacy signature (title="") preserved for callers that
+        # don't have story context.
+        _qc = check_pre_render_quality(
+            hook_text,
+            niche_id=getattr(self, "_niche_id", ""),
+            title=story.get("title", ""),
+        )
         if not _qc.ok:
             logger.warning(
                 "%s pre-render quality gate rejected story %s (%s): %s",
