@@ -28,6 +28,11 @@ from genlab_core.monitoring.checks.infrastructure import (
     check_swap,
     check_warp_health,
 )
+from genlab_core.monitoring.checks.llm_cost import (
+    check_llm_budget_runway,
+    check_llm_cost,
+    check_llm_cost_runaway,
+)
 from genlab_core.monitoring.checks.pipeline import (
     _FETCHER_STAGES_TO_MONITOR,
     _SILENT_FAILURE_CONSECUTIVE_RUNS,
@@ -67,6 +72,9 @@ __all__ = [
     "check_foreign_host_writes",
     "check_git_drift",
     "check_git_ownership_drift",
+    "check_llm_budget_runway",
+    "check_llm_cost",
+    "check_llm_cost_runaway",
     "check_missing_media",
     "check_publish_failures",
     "check_publish_silence",

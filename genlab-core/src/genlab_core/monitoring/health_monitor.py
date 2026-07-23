@@ -62,6 +62,7 @@ from genlab_core.monitoring.checks.infrastructure import (
     check_swap,
     check_warp_health,
 )
+from genlab_core.monitoring.checks.llm_cost import check_llm_cost
 from genlab_core.monitoring.checks.pipeline import (
     _FETCHER_STAGES_TO_MONITOR,
     _SILENT_FAILURE_CONSECUTIVE_RUNS,
@@ -133,6 +134,7 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_git_drift())
         all_alerts.extend(check_git_ownership_drift())  # 2026-07-21: prevent deploy-blocking root-owned .git files
         all_alerts.extend(check_anthropic_credit())  # 2026-07-21: 1-token probe; prevents 4th exhaustion-class outage
+        all_alerts.extend(check_llm_cost())  # 2026-07-23: proactive runaway-spike + budget-runway projection
         all_alerts.extend(check_warp_health())
         # PR #516 (2026-06-24): infrastructure-half-wired audit probes
         all_alerts.extend(check_engagement_health())
@@ -414,6 +416,7 @@ __all__ = [
     "check_foreign_host_writes",
     "check_git_drift",
     "check_git_ownership_drift",
+    "check_llm_cost",
     "check_missing_media",
     "check_publish_failures",
     "check_publish_silence",
