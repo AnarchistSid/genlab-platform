@@ -443,10 +443,15 @@ class FacebookClient:
             if resp.status_code == 200 and "id" in data:
                 self._log.info("Facebook: replied to comment %s", parent_id)
                 return True
+            # 2026-07-23: format_meta_error preserves code + subcode +
+            # fbtrace_id. See
+            # [[class-of-bug-signal-loss-through-merged-failure-paths]].
+            from genlab_core.platforms.meta_errors import format_meta_error
+
             self._log.warning(
                 "Facebook: reply failed (HTTP %d): %s",
                 resp.status_code,
-                data.get("error", {}).get("message", str(data)),
+                format_meta_error(data),
             )
             return False
         except Exception as exc:

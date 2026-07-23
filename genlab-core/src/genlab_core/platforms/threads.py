@@ -635,7 +635,12 @@ class ThreadsClient:
             if resp.ok and "id" in payload:
                 self._log.debug("Threads: created %s container %s", media_type, payload["id"])
                 return payload["id"]
-            error_msg = payload.get("error", {}).get("message", str(payload))
+            # 2026-07-23: format_meta_error captures code + subcode +
+            # fbtrace_id — critical for Meta support triage. See
+            # [[class-of-bug-signal-loss-through-merged-failure-paths]].
+            from genlab_core.platforms.meta_errors import format_meta_error
+
+            error_msg = format_meta_error(payload)
             self._last_error = f"container creation failed ({media_type}): {error_msg}"
             self._log.error("Threads: container creation failed (%s): %s", media_type, error_msg)
             return None
@@ -659,7 +664,11 @@ class ThreadsClient:
             payload = _safe_json(resp)
             if resp.ok and "id" in payload:
                 return payload["id"]
-            error_msg = payload.get("error", {}).get("message", str(payload))
+            # 2026-07-23: format_meta_error preserves attribution
+            # (see companion fix at _create_container above).
+            from genlab_core.platforms.meta_errors import format_meta_error
+
+            error_msg = format_meta_error(payload)
             self._last_error = f"threads_publish failed: {error_msg}"
             self._log.error("Threads: threads_publish failed: %s", error_msg)
             return None
