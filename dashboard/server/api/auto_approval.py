@@ -525,11 +525,12 @@ def _one_niche_breakdown(conn, niche_id: str, window_days: int) -> dict:
     top_check = next(iter(failed_check_counts), None)
     rejected = exam - approved
 
-    # Percentile distribution over the top failing check's raw values.
-    # For composite_score and virality_score, extra JSONB carries the
-    # actual number the gate saw. Operator uses p25 as a starting
-    # tuning suggestion — "if you set threshold to p25 you'd unlock
-    # 75% of currently-rejected blueprints".
+    # Percentile distribution + absolute-unlock estimate for the top
+    # failing check's raw values. Operator's actual question is not
+    # "what % of the failing set" but "how many more approvals per
+    # week would this get me". The former can be 75% of 2 blueprints
+    # (meaningless); the latter is a concrete number denominated in
+    # blueprints published.
     threshold_suggestion = None
     score_distribution = None
     if top_check in ("composite_score", "virality_score"):
@@ -537,15 +538,50 @@ def _one_niche_breakdown(conn, niche_id: str, window_days: int) -> dict:
             conn, niche_id, window_days, top_check
         )
         if score_distribution and score_distribution.get("p25") is not None:
+            current = _CURRENT_GATE_THRESHOLDS.get(top_check)
+            p25 = score_distribution["p25"]
+            # Suggest ONE tick below p25 so blueprints exactly at p25
+            # pass. Round to 3 decimals matching the score precision.
+            suggested = round(p25 - 0.001, 3)
+
+            # Absolute count: rejected rows where extra->>{check} is
+            # >= suggested_threshold. Reuses the same table so no
+            # cross-join to blueprints needed.
+            unlock_count = _count_unlockable_at_threshold(
+                conn, niche_id, window_days, top_check, suggested
+            )
+            # Extrapolate to weekly rate.
+            weekly_estimate = (
+                round(unlock_count * 7.0 / max(window_days, 1), 1)
+                if unlock_count is not None
+                else None
+            )
+
+            # Confidence based on distribution sample size — the p25
+            # estimate is only stable at sufficient n. Below 5 the
+            # percentile IS the min IS the max in practice.
+            n = score_distribution["n"]
+            if n >= 10:
+                confidence = "high"
+            elif n >= 5:
+                confidence = "medium"
+            else:
+                confidence = "low"
+
             threshold_suggestion = {
                 "check": top_check,
-                "current_threshold": _CURRENT_GATE_THRESHOLDS.get(top_check),
-                "suggested_threshold": score_distribution["p25"],
-                "would_unlock_pct": 75,
+                "current_threshold": current,
+                "suggested_threshold": suggested,
+                "would_unlock_count": unlock_count,
+                "weekly_unlock_estimate": weekly_estimate,
+                "confidence": confidence,
+                "n_samples": n,
                 "rationale": (
-                    f"p25 of {top_check} values among rejected blueprints. "
-                    f"Setting threshold to p25 unlocks 75% of currently- "
-                    f"rejected blueprints in this window."
+                    f"p25 of {top_check} values across {n} rejected "
+                    f"blueprints. Setting threshold to {suggested} would "
+                    f"unlock {unlock_count or 0} blueprints in the last "
+                    f"{window_days}d "
+                    f"({'~%.1f/wk' % weekly_estimate if weekly_estimate else 'unknown/wk'})."
                 ),
             }
 
@@ -641,6 +677,40 @@ def _score_distribution(
 
 def _r3(v):
     return None if v is None else round(float(v), 3)
+
+
+def _count_unlockable_at_threshold(
+    conn, niche_id: str, window_days: int, check_name: str, threshold: float
+) -> int | None:
+    """Count rejected gate_examinations rows whose extra.{check_name}
+    is >= the given threshold. That's the concrete "how many more
+    approvals" number — decision-relevant vs "% of failing set"."""
+    try:
+        row = conn.execute(
+            f"""
+            SELECT COUNT(*)::int AS n
+            FROM gate_examinations
+            WHERE niche_id = %s
+              AND approved = false
+              AND examined_at > NOW() - make_interval(days => %s)
+              AND failed_checks @> to_jsonb(ARRAY[%s]::text[])
+              AND (extra->>%s) IS NOT NULL
+              AND (extra->>%s)::float >= %s
+            """,
+            (
+                niche_id, window_days, check_name, check_name, check_name,
+                float(threshold),
+            ),
+        ).fetchone()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "gate-examinations: unlock count query failed check=%s niche=%s: %s",
+            check_name, niche_id, exc,
+        )
+        return None
+    if row is None:
+        return 0
+    return int(row.get("n") or 0) if hasattr(row, "get") else int(row[0] or 0)
 
 
 # ── Lever B: Per-rejection-reason breakdown ─────────────────────────

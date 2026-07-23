@@ -122,14 +122,22 @@ function NicheRow({ nicheId, row }: NicheRowProps) {
 
       {/* Threshold-suggestion sub-row. Only renders when the top
           failing check has raw scores captured — composite_score /
-          virality_score today. */}
+          virality_score today. Confidence badge downgrades to "low"
+          when n<5 so operator doesn't act on a percentile computed
+          from 2 samples. */}
       {row.threshold_suggestion && (
         <div className="mt-1 flex items-center gap-2 text-[11px] text-text-muted">
           <span
-            className="rounded border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-warning"
+            className={
+              row.threshold_suggestion.confidence === "high"
+                ? "rounded border border-success/30 bg-success/10 px-1.5 py-0.5 text-success"
+                : row.threshold_suggestion.confidence === "medium"
+                ? "rounded border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-warning"
+                : "rounded border border-border/40 bg-surface-2 px-1.5 py-0.5"
+            }
             title={row.threshold_suggestion.rationale}
           >
-            tune
+            tune ({row.threshold_suggestion.confidence})
           </span>
           <span>
             {row.threshold_suggestion.check}:{" "}
@@ -140,8 +148,11 @@ function NicheRow({ nicheId, row }: NicheRowProps) {
             <span className="font-mono text-warning">
               {row.threshold_suggestion.suggested_threshold?.toFixed(3) ?? "—"}
             </span>{" "}
-            <span title={`p25 of failing values, n=${row.score_distribution?.n ?? 0}`}>
-              (unlocks ~{row.threshold_suggestion.would_unlock_pct}%)
+            <span
+              title={`n=${row.threshold_suggestion.n_samples} rejected samples in window`}
+            >
+              (~{row.threshold_suggestion.weekly_unlock_estimate ?? "?"}/wk,{" "}
+              {row.threshold_suggestion.would_unlock_count ?? 0} in window)
             </span>
           </span>
         </div>

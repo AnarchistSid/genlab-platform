@@ -380,7 +380,10 @@ export interface GateThresholdSuggestion {
   check: string;
   current_threshold: number | null;
   suggested_threshold: number | null;
-  would_unlock_pct: number;
+  would_unlock_count: number | null;
+  weekly_unlock_estimate: number | null;
+  confidence: "low" | "medium" | "high";
+  n_samples: number;
   rationale: string;
 }
 
