@@ -805,7 +805,34 @@ def main() -> int:
             )
             total_exit = max(total_exit, exit_code)
         except Exception as exc:
-            logger.error("[publish] Failed for %s: %s", nid, exc)
+            # 2026-07-23: preserve traceback to a durable file BEFORE
+            # exiting. Journal rotation eats the stderr output within
+            # days; the durable file survives so operators can `cat`
+            # /opt/genlab/.runtime/publisher_last_error.txt any time
+            # after the incident. Same pattern as
+            # scripts/nightly_schedule_top_per_niche.py (commit 242718b2)
+            # + rule #19 (never silent-fail exceptions on ops paths).
+            logger.error(
+                "[publish] Failed for %s: %s", nid, exc, exc_info=True
+            )
+            try:
+                import traceback as _tb
+                from datetime import datetime as _dt, timezone as _tz
+                from pathlib import Path as _Path
+
+                error_path = _Path("/opt/genlab/.runtime/publisher_last_error.txt")
+                error_path.parent.mkdir(parents=True, exist_ok=True)
+                with error_path.open("w") as f:
+                    f.write(f"{_dt.now(_tz.utc).isoformat()}\n")
+                    f.write(f"niche_id: {nid}\n")
+                    f.write(f"ERROR: {exc}\n\n")
+                    _tb.print_exc(file=f)
+            except Exception as write_exc:
+                # Durable-write failure must NOT hide the real error —
+                # log it but proceed with the EXIT_UNEXPECTED signal.
+                logger.warning(
+                    "[publish] Also failed to write error file: %s", write_exc
+                )
             # EXIT_UNEXPECTED (5), not 1: an unhandled exception is a
             # real signal that needs operator attention. Using 1 would
             # lump it in with the BENIGN "no blueprints today" exit code

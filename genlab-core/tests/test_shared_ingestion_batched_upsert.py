@@ -256,3 +256,31 @@ class TestEdgeCases:
         with patch("genlab_core.pipeline.shared_ingestion.pg_connect") as mock_pg_connect:
             ingestion._write_to_pool()
         mock_pg_connect.assert_not_called()
+
+
+def test_shared_ingestion_exception_writes_durable_error_file():
+    """2026-07-23: on unhandled exception, shared_ingestion writes
+    traceback to /opt/genlab/.runtime/shared_ingestion_last_error.txt
+    BEFORE exiting. Same pattern as publisher (publish_all_platforms.py)
+    and nightly-scheduler (nightly_schedule_top_per_niche.py).
+
+    Source-grep pin — same discipline as the publisher test.
+    """
+    import inspect
+
+    from genlab_core.pipeline import shared_ingestion as mod
+
+    src = inspect.getsource(mod.main)
+    assert "shared_ingestion_last_error.txt" in src, (
+        "Durable error file path must remain in shared_ingestion's "
+        "main() so operators can diagnose exit=3 failures after "
+        "journal rotation."
+    )
+    assert "_tb.print_exc" in src or "traceback.print_exc" in src, (
+        "traceback.print_exc must write to the durable file so the "
+        "stack is preserved."
+    )
+    assert "also failed to write error file" in src, (
+        "Nested-except guard must be present so filesystem-full or "
+        "permissions-drift conditions do NOT hide the actual error."
+    )

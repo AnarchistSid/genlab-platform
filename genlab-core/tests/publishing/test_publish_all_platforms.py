@@ -1117,3 +1117,32 @@ class TestFilterEnabledPlatforms:
         # List-allowlist wins: only instagram passes
         assert result == ["instagram"]
         assert "instagram" in result
+
+
+def test_publisher_exception_writes_durable_error_file():
+    """2026-07-23: on per-niche exception, publisher writes traceback
+    to /opt/genlab/.runtime/publisher_last_error.txt BEFORE exiting.
+    Same pattern as nightly_schedule_top_per_niche.py (commit 242718b2).
+
+    Source-grep pin — triggering the actual exception path requires
+    mocking the full publish stack, which is brittle. The pin catches
+    removal of the durable-write block during refactor.
+    """
+    import inspect
+
+    from genlab_core.publishing import publish_all_platforms as mod
+
+    src = inspect.getsource(mod.main)
+    assert "publisher_last_error.txt" in src, (
+        "Durable error file path must remain in publisher's main() so "
+        "operators can diagnose exit=5 failures after journal rotation. "
+        "Regression of 2026-07-23 rule #19 sibling fix."
+    )
+    assert "_tb.print_exc" in src or "traceback.print_exc" in src, (
+        "traceback.print_exc must be called on the durable file so the "
+        "full stack, not just the exception str, is preserved."
+    )
+    assert "Also failed to write error file" in src, (
+        "Nested-except guard must be present so filesystem-full or "
+        "permissions-drift conditions do NOT hide the actual error."
+    )

@@ -1067,17 +1067,45 @@ class SharedIngestionPipeline:
         return report
 
 
-def main() -> None:
-    """CLI entry point."""
+def main() -> int:
+    """CLI entry point. Returns 0 on success, 3 on unhandled exception."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     )
 
-    pipeline = SharedIngestionPipeline()
-    report = pipeline.run()
-    print(report)
+    try:
+        pipeline = SharedIngestionPipeline()
+        report = pipeline.run()
+        print(report)
+        return 0
+    except Exception as exc:
+        # 2026-07-23: preserve traceback to a durable file BEFORE
+        # exiting. Same pattern as publisher (publish_all_platforms.py)
+        # and nightly-scheduler (nightly_schedule_top_per_niche.py) —
+        # journal rotation eats stderr; the durable file survives.
+        import sys as _sys
+        import traceback as _tb
+        from datetime import datetime as _dt, timezone as _tz
+        from pathlib import Path as _Path
+
+        print(f"ERROR: {exc}", file=_sys.stderr)
+        _tb.print_exc(file=_sys.stderr)
+        try:
+            error_path = _Path("/opt/genlab/.runtime/shared_ingestion_last_error.txt")
+            error_path.parent.mkdir(parents=True, exist_ok=True)
+            with error_path.open("w") as f:
+                f.write(f"{_dt.now(_tz.utc).isoformat()}\n")
+                f.write(f"ERROR: {exc}\n\n")
+                _tb.print_exc(file=f)
+        except Exception as write_exc:
+            print(
+                f"(also failed to write error file: {write_exc})",
+                file=_sys.stderr,
+            )
+        return 3
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    sys.exit(main())
