@@ -541,6 +541,31 @@ def process_reply_event(event: dict) -> None:
         )
         return
 
+    # 2026-07-23: prevent pending_engagement DB row duplication.
+    # ``write_pending_engagement`` at line ~548 always INSERTs a new
+    # row; no idempotency at the DB layer. Combined with the poller
+    # cycling every 10 min AND the fact that rate_limited comments
+    # NEVER get ``_mark_replied(comment_id)`` (only successful posts
+    # do), the same 6 sports Threads comments got queued 1858× each
+    # → 11,151 rate_limited rows in 24h. Root cause: the state file
+    # only tracked successfully-actioned comments; queued-but-not-
+    # yet-actioned comments looked "unseen" to the next poll cycle.
+    #
+    # Fix: mark ``queued:{comment_id}`` after the DB write below so
+    # subsequent poll cycles skip re-queuing the same comment. The
+    # dramatiq.Retry mechanism handles the eventual rate-limit
+    # retry from the ORIGINAL enqueued message — the poller doesn't
+    # need to re-emit it. Same class as ``skip:``, ``review:``,
+    # ``failed:`` markers above (defense-in-depth via state file).
+    if _has_replied(f"queued:{comment_id}", platform):
+        logger.debug(
+            "Engagement: comment %s on %s already queued to pending_engagement "
+            "— skipping duplicate write (dramatiq.Retry handles rate-limit retry)",
+            comment_id,
+            platform,
+        )
+        return
+
     # Record to SharePoint (optional — fails gracefully)
     bl = _get_backlog_client()
     sp_item_id = None
@@ -556,6 +581,15 @@ def process_reply_event(event: dict) -> None:
                 "niche_id": niche_id,
             }
         )
+        # 2026-07-23: mark queued IMMEDIATELY after successful DB write so
+        # the next poller cycle (10 min later) skips this comment even if
+        # every downstream step (spam / toxicity / rate_limit / reply)
+        # bails out without setting the terminal ``_mark_replied(comment_id)``.
+        # Before this: rate-limited comments were re-queued every 10 min
+        # → 11,151 rate_limited rows in 24h for 6 unique sports Threads
+        # comments (~1858 duplicates per comment). See queued: check above.
+        if sp_item_id:
+            _mark_replied(f"queued:{comment_id}", platform)
 
     # 2. Spam filter
     if is_spam(comment_text):

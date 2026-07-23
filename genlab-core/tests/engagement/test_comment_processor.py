@@ -470,3 +470,175 @@ class TestBotDisclosure:
 
         reply = "y" * 500
         assert _append_bot_disclosure(reply) == reply + _BOT_DISCLOSURE_SUFFIX
+
+
+@pytest.fixture
+def _clear_replied_cache():
+    """Isolate the module-level ``_replied_set_cache`` — otherwise
+    marks from a prior test leak into subsequent tests via the shared
+    set object (agent_root gives a fresh tmp_path, but the cache
+    only reloads from disk when explicitly invalidated)."""
+    from genlab_core.engagement import comment_processor as cp
+
+    cp._invalidate_replied_cache()
+    yield
+    cp._invalidate_replied_cache()
+
+
+class TestQueuedDedup:
+    """2026-07-23 fix: prevent pending_engagement DB row duplication.
+
+    Before the ``queued:`` marker, rate-limited comments were re-queued
+    every 10-min poller cycle → 11,151 rate_limited rows in 24h for 6
+    unique sports Threads comments (~1858 duplicates per comment).
+
+    The ``_mark_replied(f"queued:{comment_id}", platform)`` sentinel is
+    set IMMEDIATELY after the DB write succeeds, so subsequent poller
+    cycles skip re-writing regardless of whether the downstream reply
+    step eventually succeeds, fails, or hits rate-limit.
+    """
+
+    @patch("genlab_core.engagement.comment_processor.is_spam", return_value=False)
+    def test_queued_marker_skips_second_poll_cycle(
+        self, mock_spam, agent_root, _clear_replied_cache
+    ):
+        """After the first poll writes to pending_engagement, a second poll
+        for the same (comment_id, platform) must return early without
+        writing another row."""
+        from genlab_core.engagement.comment_processor import (
+            _mark_replied,
+            process_reply_event,
+        )
+
+        # Simulate: first poll already ran and marked queued.
+        _mark_replied("queued:c123", "threads")
+
+        mock_bl = MagicMock()
+        event = _make_event(platform="threads")
+
+        with (
+            patch(
+                "genlab_core.engagement.comment_processor._get_backlog_client",
+                return_value=mock_bl,
+            ),
+            patch("genlab_core.engagement.comment_processor.ToxicityGate"),
+        ):
+            process_reply_event(event)
+
+        # write_pending_engagement should NOT have been called — the
+        # queued: check returned early.
+        mock_bl.write_pending_engagement.assert_not_called()
+
+    def test_queued_marker_set_after_first_write(self, agent_root, _clear_replied_cache):
+        """First poll cycle: write pending_engagement, then IMMEDIATELY
+        mark queued:{comment_id}. The marker firing is decoupled from
+        whatever the downstream reply pipeline decides."""
+        from genlab_core.engagement import comment_processor as cp
+
+        mock_bl = MagicMock()
+        mock_bl.write_pending_engagement.return_value = "sp_row_1"
+
+        called_marks: list[tuple[str, str]] = []
+
+        def _capture_mark(key: str, platform: str) -> None:
+            called_marks.append((key, platform))
+
+        # Patch _has_replied to always False so the queued: guard
+        # doesn't short-circuit, and _mark_replied to capture calls.
+        with (
+            patch.object(cp, "_get_backlog_client", return_value=mock_bl),
+            patch.object(cp, "_has_replied", return_value=False),
+            patch.object(cp, "_mark_replied", side_effect=_capture_mark),
+            patch.object(cp, "is_spam", return_value=False),
+            # Short-circuit the toxicity gate to True so downstream
+            # persona/reply/post logic doesn't run. Any short-circuit
+            # after write_pending_engagement works — we only care that
+            # queued: fires immediately after DB write.
+            patch.object(cp._toxicity_gate, "check_inbound") as mock_tox,
+        ):
+            mock_tox.return_value = MagicMock(is_toxic=True)
+            cp.process_reply_event(_make_event(platform="threads"))
+
+        # DB write happened once.
+        mock_bl.write_pending_engagement.assert_called_once()
+        # queued: marker fired with the right key + platform.
+        assert ("queued:c123", "threads") in called_marks, (
+            f"queued: marker missing from {called_marks!r} — poller will re-queue"
+        )
+
+    def test_queued_marker_scopes_by_platform(self, agent_root, _clear_replied_cache):
+        """Threads comment queued must NOT block the same comment_id on
+        Instagram. The (comment_id, platform) pair is the dedup key."""
+        from genlab_core.engagement.comment_processor import (
+            _has_replied,
+            _mark_replied,
+        )
+
+        _mark_replied("queued:c123", "threads")
+
+        assert _has_replied("queued:c123", "threads") is True
+        assert _has_replied("queued:c123", "instagram") is False
+
+
+class TestBrokenRateLimitReQueueRegression:
+    """Regression: reproduce the exact 2026-07-23 sports Threads pattern
+    (5,500 rate_limited rows for 6 unique comments in 24h) and prove the
+    ``queued:`` marker breaks the loop."""
+
+    @patch("genlab_core.engagement.comment_processor.is_spam", return_value=False)
+    def test_rate_limited_comment_not_re_queued_after_first_pass(
+        self, mock_spam, agent_root, _clear_replied_cache
+    ):
+        """Simulate the exact bug shape: comment C hits rate_limit on
+        poll cycle 1. Poll cycle 2 (10 min later) sees the same C from
+        the Threads API. Fix: queued: marker prevents cycle 2 from
+        writing a second row."""
+        from genlab_core.engagement.comment_processor import process_reply_event
+
+        mock_bl = MagicMock()
+        mock_bl.write_pending_engagement.return_value = "sp_row_1"
+
+        mock_gate = MagicMock()
+        mock_gate.return_value.check_inbound.return_value = MagicMock(is_toxic=False)
+
+        event = _make_event(platform="threads", niche_id="sports")
+
+        # Cycle 1: rate_limit will fire → raises dramatiq.Retry
+        import dramatiq
+
+        with (
+            patch(
+                "genlab_core.engagement.comment_processor._get_backlog_client",
+                return_value=mock_bl,
+            ),
+            patch("genlab_core.engagement.comment_processor.ToxicityGate", mock_gate),
+            patch("genlab_core.engagement.comment_processor._rate_limiter") as mock_rl,
+        ):
+            mock_rl.acquire.return_value = False
+            with pytest.raises(dramatiq.Retry):
+                process_reply_event(event)
+
+        # After cycle 1: DB write happened once, queued: marker set.
+        assert mock_bl.write_pending_engagement.call_count == 1
+
+        # Cycle 2: same event fires 10 min later from a fresh poll.
+        with (
+            patch(
+                "genlab_core.engagement.comment_processor._get_backlog_client",
+                return_value=mock_bl,
+            ),
+            patch("genlab_core.engagement.comment_processor.ToxicityGate", mock_gate),
+            patch("genlab_core.engagement.comment_processor._rate_limiter") as mock_rl,
+        ):
+            mock_rl.acquire.return_value = False
+            # Should NOT raise — queued: check returns early before
+            # rate_limit is even consulted.
+            process_reply_event(event)
+
+        # KEY ASSERTION: no second DB row written.
+        # This is what stopped the 5,500/day duplication.
+        assert mock_bl.write_pending_engagement.call_count == 1, (
+            f"Cycle 2 wrote another pending_engagement row — "
+            f"the 11,151 sports Threads duplication bug is back. "
+            f"call_count={mock_bl.write_pending_engagement.call_count}"
+        )
