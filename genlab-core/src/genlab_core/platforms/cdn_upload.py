@@ -377,24 +377,45 @@ def upload_to_cdn_full(
         sorted(exclude_providers) if exclude_providers else "[]",
     )
 
+    # 2026-07-23: auto-rotation via media_provider_health. Providers
+    # marked unhealthy (last-known failure within cooldown window) are
+    # skipped without a new upload attempt. Failed attempts mark the
+    # provider unhealthy so the next publisher within the cooldown
+    # window skips straight to the working tier. Fail-open — never raises.
+    from genlab_core.platforms.media_provider_health import (
+        is_provider_healthy,
+        mark_provider_unhealthy,
+    )
+
     # Tier 1: Cloudflare tunnel (most reliable for direct access)
-    if not require_external and PROVIDER_TUNNEL not in exclude_providers:
+    if (
+        not require_external
+        and PROVIDER_TUNNEL not in exclude_providers
+        and is_provider_healthy(PROVIDER_TUNNEL)
+    ):
         url = _serve_via_tunnel(file_path)
         if url:
             return CdnUploadResult(url=url, provider=PROVIDER_TUNNEL, size_mb=size_mb)
+        mark_provider_unhealthy(PROVIDER_TUNNEL, "serve_via_tunnel returned no URL")
 
     # Tier 2: Litterbox (externally accessible)
-    if PROVIDER_LITTERBOX not in exclude_providers:
+    if PROVIDER_LITTERBOX not in exclude_providers and is_provider_healthy(
+        PROVIDER_LITTERBOX
+    ):
         url = _upload_to_litterbox(file_path, expiry, max_attempts)
         if url:
             return CdnUploadResult(url=url, provider=PROVIDER_LITTERBOX, size_mb=size_mb)
+        mark_provider_unhealthy(PROVIDER_LITTERBOX, "litterbox upload returned no URL")
         logger.warning("Litterbox unreachable, trying tmpfiles.org...")
 
     # Tier 3: tmpfiles (externally accessible)
-    if PROVIDER_TMPFILES not in exclude_providers:
+    if PROVIDER_TMPFILES not in exclude_providers and is_provider_healthy(
+        PROVIDER_TMPFILES
+    ):
         url = _upload_to_tmpfiles(file_path)
         if url:
             return CdnUploadResult(url=url, provider=PROVIDER_TMPFILES, size_mb=size_mb)
+        mark_provider_unhealthy(PROVIDER_TMPFILES, "tmpfiles upload returned no URL")
 
     return None
 
