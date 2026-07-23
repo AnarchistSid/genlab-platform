@@ -188,6 +188,48 @@ class TestInsertShape:
         assert params[3] is None
 
 
+class TestExtraShape:
+    """The extra dict is the load-bearing carrier of raw check
+    values (composite_score, virality_score). If the shape drifts,
+    the endpoint's threshold-suggestion aggregation returns null
+    and the operator loses the tuning signal."""
+
+    def test_extra_stringifies_json_and_lands_on_col(self):
+        from genlab_core.scheduling.gate_examination_logger import log
+
+        conn = MagicMock()
+        log(
+            blueprint_id="bp-a",
+            niche_id="gaming",
+            decision=_make_decision(
+                approved=False,
+                failed=["composite_score"],
+            ),
+            conn=conn,
+            extra={"composite_score": 0.28, "virality_score": 0.03},
+        )
+        _, params = conn.execute.call_args[0]
+        parsed = json.loads(params[7])
+        assert parsed["composite_score"] == pytest.approx(0.28)
+        assert parsed["virality_score"] == pytest.approx(0.03)
+
+    def test_extra_omission_defaults_to_empty(self):
+        """If auto-approver's blueprint lacks composite/virality
+        fields, extra passes through as empty dict — NOT null. Endpoint
+        distinguishes empty from missing via .get() safely."""
+        from genlab_core.scheduling.gate_examination_logger import log
+
+        conn = MagicMock()
+        log(
+            blueprint_id="bp-a",
+            niche_id="gaming",
+            decision=_make_decision(approved=False, failed=["composite_score"]),
+            conn=conn,
+        )
+        _, params = conn.execute.call_args[0]
+        assert json.loads(params[7]) == {}
+
+
 class TestNoDsnFallback:
     def test_no_dsn_silently_skips(self, monkeypatch):
         """When conn is None AND DATABASE_URL is unset, logger

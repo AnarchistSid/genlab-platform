@@ -524,6 +524,31 @@ def _one_niche_breakdown(conn, niche_id: str, window_days: int) -> dict:
 
     top_check = next(iter(failed_check_counts), None)
     rejected = exam - approved
+
+    # Percentile distribution over the top failing check's raw values.
+    # For composite_score and virality_score, extra JSONB carries the
+    # actual number the gate saw. Operator uses p25 as a starting
+    # tuning suggestion — "if you set threshold to p25 you'd unlock
+    # 75% of currently-rejected blueprints".
+    threshold_suggestion = None
+    score_distribution = None
+    if top_check in ("composite_score", "virality_score"):
+        score_distribution = _score_distribution(
+            conn, niche_id, window_days, top_check
+        )
+        if score_distribution and score_distribution.get("p25") is not None:
+            threshold_suggestion = {
+                "check": top_check,
+                "current_threshold": _CURRENT_GATE_THRESHOLDS.get(top_check),
+                "suggested_threshold": score_distribution["p25"],
+                "would_unlock_pct": 75,
+                "rationale": (
+                    f"p25 of {top_check} values among rejected blueprints. "
+                    f"Setting threshold to p25 unlocks 75% of currently- "
+                    f"rejected blueprints in this window."
+                ),
+            }
+
     rate = (approved / exam) if exam > 0 else 0.0
     return {
         "examinations": exam,
@@ -533,7 +558,89 @@ def _one_niche_breakdown(conn, niche_id: str, window_days: int) -> dict:
         "distinct_blueprints": distinct_bp,
         "failed_check_counts": failed_check_counts,
         "top_failing_check": top_check,
+        "score_distribution": score_distribution,
+        "threshold_suggestion": threshold_suggestion,
     }
+
+
+# Mirror of the gate's hardcoded thresholds — see
+# ``genlab_core/scheduling/auto_approval_gate.py:evaluate``. Mirrored
+# here to avoid an import into the endpoint's hot path AND to keep the
+# response payload self-contained. If gate thresholds move, both this
+# and the gate module must update.
+_CURRENT_GATE_THRESHOLDS: dict[str, float] = {
+    "composite_score": 0.3,
+    "virality_score": 0.05,
+}
+
+
+def _score_distribution(
+    conn, niche_id: str, window_days: int, check_name: str
+) -> dict | None:
+    """Return {min, p25, p50, p75, max, n} for a numeric check's
+    values in gate_examinations.extra, restricted to rejected rows
+    that failed THIS specific check. Returns None when no rejected
+    rows carry the value."""
+    # extra->>{check_name} → text, then ::float. Filter on failed_checks
+    # containing the check name so we only aggregate the relevant subset.
+    # ``failed_checks @> to_jsonb(ARRAY[%s])`` is the JSONB "contains"
+    # operator — fast when the failed_checks JSONB has a GIN index in
+    # the future; for now sequential scan is fine at this cardinality.
+    try:
+        row = conn.execute(
+            f"""
+            SELECT
+                MIN((extra->>%s)::float) AS min_v,
+                PERCENTILE_CONT(0.25) WITHIN GROUP (
+                    ORDER BY (extra->>%s)::float
+                ) AS p25,
+                PERCENTILE_CONT(0.50) WITHIN GROUP (
+                    ORDER BY (extra->>%s)::float
+                ) AS p50,
+                PERCENTILE_CONT(0.75) WITHIN GROUP (
+                    ORDER BY (extra->>%s)::float
+                ) AS p75,
+                MAX((extra->>%s)::float) AS max_v,
+                COUNT(*)::int AS n
+            FROM gate_examinations
+            WHERE niche_id = %s
+              AND approved = false
+              AND examined_at > NOW() - make_interval(days => %s)
+              AND failed_checks @> to_jsonb(ARRAY[%s]::text[])
+              AND (extra->>%s) IS NOT NULL
+            """,
+            (
+                check_name, check_name, check_name, check_name, check_name,
+                niche_id, window_days, check_name, check_name,
+            ),
+        ).fetchone()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "gate-examinations: score dist query failed check=%s niche=%s: %s",
+            check_name, niche_id, exc,
+        )
+        return None
+    if row is None:
+        return None
+    getval = (lambda k: row.get(k)) if hasattr(row, "get") else (
+        lambda k: row[["min_v", "p25", "p50", "p75", "max_v", "n"].index(k)]
+    )
+    n = int(getval("n") or 0)
+    if n == 0:
+        return None
+    return {
+        "check": check_name,
+        "min": _r3(getval("min_v")),
+        "p25": _r3(getval("p25")),
+        "p50": _r3(getval("p50")),
+        "p75": _r3(getval("p75")),
+        "max": _r3(getval("max_v")),
+        "n": n,
+    }
+
+
+def _r3(v):
+    return None if v is None else round(float(v), 3)
 
 
 # ── Lever B: Per-rejection-reason breakdown ─────────────────────────

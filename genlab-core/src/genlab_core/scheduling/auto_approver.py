@@ -872,15 +872,37 @@ def run_pass(
         # Persists the gate's per-check verdict so the operator can see
         # which check is the constraint. Fail-open at every DB error
         # path — the log NEVER blocks the auto-approval flow.
+        #
+        # Extra payload carries the raw numeric scores the gate saw at
+        # decision time. When a check like composite_score is the top
+        # failing check, the endpoint's percentile aggregation over
+        # extra.composite_score reveals the tuning target (e.g. p25 =
+        # 0.24 means "threshold=0.24 would unlock 75% of rejected
+        # blueprints"). Without the raw scores, operator only knows
+        # WHICH check fails — not by how much.
         try:
             from genlab_core.scheduling.gate_examination_logger import (
                 log as _log_gate_examination,
             )
 
+            gate_extra: dict[str, Any] = {}
+            for k in ("composite_score", "virality_score"):
+                v = blueprint.get(k)
+                # Blueprint field may be str-cast from Postgres jsonb —
+                # coerce to float; NULL stays out of the payload.
+                if v is None:
+                    continue
+                try:
+                    gate_extra[k] = float(v)
+                except (TypeError, ValueError):
+                    # Malformed value — skip rather than poison the log.
+                    continue
+
             _log_gate_examination(
                 blueprint_id=str(record_id),
                 niche_id=niche_id,
                 decision=decision,
+                extra=gate_extra,
             )
         except Exception:  # noqa: BLE001 — best-effort diagnostic
             pass
