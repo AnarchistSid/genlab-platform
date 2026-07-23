@@ -820,7 +820,12 @@ def test_cli_wrapper_calls_both_resolvers():
 
     def fake_auto_fix(**kw):
         calls.append(("auto_fix_applied", kw))
-        return {"checked": 0, "resolved": 0, "errors": 0}
+        return {
+            "checked": 0,
+            "resolved": 0,
+            "skipped_not_whitelisted": 0,
+            "errors": 0,
+        }
 
     with (
         patch(
@@ -972,3 +977,89 @@ class TestBanditPosteriorDriftResolver:
         assert result["checked"] == 1
         assert result["resolved"] == 0
         assert result["skipped_still_drifting"] == 1
+
+
+class TestAutoFixWhitelist:
+    """2026-07-23: only whitelisted auto_fix_applied values should
+    resolve alerts. Live-in-prod discovery: initial resolver marked
+    disk_pressure ("Run /opt/genlab/scripts/disk_cleanup.sh") and
+    anthropic_credit_exhausted ("Top up Anthropic credits") resolved
+    because they had auto_fix_applied set — but those are OPERATOR
+    SUGGESTIONS, not completed actions."""
+
+    def test_completed_archived_value_resolves(self, monkeypatch):
+        """auto_fix='archived' means the archive DID happen at write
+        time — safe to resolve."""
+        from unittest.mock import MagicMock
+
+        from genlab_core.observability import alert_auto_resolver as mod
+
+        mock_conn = MagicMock()
+        mock_conn.__enter__.return_value.execute.return_value.fetchall.return_value = [
+            {
+                "id": 1,
+                "check_name": "orphan_intake_stories_archived",
+                "niche_id": "gaming",
+                "auto_fix_applied": "archived",
+            }
+        ]
+        monkeypatch.setattr(mod, "_connect", lambda: mock_conn)
+
+        result = mod.auto_resolve_completed_auto_fix_alerts(dry_run=True)
+        assert result["resolved"] == 1
+        assert result["skipped_not_whitelisted"] == 0
+
+    def test_operator_suggestion_stays_visible(self, monkeypatch):
+        """auto_fix='Top up Anthropic credits...' is a suggestion, NOT
+        a completed action — operator must still see the alert. The
+        live prod incident on 2026-07-23 marked these resolved by
+        mistake; whitelist prevents that regression."""
+        from unittest.mock import MagicMock
+
+        from genlab_core.observability import alert_auto_resolver as mod
+
+        mock_conn = MagicMock()
+        mock_conn.__enter__.return_value.execute.return_value.fetchall.return_value = [
+            {
+                "id": 1,
+                "check_name": "anthropic_credit_exhausted",
+                "niche_id": None,
+                "auto_fix_applied": "Top up Anthropic API credits at https://console.anthropic.com/settings/billing",
+            },
+            {
+                "id": 2,
+                "check_name": "disk_pressure",
+                "niche_id": None,
+                "auto_fix_applied": "Run /opt/genlab/scripts/disk_cleanup.sh (frees ~10 GB)",
+            },
+        ]
+        monkeypatch.setattr(mod, "_connect", lambda: mock_conn)
+
+        result = mod.auto_resolve_completed_auto_fix_alerts(dry_run=True)
+        assert result["resolved"] == 0, (
+            "Operator-suggestion auto_fix values MUST NOT auto-resolve; "
+            "regression of the 2026-07-23 live-prod correction that "
+            "codified the whitelist"
+        )
+        assert result["skipped_not_whitelisted"] == 2
+
+    def test_archived_prefix_matches_with_count(self, monkeypatch):
+        """auto_fix='Archived 3 blueprints' matches the prefix
+        whitelist — variable data doesn't break the match."""
+        from unittest.mock import MagicMock
+
+        from genlab_core.observability import alert_auto_resolver as mod
+
+        mock_conn = MagicMock()
+        mock_conn.__enter__.return_value.execute.return_value.fetchall.return_value = [
+            {
+                "id": 5,
+                "check_name": "missing_media",
+                "niche_id": "sports",
+                "auto_fix_applied": "Archived 3 blueprints",
+            }
+        ]
+        monkeypatch.setattr(mod, "_connect", lambda: mock_conn)
+
+        result = mod.auto_resolve_completed_auto_fix_alerts(dry_run=True)
+        assert result["resolved"] == 1

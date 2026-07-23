@@ -1033,9 +1033,38 @@ def auto_resolve_content_pool_bypass_alerts(*, dry_run: bool = False) -> dict[st
     return counters
 
 
+# 2026-07-23: WHITELIST of auto_fix_applied values that mean "the fix
+# was actually applied and completed" (safe to auto-resolve). Values
+# NOT in this whitelist may be suggestions ("Top up credits"), skips
+# ("not attempted"), or failures ("restart failed") — those must stay
+# visible so the operator sees them.
+#
+# Discovered live in prod: first pass of this resolver mistakenly
+# marked disk_pressure ("Run /opt/genlab/scripts/disk_cleanup.sh") and
+# anthropic_credit_exhausted ("Top up Anthropic credits") resolved
+# because both had auto_fix_applied set — but the values were
+# OPERATOR SUGGESTIONS, not completed actions. Both had to be re-
+# opened via SQL. Whitelist codified from the survey at that moment.
+_AUTO_FIX_COMPLETED_VALUES: frozenset[str] = frozenset(
+    {
+        "archived",
+        "bulk_resolved_2026-06-18",
+        "yt-dlp update: success",
+    }
+)
+
+# Prefix-match whitelist for values that carry variable data
+# (e.g. "Archived 3 blueprints"). Same completed-action semantics.
+_AUTO_FIX_COMPLETED_PREFIXES: tuple[str, ...] = (
+    "Archived ",
+    "yt-dlp updated (",
+)
+
+
 def auto_resolve_completed_auto_fix_alerts(*, dry_run: bool = False) -> dict[str, int]:
-    """Walk unresolved alerts whose ``auto_fix_applied`` column is set;
-    resolve them since the fix has ALREADY been applied at write time.
+    """Walk unresolved alerts whose ``auto_fix_applied`` column is set
+    to a whitelisted "completed" value; resolve those since the fix
+    has ALREADY been applied at write time.
 
     Motivating incident (2026-07-23): the
     ``orphan_intake_stories_archived`` alert fires when the archive
@@ -1043,11 +1072,14 @@ def auto_resolve_completed_auto_fix_alerts(*, dry_run: bool = False) -> dict[str
     — a report of a completed action, not an ongoing problem. But the
     alerts stayed unresolved forever, cluttering the CriticalAlertsBanner.
 
-    Same shape as ``systemd_unit_failed`` alerts that get resolved
-    when systemctl shows the unit is active — but for a wider class
-    of "the auto-fix already ran" alerts: any check that emits an
-    ``Alert(..., auto_fix="something")`` writes ``auto_fix_applied``
-    to the DB, marking the row as "done" at write time.
+    Whitelist (2026-07-23 live-in-prod correction): the first pass
+    of this resolver auto-resolved OPERATOR-SUGGESTION values like
+    "Top up Anthropic credits" and "Run disk_cleanup.sh" because it
+    treated all auto_fix_applied values as completion signals. Both
+    had to be re-opened. Only values in ``_AUTO_FIX_COMPLETED_VALUES``
+    or matching ``_AUTO_FIX_COMPLETED_PREFIXES`` are now resolved.
+    Adding new whitelisted values means updating that set — the
+    write side of each Alert(auto_fix="...") caller is the ground truth.
 
     Guard: only resolve alerts written BEFORE this sweep (created_at
     check) so we don't race a fresh write.
@@ -1060,7 +1092,8 @@ def auto_resolve_completed_auto_fix_alerts(*, dry_run: bool = False) -> dict[str
     Returns
     -------
     dict
-        ``{"checked": int, "resolved": int, "errors": int}``
+        ``{"checked": int, "resolved": int, "skipped_not_whitelisted": int,
+        "errors": int}``
 
     Notes
     -----
@@ -1069,6 +1102,7 @@ def auto_resolve_completed_auto_fix_alerts(*, dry_run: bool = False) -> dict[str
     counters = {
         "checked": 0,
         "resolved": 0,
+        "skipped_not_whitelisted": 0,
         "errors": 0,
     }
 
@@ -1108,7 +1142,18 @@ def auto_resolve_completed_auto_fix_alerts(*, dry_run: bool = False) -> dict[str
         counters["checked"] += 1
         row_id = row.get("id")
         check_name = row.get("check_name")
-        auto_fix = row.get("auto_fix_applied")
+        auto_fix = row.get("auto_fix_applied") or ""
+
+        # Only resolve when the auto_fix value maps to a genuinely-
+        # completed action. Suggestions ("Top up..."), skips ("not
+        # attempted"), failures ("restart failed") stay visible.
+        is_completed = auto_fix in _AUTO_FIX_COMPLETED_VALUES or any(
+            auto_fix.startswith(p) for p in _AUTO_FIX_COMPLETED_PREFIXES
+        )
+        if not is_completed:
+            counters["skipped_not_whitelisted"] += 1
+            counters["checked"] -= 1  # Not a real "checked" — didn't consider
+            continue
 
         note = (
             f"\n\n[AUTO-RESOLVED {today_str}: auto_fix "
