@@ -1,0 +1,15 @@
+[Unit]
+Description=Advance auto_experiments pending → running → completed every 6h
+Documentation=file:///opt/genlab/scripts/run_experiment_lifecycle.py
+
+[Timer]
+# Every 6 hours (00:20, 06:20, 12:20, 18:20 UTC). Offsets past the top of
+# the hour so we don't collide with the other :00 timers. 6h cadence
+# means an experiment finishes within 6h of its duration expiring, which
+# is fine for the 7-day baseline.
+OnCalendar=*-*-* 00,06,12,18:20:00 UTC
+Persistent=true
+Unit=genlab-experiment-lifecycle.service
+
+[Install]
+WantedBy=timers.target

@@ -270,13 +270,147 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
     return {c: row[i] for i, c in enumerate(columns) if i < len(row)}
 
 
+# Minimum reward samples per arm before ``met_threshold`` can be True.
+# 5 is the conservative minimum where 48h-window Beta posteriors have
+# meaningful separation. Below that a treatment "win" is likely noise.
+MIN_SAMPLES_PER_ARM: Final[int] = 5
+
+
+def measure_experiment_result(
+    conn,
+    experiment: dict[str, Any],
+) -> dict[str, Any]:
+    """Compute per-arm reward from pending_feedback within the
+    experiment's time window. Returns a result dict ready to persist
+    via ``complete_experiment``.
+
+    Shape:
+        {
+          "arm_rewards": {
+            "<arm_id>": {"observed_reward": <float>, "n_samples": <int>}
+          },
+          "expected_metric_shift": <float>,
+          "observed_lift": <float | null>,  # arm[1] - arm[0]
+          "met_threshold": <bool>,
+          "sufficient_samples": <bool>,
+          "min_samples_required": <int>,
+          "window_start": <ISO 8601>,
+          "window_end": <ISO 8601>,
+        }
+
+    Discipline:
+    * observed_reward per arm = AVG(reward_48h) where the reward was
+      finalised within the experiment window.
+    * met_threshold requires BOTH sufficient_samples AND
+      observed_lift >= expected_metric_shift.
+    * Fail-open: any DB error returns a partial result with met_threshold
+      = False so the row can still be marked completed.
+    """
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
+
+    spec = experiment.get("spec") or {}
+    if isinstance(spec, str):
+        try:
+            spec = json.loads(spec)
+        except Exception:
+            spec = {}
+    arms = spec.get("arms") or []
+    if not isinstance(arms, list):
+        arms = []
+    niche_id = experiment.get("niche_id") or spec.get("niche_id") or ""
+    expected_shift = float(spec.get("expected_metric_shift", 0.0) or 0.0)
+    started_at = experiment.get("started_at")
+
+    # Normalise started_at to ISO if it came back as a datetime.
+    if hasattr(started_at, "isoformat"):
+        window_start_iso = started_at.isoformat()
+    else:
+        window_start_iso = str(started_at) if started_at else ""
+    window_end_iso = _dt.now(_UTC).isoformat()
+
+    arm_rewards: dict[str, dict[str, Any]] = {}
+    for arm_id in arms:
+        arm_str = str(arm_id).strip()
+        if not arm_str:
+            continue
+        try:
+            row = conn.execute(
+                """
+                SELECT AVG(reward_48h)::float AS avg_r,
+                       COUNT(*)::int AS n
+                FROM pending_feedback
+                WHERE niche_id = %s
+                  AND arm_id = %s
+                  AND reward_48h IS NOT NULL
+                  AND updated_at >= %s
+                  AND updated_at <= %s
+                """,
+                (niche_id, arm_str, window_start_iso, window_end_iso),
+            ).fetchone()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "[auto_experiment] reward query failed for arm=%s: %s",
+                arm_str,
+                exc,
+            )
+            arm_rewards[arm_str] = {"observed_reward": None, "n_samples": 0}
+            continue
+        if row is None:
+            arm_rewards[arm_str] = {"observed_reward": None, "n_samples": 0}
+            continue
+        if hasattr(row, "get"):
+            avg_r = row.get("avg_r")
+            n = int(row.get("n") or 0)
+        else:
+            avg_r = row[0]
+            n = int(row[1] or 0)
+        arm_rewards[arm_str] = {
+            "observed_reward": None if avg_r is None else float(avg_r),
+            "n_samples": n,
+        }
+
+    # Compute observed_lift as arm[1] - arm[0] (treatment - control).
+    observed_lift: float | None = None
+    sufficient_samples = False
+    met_threshold = False
+    if len(arms) >= 2:
+        control = arm_rewards.get(str(arms[0]).strip(), {})
+        treatment = arm_rewards.get(str(arms[1]).strip(), {})
+        c_reward = control.get("observed_reward")
+        t_reward = treatment.get("observed_reward")
+        c_n = control.get("n_samples", 0)
+        t_n = treatment.get("n_samples", 0)
+        sufficient_samples = (
+            c_n >= MIN_SAMPLES_PER_ARM and t_n >= MIN_SAMPLES_PER_ARM
+        )
+        if c_reward is not None and t_reward is not None:
+            observed_lift = float(t_reward) - float(c_reward)
+            met_threshold = (
+                sufficient_samples and observed_lift >= expected_shift
+            )
+
+    return {
+        "arm_rewards": arm_rewards,
+        "expected_metric_shift": expected_shift,
+        "observed_lift": observed_lift,
+        "met_threshold": met_threshold,
+        "sufficient_samples": sufficient_samples,
+        "min_samples_required": MIN_SAMPLES_PER_ARM,
+        "window_start": window_start_iso,
+        "window_end": window_end_iso,
+    }
+
+
 __all__ = [
     "DEFAULT_DURATION_DAYS",
+    "MIN_SAMPLES_PER_ARM",
     "ExperimentSpec",
     "check_running_experiments",
     "complete_experiment",
     "is_enabled",
     "list_experiments",
+    "measure_experiment_result",
     "queue_pending_experiment",
     "start_pending_experiments",
 ]

@@ -149,3 +149,229 @@ class TestStartPending:
         mock_conn = MagicMock()
         mock_conn.execute.return_value.fetchall.return_value = []
         assert start_pending_experiments(mock_conn) == 0
+
+
+class TestMeasureExperimentResult:
+    """Pin the shape of measure_experiment_result. It's the load-bearing
+    metric fn — if the shape drifts, complete_experiment persists
+    something the dashboard can't render."""
+
+    def _fake_row(self, avg_r, n):
+        # Simulate psycopg dict_row shape (has .get).
+        return {"avg_r": avg_r, "n": n}
+
+    def _make_conn(self, per_arm_rows):
+        """Return a conn whose execute().fetchone() cycles through
+        per-arm rows in the order arms are iterated."""
+        mock_conn = MagicMock()
+        it = iter(per_arm_rows)
+
+        def _execute(*_a, **_kw):
+            r = next(it)
+            m = MagicMock()
+            m.fetchone.return_value = r
+            return m
+
+        mock_conn.execute.side_effect = _execute
+        return mock_conn
+
+    def test_met_threshold_true_when_lift_exceeds_shift_with_samples(self):
+        from genlab_core.scheduling.auto_experiment import measure_experiment_result
+
+        conn = self._make_conn(
+            [
+                self._fake_row(0.10, 8),  # control
+                self._fake_row(0.30, 8),  # treatment
+            ]
+        )
+        exp = {
+            "id": "exp-1",
+            "niche_id": "gaming",
+            "started_at": "2026-07-16T00:00:00+00:00",
+            "spec": {
+                "arms": ["hook_style_a", "hook_style_b"],
+                "expected_metric_shift": 0.15,
+                "niche_id": "gaming",
+            },
+        }
+        result = measure_experiment_result(conn, exp)
+        assert result["met_threshold"] is True
+        assert result["sufficient_samples"] is True
+        assert result["observed_lift"] == pytest.approx(0.20, abs=1e-6)
+        assert result["arm_rewards"]["hook_style_a"]["n_samples"] == 8
+        assert result["arm_rewards"]["hook_style_b"]["n_samples"] == 8
+
+    def test_met_threshold_false_when_samples_insufficient(self):
+        from genlab_core.scheduling.auto_experiment import (
+            MIN_SAMPLES_PER_ARM,
+            measure_experiment_result,
+        )
+
+        conn = self._make_conn(
+            [
+                self._fake_row(0.10, 3),  # below MIN
+                self._fake_row(0.90, 3),  # huge lift but sample-starved
+            ]
+        )
+        exp = {
+            "id": "exp-2",
+            "niche_id": "sports",
+            "started_at": "2026-07-16T00:00:00+00:00",
+            "spec": {
+                "arms": ["ctrl", "trt"],
+                "expected_metric_shift": 0.05,
+            },
+        }
+        result = measure_experiment_result(conn, exp)
+        assert result["sufficient_samples"] is False
+        assert result["met_threshold"] is False
+        assert result["min_samples_required"] == MIN_SAMPLES_PER_ARM
+
+    def test_met_threshold_false_when_lift_under_expected(self):
+        from genlab_core.scheduling.auto_experiment import measure_experiment_result
+
+        conn = self._make_conn(
+            [
+                self._fake_row(0.20, 10),
+                self._fake_row(0.22, 10),  # only 0.02 lift vs 0.10 expected
+            ]
+        )
+        exp = {
+            "id": "exp-3",
+            "niche_id": "movies",
+            "started_at": "2026-07-16T00:00:00+00:00",
+            "spec": {
+                "arms": ["a", "b"],
+                "expected_metric_shift": 0.10,
+            },
+        }
+        result = measure_experiment_result(conn, exp)
+        assert result["sufficient_samples"] is True
+        assert result["met_threshold"] is False
+        assert result["observed_lift"] == pytest.approx(0.02, abs=1e-6)
+
+    def test_fail_open_on_db_error(self):
+        from genlab_core.scheduling.auto_experiment import measure_experiment_result
+
+        conn = MagicMock()
+        conn.execute.side_effect = RuntimeError("db down")
+        exp = {
+            "id": "exp-4",
+            "niche_id": "anime",
+            "started_at": "2026-07-16T00:00:00+00:00",
+            "spec": {"arms": ["x", "y"], "expected_metric_shift": 0.1},
+        }
+        result = measure_experiment_result(conn, exp)
+        # Fail-open: still returns a shape, met_threshold False.
+        assert result["met_threshold"] is False
+        assert result["arm_rewards"]["x"]["observed_reward"] is None
+        assert result["arm_rewards"]["y"]["observed_reward"] is None
+
+    def test_iso_window_shape(self):
+        from genlab_core.scheduling.auto_experiment import measure_experiment_result
+
+        conn = self._make_conn(
+            [self._fake_row(0.1, 5), self._fake_row(0.2, 5)]
+        )
+        exp = {
+            "id": "exp-5",
+            "niche_id": "ai_creators",
+            "started_at": "2026-07-16T00:00:00+00:00",
+            "spec": {"arms": ["a", "b"], "expected_metric_shift": 0.05},
+        }
+        result = measure_experiment_result(conn, exp)
+        assert result["window_start"] == "2026-07-16T00:00:00+00:00"
+        # window_end is NOW() ISO — must be a non-empty ISO string.
+        assert "T" in result["window_end"]
+        assert len(result["window_end"]) >= 19
+
+    def test_min_samples_constant_is_five(self):
+        """Regression pin: bumping this without operator review would
+        make the ratchet stall silently. Any change requires updating
+        the docstring rationale AND this test."""
+        from genlab_core.scheduling.auto_experiment import MIN_SAMPLES_PER_ARM
+
+        assert MIN_SAMPLES_PER_ARM == 5
+
+
+class TestLifecycleCLIStructure:
+    """Structural pins for scripts/run_experiment_lifecycle.py — catches
+    rename drift on the imports the timer relies on."""
+
+    def test_cli_imports_the_right_symbols(self):
+        import pathlib
+
+        p = pathlib.Path(__file__).resolve().parents[3] / "scripts" / "run_experiment_lifecycle.py"
+        assert p.exists(), f"CLI runner missing at {p}"
+        text = p.read_text()
+        # These symbols MUST be imported — the timer depends on them.
+        for sym in (
+            "start_pending_experiments",
+            "check_running_experiments",
+            "measure_experiment_result",
+            "complete_experiment",
+            "is_enabled",
+        ):
+            assert sym in text, f"CLI must import {sym}"
+
+    def test_cli_gates_on_is_enabled(self):
+        """Strict-true flag gate — if the flag isn't set, the CLI must
+        exit cleanly. Otherwise the systemd timer will silently mutate
+        DB before the operator flips the flag."""
+        import pathlib
+
+        p = pathlib.Path(__file__).resolve().parents[3] / "scripts" / "run_experiment_lifecycle.py"
+        text = p.read_text()
+        assert "if not is_enabled():" in text
+
+    def test_cli_dry_run_default(self):
+        """--apply must be opt-in. Reverses of this pattern (--dry-run
+        opt-in) are how test invocations accidentally mutate prod."""
+        import pathlib
+
+        p = pathlib.Path(__file__).resolve().parents[3] / "scripts" / "run_experiment_lifecycle.py"
+        text = p.read_text()
+        assert '"--apply"' in text
+        assert 'action="store_true"' in text
+
+
+class TestLifecycleSystemdUnit:
+    """Structural pins for the systemd unit — rule #26 (exit 0 unless
+    genuine incident) requires the script to guarantee 0 on nothing-
+    to-do. The service body must not accidentally set ExecStop or
+    Restart= that would create false-alarm on empty runs."""
+
+    def _read(self, filename):
+        import pathlib
+
+        p = (
+            pathlib.Path(__file__).resolve().parents[3]
+            / "deploy"
+            / "systemd-phase2"
+            / filename
+        )
+        assert p.exists(), f"unit missing at {p}"
+        return p.read_text()
+
+    def test_service_is_oneshot(self):
+        assert "Type=oneshot" in self._read(
+            "genlab-experiment-lifecycle.service"
+        )
+
+    def test_service_has_onfailure_alert(self):
+        assert "OnFailure=genlab-service-failure-alert@%n.service" in self._read(
+            "genlab-experiment-lifecycle.service"
+        )
+
+    def test_timer_is_persistent(self):
+        # Rule #21 — never leave a rare-fire timer at Persistent=false.
+        # Every-6h is often enough that Persistent=true is right too.
+        assert "Persistent=true" in self._read(
+            "genlab-experiment-lifecycle.timer"
+        )
+
+    def test_timer_calendar_shape(self):
+        # 4x/day at :20 past the hour, UTC — pin exact cadence.
+        assert "*-*-* 00,06,12,18:20:00 UTC" in self._read(
+            "genlab-experiment-lifecycle.timer"
+        )
