@@ -151,13 +151,51 @@ def _phase_pa(
 
         fetched += 1
         # Normalize field names from various platform fetchers
-        views = int(metrics.get("views") or metrics.get("plays") or 0)
-        likes = int(metrics.get("likes") or 0)
-        comments = int(metrics.get("comments") or metrics.get("replies") or 0)
-        shares = int(metrics.get("shares") or metrics.get("reposts") or metrics.get("retweets") or 0)
-        saves = int(metrics.get("saves") or metrics.get("saved") or 0)
+        new_views = int(metrics.get("views") or metrics.get("plays") or 0)
+        new_likes = int(metrics.get("likes") or 0)
+        new_comments = int(metrics.get("comments") or metrics.get("replies") or 0)
+        new_shares = int(metrics.get("shares") or metrics.get("reposts") or metrics.get("retweets") or 0)
+        new_saves = int(metrics.get("saves") or metrics.get("saved") or 0)
 
-        old_views = row["views"] or 0
+        old_views = int(row["views"] or 0)
+        old_likes = int(row["likes"] or 0)
+        old_comments = int(row["comments"] or 0)
+        old_shares = int(row["shares"] or 0)
+        old_saves = int(row["saves"] or 0)
+
+        # 2026-07-23 SAFETY: view counts are MONOTONIC — they only go up
+        # over time (Meta/YT never reduce them). If the fetcher returns
+        # a LOWER value than what we already have, that's a fetcher bug
+        # (metric-shape drift on old posts, Meta v22 field deprecation,
+        # etc). NEVER overwrite a higher stored value with a lower fetched
+        # one — that's data loss. Take max() per field.
+        #
+        # First batch of the initial script overwrote ~100 rows with
+        # lower values because Meta returns 0 for some old-post metric
+        # fields. This guard prevents recurrence.
+        views = max(old_views, new_views)
+        likes = max(old_likes, new_likes)
+        comments = max(old_comments, new_comments)
+        shares = max(old_shares, new_shares)
+        saves = max(old_saves, new_saves)
+
+        # Skip UPDATE if nothing changed
+        if (
+            views == old_views and likes == old_likes and comments == old_comments
+            and shares == old_shares and saves == old_saves
+        ):
+            logger.info(
+                "NOCHG %s/%s/%s views=%d (fetcher matches stored, only stamp mf)",
+                niche, platform, row["id"][:8], views,
+            )
+            if commit:
+                conn.execute(
+                    "UPDATE publishing_analytics SET metrics_fetched = NOW() WHERE id = %s::uuid",
+                    (row["id"],),
+                )
+                conn.commit()
+                updated += 1
+            continue
 
         if commit:
             conn.execute(
@@ -176,13 +214,13 @@ def _phase_pa(
             conn.commit()
             updated += 1
             logger.info(
-                "UPD   %s/%s/%s views=%d→%d likes=%d",
-                niche, platform, row["id"][:8], old_views, views, likes,
+                "UPD   %s/%s/%s views=%d→%d likes=%d→%d (guarded)",
+                niche, platform, row["id"][:8], old_views, views, old_likes, likes,
             )
         else:
             logger.info(
-                "DRY   %s/%s/%s would set views=%d→%d likes=%d",
-                niche, platform, row["id"][:8], old_views, views, likes,
+                "DRY   %s/%s/%s would set views=%d→%d likes=%d→%d",
+                niche, platform, row["id"][:8], old_views, views, old_likes, likes,
             )
 
     return fetched, updated, skipped
