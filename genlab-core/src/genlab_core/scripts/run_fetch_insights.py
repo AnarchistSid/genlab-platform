@@ -341,6 +341,17 @@ def _mark_window_completed(
     update_fields: dict[str, Any] = {"status": new_status}
     if metrics:
         update_fields.update(normalize_publishing_metrics(metrics))
+    # 2026-07-23: stamp when metrics were last fetched. Before this,
+    # ``publishing_analytics.metrics_fetched`` was NEVER populated across
+    # 406+ rows (all NULL). The column existed in the schema + on the
+    # analytics_store sibling table, but the insights-collector timer
+    # (this code path) never wrote it. Without a fetch timestamp,
+    # freshness of the views/likes/... columns was invisible — operators
+    # couldn't tell whether a "0 views" row was stale (never re-fetched)
+    # or genuine (post got 0 engagement). Class-of-bug: schema-code
+    # drift — column added but write path never wired (sibling of
+    # 2026-07-23 action_taken_source fix in blueprints).
+    update_fields["metrics_fetched"] = datetime.now(UTC).isoformat()
     try:
         client.publishing_analytics.update(
             record_id,
