@@ -394,14 +394,57 @@ def run_publish(
             sorted(prior_published),
             record_id[:16],
         )
+    # 2026-07-23: cross-platform posterior gate.
+    # Flag-gated via GENLAB_CROSS_PLATFORM_GATE_ENABLED. When on, skips
+    # platforms whose (niche, platform) Beta posterior is below the
+    # 0.02 mean threshold AND has ≥15 observations (cold-start safe).
+    # Fail-open — any error returns should_skip=False and publish continues.
+    try:
+        from genlab_core.publishing.cross_platform_gate import should_skip_platform
+    except ImportError:
+        should_skip_platform = None  # type: ignore[assignment]
+
     platforms_to_publish = []
     for p in enabled_platforms:
         if p in prior_published:
             continue  # already live — never re-post
         if daily_cap and not daily_cap.can_publish(p):
             logger.info("[publish] %s: daily cap reached, skipping", p)
-        else:
-            platforms_to_publish.append(p)
+            continue
+        if should_skip_platform is not None:
+            try:
+                decision = should_skip_platform(niche_id, p)
+                if decision.should_skip:
+                    logger.info(
+                        "[publish] %s: cross-platform gate skip — %s",
+                        p,
+                        decision.reason,
+                    )
+                    # Write SKIPPED to publishing_analytics so the
+                    # skip is durable + operator-visible.
+                    try:
+                        from genlab_core.publishing.analytics_recorder import (
+                            record_publish,
+                        )
+
+                        record_publish(
+                            client=backlog_client,
+                            niche_id=niche_id,
+                            platform=p,
+                            status="SKIPPED",
+                            error_message=f"cross_platform_gate:{decision.reason}",
+                            blueprint_id=record_id,
+                        )
+                    except Exception:  # noqa: BLE001 — analytics never blocks
+                        pass
+                    continue
+            except Exception as exc:  # noqa: BLE001 — fail-open
+                logger.debug(
+                    "[publish] cross-platform gate check failed for %s: %s",
+                    p,
+                    exc,
+                )
+        platforms_to_publish.append(p)
 
     if not platforms_to_publish:
         # Distinguish "all enabled already published" (finalize) from "capped".
