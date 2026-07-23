@@ -1,0 +1,16 @@
+[Unit]
+Description=Promote fresh strategist hypotheses to learning_findings — daily 03:15 UTC
+Documentation=file:///opt/genlab/scripts/auto_promote_hypotheses_to_findings.py
+
+[Timer]
+# 03:15 UTC = 08:45 IST. Fires 15 min after genlab-strategist-apply so
+# the two writers don't collide on strategist_reports at the same
+# moment. Runs daily so any mid-week strategist re-run also propagates
+# fresh hypotheses without waiting a week.
+# Idempotent via SELECT-then-INSERT on (source_report_id, finding_text).
+OnCalendar=*-*-* 03:15:00 UTC
+Persistent=true
+Unit=genlab-hypothesis-promote.service
+
+[Install]
+WantedBy=timers.target

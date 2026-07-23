@@ -1,0 +1,29 @@
+[Unit]
+Description=GenLab Hypothesis promoter — write medium/high strategist hypotheses to learning_findings
+After=network-online.target
+OnFailure=genlab-service-failure-alert@%n.service
+# Fire AFTER the strategist runs so we always process the freshest
+# reports. The strategist itself runs Sunday 02:00 UTC.
+After=genlab-strategist.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=UV_FROZEN=1
+TimeoutStartSec=5min
+# File-path invocation — scripts/ is not a Python package
+# (test_systemd_module_drift.py pins this pattern).
+ExecStart=/usr/local/bin/uv run python scripts/auto_promote_hypotheses_to_findings.py --apply
+StandardOutput=journal
+StandardError=journal
+
+MemoryMax=256M
+CPUWeight=30
+
+[Install]
+WantedBy=multi-user.target
