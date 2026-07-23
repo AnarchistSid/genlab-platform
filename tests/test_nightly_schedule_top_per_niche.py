@@ -743,3 +743,35 @@ def test_scheduler_exit_code_returns_zero_on_partial_success(script_module):
         "back — that still failed for the 4-pre-scheduled + 5th-empty "
         "case. Use unconditional `return 0`; hard errors raise out."
     )
+
+
+def test_exception_handler_writes_durable_error_file(script_module):
+    """2026-07-23: on exception, the script must preserve the traceback
+    to a durable file BEFORE exiting. The service exited status=3 on
+    2026-07-22 22:00 IST but the journal was rotated before we could
+    diagnose. Same rule #19 sibling issue as content_pool WARNING.
+
+    Source-grep pin (rather than integration test) because triggering
+    the actual exception path requires mocking DB + env + fs — brittle
+    and slow. The pin catches removal of the durable-write block.
+    """
+    import inspect
+
+    src = inspect.getsource(script_module.main)
+    # The durable file path must be present
+    assert "nightly_schedule_last_error.txt" in src, (
+        "The durable error file path must remain in main() so operators "
+        "can diagnose exit=3 failures after journal rotation. Regression "
+        "of the 2026-07-23 rule #19 sibling fix."
+    )
+    # Must import traceback + write to the file inside the except block
+    assert "traceback.print_exc" in src, (
+        "traceback.print_exc must be called on the durable file so "
+        "the stack, not just the exception str, is preserved."
+    )
+    # Guarded write — durable-write failure must NOT hide the original error
+    assert "also failed to write error file" in src, (
+        "The nested except that guards the durable write must be present "
+        "so a filesystem-full or permissions-drift condition doesn't "
+        "hide the actual pipeline error."
+    )

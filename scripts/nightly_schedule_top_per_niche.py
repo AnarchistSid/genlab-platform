@@ -514,7 +514,37 @@ def main() -> int:
             # 2026-07-21: return 0 unconditionally (see dry-run branch above).
             return 0
     except Exception as exc:
+        # 2026-07-23: preserve the traceback to a durable file BEFORE
+        # exiting. The service exited status=3 last night (2026-07-22
+        # 22:00 IST) but the journal was rotated before I could
+        # diagnose it — same rule #19 sibling issue as the WARNING
+        # logs that content_pool tripped on.
+        #
+        # The durable file survives journal rotation so operators can
+        # `cat /opt/genlab/.runtime/nightly_schedule_last_error.txt`
+        # any time after the incident. Overwrites on each failure —
+        # the LAST failure is what matters for triage; the alarm
+        # itself fires on every non-zero exit so we don't lose the
+        # incident timestamp.
+        import traceback
+        from datetime import datetime, timezone
+
         print(f"ERROR: {exc}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        try:
+            error_path = Path("/opt/genlab/.runtime/nightly_schedule_last_error.txt")
+            error_path.parent.mkdir(parents=True, exist_ok=True)
+            with error_path.open("w") as f:
+                f.write(f"{datetime.now(timezone.utc).isoformat()}\n")
+                f.write(f"ERROR: {exc}\n\n")
+                traceback.print_exc(file=f)
+        except Exception as write_exc:
+            # Durable-write failure must NOT hide the real error —
+            # log it but proceed to exit 3 with the original signal.
+            print(
+                f"(also failed to write error file: {write_exc})",
+                file=sys.stderr,
+            )
         return 3
 
 
