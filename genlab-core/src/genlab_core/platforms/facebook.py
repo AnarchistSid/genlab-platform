@@ -722,7 +722,12 @@ class FacebookClient:
                     message=f"Token valid for page '{name}' (id={data['id']})",
                     details=data,
                 )
-            error_msg = data.get("error", {}).get("message", "") or f"HTTP {resp.status_code}"
+            # 2026-07-23: format_meta_error preserves code + subcode +
+            # fbtrace_id. See
+            # [[class-of-bug-signal-loss-through-merged-failure-paths]].
+            from genlab_core.platforms.meta_errors import format_meta_error
+
+            error_msg = format_meta_error(data) or f"HTTP {resp.status_code}"
             return TokenStatus(
                 valid=False,
                 platform=self.platform_id,
@@ -750,11 +755,14 @@ class FacebookClient:
 
 
 def _extract_error_message(data: dict[str, Any]) -> str:
-    """Extract a human-readable error message from a Facebook API response."""
-    error = data.get("error", {})
-    if isinstance(error, dict):
-        msg = error.get("message", "")
-        code = error.get("code", "")
-        if msg:
-            return f"code={code}: {msg}" if code else msg
-    return str(data)[:200] if data else "Unknown error"
+    """Extract a human-readable error message from a Facebook API response.
+
+    2026-07-23: delegates to ``format_meta_error`` so error attribution
+    (code + subcode + fbtrace_id) is consistent across all Meta clients.
+    Previously used a local ``code={code}: {msg}`` shape that discarded
+    subcode + fbtrace_id — the same class-of-bug that
+    [[class-of-bug-signal-loss-through-merged-failure-paths]] documents.
+    """
+    from genlab_core.platforms.meta_errors import format_meta_error
+
+    return format_meta_error(data) if data else "Unknown error"

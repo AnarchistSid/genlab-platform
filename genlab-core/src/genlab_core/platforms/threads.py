@@ -359,7 +359,14 @@ class ThreadsClient:
                     details=data,
                 )
 
-            error_msg = data.get("error", {}).get("message", "") or f"HTTP {resp.status_code}"
+            # 2026-07-23: format_meta_error preserves code + subcode +
+            # fbtrace_id — critical for Meta support triage of token
+            # health failures. Same helper as _create_container +
+            # _threads_publish. See
+            # [[class-of-bug-signal-loss-through-merged-failure-paths]].
+            from genlab_core.platforms.meta_errors import format_meta_error
+
+            error_msg = format_meta_error(data) or f"HTTP {resp.status_code}"
             return TokenStatus(
                 valid=False,
                 platform=self.platform_id,

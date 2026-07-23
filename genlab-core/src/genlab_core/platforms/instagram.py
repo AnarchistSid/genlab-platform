@@ -518,10 +518,13 @@ class InstagramClient:
             if resp.status_code == 200 and "id" in data:
                 self._log.info("Instagram: replied to comment %s (media=%s)", parent_id, context_id)
                 return True
+            # 2026-07-23: format_meta_error preserves attribution.
+            from genlab_core.platforms.meta_errors import format_meta_error
+
             self._log.warning(
                 "Instagram: reply failed (HTTP %d): %s",
                 resp.status_code,
-                data.get("error", {}).get("message", str(data)),
+                format_meta_error(data),
             )
             return False
         except Exception as exc:
@@ -570,7 +573,11 @@ class InstagramClient:
                     message=f"Token valid for account '{name}' (id={data['id']})",
                     details=data,
                 )
-            error_msg = data.get("error", {}).get("message", "") or f"HTTP {resp.status_code}"
+            # 2026-07-23: format_meta_error preserves code + subcode +
+            # fbtrace_id — critical for Meta support triage.
+            from genlab_core.platforms.meta_errors import format_meta_error
+
+            error_msg = format_meta_error(data) or f"HTTP {resp.status_code}"
             return TokenStatus(
                 valid=False,
                 platform=self.platform_id,
@@ -621,7 +628,11 @@ class InstagramClient:
                     username,
                 )
                 return True
-            error_msg = data.get("error", {}).get("message", "") or f"HTTP {resp.status_code}"
+            # 2026-07-23: format_meta_error preserves attribution
+            # across all Meta clients (see shared helper module).
+            from genlab_core.platforms.meta_errors import format_meta_error
+
+            error_msg = format_meta_error(data) or f"HTTP {resp.status_code}"
             self._log.error("Instagram: channel verification failed: %s", error_msg)
             return False
         except Exception as exc:
@@ -787,7 +798,11 @@ class InstagramClient:
             if "id" in payload:
                 self._log.info("Reel container created: %s", payload["id"])
                 return payload["id"]
-            error_msg = payload.get("error", {}).get("message", str(payload))
+            # 2026-07-23: format_meta_error preserves attribution
+            # (see shared helper).
+            from genlab_core.platforms.meta_errors import format_meta_error
+
+            error_msg = format_meta_error(payload)
             self._last_error = f"Container creation failed: {error_msg}"
             self._log.error("Reel container creation failed: %s", error_msg)
             return None
