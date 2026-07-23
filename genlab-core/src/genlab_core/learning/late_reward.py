@@ -99,6 +99,7 @@ def recompute_late_reward(
     conn: Any = None,
     shaper: Any = None,
     fetch_platform_metrics_fn: Any = None,
+    platform: str = "",
 ) -> LateRewardDelta | None:
     """Re-fetch metrics at the extended window and compute the late reward.
 
@@ -110,6 +111,15 @@ def recompute_late_reward(
         shaper: Optional RewardShaper instance. Constructed by caller
             OR test-injected.
         fetch_platform_metrics_fn: Injectable metric fetcher.
+        platform: Optional platform filter (2026-07-23 add). When empty,
+            the SQL's ``LIMIT 1`` picks whichever platform's row the DB
+            returns first — historically Facebook, because it happens to
+            sort first in Postgres insertion order. Result: only FB got
+            late_reward_delta rows despite blueprints publishing to
+            IG/YT/Threads too. When non-empty, filters to that specific
+            platform (still LIMIT 1 — one row per bp × platform pair).
+            Caller (``process_late_reward_batch``) iterates over all
+            (blueprint_id, platform) combos to get full coverage.
 
     Returns:
         LateRewardDelta on success; None on any failure (fail-closed).
@@ -149,9 +159,16 @@ def recompute_late_reward(
     # resolve; 9 with reward_48h would fire the persist path that had
     # been silently dead. See ``[[late-reward-sql-bug-2026-07-02]]`` for
     # the discovery trail.
+    # 2026-07-23: when platform filter passed, add strict equality to the
+    # WHERE clause so the LIMIT 1 picks the requested platform's row.
+    # Empty platform preserves pre-fix behaviour (whichever row Postgres
+    # returns first — historically FB).
+    _platform_filter_sql = " AND pa.platform = %s" if platform else ""
+    _query_params: tuple = (blueprint_id, platform) if platform else (blueprint_id,)
+
     try:
         row = conn.execute(
-            """
+            f"""
             SELECT b.id, b.niche_id, b.arm_id, pa.platform,
                    pa.post_id AS platform_post_id,
                    pa.published_at,
@@ -161,7 +178,7 @@ def recompute_late_reward(
             LEFT JOIN pending_feedback p
                    ON p.platform = pa.platform
                   AND p.post_id = pa.post_id
-            WHERE b.id = %s::uuid AND pa.status = 'SUCCESS'
+            WHERE b.id = %s::uuid AND pa.status = 'SUCCESS'{_platform_filter_sql}
             LIMIT 1
             -- 2026-07-14 (learning-wire audit F3): switched from
             -- `LIKE '%%' || pa.post_id` to strict equality. The LIKE
@@ -176,7 +193,7 @@ def recompute_late_reward(
             -- silently attributing wrong reward_48h to unrelated
             -- pending_feedback rows.
             """,
-            (blueprint_id,),
+            _query_params,
         ).fetchone()
     except Exception as exc:
         logger.warning("late_reward: DB read failed bp=%s err=%s", blueprint_id, exc)
@@ -350,9 +367,17 @@ def process_late_reward_batch(
     cutoff_min = datetime.now(UTC) - timedelta(days=days_ago_max)
     cutoff_max = datetime.now(UTC) - timedelta(days=days_ago_min)
     try:
+        # 2026-07-23: query per-(blueprint × platform) pairs instead of
+        # per-blueprint. Pre-fix path returned only blueprint_ids and
+        # recompute_late_reward's LIMIT 1 picked one platform's row —
+        # historically Facebook (first-inserted). Result: 14-day
+        # late_reward_deltas table had ~50 FB rows + 1 non-FB row despite
+        # blueprints publishing to 4-5 platforms each. IG/YT/Threads
+        # long-tail growth patterns went completely un-measured.
+        # New shape gets 4-5× the row coverage with same query cost.
         rows = conn.execute(
             """
-            SELECT DISTINCT pa.blueprint_id::text AS blueprint_id
+            SELECT DISTINCT pa.blueprint_id::text AS blueprint_id, pa.platform
             FROM publishing_analytics pa
             WHERE pa.published_at BETWEEN %s AND %s
               AND pa.status = 'SUCCESS'
@@ -367,11 +392,19 @@ def process_late_reward_batch(
 
     for row in rows or []:
         counters["scanned"] += 1
-        bp_id = row.get("blueprint_id") if hasattr(row, "get") else row[0]
+        if hasattr(row, "get"):
+            bp_id = row.get("blueprint_id")
+            row_platform = row.get("platform") or ""
+        else:
+            bp_id = row[0]
+            row_platform = row[1] or ""
         try:
-            delta = recompute_late_reward(bp_id, conn=conn)
+            delta = recompute_late_reward(bp_id, conn=conn, platform=row_platform)
         except Exception as exc:
-            logger.warning("late_reward.blueprint_error bp=%s err=%s", bp_id, exc)
+            logger.warning(
+                "late_reward.blueprint_error bp=%s platform=%s err=%s",
+                bp_id, row_platform, exc,
+            )
             counters["errors"] += 1
             continue
         if delta is None:

@@ -338,3 +338,89 @@ class TestBatch:
         assert counters["scanned"] == 3
         assert counters["measured"] == 2
         assert counters["significant_lift"] == 1
+
+
+class TestPlatformScopedRecompute:
+    """2026-07-23: recompute_late_reward now accepts a platform filter.
+
+    Pre-fix: LIMIT 1 picked whichever row Postgres returned first for a
+    blueprint that published to multiple platforms. Historically FB (row
+    insertion order). Result: late_reward_deltas table only had FB rows
+    despite blueprints publishing to 4-5 platforms each.
+
+    Post-fix: batch iterates (blueprint × platform) pairs → each pair
+    gets its own delta row → 4-5x more coverage for IG/YT/Threads
+    long-tail growth patterns.
+    """
+
+    def test_batch_query_returns_bp_platform_pairs(self, monkeypatch):
+        """Verify the batch fetches (blueprint_id, platform) tuples,
+        not just blueprint_ids. This is the shape change that unlocks
+        per-platform late-reward measurement."""
+        monkeypatch.setenv("DATABASE_URL", "postgres://fake")
+        conn = MagicMock()
+        # Batch's new SQL returns rows with BOTH blueprint_id + platform
+        conn.execute.return_value.fetchall.return_value = [
+            {"blueprint_id": "bp1", "platform": "facebook"},
+            {"blueprint_id": "bp1", "platform": "instagram"},
+            {"blueprint_id": "bp1", "platform": "youtube"},
+            {"blueprint_id": "bp1", "platform": "threads"},
+        ]
+
+        called_platforms: list[str] = []
+
+        def _capture(bp_id, *, conn=None, platform=""):
+            called_platforms.append(platform)
+            return None  # skip persist path
+
+        with patch.object(late_reward, "recompute_late_reward", side_effect=_capture):
+            with patch.object(late_reward, "_persist_delta_row"):
+                counters = late_reward.process_late_reward_batch(conn=conn)
+
+        # 4 (bp × platform) pairs scanned — one per platform
+        assert counters["scanned"] == 4
+        # Each recompute call got a distinct platform, not empty
+        assert called_platforms == ["facebook", "instagram", "youtube", "threads"]
+
+    def test_recompute_with_platform_filter_narrows_query(self, monkeypatch):
+        """When platform is passed to recompute_late_reward, the SQL
+        must include ``AND pa.platform = %s`` so LIMIT 1 picks that
+        specific platform's row (not whichever was inserted first)."""
+        monkeypatch.setenv("DATABASE_URL", "postgres://fake")
+        conn = MagicMock()
+
+        # No matching row for this platform → returns None
+        conn.execute.return_value.fetchone.return_value = None
+
+        result = late_reward.recompute_late_reward(
+            "bp_abc", conn=conn, platform="youtube"
+        )
+        assert result is None
+
+        # Verify the query included the platform filter
+        # (2nd param since bp_id is 1st)
+        call_args = conn.execute.call_args
+        query_str = call_args[0][0]
+        query_params = call_args[0][1]
+        assert "pa.platform = %s" in query_str
+        assert query_params == ("bp_abc", "youtube")
+
+    def test_recompute_without_platform_filter_preserves_legacy_shape(
+        self, monkeypatch
+    ):
+        """Empty-string platform (default) MUST use the pre-fix SQL —
+        no platform filter — to preserve backward compat for any legacy
+        caller that hasn't been updated to pass platform."""
+        monkeypatch.setenv("DATABASE_URL", "postgres://fake")
+        conn = MagicMock()
+        conn.execute.return_value.fetchone.return_value = None
+
+        late_reward.recompute_late_reward("bp_abc", conn=conn)
+
+        call_args = conn.execute.call_args
+        query_str = call_args[0][0]
+        query_params = call_args[0][1]
+        # Legacy shape: no platform filter substring
+        assert "pa.platform = %s" not in query_str
+        # Only bp_id in params
+        assert query_params == ("bp_abc",)
