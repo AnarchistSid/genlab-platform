@@ -77,3 +77,31 @@ def test_gaming_and_ai_creators_inherit_default():
         # Either explicitly omitted (inherits default 7) or explicitly set to 7
         v = cfg.get("pipeline", {}).get("title_dedup_days", 7)
         assert v == 7, f"{path}: expected 7 (default), got {v}"
+
+
+def test_push_to_backlog_emits_decision_trace_source_pin():
+    """2026-07-23: PushToBacklog must emit a decision trace (7th stage
+    in the trace-emission rollout). Behavioral tests would need to
+    fabricate the full backlog client + niche config stack; source-grep
+    pin catches removal during refactor.
+    """
+    import inspect
+
+    from genlab_core.pipeline.stages.push_to_backlog import PushToBacklog
+
+    src = inspect.getsource(PushToBacklog.execute)
+    assert 'stage="PushToBacklog"' in src, (
+        "PushToBacklog.execute must emit a decision trace with "
+        "stage='PushToBacklog' (added 2026-07-23; symmetric with "
+        "VideoGate/ViralityScoring/QCGates/PreDownloadDedup/"
+        "ValidateVideos)"
+    )
+    assert "record_decision" in src, (
+        "Must call record_decision (on-disk JSONL)"
+    )
+    assert "append_trace" in src, (
+        "Must call append_trace (dashboard reasoning trace)"
+    )
+    # Warning-decision path must exist for the "0 blueprints from N stories"
+    # precursor state.
+    assert '"warning"' in src

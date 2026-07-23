@@ -3252,4 +3252,73 @@ class PushToBacklog:
                 )
             except Exception as exc:  # noqa: BLE001 — observability is never critical-path
                 logger.debug("[PUSH] record_filter_drops failed: %s", exc)
+
+        # 2026-07-23: emit decision trace symmetric with VideoGate +
+        # ViralityScoring + QCGates + PreDownloadDedup + ValidateVideos.
+        # 7th stage in the trace-emission rollout — coverage 6/22 → 7/22.
+        #
+        # Motivating pattern: PushToBacklog has multiple drop paths
+        # (video_dedup, cross_niche, _skip_llm, per-blueprint errors).
+        # When blueprints_pushed=0 for a niche, the operator needs to
+        # know WHICH drop path fired most. The aggregate trace surfaces
+        # all counts + first 5 error messages so filtering the JSONL by
+        # decision='warning' + stage='PushToBacklog' surfaces
+        # zero-blueprint precursors before the alert fires 30 min later.
+        try:
+            from genlab_core.observability.decision_trace import record_decision
+            from genlab_core.pipeline.reasoning_trace import append_trace
+
+            # WARN when 0 blueprints pushed but there WERE stories to
+            # push (all dropped) OR when errors occurred. This is the
+            # "PushToBacklog ate every candidate" state.
+            if len(stories) > 0 and blueprints_pushed == 0:
+                trace_decision = "warning"
+            elif errors:
+                trace_decision = "warning"
+            elif cross_niche_drops:
+                # Cross-niche leak is niche.yaml contamination — always
+                # surface at warning level even if blueprints_pushed > 0.
+                trace_decision = "warning"
+            else:
+                trace_decision = "info"
+
+            reasons_line = (
+                f"stories={stories_pushed}, blueprints={blueprints_pushed}, "
+                f"video_dedup_skipped={video_dedup_skipped}, "
+                f"cross_niche_drops={cross_niche_drops}, "
+                f"skip_llm_drops={skip_llm_drops}, errors={len(errors)}"
+            )
+            metadata = {
+                "input_stories": len(stories),
+                "stories_pushed": stories_pushed,
+                "blueprints_pushed": blueprints_pushed,
+                "video_dedup_skipped": video_dedup_skipped,
+                "cross_niche_drops": cross_niche_drops,
+                "skip_llm_drops": skip_llm_drops,
+                "error_count": len(errors),
+                # First 5 error strings so operators can see the
+                # dominant failure without loading the full run report.
+                "error_examples": errors[:5],
+            }
+            append_trace(
+                context,
+                stage="PushToBacklog",
+                decision=trace_decision,
+                confidence=1.0,
+                reasons=[reasons_line],
+                metadata=metadata,
+            )
+            record_decision(
+                context,
+                stage="PushToBacklog",
+                decision=trace_decision,
+                reason=reasons_line,
+                confidence=1.0,
+                metadata=metadata,
+            )
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            logger.warning(
+                "[PushToBacklog] trace emission failed: %s", exc, exc_info=True
+            )
+
         return context
