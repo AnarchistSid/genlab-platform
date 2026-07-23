@@ -1,6 +1,6 @@
 """add source column to auto_approval_calibration
 
-Revision ID: b8c9d0e1f2g3
+Revision ID: h4d5e6f7g8h9
 Revises: fce3b7f2daf0
 Create Date: 2026-07-23 22:00:00.000000+00:00
 
@@ -36,7 +36,7 @@ Idempotency: sub-second column adds use IF NOT EXISTS + safe backfill.
 
 from alembic import op
 
-revision = "b8c9d0e1f2g3"
+revision = "h4d5e6f7g8h9"
 down_revision = "fce3b7f2daf0"
 branch_labels = None
 depends_on = None
