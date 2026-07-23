@@ -58,6 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     from genlab_core.observability.alert_auto_resolver import (
         _summary_json,
         auto_resolve_bandit_posterior_drift_alerts,
+        auto_resolve_content_pool_bypass_alerts,
         auto_resolve_nightly_schedule_missing_slot_alerts,
         auto_resolve_systemd_unit_alerts,
     )
@@ -78,6 +79,11 @@ def main(argv: list[str] | None = None) -> int:
         # backfill closes the drift condition but the drift alerts
         # stayed unresolved forever without a matching resolver.
         ("bandit_posterior_drift", auto_resolve_bandit_posterior_drift_alerts),
+        # 2026-07-23: added after commit 7ad2aad1 fixed the 2-day
+        # silent content_pool consumer outage (literal % in SQL
+        # comment tripped psycopg placeholder parsing). Resolves
+        # when the content_pool has any claim activity in last 24h.
+        ("content_pool_consumer_bypass", auto_resolve_content_pool_bypass_alerts),
     ]
 
     combined: dict[str, dict[str, int]] = {}

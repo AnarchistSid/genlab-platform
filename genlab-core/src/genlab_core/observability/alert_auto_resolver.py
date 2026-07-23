@@ -869,9 +869,174 @@ def auto_resolve_bandit_posterior_drift_alerts(*, dry_run: bool = False) -> dict
     return counters
 
 
+def _query_content_pool_claims_recent(hours: int = 24) -> int | None:
+    """Return count of content_pool rows CLAIMED in the last N hours.
+
+    When a pipeline fetcher successfully calls
+    ``_read_from_content_pool`` and receives rows, those rows are
+    updated with ``status='claimed', claimed_at=NOW()``. Any
+    ``claimed_at`` value in the recent past = the consumer is
+    working.
+
+    Returns None on DB error — caller treats as skip.
+    """
+    conn_cm = _connect()
+    if conn_cm is None:
+        return None
+    try:
+        with conn_cm as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) AS claim_count
+                FROM content_pool
+                WHERE claimed_at > NOW() - make_interval(hours => %s)
+                """,
+                (hours,),
+            ).fetchone()
+        return int(row["claim_count"]) if row else 0
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.warning(
+            "[alert_auto_resolver] content_pool claim query failed: %s", exc
+        )
+        return None
+
+
+def auto_resolve_content_pool_bypass_alerts(*, dry_run: bool = False) -> dict[str, int]:
+    """Walk unresolved ``content_pool_consumer_bypass`` alerts;
+    resolve any where the underlying condition has cleared.
+
+    Motivating incident (2026-07-23): commit 7ad2aad1 fixed the
+    2-day silent outage where a literal ``%`` in the SQL comment
+    of ``_read_from_content_pool`` raised
+    ``psycopg.IncompletePlaceholder`` on every fire. The check
+    itself uses a 7-day rolling claim rate, so even with the fix
+    in place the alert would linger for days waiting for the
+    rolling window to fill.
+
+    This resolver instead uses a 24-hour "any claim activity"
+    signal: if ANY row was claimed in the last 24h, the consumer
+    is demonstrably alive → the alert is stale.
+
+    Parameters
+    ----------
+    dry_run : bool, default False
+        Log every resolution decision but do NOT execute the UPDATE.
+
+    Returns
+    -------
+    dict
+        ``{"checked": int, "resolved": int, "skipped_no_recent_claims": int,
+        "skipped_query_failed": int, "errors": int}``
+    """
+    counters = {
+        "checked": 0,
+        "resolved": 0,
+        "skipped_no_recent_claims": 0,
+        "skipped_query_failed": 0,
+        "errors": 0,
+    }
+
+    conn_cm = _connect()
+    if conn_cm is None:
+        return counters
+
+    try:
+        with conn_cm as conn:
+            rows = conn.execute(
+                """
+                SELECT id, created_at
+                FROM pipeline_alerts
+                WHERE check_name = 'content_pool_consumer_bypass'
+                  AND resolved_at IS NULL
+                ORDER BY created_at ASC
+                """
+            ).fetchall()
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.warning(
+            "[alert_auto_resolver] SELECT bypass alerts failed: %s", exc
+        )
+        return counters
+
+    if not rows:
+        logger.debug(
+            "[alert_auto_resolver] no unresolved content_pool_consumer_bypass alerts"
+        )
+        return counters
+
+    # Query claim activity ONCE per sweep (not per row) — same signal
+    # for every unresolved alert, and DB round-trips are the expensive
+    # part.
+    recent_claims = _query_content_pool_claims_recent(hours=24)
+    if recent_claims is None:
+        counters["skipped_query_failed"] = len(rows)
+        return counters
+
+    if recent_claims == 0:
+        counters["skipped_no_recent_claims"] = len(rows)
+        return counters
+
+    # Any recent claim = the consumer is alive; resolve every row.
+    from datetime import UTC, datetime
+
+    today_str = datetime.now(UTC).strftime("%Y-%m-%d")
+    note = (
+        f"\n\n[AUTO-RESOLVED {today_str}: content_pool has "
+        f"{recent_claims} claim(s) in the last 24h — consumer is alive.]"
+    )
+
+    for row in rows:
+        counters["checked"] += 1
+        row_id = row.get("id")
+
+        if dry_run:
+            logger.info(
+                "[alert_auto_resolver] DRY-RUN would resolve bypass row %s",
+                row_id,
+            )
+            counters["resolved"] += 1
+            continue
+
+        try:
+            with _connect() as write_conn:  # type: ignore[union-attr]
+                if write_conn is None:
+                    logger.warning(
+                        "[alert_auto_resolver] reconnect for bypass UPDATE failed; row %s left unresolved",
+                        row_id,
+                    )
+                    counters["errors"] += 1
+                    continue
+                with write_conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE pipeline_alerts
+                        SET resolved_at = NOW(),
+                            message = COALESCE(message, '') || %s
+                        WHERE id = %s
+                          AND resolved_at IS NULL
+                        """,
+                        (note, row_id),
+                    )
+            logger.info(
+                "[alert_auto_resolver] resolved bypass row %s (%d recent claims)",
+                row_id,
+                recent_claims,
+            )
+            counters["resolved"] += 1
+        except Exception as exc:  # noqa: BLE001 — fail-open per row
+            logger.warning(
+                "[alert_auto_resolver] UPDATE bypass row %s failed: %s",
+                row_id,
+                exc,
+            )
+            counters["errors"] += 1
+
+    return counters
+
+
 # Re-export for callers that prefer importing the typing helper.
 __all__ = [
     "auto_resolve_bandit_posterior_drift_alerts",
+    "auto_resolve_content_pool_bypass_alerts",
     "auto_resolve_nightly_schedule_missing_slot_alerts",
     "auto_resolve_systemd_unit_alerts",
 ]

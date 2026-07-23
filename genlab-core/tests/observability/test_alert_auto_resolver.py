@@ -808,6 +808,16 @@ def test_cli_wrapper_calls_both_resolvers():
             "errors": 0,
         }
 
+    def fake_bypass(**kw):
+        calls.append(("content_pool_consumer_bypass", kw))
+        return {
+            "checked": 0,
+            "resolved": 0,
+            "skipped_no_recent_claims": 0,
+            "skipped_query_failed": 0,
+            "errors": 0,
+        }
+
     with (
         patch(
             "genlab_core.observability.alert_auto_resolver.auto_resolve_systemd_unit_alerts",
@@ -821,6 +831,10 @@ def test_cli_wrapper_calls_both_resolvers():
             "genlab_core.observability.alert_auto_resolver.auto_resolve_bandit_posterior_drift_alerts",
             side_effect=fake_drift,
         ),
+        patch(
+            "genlab_core.observability.alert_auto_resolver.auto_resolve_content_pool_bypass_alerts",
+            side_effect=fake_bypass,
+        ),
     ):
         assert mod.main([]) == 0
 
@@ -829,11 +843,79 @@ def test_cli_wrapper_calls_both_resolvers():
         "systemd_unit_failed",
         "nightly_schedule_missing_slot",
         "bandit_posterior_drift",
+        "content_pool_consumer_bypass",
     }, (
-        f"CLI must invoke all three resolvers; got {sorted(labels)}. "
+        f"CLI must invoke all four resolvers; got {sorted(labels)}. "
         "If a refactor drops one, the CriticalAlertsBanner will grow "
         "stale rows for that check_name."
     )
+
+
+class TestContentPoolBypassResolver:
+    """2026-07-23: added after commit 7ad2aad1 fixed the content_pool
+    2-day silent outage. The check uses a 7-day rolling window so
+    even with the fix in place the alert would linger. Resolver uses
+    a 24h "any claim activity" signal instead — the moment the
+    consumer starts working again, alerts clear."""
+
+    def test_no_alerts_returns_zero_counters(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from genlab_core.observability import alert_auto_resolver as mod
+
+        mock_conn = MagicMock()
+        mock_conn.__enter__.return_value.execute.return_value.fetchall.return_value = []
+        monkeypatch.setattr(mod, "_connect", lambda: mock_conn)
+
+        result = mod.auto_resolve_content_pool_bypass_alerts()
+        assert result == {
+            "checked": 0,
+            "resolved": 0,
+            "skipped_no_recent_claims": 0,
+            "skipped_query_failed": 0,
+            "errors": 0,
+        }
+
+    def test_no_recent_claims_leaves_alerts_visible(self, monkeypatch):
+        """When claim activity is zero (consumer still broken), alerts
+        stay unresolved — operators must still see the incident."""
+        from unittest.mock import MagicMock
+
+        from genlab_core.observability import alert_auto_resolver as mod
+
+        mock_conn = MagicMock()
+        mock_conn.__enter__.return_value.execute.return_value.fetchall.return_value = [
+            {"id": 42, "created_at": "2026-07-23"}
+        ]
+        monkeypatch.setattr(mod, "_connect", lambda: mock_conn)
+        monkeypatch.setattr(
+            mod, "_query_content_pool_claims_recent", lambda hours=24: 0
+        )
+
+        result = mod.auto_resolve_content_pool_bypass_alerts()
+        assert result["checked"] == 0  # short-circuited
+        assert result["resolved"] == 0
+        assert result["skipped_no_recent_claims"] == 1
+
+    def test_recent_claims_resolves_all_pending_alerts(self, monkeypatch):
+        """Any claim activity in last 24h → all pending alerts resolve."""
+        from unittest.mock import MagicMock
+
+        from genlab_core.observability import alert_auto_resolver as mod
+
+        mock_conn = MagicMock()
+        mock_conn.__enter__.return_value.execute.return_value.fetchall.return_value = [
+            {"id": 1, "created_at": "2026-07-23"},
+            {"id": 2, "created_at": "2026-07-23"},
+        ]
+        monkeypatch.setattr(mod, "_connect", lambda: mock_conn)
+        monkeypatch.setattr(
+            mod, "_query_content_pool_claims_recent", lambda hours=24: 60
+        )
+
+        result = mod.auto_resolve_content_pool_bypass_alerts(dry_run=True)
+        assert result["checked"] == 2
+        assert result["resolved"] == 2
 
 
 class TestBanditPosteriorDriftResolver:
