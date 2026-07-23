@@ -472,6 +472,41 @@ class TestNonOperatorSourceFilter:
         # the bug we're trying to avoid.
         fake_psycopg.connect.assert_not_called()
 
+    def test_nightly_scheduler_source_skips_log(self, monkeypatch):
+        """2026-07-23 pin. The nightly_scheduler script tags rows since
+        2026-07-21 (scripts/nightly_schedule_top_per_niche.py:416).
+        Same gate-vs-gate semantics as auto_approver_v1 — writer must
+        drop the row so it doesn't pollute the confusion matrix when
+        an operator later opens the dashboard to revise a nightly-
+        scheduled blueprint."""
+        from unittest.mock import MagicMock
+
+        from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
+        from genlab_core.scheduling.calibration_logger import log
+
+        monkeypatch.setenv("DATABASE_URL", "postgresql://x:y@127.0.0.1:1/d")
+
+        fake_psycopg = MagicMock()
+        monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
+
+        decision = AutoApprovalDecision(
+            approved=True,
+            confidence=0.9,
+            passed_checks=["a"],
+            failed_checks=[],
+            reasons=["ok"],
+        )
+        result = log(
+            blueprint_id="00000000-0000-0000-0000-000000000001",
+            niche_id="gaming",
+            decision=decision,
+            operator_action="approved",
+            action_taken_source="nightly_scheduler",
+        )
+
+        assert result is False, "nightly_scheduler row must be filtered out"
+        fake_psycopg.connect.assert_not_called()
+
     def test_none_source_writes_normally(self, monkeypatch):
         """Backward-compat: callers that don't pass action_taken_source
         get the pre-S1 behavior — row writes normally."""

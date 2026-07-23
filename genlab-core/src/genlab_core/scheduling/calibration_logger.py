@@ -52,9 +52,17 @@ VALID_OPERATOR_ACTIONS = frozenset({"approved", "rejected", "revised", "skipped"
 # auto-source (e.g. ``auto_approver_v2``) means adding it here too —
 # kept as a literal frozenset rather than an import to avoid the
 # circular dependency calibration_logger → auto_approver.
+#
+# 2026-07-23: added "nightly_scheduler" after prod audit found it
+# had been tagging rows since 2026-07-21 without a matching guard
+# entry. Symptom this catches: operator opens dashboard to revise
+# a nightly-scheduled blueprint → old code would write a gate-vs-
+# nightly row that pollutes the confusion matrix (the "operator
+# action" is a reaction to auto-approval, not a fresh decision).
 _NON_OPERATOR_SOURCE_TAGS: frozenset[str] = frozenset(
     {
         "auto_approver_v1",
+        "nightly_scheduler",
     }
 )
 
