@@ -1,0 +1,26 @@
+[Unit]
+Description=GenLab auto-experiment parser — LLM-parse strategist testable_predictions
+After=network-online.target
+OnFailure=genlab-service-failure-alert@%n.service
+# After the strategist so we pick up fresh hypotheses.
+After=genlab-strategist.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=UV_FROZEN=1
+TimeoutStartSec=15min
+ExecStart=/usr/local/bin/uv run python scripts/parse_testable_predictions.py --apply
+StandardOutput=journal
+StandardError=journal
+
+MemoryMax=512M
+CPUWeight=30
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+[Unit]
+Description=Parse fresh testable_predictions into auto_experiments queue — daily 03:45 UTC
+Documentation=file:///opt/genlab/scripts/parse_testable_predictions.py
+
+[Timer]
+# 03:45 UTC — after strategist-apply (03:00), hypothesis-promote (03:15),
+# proposal-auto-accept (03:30). Sits at the tail of the daily
+# scheduling chain so it sees the freshest state.
+OnCalendar=*-*-* 03:45:00 UTC
+Persistent=true
+Unit=genlab-experiment-parser.service
+
+[Install]
+WantedBy=timers.target
