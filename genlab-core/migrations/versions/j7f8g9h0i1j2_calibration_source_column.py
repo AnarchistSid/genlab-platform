@@ -37,7 +37,14 @@ Idempotency: sub-second column adds use IF NOT EXISTS + safe backfill.
 from alembic import op
 
 revision = "j7f8g9h0i1j2"
-down_revision = "fce3b7f2daf0"
+# Merge the two pre-existing heads that were on prod when the shadow
+# reviewer work began: fce3b7f2daf0 (content_pool_expiry_96h) and
+# a8w9x0y1z2a3 (which itself is duplicated across
+# blueprints_action_taken_source.py and monetization_l3_product_bandit_schema.py
+# — an old collision that we accept and merge across). Making this a
+# tuple downgrade_revision collapses the two heads into one — the shadow
+# reviewer's source column becomes the sole new head going forward.
+down_revision = ("fce3b7f2daf0", "a8w9x0y1z2a3")
 branch_labels = None
 depends_on = None
 
