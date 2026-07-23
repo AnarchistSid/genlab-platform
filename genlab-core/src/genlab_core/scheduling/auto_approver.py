@@ -868,6 +868,23 @@ def run_pass(
                     flush=True,
                 )
 
+        # ── Diagnostic log — every examination lands regardless of outcome.
+        # Persists the gate's per-check verdict so the operator can see
+        # which check is the constraint. Fail-open at every DB error
+        # path — the log NEVER blocks the auto-approval flow.
+        try:
+            from genlab_core.scheduling.gate_examination_logger import (
+                log as _log_gate_examination,
+            )
+
+            _log_gate_examination(
+                blueprint_id=str(record_id),
+                niche_id=niche_id,
+                decision=decision,
+            )
+        except Exception:  # noqa: BLE001 — best-effort diagnostic
+            pass
+
         if not decision.approved:
             result.skipped_gate_rejected.append(record_id)
             continue

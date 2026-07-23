@@ -351,6 +351,191 @@ def outcome_readiness_endpoint():
     )
 
 
+# ── Gate examination breakdown (2026-07-23) ─────────────────────────
+#
+# READ-ONLY. Aggregates gate_examinations rows so the operator can
+# see which of the 5 auto-approval-gate checks (has_video, has_hook,
+# qc_passed, composite_score, virality_score) is the constraint per
+# niche. Unblocks the AUTO #2 ratchet's tuning problem — currently
+# the gate approves ~0/1 blueprints per fire; without knowing which
+# check is failing, the operator can't tune the threshold.
+
+
+@bp.route("/gate-examinations", methods=["GET"])
+def gate_examinations_endpoint():
+    """Per-niche gate examination breakdown.
+
+    Query params:
+        niche_id (optional): filter to one niche. Omit for all 5.
+        window_days (optional, default 7): rolling window.
+
+    Response shape (all niches):
+        {
+          "window_days": 7,
+          "niches": {
+            "gaming": {
+              "niche_id": "gaming",
+              "examinations": N,
+              "approved": M,
+              "rejected": N - M,
+              "approval_rate": M / N,
+              "distinct_blueprints": K,      // dedupe re-examines
+              "failed_check_counts": {
+                "composite_score": 8,
+                "virality_score": 4,
+                ...
+              },
+              "top_failing_check": "composite_score"
+            },
+            ...
+          }
+        }
+    """
+    dsn = os.environ.get("DATABASE_URL", "")
+    if not dsn:
+        return api_error(error="DATABASE_URL not configured", code=503)
+
+    try:
+        window_days = int(request.args.get("window_days", "7"))
+    except (TypeError, ValueError):
+        return api_error(error="window_days must be an integer", code=400)
+    if window_days < 1 or window_days > 90:
+        return api_error(error="window_days must be 1..90", code=400)
+
+    niche_id = (request.args.get("niche_id") or "").strip()
+    if niche_id and niche_id not in _VALID_NICHES:
+        return api_error(
+            error=f"niche_id must be one of {sorted(_VALID_NICHES)}",
+            code=400,
+        )
+
+    from psycopg.rows import dict_row
+
+    from genlab_core.storage.tenant_context import pg_connect
+
+    target_niches = [niche_id] if niche_id else sorted(_VALID_NICHES)
+
+    try:
+        with pg_connect(dsn, row_factory=dict_row, niche_id="all") as conn:
+            out: dict[str, dict] = {}
+            for nid in target_niches:
+                out[nid] = _one_niche_breakdown(conn, nid, window_days)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "gate-examinations failed niche=%r window=%d: %s",
+            niche_id or "all",
+            window_days,
+            exc,
+        )
+        # Fail-open zero-fill so the card renders without an error state.
+        zero = {
+            "examinations": 0,
+            "approved": 0,
+            "rejected": 0,
+            "approval_rate": 0.0,
+            "distinct_blueprints": 0,
+            "failed_check_counts": {},
+            "top_failing_check": None,
+        }
+        if niche_id:
+            return api_success(
+                data={
+                    "niche_id": niche_id,
+                    "window_days": window_days,
+                    **zero,
+                    "degraded": True,
+                    "degraded_reason": str(exc)[:200],
+                }
+            )
+        return api_success(
+            data={
+                "window_days": window_days,
+                "niches": {
+                    n: {"niche_id": n, "window_days": window_days, **zero}
+                    for n in target_niches
+                },
+                "degraded": True,
+                "degraded_reason": str(exc)[:200],
+            }
+        )
+
+    if niche_id:
+        return api_success(
+            data={"niche_id": niche_id, "window_days": window_days, **out[niche_id]}
+        )
+    return api_success(
+        data={
+            "window_days": window_days,
+            "niches": {
+                n: {"niche_id": n, "window_days": window_days, **v}
+                for n, v in out.items()
+            },
+        }
+    )
+
+
+def _one_niche_breakdown(conn, niche_id: str, window_days: int) -> dict:
+    """Compute the aggregation for one niche. Split out so the
+    endpoint stays a thin router."""
+    # Top-line counts.
+    row = conn.execute(
+        """
+        SELECT
+            COUNT(*)::int AS examinations,
+            COUNT(*) FILTER (WHERE approved = true)::int AS approved,
+            COUNT(DISTINCT blueprint_id)::int AS distinct_blueprints
+        FROM gate_examinations
+        WHERE niche_id = %s
+          AND examined_at > NOW() - make_interval(days => %s)
+        """,
+        (niche_id, window_days),
+    ).fetchone()
+    exam = int(row.get("examinations") or 0) if hasattr(row, "get") else int(row[0] or 0)
+    approved = int(row.get("approved") or 0) if hasattr(row, "get") else int(row[1] or 0)
+    distinct_bp = (
+        int(row.get("distinct_blueprints") or 0)
+        if hasattr(row, "get")
+        else int(row[2] or 0)
+    )
+
+    # Failed check tally — jsonb_array_elements_text unpivots the
+    # failed_checks arrays across all rejected rows, then GROUP BY
+    # counts occurrences. Only rejected rows contribute; the top
+    # failing check IS the ratchet's tuning target.
+    check_rows = conn.execute(
+        """
+        SELECT check_name, COUNT(*)::int AS n
+        FROM gate_examinations,
+             jsonb_array_elements_text(failed_checks) AS check_name
+        WHERE niche_id = %s
+          AND approved = false
+          AND examined_at > NOW() - make_interval(days => %s)
+        GROUP BY check_name
+        ORDER BY n DESC
+        """,
+        (niche_id, window_days),
+    ).fetchall()
+    failed_check_counts: dict[str, int] = {}
+    for r in check_rows:
+        name = r.get("check_name") if hasattr(r, "get") else r[0]
+        n = int(r.get("n") or 0) if hasattr(r, "get") else int(r[1] or 0)
+        if name:
+            failed_check_counts[str(name)] = n
+
+    top_check = next(iter(failed_check_counts), None)
+    rejected = exam - approved
+    rate = (approved / exam) if exam > 0 else 0.0
+    return {
+        "examinations": exam,
+        "approved": approved,
+        "rejected": rejected,
+        "approval_rate": round(rate, 3),
+        "distinct_blueprints": distinct_bp,
+        "failed_check_counts": failed_check_counts,
+        "top_failing_check": top_check,
+    }
+
+
 # ── Lever B: Per-rejection-reason breakdown ─────────────────────────
 #
 # Operator clicks 1 of 6 categorical rejection reasons on every reject:
