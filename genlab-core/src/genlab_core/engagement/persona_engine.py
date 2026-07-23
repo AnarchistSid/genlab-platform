@@ -36,6 +36,12 @@ class PersonaEngine:
         self._persona = persona
         self._toxicity_gate = toxicity_gate
         self._client = None  # Lazy-initialized Anthropic client
+        # 2026-07-23 observability: capture the specific reason
+        # generate_reply returned None so the caller can propagate it
+        # to pending_engagement.error_message instead of the generic
+        # "Reply generation failed". Values: "" (success or not yet
+        # called), "circuit_open", "retries_exhausted", "toxicity_gate".
+        self._last_error_reason: str = ""
         # 2026-06-21 (perf): build the system prompt ONCE per engine instance.
         # Was rebuilt on every ``generate_reply`` call even though it's a pure
         # function of ``persona`` (~200 tokens of string concatenation). At the
@@ -95,7 +101,19 @@ class PersonaEngine:
 
         Retries if the generated reply fails outbound toxicity.
         Returns None if all retries fail.
+
+        2026-07-23: on None return, sets ``self._last_error_reason``
+        to one of:
+          - "circuit_open" — Anthropic circuit breaker tripped
+          - "toxicity_gate" — all attempts failed outbound toxicity
+          - "retries_exhausted" — Anthropic API errors on every attempt
+        Success clears the field to "". The caller (comment_processor)
+        reads this to populate the pending_engagement.error_message
+        instead of the generic "Reply generation failed" — 3 days of
+        threads failures were opaque because the message was the same
+        regardless of root cause.
         """
+        self._last_error_reason = ""
         if self._client is None:
             import anthropic
 
@@ -209,6 +227,7 @@ class PersonaEngine:
 
             except CircuitOpenError:
                 logger.warning("[PERSONA] Anthropic circuit open — cannot generate reply")
+                self._last_error_reason = "circuit_open"
                 return None
             except Exception as e:
                 logger.warning(
@@ -217,9 +236,11 @@ class PersonaEngine:
                     e,
                 )
                 if attempt >= max_retries:
+                    self._last_error_reason = "retries_exhausted"
                     return None
 
         logger.warning("[PERSONA] All %d reply attempts failed toxicity gate", max_retries + 1)
+        self._last_error_reason = "toxicity_gate"
         return None
 
     def validate_reply(

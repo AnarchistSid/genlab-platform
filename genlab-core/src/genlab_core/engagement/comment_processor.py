@@ -652,10 +652,23 @@ def process_reply_event(event: dict) -> None:
         post_context=post_context,
     )
     if reply is None:
-        logger.error("Engagement: failed to generate safe reply for %s", comment_id)
+        # 2026-07-23: propagate the specific failure reason from
+        # PersonaEngine._last_error_reason. Previous behaviour wrote
+        # the generic "Reply generation failed" regardless — 3 days of
+        # threads failures were opaque because the message was the
+        # same whether Anthropic was down (fix: top up credits) or
+        # the toxicity gate was over-strict (fix: tune the gate) or
+        # retries were burned (fix: check API quotas).
+        error_reason = getattr(engine, "_last_error_reason", "") or "unknown"
+        error_msg = f"Reply generation failed: {error_reason}"
+        logger.error(
+            "Engagement: failed to generate safe reply for %s (%s)",
+            comment_id,
+            error_reason,
+        )
         if bl and sp_item_id:
             bl.update_engagement_status(
-                sp_item_id, "failed", error_msg="Reply generation failed", niche_id=niche_id
+                sp_item_id, "failed", error_msg=error_msg, niche_id=niche_id
             )
         return
 
