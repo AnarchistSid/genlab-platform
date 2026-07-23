@@ -688,6 +688,36 @@ class PostgresBackend:
 
                     pg_where = re.sub(r"\$\d+", "%s", where_clause)
                     sql += f" WHERE {pg_where}"
+
+                # 2026-07-24: belt-and-suspenders niche filter. RLS is
+                # supposed to scope queries via
+                # ``set_config('app.niche_id', ...)`` above, but the
+                # ``genlab`` role has ``Bypass RLS`` attribute in prod
+                # (known limitation, see MEMORY "34 psycopg bypass sites
+                # — tenant isolation is Phase 2 blocker"). Without an
+                # explicit WHERE clause the auto-approver has been
+                # examining cross-niche blueprints for weeks, e.g. a
+                # gaming blueprint gate-evaluated under ai_creators
+                # policy. Explicit AND handles both RLS-on AND
+                # RLS-bypassed callers correctly. Admin-mode
+                # (niche_id="") preserves the historical "no filter"
+                # behavior.
+                #
+                # Only tables that have a niche_id column can get this
+                # filter — other tables (bandit_arms uses arm_id-scope,
+                # config_updates is admin-only) would 500 on
+                # "column niche_id does not exist". Derived from
+                # PROMOTED_COLUMNS: any table whose promoted set
+                # includes "niche_id" is niche-scoped.
+                if (
+                    niche_id
+                    and "niche_id" in PROMOTED_COLUMNS.get(table, set())
+                ):
+                    if where_clause:
+                        sql += " AND niche_id = %s"
+                    else:
+                        sql += " WHERE niche_id = %s"
+                    params.append(niche_id)
                 # ORDER BY — legacy default `created_at DESC` unless caller
                 # supplies `order_by`. Whitelist-validate to prevent SQL
                 # injection (this string ends up unescaped in the query).
