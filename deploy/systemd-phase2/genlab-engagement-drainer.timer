@@ -1,0 +1,13 @@
+[Unit]
+Description=Drain stale pending_review engagement rows every 4h
+Documentation=file:///opt/genlab/scripts/drain_engagement_review_queue.py
+
+[Timer]
+# Every 4 hours. Catches items sitting >24h in pending_review before
+# the 7-day archive-stranded-reviews sweep (bandit_engagement.py:192).
+OnCalendar=*-*-* 00,04,08,12,16,20:30:00 UTC
+Persistent=true
+Unit=genlab-engagement-drainer.service
+
+[Install]
+WantedBy=timers.target
