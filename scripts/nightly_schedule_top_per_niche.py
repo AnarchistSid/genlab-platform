@@ -198,7 +198,11 @@ def _connect():
     return psycopg.connect(url, row_factory=dict_row)
 
 
-def compute_target_slot(now_utc: datetime | None = None) -> datetime:
+def compute_target_slot(
+    now_utc: datetime | None = None,
+    *,
+    niche_id: str | None = None,
+) -> datetime:
     """Tomorrow's publisher slot in UTC.
 
     Publisher fires 12:05 IST = 06:35 UTC. We set scheduled_for to
@@ -207,11 +211,48 @@ def compute_target_slot(now_utc: datetime | None = None) -> datetime:
 
     "Tomorrow" is computed against UTC current date so it matches the
     UTC-based Postgres ``current_date + 1`` semantics.
+
+    2026-07-23: when ``niche_id`` is supplied AND
+    ``GENLAB_OPTIMAL_TIME_BANDIT_ENABLED`` is on AND the niche has
+    ≥30 total obs across its hour arms, the hour is picked from the
+    aggregate bandit posterior instead of the hardcoded 6 UTC. Falls
+    through to 6 UTC on cold-start / flag off / bandit unreachable.
+
+    See memory: "6am hurts YT 4× (all niches)" — the hardcoded 06:00
+    slot has been documented as anti-signal on YouTube specifically.
+    Bandit picks something better once each niche accumulates enough
+    hour-arm observations.
     """
     if now_utc is None:
         now_utc = datetime.now(UTC)
     tomorrow_utc: date = now_utc.date() + timedelta(days=1)
-    return datetime.combine(tomorrow_utc, time(6, 0, 0), tzinfo=UTC)
+
+    picked_hour = 6
+    source = "fallback"
+    if niche_id:
+        try:
+            # Late import — the script must keep importing cleanly on
+            # test environments where genlab_core isn't installed.
+            from genlab_core.scheduling.optimal_time_learner import (
+                pick_optimal_hour_for_niche,
+            )
+
+            picked_hour, source = pick_optimal_hour_for_niche(
+                niche_id, fallback_hour=6
+            )
+        except Exception as exc:  # noqa: BLE001 — must never break scheduling
+            print(
+                f"[nightly_schedule] optimal-hour lookup failed for {niche_id}: "
+                f"{exc}; using 6 UTC fallback"
+            )
+
+    slot = datetime.combine(tomorrow_utc, time(picked_hour, 0, 0), tzinfo=UTC)
+    if niche_id:
+        print(
+            f"[nightly_schedule] niche={niche_id} scheduled_for={slot.isoformat()} "
+            f"(hour source={source})"
+        )
+    return slot
 
 
 def niches_needing_scheduling(cur, target_date: date) -> set[str]:
@@ -442,9 +483,15 @@ def main() -> int:
 
     _load_env_file(Path(args.env_file))
 
+    # target_date is UTC-tomorrow — used by niches_needing_scheduling.
+    # Per-niche target_slot is computed later, once per niche, so each
+    # niche's scheduled_for reflects its own optimal-hour posterior.
     target_slot = compute_target_slot()
     target_date = target_slot.date()
-    print(f"Target slot: {target_slot.isoformat()} (scheduling for {target_date})")
+    print(
+        f"Target date: {target_date} (per-niche slot hours picked by "
+        f"pick_optimal_hour_for_niche)"
+    )
 
     try:
         with _connect() as conn, conn.cursor() as cur:
@@ -502,13 +549,30 @@ def main() -> int:
                 # and hits the `except` → exit 3, which IS a real fault.
                 return 0
 
-            rows = schedule_blueprints(cur, picks, target_slot)
+            # 2026-07-23: compute per-niche target slot via the optimal-
+            # time bandit. Each niche gets scheduled_for at whatever hour
+            # its aggregate hour-arm posterior favors. Falls through to
+            # 06 UTC when cold-start / flag off / bandit unreachable.
+            # Group picks by niche so each group gets its own UPDATE.
+            picks_by_niche: dict[str, list[dict]] = {}
+            for p in picks:
+                picks_by_niche.setdefault(p["niche_id"], []).append(p)
+
+            all_rows = []
+            for nid, niche_picks in picks_by_niche.items():
+                per_niche_slot = compute_target_slot(niche_id=nid)
+                niche_rows = schedule_blueprints(
+                    cur, niche_picks, per_niche_slot
+                )
+                all_rows.extend(niche_rows)
+            rows = all_rows
             conn.commit()
             for r in rows:
                 print(
                     f"  ✓ {r['niche_id']:12s}  "
                     f"score={r['priority_score']:.4f}  "
-                    f"hook={r['hook'][:60]!r}"
+                    f"hook={r['hook'][:60]!r} "
+                    f"scheduled={r['scheduled_for']}"
                 )
 
             # 2026-07-21: return 0 unconditionally (see dry-run branch above).

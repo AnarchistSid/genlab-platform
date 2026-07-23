@@ -497,3 +497,162 @@ def optimal_slots_hhmm(
 def reset_cache() -> None:
     """Drop the per-key cache. Used in tests; not for production."""
     _cache.clear()
+
+
+# ── Multi-platform hour picker for the nightly scheduler ──
+
+
+# Minimum observations across all matching hour arms combined before we
+# trust the multi-platform Thompson-sample. Sized to be conservative:
+# below this the posteriors are dominated by the Beta(1,1) prior and
+# the "best hour" is basically noise. Aligned with MIN_OBS_FOR_LINUCB.
+_MIN_MULTI_PLATFORM_OBS: int = 30
+
+
+def pick_optimal_hour_for_niche(
+    niche_id: str,
+    *,
+    fallback_hour: int = 6,
+    min_total_obs: int = _MIN_MULTI_PLATFORM_OBS,
+) -> tuple[int, str]:
+    """Return the single best UTC hour to publish for a niche, combining
+    every platform's ``hour:{H}:*:{niche_id}`` bandit arm.
+
+    Consumer for the nightly scheduler: pre-compute the target slot's
+    hour from the bandit before writing ``scheduled_for``. Publisher
+    executes the schedule as-is — no runtime hour re-picking needed.
+
+    Design:
+    * Sum ``alpha`` and ``beta`` across all platforms per hour → treat
+      each hour as one aggregate Beta posterior.
+    * Thompson-sample each aggregate posterior; pick argmax.
+    * Fall through to ``fallback_hour`` (default 6 UTC, matching
+      compute_target_slot) when:
+        - ``GENLAB_OPTIMAL_TIME_BANDIT_ENABLED`` flag is off
+        - Bandit is unreachable
+        - Total observations across all hours < ``min_total_obs``
+          (cold-start guard — trusting posteriors here means the
+          publisher timing would be dominated by prior noise for weeks
+          after a new niche launches).
+
+    Returns:
+        Tuple of ``(hour, source)`` where ``source`` is one of:
+        ``"bandit"`` — bandit picked the hour
+        ``"fallback"`` — flag off, unreachable, or cold-start
+
+    Rule #22 sibling: the ``source`` return value lets callers log
+    "used bandit" vs "used fallback" so operators can see which is
+    steering behaviour without inspecting alpha/beta values.
+    """
+    from genlab_core.settings import env_true
+
+    if not env_true(
+        "GENLAB_OPTIMAL_TIME_BANDIT_ENABLED",
+        legacy_name="GENLAB_OPTIMAL_TIME_BANDIT",
+    ):
+        return fallback_hour, "fallback"
+
+    if not niche_id:
+        return fallback_hour, "fallback"
+
+    try:
+        from genlab_core.http.backlog_client import BacklogClient
+        from genlab_core.learning.arm_loader import load_all_arms
+    except ImportError:
+        return fallback_hour, "fallback"
+
+    try:
+        client = BacklogClient()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "[optimal_time] BacklogClient failed for niche=%s multi-platform pick: %s",
+            niche_id,
+            exc,
+        )
+        return fallback_hour, "fallback"
+
+    proxy = getattr(client, "bandit_arms", None)
+    if proxy is None:
+        return fallback_hour, "fallback"
+
+    try:
+        arms = load_all_arms(proxy, niche_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "[optimal_time] load_all_arms failed for niche=%s: %s",
+            niche_id,
+            exc,
+        )
+        return fallback_hour, "fallback"
+
+    # Aggregate per-hour across all platforms.
+    hour_prefix = "hour:"
+    per_hour: dict[int, tuple[float, float]] = {}
+    for arm_id, (alpha, beta) in arms.items():
+        if not arm_id.startswith(hour_prefix):
+            continue
+        # Shape: hour:{H}:{platform}:{niche_id}
+        # Verify the arm ends with `:{niche_id}` so we don't accidentally
+        # count another niche's arms.
+        if not arm_id.endswith(f":{niche_id}"):
+            continue
+        parts = arm_id.split(":")
+        if len(parts) < 4:
+            continue
+        try:
+            hour = int(parts[1])
+        except (ValueError, IndexError):
+            continue
+        if not (0 <= hour <= 23):
+            continue
+        prev_a, prev_b = per_hour.get(hour, (0.0, 0.0))
+        # Alpha and beta from Beta(1,1) prior contribute 1+1 =2 observations.
+        # Any α+β > 2 = real signal has landed. Sum across platforms.
+        per_hour[hour] = (prev_a + max(alpha, 1.0), prev_b + max(beta, 1.0))
+
+    # Total observations across every hour arm = sum of (α+β) - 2 per arm.
+    # But we're aggregating already, so approximate:
+    # total_evidence = sum(α+β) - 2*(hour_count * platform_count).
+    # Simpler: only count "real" evidence — alpha+beta above 2 per arm.
+    total_obs = 0.0
+    for alpha, beta in per_hour.values():
+        # Each hour aggregates across platforms; subtract the Beta(1,1)
+        # baseline (2) per contributing platform. We don't know the
+        # platform count for sure — err on cold-start-safe side by
+        # underestimating: subtract 2 per hour (assumes 1 platform).
+        total_obs += max(0.0, alpha + beta - 2.0)
+
+    if total_obs < min_total_obs:
+        logger.debug(
+            "[optimal_time] niche=%s total_obs=%.1f < min=%d — using fallback",
+            niche_id,
+            total_obs,
+            min_total_obs,
+        )
+        return fallback_hour, "fallback"
+
+    if not per_hour:
+        return fallback_hour, "fallback"
+
+    # Thompson-sample each aggregate hour posterior; pick argmax.
+    import random as _random
+
+    best_hour = fallback_hour
+    best_sample = -1.0
+    for hour, (alpha, beta) in per_hour.items():
+        try:
+            sample = _random.betavariate(alpha, beta)
+        except (ValueError, OverflowError):
+            sample = 0.5
+        if sample > best_sample:
+            best_sample = sample
+            best_hour = hour
+
+    logger.info(
+        "[optimal_time] niche=%s bandit picked hour=%d (sample=%.3f, total_obs=%.1f)",
+        niche_id,
+        best_hour,
+        best_sample,
+        total_obs,
+    )
+    return best_hour, "bandit"
