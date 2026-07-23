@@ -350,5 +350,26 @@ def main() -> None:
         sys.exit(0)
 
 
+def _main_with_durable_error() -> int:
+    """Wrapper around main() that preserves any unhandled exception
+    traceback to /opt/genlab/.runtime/check_affiliate_links_last_error.txt
+    BEFORE exiting. Same pattern as publisher, nightly-scheduler,
+    shared_ingestion. See
+    genlab_core.observability.durable_error.
+    """
+    try:
+        main()
+        return 0
+    except SystemExit as e:
+        # main() uses sys.exit() liberally — preserve its exit code
+        # without treating it as an unhandled exception.
+        return int(e.code) if isinstance(e.code, int) else 0
+    except Exception as exc:  # noqa: BLE001
+        from genlab_core.observability.durable_error import write_durable_error
+
+        write_durable_error("check_affiliate_links", exc)
+        return 3
+
+
 if __name__ == "__main__":
-    main()
+    sys.exit(_main_with_durable_error())

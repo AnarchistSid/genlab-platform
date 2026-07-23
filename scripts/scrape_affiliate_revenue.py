@@ -380,5 +380,31 @@ def main() -> int:
     return 0 if successes >= 1 else 1
 
 
+def _main_with_durable_error() -> int:
+    """Wrapper preserving unhandled exceptions to a durable file.
+
+    See genlab_core.observability.durable_error for the pattern.
+    """
+    try:
+        return main()
+    except SystemExit as e:
+        return int(e.code) if isinstance(e.code, int) else 0
+    except Exception as exc:  # noqa: BLE001
+        # Late import so this script keeps working even if it's run
+        # from an environment where genlab_core isn't yet installed
+        # (e.g. dev bootstrap).
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "genlab-core" / "src"))
+            from genlab_core.observability.durable_error import write_durable_error
+
+            write_durable_error("scrape_affiliate_revenue", exc)
+        except Exception as import_exc:  # noqa: BLE001
+            print(f"(also failed to import durable_error helper: {import_exc})", file=sys.stderr)
+            import traceback as _tb
+
+            _tb.print_exc(file=sys.stderr)
+        return 3
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(_main_with_durable_error())
