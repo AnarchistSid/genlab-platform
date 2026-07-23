@@ -336,6 +336,31 @@ export interface CalibrationStatsAllResponse {
   niches: Record<string, CalibrationStats>;
 }
 
+/**
+ * Per-niche outcome-based readiness verdict (2026-07-23). Independent
+ * signal from operator-agreement; unblocks the AUTO #2 ratchet when
+ * the operator hasn't clicked in weeks (which is the current prod
+ * state). Renders as a sub-badge on AutoApprovalCalibrationCard.
+ */
+export interface OutcomeReadiness {
+  niche_id: string;
+  window_days: number;
+  sample_count: number;
+  outcome_good_count: number;
+  outcome_good_rate: number; // 0..1
+  threshold: number;         // reward_48h low bar
+  ready: boolean;
+  degraded?: boolean;
+  degraded_reason?: string;
+}
+
+export interface OutcomeReadinessAllResponse {
+  window_days: number;
+  niches: Record<string, OutcomeReadiness>;
+  degraded?: boolean;
+  degraded_reason?: string;
+}
+
 export const autoApproval = {
   calibrationStats: (nicheId: string, windowDays = 7) =>
     get<CalibrationStats>("/auto-approval/calibration-stats", {
@@ -348,6 +373,14 @@ export const autoApproval = {
    */
   calibrationStatsAll: (windowDays = 7) =>
     get<CalibrationStatsAllResponse>("/auto-approval/calibration-stats-all", {
+      window_days: String(windowDays),
+    }),
+  /**
+   * Outcome-based readiness — parallel signal to calibration-stats.
+   * Returns all 5 niches in one request when niche_id is omitted.
+   */
+  outcomeReadiness: (windowDays = 14) =>
+    get<OutcomeReadinessAllResponse>("/auto-approval/outcome-readiness", {
       window_days: String(windowDays),
     }),
   trackRecord: (nicheId: string, windowDays = 30, binDays = 1) =>

@@ -37,10 +37,28 @@ export function AutoApprovalCalibrationCard() {
     retry: false,
   });
 
+  // 2026-07-23: parallel outcome-based readiness signal — see
+  // outcome_readiness.py docstring for why. Operator ratchet has been
+  // stuck 24 days because auto-approver approves without operator
+  // review; this signal validates the gate from reward_48h outcomes
+  // instead. Poll cadence 5min matches the calibration cadence — data
+  // updates once per 48h reward window fill anyway.
+  const { data: outcomeData } = useQuery({
+    queryKey: ["auto-approval-outcome-readiness-all"],
+    queryFn: () => autoApproval.outcomeReadiness(),
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    retry: false,
+  });
+
   const anyLoading = isLoading;
   const perNiche = data?.niches ?? {};
+  const outcomePerNiche = outcomeData?.niches ?? {};
   const readyCount = NICHE_IDS.filter(
     (nicheId) => perNiche[nicheId]?.ready_for_enforcement === true,
+  ).length;
+  const outcomeReadyCount = NICHE_IDS.filter(
+    (nicheId) => outcomePerNiche[nicheId]?.ready === true,
   ).length;
 
   return (
@@ -74,6 +92,46 @@ export function AutoApprovalCalibrationCard() {
             : `${readyCount} / ${NICHE_IDS.length} niches above threshold`}
         </span>
       </div>
+
+      {/* Outcome-based readiness sub-badge — 2026-07-23.
+          Independent signal from reward_48h. Renders below the
+          headline so operator sees both signals side by side.
+          Copy is deliberately compact — this is a "peek" signal
+          during the observation-only rollout; a full row per niche
+          would out-shout the operator-agreement primary. */}
+      {outcomeData && (
+        <div
+          className="mb-3 flex items-center gap-2 text-xs text-text-muted"
+          title={
+            "Fraction of auto-approved posts whose reward_48h cleared " +
+            "a low-bar threshold. Separate from operator-agreement; " +
+            "readiness observed but not yet wired to advance the ladder."
+          }
+        >
+          <span className="rounded border border-border/40 bg-surface-2 px-1.5 py-0.5 text-[10px]">
+            outcome
+          </span>
+          <span>
+            {outcomeReadyCount} / {NICHE_IDS.length} niches ·{" "}
+            {NICHE_IDS.map((nid) => {
+              const r = outcomePerNiche[nid];
+              const info = getNicheInfo(nid);
+              const rate = r?.outcome_good_rate ?? 0;
+              return (
+                <span
+                  key={nid}
+                  className="mr-2 font-mono"
+                  style={{ color: info.hex }}
+                  title={`${info.shortLabel}: ${r?.outcome_good_count ?? 0}/${r?.sample_count ?? 0} good outcomes (rate ${(rate * 100).toFixed(0)}%, threshold ${((r?.threshold ?? 0.05) * 100).toFixed(0)}%)`}
+                >
+                  {info.shortLabel[0]}
+                  {(rate * 100).toFixed(0)}
+                </span>
+              );
+            })}
+          </span>
+        </div>
+      )}
 
       {/* Per-niche rows */}
       <div className="flex flex-col gap-2">

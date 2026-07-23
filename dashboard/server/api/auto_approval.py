@@ -207,6 +207,150 @@ def calibration_stats_all():
     return api_success(data={"window_days": window_days, "niches": out})
 
 
+# ── Outcome-based readiness (2026-07-23) ────────────────────────────
+#
+# Complementary signal to /calibration-stats. The calibration ratchet
+# is stuck 24 days because the operator hasn't clicked review since
+# auto-approver started approving blueprints outright. This endpoint
+# surfaces an INDEPENDENT signal: for auto-approved blueprints in the
+# rolling window, what fraction had reward_48h clear a low bar? A high
+# outcome-good rate validates the gate's decisions from real-world
+# performance rather than operator agreement.
+#
+# READ-ONLY. Does NOT write to auto_approval_calibration. The auto-
+# approver's advancement ladder currently ignores this signal —
+# observability first per CLAUDE.md rollout discipline; operator
+# eyeballs the numbers for ~1 week before the flag flip that lets it
+# advance the ladder.
+
+
+@bp.route("/outcome-readiness", methods=["GET"])
+def outcome_readiness_endpoint():
+    """Per-niche outcome-based readiness verdict.
+
+    Query params:
+        niche_id (optional): one of ai_creators, gaming, sports,
+            movies, anime. If omitted, returns all 5.
+        window_days (optional, default 14): rolling window for
+            auto-approved blueprint lookup.
+
+    Response shape (single niche):
+        {
+          "niche_id": "gaming",
+          "window_days": 14,
+          "sample_count": 22,
+          "outcome_good_count": 18,
+          "outcome_good_rate": 0.818,
+          "threshold": 0.05,
+          "ready": false          // sample_count < 30
+        }
+
+    Response shape (all niches — no ``niche_id`` param):
+        {
+          "window_days": 14,
+          "niches": {
+            "ai_creators": { ...same shape as single... },
+            ...
+          }
+        }
+    """
+    dsn = os.environ.get("DATABASE_URL", "")
+    if not dsn:
+        return api_error(error="DATABASE_URL not configured", code=503)
+
+    try:
+        window_days = int(request.args.get("window_days", "14"))
+    except (TypeError, ValueError):
+        return api_error(error="window_days must be an integer", code=400)
+    if window_days < 1 or window_days > 90:
+        return api_error(error="window_days must be 1..90", code=400)
+
+    niche_id = (request.args.get("niche_id") or "").strip()
+    if niche_id and niche_id not in _VALID_NICHES:
+        return api_error(
+            error=f"niche_id must be one of {sorted(_VALID_NICHES)}",
+            code=400,
+        )
+
+    from psycopg.rows import dict_row
+
+    from genlab_core.scheduling.outcome_readiness import (
+        check_all_niches,
+        check_outcome_readiness,
+    )
+    from genlab_core.storage.tenant_context import pg_connect
+
+    def _to_dict(r) -> dict:
+        return {
+            "niche_id": r.niche_id,
+            "window_days": r.window_days,
+            "sample_count": r.sample_count,
+            "outcome_good_count": r.outcome_good_count,
+            "outcome_good_rate": round(r.outcome_good_rate, 3),
+            "threshold": r.threshold,
+            "ready": r.ready,
+        }
+
+    try:
+        with pg_connect(dsn, row_factory=dict_row, niche_id="all") as conn:
+            if niche_id:
+                r = check_outcome_readiness(
+                    conn, niche_id, window_days=window_days
+                )
+                return api_success(data=_to_dict(r))
+            per_niche = check_all_niches(conn, window_days=window_days)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "outcome-readiness failed for niche=%r window=%d: %s",
+            niche_id or "all",
+            window_days,
+            exc,
+        )
+        # Fail-open: zero-filled for the requested niche(s) rather
+        # than 500 — matches calibration-stats convention.
+        if niche_id:
+            return api_success(
+                data={
+                    "niche_id": niche_id,
+                    "window_days": window_days,
+                    "sample_count": 0,
+                    "outcome_good_count": 0,
+                    "outcome_good_rate": 0.0,
+                    "threshold": 0.05,
+                    "ready": False,
+                    "degraded": True,
+                    "degraded_reason": str(exc)[:200],
+                }
+            )
+        # Cross-niche zero-fill.
+        return api_success(
+            data={
+                "window_days": window_days,
+                "niches": {
+                    n: {
+                        "niche_id": n,
+                        "window_days": window_days,
+                        "sample_count": 0,
+                        "outcome_good_count": 0,
+                        "outcome_good_rate": 0.0,
+                        "threshold": 0.05,
+                        "ready": False,
+                    }
+                    for n in sorted(_VALID_NICHES)
+                },
+                "degraded": True,
+                "degraded_reason": str(exc)[:200],
+            }
+        )
+
+    return api_success(
+        data={
+            "window_days": window_days,
+            "niches": {n: _to_dict(r) for n, r in per_niche.items()},
+        }
+    )
+
+
 # ── Lever B: Per-rejection-reason breakdown ─────────────────────────
 #
 # Operator clicks 1 of 6 categorical rejection reasons on every reject:
