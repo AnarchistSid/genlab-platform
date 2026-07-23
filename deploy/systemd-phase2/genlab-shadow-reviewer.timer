@@ -1,0 +1,18 @@
+[Unit]
+Description=Run shadow reviewer LLM pass — daily 04:00 UTC
+Documentation=file:///opt/genlab/scripts/run_shadow_reviewer.py
+
+[Timer]
+# 04:00 UTC = 09:30 IST. Sits after:
+#   * 02:00 UTC — strategist (Sundays only)
+#   * 03:00 UTC — apply_strategist_actions
+#   * 03:15 UTC — auto_promote_hypotheses
+# Runs daily so mid-week fresh blueprints get shadowed within 24h,
+# not stuck waiting for the next Sunday cycle.
+# Idempotent via SELECT-then-INSERT on (blueprint_id, source).
+OnCalendar=*-*-* 04:00:00 UTC
+Persistent=true
+Unit=genlab-shadow-reviewer.service
+
+[Install]
+WantedBy=timers.target

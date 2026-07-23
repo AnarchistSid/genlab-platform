@@ -136,6 +136,7 @@ def log(
     action_taken_source: str | None = None,
     review_duration_ms: int | None = None,
     feedback_category: str | None = None,
+    source: str = "operator",
 ) -> bool:
     """Write one calibration row. Best-effort, never raises.
 
@@ -286,6 +287,12 @@ def log(
                 # Keeping the live shape untouched preserves the
                 # operator-review fast path (NOW() is cheaper than a
                 # round-trip to Python's datetime serializer).
+                # 2026-07-23: normalise ``source`` here so a caller
+                # that accidentally passes None or a whitespace string
+                # still lands with a valid tag. Default 'operator'
+                # matches the migration's DEFAULT + preserves pre-fix
+                # semantics.
+                clean_source = (str(source).strip() if source else "operator") or "operator"
                 if decided_at is None:
                     # 2026-06-15 audit T#57: ON CONFLICT DO NOTHING
                     # against the new unique index
@@ -299,8 +306,8 @@ def log(
                              gate_approved, gate_confidence,
                              gate_passed_checks, gate_failed_checks,
                              operator_action, review_duration_ms,
-                             feedback_category)
-                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, %s)
+                             feedback_category, source)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, %s, %s)
                         ON CONFLICT DO NOTHING
                         """,
                         (
@@ -313,6 +320,7 @@ def log(
                             operator_action,
                             clean_duration_ms,
                             clean_feedback_category,
+                            clean_source,
                         ),
                     )
                 else:
@@ -324,8 +332,8 @@ def log(
                              gate_approved, gate_confidence,
                              gate_passed_checks, gate_failed_checks,
                              operator_action, decided_at,
-                             review_duration_ms, feedback_category)
-                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, %s, %s)
+                             review_duration_ms, feedback_category, source)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, %s, %s, %s)
                         ON CONFLICT DO NOTHING
                         """,
                         (
@@ -339,6 +347,7 @@ def log(
                             decided_at,
                             clean_duration_ms,
                             clean_feedback_category,
+                            clean_source,
                         ),
                     )
             conn.commit()
@@ -359,8 +368,24 @@ def log(
         return False
 
 
-def stats(*, niche_id: str, window_days: int = 7) -> CalibrationStats:
+def stats(
+    *,
+    niche_id: str,
+    window_days: int = 7,
+    source_filter: str = "operator",
+) -> CalibrationStats:
     """Compute agreement-rate stats for a niche over a rolling window.
+
+    Args:
+        niche_id: The niche whose calibration rows to aggregate.
+        window_days: Rolling window (default 7).
+        source_filter: Restrict to this source tag. Default 'operator'
+            preserves the pre-2026-07-23 semantic (AUTO #2 readiness
+            reads operator agreement only). Pass 'shadow_reviewer' to
+            aggregate the shadow reviewer's verdicts separately —
+            enrollment MUST NOT be triggered by shadow data alone
+            (rule #22 sibling: shadow is a different agent, not an
+            operator).
 
     Returns zeros + ready_for_enforcement=False on any error (cold
     start, no DB, table missing). Callers should not gate enforcement
@@ -435,10 +460,11 @@ def stats(*, niche_id: str, window_days: int = 7) -> CalibrationStats:
                     FROM auto_approval_calibration
                     WHERE niche_id = %s
                       AND decided_at >= NOW() - (%s || ' days')::interval
+                      AND source = %s
                       -- PR #519: UUID-shape filter (exclude synthetic IDs)
                       AND blueprint_id LIKE '________-____-____-____-____________'
                     """,
-                    (niche_id, str(window_days)),
+                    (niche_id, str(window_days), source_filter),
                 )
                 row = cur.fetchone() or (0, 0, 0, 0, 0)
                 sample_count = int(row[0] or 0)

@@ -1,0 +1,30 @@
+[Unit]
+Description=GenLab Shadow Reviewer — LLM would-approve verdict for scheduled blueprints
+After=network-online.target
+OnFailure=genlab-service-failure-alert@%n.service
+# Fire after apply_strategist_actions + auto_promote_hypotheses so
+# the learning_findings + strategist_reports state is fresh when the
+# shadow reviewer reads blueprints.
+After=genlab-hypothesis-promote.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=UV_FROZEN=1
+TimeoutStartSec=15min
+# File-path invocation — scripts/ is not a Python package
+# (test_systemd_module_drift.py pins this pattern).
+ExecStart=/usr/local/bin/uv run python scripts/run_shadow_reviewer.py
+StandardOutput=journal
+StandardError=journal
+
+MemoryMax=512M
+CPUWeight=30
+
+[Install]
+WantedBy=multi-user.target
