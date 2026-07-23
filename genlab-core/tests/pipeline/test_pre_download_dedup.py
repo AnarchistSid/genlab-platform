@@ -417,3 +417,104 @@ def test_source_pins_url_dedup_ttl_key_path() -> None:
 # Pathlib needed for the source pin above — imported here so the new block
 # is self-contained and doesn't disturb the imports at the top of the file.
 from pathlib import Path  # noqa: E402, I001
+
+
+class TestDecisionTraceEmission:
+    """2026-07-23: PreDownloadDedup must emit a decision trace with the
+    dedup drop counts. Fourth stage in this session's trace-emission
+    symmetric rollout (VideoGate, ViralityScoring, QCGates already).
+
+    Motivating pattern: pipeline_alerts warns about
+    "0 blueprints, stories created but 0 blueprints (dedup?)" — this
+    trace lets operators see the drop counts pre-alert.
+    """
+
+    @staticmethod
+    def _run_with_mocked_client(monkeypatch, stories, existing_records=None):
+        """Helper: execute PreDownloadDedup with a mocked BacklogClient
+        that returns the given ``existing_records`` list (default empty).
+        Returns the captured traces list."""
+        from unittest.mock import MagicMock
+
+        from genlab_core.pipeline.stages.pre_download_dedup import PreDownloadDedup
+
+        traces: list[dict] = []
+        monkeypatch.setattr(
+            "genlab_core.observability.decision_trace.record_decision",
+            lambda context, **kwargs: traces.append(kwargs),
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.reasoning_trace.append_trace",
+            lambda *a, **k: None,
+        )
+
+        mock_client = MagicMock()
+        mock_client.blueprints.all.return_value = existing_records or []
+        monkeypatch.setattr(
+            PreDownloadDedup, "_get_client", lambda self: mock_client
+        )
+
+        ctx = {
+            "niche_id": "gaming",
+            "niche_config": {},
+            "stories": stories,
+        }
+        PreDownloadDedup().execute(ctx)
+        return traces
+
+    def test_emits_aggregate_trace(self, monkeypatch) -> None:
+        stories = [
+            {"source_url": "https://example.com/a", "video_id": "aaa"},
+            {"source_url": "https://example.com/b", "video_id": "bbb"},
+        ]
+        traces = self._run_with_mocked_client(monkeypatch, stories)
+
+        pdd_traces = [t for t in traces if t.get("stage") == "PreDownloadDedup"]
+        assert pdd_traces, "expected PreDownloadDedup decision trace"
+        trace = pdd_traces[0]
+        assert trace["metadata"]["input_count"] == 2
+        assert trace["metadata"]["kept_count"] == 2  # No dedup — both kept
+        assert trace["decision"] == "info"
+
+    def test_all_dropped_produces_warning(self, monkeypatch) -> None:
+        """When PreDownloadDedup eats every candidate (0 kept), the
+        trace surfaces decision='warning' — the "dedup ate everything"
+        precursor state that the zero_blueprints alert catches later.
+
+        Populate the blueprint pool with the same video_ids as the
+        candidates so dedup drops all of them.
+        """
+        stories = [
+            {"source_url": "https://example.com/a", "video_id": "aaa"},
+            {"source_url": "https://example.com/b", "video_id": "bbb"},
+        ]
+        # Existing blueprints match the candidate video_ids (non-terminal
+        # statuses so dedup counts them). Dedup looks up
+        # ``fields.video_url`` / ``fields.video_id`` — put both at
+        # top-level since fields falls back to the bp dict itself.
+        existing = [
+            {
+                "id": "bp-a",
+                "status": "VISUAL_READY",
+                "video_id": "aaa",
+                "video_url": "https://example.com/a",
+                "created_at": "2026-07-20T00:00:00Z",
+            },
+            {
+                "id": "bp-b",
+                "status": "VISUAL_READY",
+                "video_id": "bbb",
+                "video_url": "https://example.com/b",
+                "created_at": "2026-07-20T00:00:00Z",
+            },
+        ]
+        traces = self._run_with_mocked_client(monkeypatch, stories, existing)
+
+        pdd_traces = [t for t in traces if t.get("stage") == "PreDownloadDedup"]
+        assert pdd_traces
+        # All 2 dropped (either by URL or video_id — either way 0 kept)
+        assert pdd_traces[0]["metadata"]["kept_count"] == 0
+        assert pdd_traces[0]["decision"] == "warning", (
+            "0 kept from >0 input must produce decision='warning' so "
+            "operators can grep the trace for the precursor state"
+        )

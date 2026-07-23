@@ -192,4 +192,62 @@ class PreDownloadDedup:
             dropped_url,
             dropped_vid,
         )
+
+        # 2026-07-23: emit decision trace symmetric with VideoGate +
+        # ViralityScoring + QCGates. Fourth stage this session to gain
+        # trace emission. Motivating pattern: pipeline_alerts warns
+        # about "0 blueprints, stories created but 0 blueprints
+        # (dedup?)" — this trace surfaces the dedup drop counts BEFORE
+        # the alert fires 30 min later.
+        try:
+            from genlab_core.observability.decision_trace import record_decision
+            from genlab_core.pipeline.reasoning_trace import append_trace
+
+            total_dropped = dropped_url + dropped_vid
+            # WARN when all stories were dedup-dropped — the "dedup
+            # ate every candidate" state that the zero_blueprints
+            # alert catches later.
+            if len(stories) > 0 and len(kept) == 0:
+                trace_decision = "warning"
+            elif total_dropped > len(stories) // 2:
+                # More than half dropped — worth noting.
+                trace_decision = "info"
+            else:
+                trace_decision = "info"
+
+            reasons_line = (
+                f"kept={len(kept)}/{len(stories)}, "
+                f"dropped_url={dropped_url}, dropped_video_id={dropped_vid}"
+            )
+            metadata = {
+                "input_count": len(stories),
+                "kept_count": len(kept),
+                "dropped_url": dropped_url,
+                "dropped_video_id": dropped_vid,
+                "active_blueprint_urls": len(seen_url_hashes),
+                "active_blueprint_video_ids": len(seen_video_ids),
+            }
+            append_trace(
+                context,
+                stage="PreDownloadDedup",
+                decision=trace_decision,
+                confidence=1.0,
+                reasons=[reasons_line],
+                metadata=metadata,
+            )
+            record_decision(
+                context,
+                stage="PreDownloadDedup",
+                decision=trace_decision,
+                reason=reasons_line,
+                confidence=1.0,
+                metadata=metadata,
+            )
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            logger.warning(
+                "[PreDownloadDedup] trace emission failed: %s",
+                exc,
+                exc_info=True,
+            )
+
         return context
