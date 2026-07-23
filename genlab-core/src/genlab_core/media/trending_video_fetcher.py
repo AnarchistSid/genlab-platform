@@ -1355,10 +1355,18 @@ class FetchTrendingVideos(FetcherStage):
                     return stories
 
         except Exception as e:
+            # 2026-07-23: add exc_info=True so future incidents surface
+            # the traceback. The 2-day content_pool outage was hard to
+            # diagnose because the WARNING message alone couldn't
+            # attribute the psycopg IncompletePlaceholder to a specific
+            # SQL string. Class-of-bug rooted in
+            # [[class-of-bug-psycopg-percent-in-sql-comment]] — see also
+            # rule #19 (silent-fail elevation).
             logger.warning(
                 "[FetchTrending:%s] Content pool read failed: %s",
                 niche_id,
                 e,
+                exc_info=True,
             )
             return []
 
