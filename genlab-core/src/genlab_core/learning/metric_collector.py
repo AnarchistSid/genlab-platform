@@ -856,11 +856,22 @@ def process_pending_task(
 
     # Early-stop detection at 6h window (Break 14 fix)
     # If 6h views are far below niche floor, the post is bombing — skip
-    # collection of later windows.  We do NOT update the bandit here:
-    # the 48h reward path is the single source of bandit truth, so a
-    # bombing post will naturally produce a near-zero reward there.
-    # Sending 0.05 here previously hit the adaptive-threshold floor and
-    # incremented α (Bug F in 2026-05-16 audit) — the opposite of intent.
+    # collection of later windows.
+    #
+    # 2026-05-16 audit "Bug F": sending reward=0.05 here previously hit
+    # the adaptive-threshold floor and incremented α — the OPPOSITE of
+    # intent (a bombing post should push the arm toward BAD, not GOOD).
+    #
+    # 2026-07-23 fix: the 2026-05-16 remediation over-corrected by
+    # skipping the bandit update entirely. That left arms at uniform
+    # prior forever despite bombs — the "bandit_posterior_drift" alert
+    # fires today for exactly this reason (anime + movies arms at
+    # α=β=1 with pending_feedback rows). The RIGHT signal is
+    # reward=0.0 (α += 0, β += 1) — a real "bad outcome" update, not
+    # 0.05 (which hit the floor) and not skipping (which loses signal).
+    # See [[class-of-bug-signal-loss-through-merged-failure-paths]] —
+    # same class as the merged-failure-mode collapses today, applied
+    # at the bandit-learning boundary.
     if window == "6h" and metrics:
         views_6h = metrics.get("views", 0)
         _NICHE_6H_FLOOR: dict[str, int] = {
@@ -917,6 +928,37 @@ def process_pending_task(
                 )
             except Exception as exc:  # noqa: BLE001 — fail-open
                 logger.debug("[metric_collector] early-stop episodic emit failed: %s", exc)
+
+            # 2026-07-23: feed reward=0.0 into bandit_arms so the arm
+            # actually learns from the bomb. See design commentary at
+            # line ~858 for why 0.0 (not 0.05) is the correct signal
+            # and why the prior "skip update entirely" was over-
+            # corrective. Fail-open — bandit-update failures must NOT
+            # block early-stop status persistence.
+            arm_for_update = task_record.bandit_arm or task_record.content_type
+            if bandit_updater is not None and arm_for_update:
+                try:
+                    bandit_updater(
+                        task_record.niche_id,
+                        arm_for_update,
+                        task_record.platform,
+                        0.0,
+                        task_record.bandit_context,
+                    )
+                    logger.info(
+                        "[metric_collector] early-stop bandit updated: "
+                        "niche=%s arm=%s platform=%s reward=0.0",
+                        task_record.niche_id,
+                        arm_for_update,
+                        task_record.platform,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "[metric_collector] early-stop bandit update failed for %s/%s: %s",
+                        task_record.platform,
+                        task_record.platform_post_id,
+                        exc,
+                    )
 
             return True
 

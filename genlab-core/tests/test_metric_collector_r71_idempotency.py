@@ -217,12 +217,25 @@ def test_r71_no_bandit_fire_at_168h_window(mock_fetch) -> None:
 
 
 @patch("genlab_core.learning.metric_collector.fetch_platform_metrics")
-def test_r71_no_bandit_fire_when_early_stopped_at_6h(mock_fetch) -> None:
-    """R-71 pin: a 6h early-stop must NOT fire the bandit. The Bug F
-    fix from the 2026-05-16 audit was exactly this — sending
-    reward=0.05 at 6h hit the adaptive threshold floor and
-    incremented α, treating a flop as a success. Catching a
-    regression here is the contract-test net the audit asked for."""
+def test_r71_early_stop_fires_bandit_with_zero_reward(mock_fetch) -> None:
+    """R-71 pin (2026-07-23 revision): a 6h early-stop MUST fire the
+    bandit_updater with reward=0.0 — a real "bad outcome" signal
+    (α += 0, β += 1).
+
+    History:
+      * 2026-05-16 audit "Bug F": early-stop originally sent 0.05
+        which hit the adaptive-threshold floor and incremented α —
+        treating a flop as a success. Wrong direction.
+      * 2026-05-16 remediation: skip bandit update entirely at
+        early-stop. Over-corrective — left arms at uniform prior
+        forever despite bombs.
+      * 2026-07-23 fix (this pin): send reward=0.0. Not 0.05 (Bug F
+        prevented), not skipped (bandit_posterior_drift alert closed
+        for anime + movies arms).
+
+    See [[class-of-bug-signal-loss-through-merged-failure-paths]] —
+    the pattern applied at the bandit-learning boundary.
+    """
     # Very low views → trips early-stop floor.
     mock_fetch.return_value = {"views": 5, "likes": 0}
 
@@ -244,9 +257,16 @@ def test_r71_no_bandit_fire_when_early_stopped_at_6h(mock_fetch) -> None:
 
     process_pending_task(task, store, shaper, bandit_updater=updater)
 
-    assert updater.call_count == 0, (
-        "R-71 regression: bandit_updater fired at the 6h early-stop "
-        "path. This was Bug F (2026-05-16 audit) — a flop's reward=0.05 "
-        "hit the adaptive-threshold floor and incremented α, treating "
-        "a flop as a success. The pin guards against the regression."
+    assert updater.call_count == 1, (
+        "2026-07-23: bandit_updater MUST fire at early-stop so the arm "
+        "learns from bombs. Previously skipped entirely (2026-05-16 "
+        "over-correction to Bug F) — that left arms at uniform prior "
+        "forever and produced the bandit_posterior_drift alert."
+    )
+    call_args = updater.call_args
+    # Positional args: (niche_id, arm, platform, reward, bandit_context)
+    assert call_args[0][3] == 0.0, (
+        "Bug F guard: early-stop bandit reward MUST be 0.0 (α += 0, "
+        "β += 1). Not 0.05 (hit adaptive-threshold floor, incremented "
+        "α — treated flop as success)."
     )

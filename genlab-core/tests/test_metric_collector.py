@@ -986,14 +986,27 @@ class TestNoWindowDue:
 # ===========================================================================
 
 
-class TestEarlyStopDoesNotFireBandit:
-    """Bug F (2026-05-16): early-stop sent reward=0.05 which hit the
-    adaptive threshold floor and incremented α, treating a flop as a
-    success. The fix is to skip the bandit update at 6h entirely and
-    rely on the 48h reward path."""
+class TestEarlyStopFeedsBanditWithZeroReward:
+    """Bug F (2026-05-16): early-stop originally sent reward=0.05 which
+    hit the adaptive-threshold floor and incremented α — treating a
+    flop as a success. The 2026-05-16 fix over-corrected by SKIPPING
+    the bandit update entirely; that left arms at uniform prior
+    forever despite bombs (the "bandit_posterior_drift" alert fired
+    on anime + movies arms with α=β=1 and pending_feedback rows).
+
+    2026-07-23 fix: early-stop calls bandit_updater with reward=0.0 —
+    a real "bad outcome" update (α += 0, β += 1). Not 0.05 (Bug F
+    remains prevented), not skipped (drift signal preserved).
+
+    See [[class-of-bug-signal-loss-through-merged-failure-paths]] —
+    the pattern applied at the bandit-learning boundary.
+    """
 
     @patch("genlab_core.learning.metric_collector.fetch_platform_metrics")
-    def test_early_stop_does_not_call_bandit_updater(self, mock_fetch):
+    def test_early_stop_calls_bandit_updater_with_zero_reward(self, mock_fetch):
+        """The load-bearing behavioral pin: early-stop MUST call the
+        bandit_updater with reward=0.0 so the arm learns from bombs.
+        """
         # Views well below the gaming niche floor (30) → triggers early stop
         mock_fetch.return_value = {"views": 5}
 
@@ -1009,12 +1022,47 @@ class TestEarlyStopDoesNotFireBandit:
 
         result = process_pending_task(task, store, shaper, bandit_updater=updater)
 
-        # Early-stop happened (returned True), but bandit was NOT touched.
+        # Early-stop happened (returned True).
         assert result is True
-        updater.assert_not_called()
-        # Task marked as early_stopped with reward 0.0 (not 0.05).
+        # Task marked as early_stopped with reward 0.0 (not 0.05 — Bug F).
         assert task.collection_status == "early_stopped"
         assert task.reward_48h == 0.0
+        # 2026-07-23: bandit_updater WAS called with reward=0.0.
+        updater.assert_called_once()
+        call_args = updater.call_args
+        # Positional args: (niche_id, arm, platform, reward, bandit_context)
+        assert call_args[0][3] == 0.0, (
+            "early-stop bandit update must pass reward=0.0 (real "
+            "bad-outcome signal, α += 0 β += 1). NOT 0.05 (Bug F "
+            "floor-hit) and NOT skipped (bandit_posterior_drift)."
+        )
+
+    @patch("genlab_core.learning.metric_collector.fetch_platform_metrics")
+    def test_early_stop_bandit_update_failure_does_not_break_status(
+        self, mock_fetch
+    ):
+        """The bandit_updater call is fail-open — if it raises, the
+        early-stop status persistence still succeeds. Regression guard
+        against a bandit outage stalling the metric_collector."""
+        mock_fetch.return_value = {"views": 5}
+
+        task = _make_task(
+            published_hours_ago=7.0,
+            collection_status="awaiting_6h",
+            completed_windows=[],
+            niche_id="gaming",
+        )
+        store = _mock_store(next_window="6h")
+        shaper = _mock_shaper()
+        updater = MagicMock(side_effect=RuntimeError("bandit DB down"))
+
+        result = process_pending_task(task, store, shaper, bandit_updater=updater)
+
+        # Early-stop status STILL persisted even when bandit blew up.
+        assert result is True
+        assert task.collection_status == "early_stopped"
+        assert task.reward_48h == 0.0
+        updater.assert_called_once()
 
 
 class TestDefaultBanditUpdaterFractionalMath:
