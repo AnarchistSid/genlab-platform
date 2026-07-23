@@ -818,6 +818,10 @@ def test_cli_wrapper_calls_both_resolvers():
             "errors": 0,
         }
 
+    def fake_auto_fix(**kw):
+        calls.append(("auto_fix_applied", kw))
+        return {"checked": 0, "resolved": 0, "errors": 0}
+
     with (
         patch(
             "genlab_core.observability.alert_auto_resolver.auto_resolve_systemd_unit_alerts",
@@ -835,6 +839,10 @@ def test_cli_wrapper_calls_both_resolvers():
             "genlab_core.observability.alert_auto_resolver.auto_resolve_content_pool_bypass_alerts",
             side_effect=fake_bypass,
         ),
+        patch(
+            "genlab_core.observability.alert_auto_resolver.auto_resolve_completed_auto_fix_alerts",
+            side_effect=fake_auto_fix,
+        ),
     ):
         assert mod.main([]) == 0
 
@@ -844,8 +852,9 @@ def test_cli_wrapper_calls_both_resolvers():
         "nightly_schedule_missing_slot",
         "bandit_posterior_drift",
         "content_pool_consumer_bypass",
+        "auto_fix_applied",
     }, (
-        f"CLI must invoke all four resolvers; got {sorted(labels)}. "
+        f"CLI must invoke all five resolvers; got {sorted(labels)}. "
         "If a refactor drops one, the CriticalAlertsBanner will grow "
         "stale rows for that check_name."
     )

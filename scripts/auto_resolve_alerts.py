@@ -58,6 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     from genlab_core.observability.alert_auto_resolver import (
         _summary_json,
         auto_resolve_bandit_posterior_drift_alerts,
+        auto_resolve_completed_auto_fix_alerts,
         auto_resolve_content_pool_bypass_alerts,
         auto_resolve_nightly_schedule_missing_slot_alerts,
         auto_resolve_systemd_unit_alerts,
@@ -84,6 +85,14 @@ def main(argv: list[str] | None = None) -> int:
         # comment tripped psycopg placeholder parsing). Resolves
         # when the content_pool has any claim activity in last 24h.
         ("content_pool_consumer_bypass", auto_resolve_content_pool_bypass_alerts),
+        # 2026-07-23: catch-all for alerts written with an
+        # ``auto_fix_applied`` value — the fix has ALREADY been
+        # applied at write time, so the row is a completed-action
+        # report, not an ongoing incident. Currently fires for
+        # orphan_intake_stories_archived (15 fires in 7d) but
+        # any future check that emits Alert(auto_fix="...") gains
+        # this resolution behavior for free.
+        ("auto_fix_applied", auto_resolve_completed_auto_fix_alerts),
     ]
 
     combined: dict[str, dict[str, int]] = {}

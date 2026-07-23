@@ -1033,9 +1033,139 @@ def auto_resolve_content_pool_bypass_alerts(*, dry_run: bool = False) -> dict[st
     return counters
 
 
+def auto_resolve_completed_auto_fix_alerts(*, dry_run: bool = False) -> dict[str, int]:
+    """Walk unresolved alerts whose ``auto_fix_applied`` column is set;
+    resolve them since the fix has ALREADY been applied at write time.
+
+    Motivating incident (2026-07-23): the
+    ``orphan_intake_stories_archived`` alert fires when the archive
+    action DOES something (auto-archived N stories). It's informational
+    — a report of a completed action, not an ongoing problem. But the
+    alerts stayed unresolved forever, cluttering the CriticalAlertsBanner.
+
+    Same shape as ``systemd_unit_failed`` alerts that get resolved
+    when systemctl shows the unit is active — but for a wider class
+    of "the auto-fix already ran" alerts: any check that emits an
+    ``Alert(..., auto_fix="something")`` writes ``auto_fix_applied``
+    to the DB, marking the row as "done" at write time.
+
+    Guard: only resolve alerts written BEFORE this sweep (created_at
+    check) so we don't race a fresh write.
+
+    Parameters
+    ----------
+    dry_run : bool, default False
+        Log every resolution decision but do NOT execute the UPDATE.
+
+    Returns
+    -------
+    dict
+        ``{"checked": int, "resolved": int, "errors": int}``
+
+    Notes
+    -----
+    Never raises into the caller. Per-row error → WARNING + continue.
+    """
+    counters = {
+        "checked": 0,
+        "resolved": 0,
+        "errors": 0,
+    }
+
+    conn_cm = _connect()
+    if conn_cm is None:
+        return counters
+
+    try:
+        with conn_cm as conn:
+            rows = conn.execute(
+                """
+                SELECT id, check_name, niche_id, auto_fix_applied
+                FROM pipeline_alerts
+                WHERE auto_fix_applied IS NOT NULL
+                  AND resolved_at IS NULL
+                  AND created_at < NOW()
+                ORDER BY created_at ASC
+                """
+            ).fetchall()
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.warning(
+            "[alert_auto_resolver] SELECT auto_fix alerts failed: %s", exc
+        )
+        return counters
+
+    if not rows:
+        logger.debug(
+            "[alert_auto_resolver] no unresolved auto_fix_applied alerts"
+        )
+        return counters
+
+    from datetime import UTC, datetime
+
+    today_str = datetime.now(UTC).strftime("%Y-%m-%d")
+
+    for row in rows:
+        counters["checked"] += 1
+        row_id = row.get("id")
+        check_name = row.get("check_name")
+        auto_fix = row.get("auto_fix_applied")
+
+        note = (
+            f"\n\n[AUTO-RESOLVED {today_str}: auto_fix "
+            f"'{auto_fix}' completed at write time.]"
+        )
+
+        if dry_run:
+            logger.info(
+                "[alert_auto_resolver] DRY-RUN would resolve auto_fix row %s (%s)",
+                row_id,
+                check_name,
+            )
+            counters["resolved"] += 1
+            continue
+
+        try:
+            with _connect() as write_conn:  # type: ignore[union-attr]
+                if write_conn is None:
+                    logger.warning(
+                        "[alert_auto_resolver] reconnect for auto_fix UPDATE failed; row %s left unresolved",
+                        row_id,
+                    )
+                    counters["errors"] += 1
+                    continue
+                with write_conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE pipeline_alerts
+                        SET resolved_at = NOW(),
+                            message = COALESCE(message, '') || %s
+                        WHERE id = %s
+                          AND resolved_at IS NULL
+                        """,
+                        (note, row_id),
+                    )
+            logger.info(
+                "[alert_auto_resolver] resolved auto_fix row %s (%s, fix=%s)",
+                row_id,
+                check_name,
+                auto_fix,
+            )
+            counters["resolved"] += 1
+        except Exception as exc:  # noqa: BLE001 — fail-open per row
+            logger.warning(
+                "[alert_auto_resolver] UPDATE auto_fix row %s failed: %s",
+                row_id,
+                exc,
+            )
+            counters["errors"] += 1
+
+    return counters
+
+
 # Re-export for callers that prefer importing the typing helper.
 __all__ = [
     "auto_resolve_bandit_posterior_drift_alerts",
+    "auto_resolve_completed_auto_fix_alerts",
     "auto_resolve_content_pool_bypass_alerts",
     "auto_resolve_nightly_schedule_missing_slot_alerts",
     "auto_resolve_systemd_unit_alerts",
