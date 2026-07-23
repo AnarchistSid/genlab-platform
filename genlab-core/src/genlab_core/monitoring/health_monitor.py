@@ -62,6 +62,7 @@ from genlab_core.monitoring.checks.infrastructure import (
     check_swap,
     check_warp_health,
 )
+from genlab_core.monitoring.checks.bandit_regret import check_bandit_regret_signal
 from genlab_core.monitoring.checks.llm_cost import check_llm_cost
 from genlab_core.monitoring.checks.pipeline import (
     _FETCHER_STAGES_TO_MONITOR,
@@ -135,6 +136,7 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_git_ownership_drift())  # 2026-07-21: prevent deploy-blocking root-owned .git files
         all_alerts.extend(check_anthropic_credit())  # 2026-07-21: 1-token probe; prevents 4th exhaustion-class outage
         all_alerts.extend(check_llm_cost())  # 2026-07-23: proactive runaway-spike + budget-runway projection
+        all_alerts.extend(check_bandit_regret_signal())  # 2026-07-23: bandit exploration meta-param signal (#7 autonomy roadmap)
         all_alerts.extend(check_warp_health())
         # PR #516 (2026-06-24): infrastructure-half-wired audit probes
         all_alerts.extend(check_engagement_health())
