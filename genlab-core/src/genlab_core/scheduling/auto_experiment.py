@@ -402,6 +402,190 @@ def measure_experiment_result(
     }
 
 
+def promote_verdict_to_proposal(
+    conn, experiment: dict[str, Any]
+) -> tuple[str | None, str]:
+    """Auto-accept the strategist proposal that seeded a completed
+    experiment when the reward measurement confirmed the hypothesis.
+
+    Verdict-confirmed promotion runs iff BOTH:
+      * ``result.met_threshold`` is True
+      * ``result.sufficient_samples`` is True
+
+    Linkage: the experiment's ``spec.arms[1]`` (treatment) is matched
+    against ``strategist_reports.proposals[i].proposed.arm_id``. Since
+    the experiment was queued FROM a strategist testable_prediction,
+    a proposal for the same arm typically exists in the same report.
+
+    Confidence handling: the experiment-verdict is EMPIRICAL evidence
+    (measured reward lift with n>=5/arm), which is stronger than the
+    strategist's tagged confidence. So we call ``classify_arm_add``
+    with ``proposal_confidence="high"`` unconditionally — the
+    verdict IS the confidence. Shape guards still apply (only
+    style: / transform__ / hook_type: variants of EXISTING dimensions
+    auto-accept; new dimensions still need operator review).
+
+    Returns:
+        (arm_id, reason) — arm_id is None when no action was taken;
+        reason is a short human-readable summary. Fail-open on any DB
+        error — never blocks the lifecycle.
+    """
+    # Lazy import to avoid circular dep: this module already lives in
+    # scheduling/, and proposal_auto_accept is a sibling.
+    from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+    exp_id = experiment.get("id")
+    result = experiment.get("result") or {}
+    if isinstance(result, str):
+        try:
+            result = json.loads(result)
+        except Exception:
+            result = {}
+
+    if not (result.get("met_threshold") and result.get("sufficient_samples")):
+        return (None, "skip:verdict_not_met_or_low_n")
+
+    spec = experiment.get("spec") or {}
+    if isinstance(spec, str):
+        try:
+            spec = json.loads(spec)
+        except Exception:
+            spec = {}
+    arms = spec.get("arms") or []
+    if len(arms) < 2:
+        return (None, "skip:not_two_arm_experiment")
+    winning_arm = str(arms[1]).strip()
+    if not winning_arm:
+        return (None, "skip:empty_winning_arm")
+
+    report_id = experiment.get("source_report_id")
+    if not report_id:
+        return (None, "skip:no_source_report")
+    niche_id = experiment.get("niche_id") or spec.get("niche_id") or ""
+
+    # Load the source report's proposals list.
+    try:
+        row = conn.execute(
+            """
+            SELECT proposals, COALESCE(proposals_accepted, '[]'::jsonb) AS accepted
+            FROM strategist_reports
+            WHERE id = %s
+            """,
+            (report_id,),
+        ).fetchone()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "[auto_experiment] promote: report lookup failed %s: %s",
+            exp_id,
+            exc,
+        )
+        return (None, "skip:report_load_error")
+    if row is None:
+        return (None, "skip:report_missing")
+
+    if hasattr(row, "get"):
+        proposals = row.get("proposals") or []
+        accepted = row.get("accepted") or []
+    else:
+        proposals = row[0] or []
+        accepted = row[1] or []
+    if isinstance(proposals, str):
+        try:
+            proposals = json.loads(proposals)
+        except Exception:
+            proposals = []
+    if isinstance(accepted, str):
+        try:
+            accepted = json.loads(accepted)
+        except Exception:
+            accepted = []
+    if not isinstance(proposals, list) or not isinstance(accepted, list):
+        return (None, "skip:malformed_proposals_or_accepted")
+
+    # Find the proposal whose proposed.arm_id matches the winning arm.
+    target_index: int | None = None
+    target_proposal: dict[str, Any] | None = None
+    for i, p in enumerate(proposals):
+        if not isinstance(p, dict) or p.get("type") != "arm_add":
+            continue
+        proposed = p.get("proposed") or {}
+        if isinstance(proposed, dict) and str(
+            proposed.get("arm_id", "")
+        ).strip() == winning_arm:
+            target_index = i
+            target_proposal = p
+            break
+
+    if target_index is None or target_proposal is None:
+        return (None, f"skip:no_matching_proposal (arm={winning_arm})")
+
+    if target_index in accepted:
+        return (None, "skip:already_accepted")
+
+    # Load existing arm_ids for the niche — the classifier needs
+    # them to distinguish new-dimension vs variant-of-existing.
+    try:
+        arm_rows = conn.execute(
+            "SELECT arm_id FROM bandit_arms WHERE niche_id = %s",
+            (niche_id,),
+        ).fetchall()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "[auto_experiment] promote: arm_ids lookup failed %s: %s",
+            exp_id,
+            exc,
+        )
+        return (None, "skip:arm_ids_load_error")
+    existing_arm_ids: frozenset[str] = frozenset(
+        str(r.get("arm_id") if hasattr(r, "get") else r[0]) for r in arm_rows
+    )
+
+    # Classify with confidence forced to "high" — the empirical
+    # verdict is stronger than the strategist tag.
+    decision = classify_arm_add(
+        target_proposal,
+        existing_arm_ids=existing_arm_ids,
+        proposal_confidence="high",
+    )
+    if not decision.should_auto_accept:
+        return (None, f"skip:classifier_declined ({decision.reason})")
+
+    # Write the promotion — mirror _append_auto_accepted's shape from
+    # scripts/auto_accept_strategist_proposals.py:95-111 so downstream
+    # apply_strategist_actions picks it up unchanged.
+    try:
+        conn.execute(
+            """
+            UPDATE strategist_reports
+            SET proposals_accepted = COALESCE(proposals_accepted, '[]'::jsonb)
+                  || %s::jsonb,
+                extra = COALESCE(extra, '{}'::jsonb) || jsonb_build_object(
+                    'auto_accepted_indices',
+                    COALESCE(extra->'auto_accepted_indices', '[]'::jsonb) || %s::jsonb,
+                    'verdict_promoted_experiment_ids',
+                    COALESCE(extra->'verdict_promoted_experiment_ids', '[]'::jsonb)
+                        || %s::jsonb
+                )
+            WHERE id = %s
+            """,
+            (
+                json.dumps([target_index]),
+                json.dumps([target_index]),
+                json.dumps([str(exp_id)] if exp_id else []),
+                report_id,
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "[auto_experiment] promote: append_accepted failed %s: %s",
+            exp_id,
+            exc,
+        )
+        return (None, "skip:append_write_error")
+
+    return (winning_arm, decision.reason)
+
+
 __all__ = [
     "DEFAULT_DURATION_DAYS",
     "MIN_SAMPLES_PER_ARM",
@@ -411,6 +595,7 @@ __all__ = [
     "is_enabled",
     "list_experiments",
     "measure_experiment_result",
+    "promote_verdict_to_proposal",
     "queue_pending_experiment",
     "start_pending_experiments",
 ]

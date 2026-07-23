@@ -90,6 +90,7 @@ def main() -> int:
         is_enabled,
         list_experiments,
         measure_experiment_result,
+        promote_verdict_to_proposal,
         start_pending_experiments,
     )
 
@@ -136,6 +137,7 @@ def main() -> int:
         completed = 0
         met_threshold_count = 0
         insufficient_samples_count = 0
+        promoted_count = 0
 
         for exp in due:
             exp_id = exp.get("id")
@@ -160,6 +162,29 @@ def main() -> int:
                         suff,
                         result.get("observed_lift"),
                     )
+                    # Verdict-driven proposal promotion. Fail-open —
+                    # the completion is already durable; a promotion
+                    # failure logs a WARNING and continues.
+                    promoted_arm, reason = promote_verdict_to_proposal(
+                        conn, {**exp, "result": result}
+                    )
+                    if promoted_arm:
+                        promoted_count += 1
+                        logger.info(
+                            "[lifecycle] promoted arm=%s exp=%s reason=%s",
+                            promoted_arm,
+                            (exp_id or "?")[:8],
+                            reason,
+                        )
+                    else:
+                        # DEBUG rather than WARNING — most experiments
+                        # legitimately don't promote (verdict unmet,
+                        # no matching proposal, low n).
+                        logger.debug(
+                            "[lifecycle] no promotion exp=%s reason=%s",
+                            (exp_id or "?")[:8],
+                            reason,
+                        )
             else:
                 print(
                     f"  DRY [{niche_id}] exp={exp_id[:8]} "
@@ -171,10 +196,11 @@ def main() -> int:
             conn.commit()
 
         logger.info(
-            "DONE completed=%d met_threshold=%d insufficient_samples=%d",
+            "DONE completed=%d met_threshold=%d insufficient_samples=%d promoted=%d",
             completed,
             met_threshold_count,
             insufficient_samples_count,
+            promoted_count,
         )
         return 0
 

@@ -294,6 +294,246 @@ class TestMeasureExperimentResult:
         assert MIN_SAMPLES_PER_ARM == 5
 
 
+class TestPromoteVerdictToProposal:
+    """Closes the loop verdict -> proposal auto-accept. When lifecycle
+    completes an experiment with met_threshold=True + sufficient_samples
+    =True, the matching strategist proposal is auto-accepted so the
+    winning arm gets activated in bandit_arms on the next
+    apply_strategist_actions fire."""
+
+    def _make_conn(self, report_row=None, arm_rows=None, raise_on=None):
+        """Build a conn that returns the given report_row for
+        strategist_reports lookup and arm_rows for bandit_arms lookup."""
+        mock_conn = MagicMock()
+        arm_rows = arm_rows or []
+        calls = []
+
+        def _execute(sql, *_a, **_kw):
+            calls.append(sql)
+            m = MagicMock()
+            if raise_on and raise_on in sql:
+                raise RuntimeError("db down")
+            if "FROM strategist_reports" in sql:
+                m.fetchone.return_value = report_row
+            elif "FROM bandit_arms" in sql:
+                m.fetchall.return_value = arm_rows
+            elif "UPDATE strategist_reports" in sql:
+                m.rowcount = 1
+            return m
+
+        mock_conn.execute.side_effect = _execute
+        mock_conn._calls = calls
+        return mock_conn
+
+    def test_skips_when_met_threshold_false(self):
+        from genlab_core.scheduling.auto_experiment import promote_verdict_to_proposal
+
+        conn = self._make_conn()
+        arm_id, reason = promote_verdict_to_proposal(
+            conn,
+            {
+                "id": "e1",
+                "spec": {"arms": ["a", "b"]},
+                "result": {"met_threshold": False, "sufficient_samples": True},
+                "source_report_id": "r1",
+                "niche_id": "gaming",
+            },
+        )
+        assert arm_id is None
+        assert reason == "skip:verdict_not_met_or_low_n"
+
+    def test_skips_when_low_samples(self):
+        from genlab_core.scheduling.auto_experiment import promote_verdict_to_proposal
+
+        conn = self._make_conn()
+        arm_id, _ = promote_verdict_to_proposal(
+            conn,
+            {
+                "id": "e1",
+                "spec": {"arms": ["a", "b"]},
+                "result": {"met_threshold": True, "sufficient_samples": False},
+                "source_report_id": "r1",
+                "niche_id": "gaming",
+            },
+        )
+        assert arm_id is None
+
+    def test_skips_when_no_source_report(self):
+        from genlab_core.scheduling.auto_experiment import promote_verdict_to_proposal
+
+        conn = self._make_conn()
+        arm_id, reason = promote_verdict_to_proposal(
+            conn,
+            {
+                "id": "e1",
+                "spec": {"arms": ["a", "b"]},
+                "result": {"met_threshold": True, "sufficient_samples": True},
+                "source_report_id": None,
+                "niche_id": "gaming",
+            },
+        )
+        assert arm_id is None
+        assert reason == "skip:no_source_report"
+
+    def test_skips_when_no_matching_proposal(self):
+        from genlab_core.scheduling.auto_experiment import promote_verdict_to_proposal
+
+        # Report has proposals but none match the winning arm.
+        report_row = {
+            "proposals": [
+                {"type": "arm_add", "proposed": {"arm_id": "style:gaming:other"}},
+            ],
+            "accepted": [],
+        }
+        conn = self._make_conn(
+            report_row=report_row,
+            arm_rows=[{"arm_id": "style:gaming:existing"}],
+        )
+        arm_id, reason = promote_verdict_to_proposal(
+            conn,
+            {
+                "id": "e1",
+                "spec": {"arms": ["ctrl", "style:gaming:winner"]},
+                "result": {"met_threshold": True, "sufficient_samples": True},
+                "source_report_id": "r1",
+                "niche_id": "gaming",
+            },
+        )
+        assert arm_id is None
+        assert "no_matching_proposal" in reason
+
+    def test_skips_when_already_accepted(self):
+        from genlab_core.scheduling.auto_experiment import promote_verdict_to_proposal
+
+        report_row = {
+            "proposals": [
+                {"type": "arm_add", "proposed": {"arm_id": "style:gaming:winner"}},
+            ],
+            "accepted": [0],  # already at index 0
+        }
+        conn = self._make_conn(
+            report_row=report_row,
+            arm_rows=[{"arm_id": "style:gaming:existing"}],
+        )
+        arm_id, reason = promote_verdict_to_proposal(
+            conn,
+            {
+                "id": "e1",
+                "spec": {"arms": ["ctrl", "style:gaming:winner"]},
+                "result": {"met_threshold": True, "sufficient_samples": True},
+                "source_report_id": "r1",
+                "niche_id": "gaming",
+            },
+        )
+        assert arm_id is None
+        assert reason == "skip:already_accepted"
+
+    def test_promotes_style_variant_when_existing_style_present(self):
+        from genlab_core.scheduling.auto_experiment import promote_verdict_to_proposal
+
+        report_row = {
+            "proposals": [
+                {"type": "arm_add", "proposed": {"arm_id": "style:gaming:winner"}},
+            ],
+            "accepted": [],
+        }
+        conn = self._make_conn(
+            report_row=report_row,
+            arm_rows=[{"arm_id": "style:gaming:existing"}],
+        )
+        arm_id, reason = promote_verdict_to_proposal(
+            conn,
+            {
+                "id": "e1",
+                "spec": {"arms": ["ctrl", "style:gaming:winner"]},
+                "result": {"met_threshold": True, "sufficient_samples": True},
+                "source_report_id": "r1",
+                "niche_id": "gaming",
+            },
+        )
+        assert arm_id == "style:gaming:winner"
+        assert reason.startswith("auto_accept:style_variant")
+
+    def test_declines_new_dimension_even_when_verdict_met(self):
+        """Verdict-confirmed does NOT bypass shape guards. A
+        first-of-dimension arm still needs operator review."""
+        from genlab_core.scheduling.auto_experiment import promote_verdict_to_proposal
+
+        report_row = {
+            "proposals": [
+                {"type": "arm_add", "proposed": {"arm_id": "source:gaming:new_feed"}},
+            ],
+            "accepted": [],
+        }
+        conn = self._make_conn(
+            report_row=report_row,
+            arm_rows=[{"arm_id": "style:gaming:existing"}],
+        )
+        arm_id, reason = promote_verdict_to_proposal(
+            conn,
+            {
+                "id": "e1",
+                "spec": {"arms": ["ctrl", "source:gaming:new_feed"]},
+                "result": {"met_threshold": True, "sufficient_samples": True},
+                "source_report_id": "r1",
+                "niche_id": "gaming",
+            },
+        )
+        # new_source shape always operator-gates.
+        assert arm_id is None
+        assert "classifier_declined" in reason
+
+    def test_fail_open_on_report_load_error(self):
+        from genlab_core.scheduling.auto_experiment import promote_verdict_to_proposal
+
+        conn = self._make_conn(raise_on="FROM strategist_reports")
+        arm_id, reason = promote_verdict_to_proposal(
+            conn,
+            {
+                "id": "e1",
+                "spec": {"arms": ["a", "b"]},
+                "result": {"met_threshold": True, "sufficient_samples": True},
+                "source_report_id": "r1",
+                "niche_id": "gaming",
+            },
+        )
+        assert arm_id is None
+        assert reason == "skip:report_load_error"
+
+    def test_writes_verdict_promoted_experiment_ids_marker(self):
+        """The UPDATE must record the experiment_id in
+        extra.verdict_promoted_experiment_ids so operator can
+        distinguish auto-accepted-by-strategist-classifier from
+        auto-accepted-by-experiment-verdict later."""
+        from genlab_core.scheduling.auto_experiment import promote_verdict_to_proposal
+
+        report_row = {
+            "proposals": [
+                {"type": "arm_add", "proposed": {"arm_id": "style:gaming:winner"}},
+            ],
+            "accepted": [],
+        }
+        conn = self._make_conn(
+            report_row=report_row,
+            arm_rows=[{"arm_id": "style:gaming:existing"}],
+        )
+        arm_id, _ = promote_verdict_to_proposal(
+            conn,
+            {
+                "id": "exp-abc123",
+                "spec": {"arms": ["ctrl", "style:gaming:winner"]},
+                "result": {"met_threshold": True, "sufficient_samples": True},
+                "source_report_id": "r1",
+                "niche_id": "gaming",
+            },
+        )
+        assert arm_id == "style:gaming:winner"
+        # Verify the UPDATE SQL carries the experiment_ids marker key.
+        update_calls = [c for c in conn._calls if "UPDATE strategist_reports" in c]
+        assert len(update_calls) == 1
+        assert "verdict_promoted_experiment_ids" in update_calls[0]
+
+
 class TestLifecycleCLIStructure:
     """Structural pins for scripts/run_experiment_lifecycle.py — catches
     rename drift on the imports the timer relies on."""
