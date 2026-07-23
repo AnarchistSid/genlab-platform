@@ -667,8 +667,208 @@ def auto_resolve_nightly_schedule_missing_slot_alerts(*, dry_run: bool = False) 
     return counters
 
 
+def _query_arms_still_at_uniform_prior(niche_id: str) -> int | None:
+    """Return count of ``bandit_arms`` rows for the niche where
+    α+β < 3.0 AND at least one recent pending_feedback row exists
+    for that arm.
+
+    This mirrors the ``check_bandit_posterior_drift`` query in
+    ``monitoring/checks/bandit_engagement.py``. When the count is 0,
+    the drift condition has cleared → the alert is stale.
+
+    Returns None on DB error — caller treats as skip (leave alert
+    visible).
+    """
+    conn_cm = _connect()
+    if conn_cm is None:
+        return None
+    try:
+        with conn_cm as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) FROM (
+                    SELECT b.arm_id
+                    FROM bandit_arms b
+                    WHERE b.niche_id = %s
+                      AND (b.alpha + b.beta) < 3.0
+                      AND b.arm_id NOT LIKE 'style:%%'
+                      AND EXISTS (
+                          SELECT 1 FROM pending_feedback p
+                          WHERE p.niche_id = b.niche_id
+                            AND p.arm_id = b.arm_id
+                            AND p.reward_48h IS NOT NULL
+                            AND p.updated_at > NOW() - INTERVAL '14 days'
+                      )
+                ) t
+                """,
+                (niche_id,),
+            ).fetchone()
+        return int(row[0]) if row else 0
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.warning(
+            "[alert_auto_resolver] drift-arms query failed niche=%s: %s",
+            niche_id,
+            exc,
+        )
+        return None
+
+
+def auto_resolve_bandit_posterior_drift_alerts(*, dry_run: bool = False) -> dict[str, int]:
+    """Walk unresolved ``bandit_posterior_drift`` alerts; resolve any
+    where the underlying condition has cleared.
+
+    Motivating incident (2026-07-23): commit 1007c72a fixed the
+    2026-05-16 over-correction where early-stopped rewards silently
+    skipped the bandit update. The backfill re-fed 211 historical
+    rewards into ``bandit_arms``. The two arms triggering today's
+    drift alerts (anime + movies) both moved off uniform prior —
+    but the alerts stayed unresolved because there was no resolver
+    for this check_name. Added here symmetric with the missing_slot
+    resolver.
+
+    Parameters
+    ----------
+    dry_run : bool, default False
+        Log every resolution decision but do NOT execute the UPDATE.
+
+    Returns
+    -------
+    dict
+        ``{"checked": int, "resolved": int, "skipped_still_drifting": int,
+        "skipped_query_failed": int, "errors": int}``
+
+    Notes
+    -----
+    Never raises into the caller. Per-row error → WARNING + continue.
+    """
+    counters = {
+        "checked": 0,
+        "resolved": 0,
+        "skipped_still_drifting": 0,
+        "skipped_query_failed": 0,
+        "errors": 0,
+    }
+
+    conn_cm = _connect()
+    if conn_cm is None:
+        return counters
+
+    try:
+        with conn_cm as conn:
+            rows = conn.execute(
+                """
+                SELECT id, niche_id, created_at
+                FROM pipeline_alerts
+                WHERE check_name = 'bandit_posterior_drift'
+                  AND resolved_at IS NULL
+                ORDER BY created_at ASC
+                """
+            ).fetchall()
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.warning(
+            "[alert_auto_resolver] SELECT drift alerts failed: %s", exc
+        )
+        return counters
+
+    if not rows:
+        logger.debug(
+            "[alert_auto_resolver] no unresolved bandit_posterior_drift alerts"
+        )
+        return counters
+
+    for row in rows:
+        counters["checked"] += 1
+        row_id = row.get("id")
+        niche = row.get("niche_id") or ""
+        if not niche:
+            logger.warning(
+                "[alert_auto_resolver] drift row %s: no niche_id; skipping",
+                row_id,
+            )
+            counters["errors"] += 1
+            continue
+
+        try:
+            drifting_count = _query_arms_still_at_uniform_prior(niche)
+            if drifting_count is None:
+                counters["skipped_query_failed"] += 1
+                continue
+            if drifting_count > 0:
+                logger.debug(
+                    "[alert_auto_resolver] drift row %s: niche=%s still has "
+                    "%d arms drifting; skipping",
+                    row_id,
+                    niche,
+                    drifting_count,
+                )
+                counters["skipped_still_drifting"] += 1
+                continue
+
+            # Condition cleared — auto-resolve.
+            from datetime import UTC, datetime
+
+            today_str = datetime.now(UTC).strftime("%Y-%m-%d")
+            note = (
+                f"\n\n[AUTO-RESOLVED {today_str}: no bandit_arms for "
+                f"'{niche}' remain at uniform prior with recent rewards.]"
+            )
+
+            if dry_run:
+                logger.info(
+                    "[alert_auto_resolver] DRY-RUN would resolve drift row %s (niche=%s)",
+                    row_id,
+                    niche,
+                )
+                counters["resolved"] += 1
+                continue
+
+            try:
+                with _connect() as write_conn:  # type: ignore[union-attr]
+                    if write_conn is None:
+                        logger.warning(
+                            "[alert_auto_resolver] reconnect for drift UPDATE failed; row %s left unresolved",
+                            row_id,
+                        )
+                        counters["errors"] += 1
+                        continue
+                    with write_conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            UPDATE pipeline_alerts
+                            SET resolved_at = NOW(),
+                                message = COALESCE(message, '') || %s
+                            WHERE id = %s
+                              AND resolved_at IS NULL
+                            """,
+                            (note, row_id),
+                        )
+                logger.info(
+                    "[alert_auto_resolver] resolved drift row %s (niche=%s)",
+                    row_id,
+                    niche,
+                )
+                counters["resolved"] += 1
+            except Exception as exc:  # noqa: BLE001 — fail-open per row
+                logger.warning(
+                    "[alert_auto_resolver] UPDATE drift row %s failed: %s",
+                    row_id,
+                    exc,
+                )
+                counters["errors"] += 1
+        except Exception as exc:  # noqa: BLE001 — fail-open per row
+            logger.warning(
+                "[alert_auto_resolver] unexpected error on drift row %s: %s",
+                row_id,
+                exc,
+            )
+            counters["errors"] += 1
+
+    return counters
+
+
 # Re-export for callers that prefer importing the typing helper.
 __all__ = [
+    "auto_resolve_bandit_posterior_drift_alerts",
     "auto_resolve_nightly_schedule_missing_slot_alerts",
     "auto_resolve_systemd_unit_alerts",
 ]

@@ -798,6 +798,16 @@ def test_cli_wrapper_calls_both_resolvers():
             "errors": 0,
         }
 
+    def fake_drift(**kw):
+        calls.append(("bandit_posterior_drift", kw))
+        return {
+            "checked": 0,
+            "resolved": 0,
+            "skipped_still_drifting": 0,
+            "skipped_query_failed": 0,
+            "errors": 0,
+        }
+
     with (
         patch(
             "genlab_core.observability.alert_auto_resolver.auto_resolve_systemd_unit_alerts",
@@ -807,12 +817,67 @@ def test_cli_wrapper_calls_both_resolvers():
             "genlab_core.observability.alert_auto_resolver.auto_resolve_nightly_schedule_missing_slot_alerts",
             side_effect=fake_missing_slot,
         ),
+        patch(
+            "genlab_core.observability.alert_auto_resolver.auto_resolve_bandit_posterior_drift_alerts",
+            side_effect=fake_drift,
+        ),
     ):
         assert mod.main([]) == 0
 
     labels = {c[0] for c in calls}
-    assert labels == {"systemd_unit_failed", "nightly_schedule_missing_slot"}, (
-        f"CLI must invoke both resolvers; got {sorted(labels)}. "
+    assert labels == {
+        "systemd_unit_failed",
+        "nightly_schedule_missing_slot",
+        "bandit_posterior_drift",
+    }, (
+        f"CLI must invoke all three resolvers; got {sorted(labels)}. "
         "If a refactor drops one, the CriticalAlertsBanner will grow "
         "stale rows for that check_name."
     )
+
+
+class TestBanditPosteriorDriftResolver:
+    """2026-07-23: added after commit 1007c72a fixed the 2026-05-16
+    early-stop bandit-update over-correction. Drift alerts stayed
+    unresolved forever without a matching resolver."""
+
+    def test_no_alerts_returns_zero_counters(self, monkeypatch):
+        """When there are no unresolved drift alerts, resolver returns
+        cleanly with all counters at zero."""
+        from unittest.mock import MagicMock
+
+        from genlab_core.observability import alert_auto_resolver as mod
+
+        mock_conn = MagicMock()
+        mock_conn.__enter__.return_value.execute.return_value.fetchall.return_value = []
+        monkeypatch.setattr(mod, "_connect", lambda: mock_conn)
+
+        result = mod.auto_resolve_bandit_posterior_drift_alerts()
+        assert result == {
+            "checked": 0,
+            "resolved": 0,
+            "skipped_still_drifting": 0,
+            "skipped_query_failed": 0,
+            "errors": 0,
+        }
+
+    def test_still_drifting_leaves_alert_visible(self, monkeypatch):
+        """When the drift condition still holds (arms still at uniform
+        prior with recent rewards), the alert MUST stay unresolved so
+        operators can see it."""
+        from unittest.mock import MagicMock
+
+        from genlab_core.observability import alert_auto_resolver as mod
+
+        # SELECT returns 1 unresolved alert; drift query returns count>0.
+        mock_conn = MagicMock()
+        mock_conn.__enter__.return_value.execute.return_value.fetchall.return_value = [
+            {"id": 99, "niche_id": "anime", "created_at": "2026-07-23"}
+        ]
+        monkeypatch.setattr(mod, "_connect", lambda: mock_conn)
+        monkeypatch.setattr(mod, "_query_arms_still_at_uniform_prior", lambda niche_id: 2)
+
+        result = mod.auto_resolve_bandit_posterior_drift_alerts()
+        assert result["checked"] == 1
+        assert result["resolved"] == 0
+        assert result["skipped_still_drifting"] == 1

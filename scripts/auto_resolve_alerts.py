@@ -57,11 +57,12 @@ def main(argv: list[str] | None = None) -> int:
     # cost only lands when main() actually runs.
     from genlab_core.observability.alert_auto_resolver import (
         _summary_json,
+        auto_resolve_bandit_posterior_drift_alerts,
         auto_resolve_nightly_schedule_missing_slot_alerts,
         auto_resolve_systemd_unit_alerts,
     )
 
-    # Two independent resolvers, each with distinct semantics.
+    # Three independent resolvers, each with distinct semantics.
     # Structured as a list of (label, callable) so adding a new
     # resolver in the future stays one-line.
     #
@@ -72,6 +73,11 @@ def main(argv: list[str] | None = None) -> int:
     resolvers = [
         ("systemd_unit_failed", auto_resolve_systemd_unit_alerts),
         ("nightly_schedule_missing_slot", auto_resolve_nightly_schedule_missing_slot_alerts),
+        # 2026-07-23: added after commit 1007c72a fixed the 2026-05-16
+        # early-stop bandit-update over-correction. The historical
+        # backfill closes the drift condition but the drift alerts
+        # stayed unresolved forever without a matching resolver.
+        ("bandit_posterior_drift", auto_resolve_bandit_posterior_drift_alerts),
     ]
 
     combined: dict[str, dict[str, int]] = {}
