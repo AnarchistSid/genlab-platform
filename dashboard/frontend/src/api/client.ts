@@ -361,6 +361,55 @@ export interface OutcomeReadinessAllResponse {
   degraded_reason?: string;
 }
 
+/**
+ * Per-check score distribution over rejected blueprints, restricted
+ * to the top failing check. Populated from
+ * gate_examinations.extra.{check_name}.
+ */
+export interface GateScoreDistribution {
+  check: string;
+  min: number | null;
+  p25: number | null;
+  p50: number | null;
+  p75: number | null;
+  max: number | null;
+  n: number;
+}
+
+export interface GateThresholdSuggestion {
+  check: string;
+  current_threshold: number | null;
+  suggested_threshold: number | null;
+  would_unlock_pct: number;
+  rationale: string;
+}
+
+/**
+ * Per-niche gate examination breakdown (2026-07-23). Diagnostic
+ * layer that surfaces WHICH gate check is the AUTO #2 ratchet's
+ * blocker + BY HOW MUCH.
+ */
+export interface GateExaminations {
+  niche_id: string;
+  window_days: number;
+  examinations: number;
+  approved: number;
+  rejected: number;
+  approval_rate: number;
+  distinct_blueprints: number;
+  failed_check_counts: Record<string, number>;
+  top_failing_check: string | null;
+  score_distribution: GateScoreDistribution | null;
+  threshold_suggestion: GateThresholdSuggestion | null;
+}
+
+export interface GateExaminationsAllResponse {
+  window_days: number;
+  niches: Record<string, GateExaminations>;
+  degraded?: boolean;
+  degraded_reason?: string;
+}
+
 export const autoApproval = {
   calibrationStats: (nicheId: string, windowDays = 7) =>
     get<CalibrationStats>("/auto-approval/calibration-stats", {
@@ -381,6 +430,17 @@ export const autoApproval = {
    */
   outcomeReadiness: (windowDays = 14) =>
     get<OutcomeReadinessAllResponse>("/auto-approval/outcome-readiness", {
+      window_days: String(windowDays),
+    }),
+  /**
+   * Gate examination breakdown — reveals which of the 5 gate checks
+   * is the ratchet's blocker per niche. Returns null score
+   * distribution + suggestion until at least 1 rejected blueprint
+   * has captured its raw composite/virality values (post-2026-07-23
+   * commit; each auto-approver fire enriches the data).
+   */
+  gateExaminations: (windowDays = 7) =>
+    get<GateExaminationsAllResponse>("/auto-approval/gate-examinations", {
       window_days: String(windowDays),
     }),
   trackRecord: (nicheId: string, windowDays = 30, binDays = 1) =>

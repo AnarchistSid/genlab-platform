@@ -13,6 +13,7 @@ import { KpiHero } from "./KpiHero";
 import { TopPostSpotlight } from "./TopPostSpotlight";
 import { LearningLoopCard } from "./LearningLoopCard";
 import { AutoApprovalCalibrationCard } from "./AutoApprovalCalibrationCard";
+import { GateExaminationsCard } from "./GateExaminationsCard";
 import { TrackRecordCard } from "./TrackRecordCard";
 import { RolloutPctSlider } from "./RolloutPctSlider";
 import { AutoApprovalKillSwitch } from "./AutoApprovalKillSwitch";
@@ -291,6 +292,14 @@ export default function MissionControl() {
                 threshold so operator can flip enforcement on with
                 evidence rather than gut. */}
             <AutoApprovalCalibrationCard />
+            {/* 2026-07-23 diagnostic — shows the ratchet's REAL blocker
+                (which gate check rejects the most blueprints + suggests
+                a threshold tuned to unlock 75% of the failing set).
+                Sibling to AutoApprovalCalibrationCard: calibration
+                measures agreement rate; this card measures WHY the
+                gate rejects when it rejects. Mounted immediately
+                after so operator scans both together. */}
+            <GateExaminationsCard />
             {/* W4.4: per-day trend so operator sees climb/flat/regress
                 BEFORE the calibration card hits its 30-sample readiness
                 threshold. Surfaces regressions earlier — at day 7 of
