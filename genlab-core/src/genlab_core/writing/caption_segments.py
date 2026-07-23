@@ -384,7 +384,16 @@ def generate_caption_segments(
         try:
             raw_text = call_openai_fallback("", prompt, 800, 0.7, _openai_key)
         except Exception as exc:
-            logger.warning("[caption_segments] OpenAI fallback failed: %s", exc)
+            # 2026-07-23: classify_llm_error attributes the OpenAI fail
+            # (credit_exhausted vs rate_limit vs auth vs unknown).
+            from genlab_core.llm.errors import classify_llm_error
+
+            logger.warning(
+                "[caption_segments] OpenAI fallback failed (reason=%s): %s",
+                classify_llm_error(exc),
+                exc,
+                exc_info=True,
+            )
             return None
     else:
         try:
@@ -405,15 +414,28 @@ def generate_caption_segments(
                 try:
                     raw_text = call_openai_fallback("", prompt, 800, 0.7, _openai_key)
                 except Exception as openai_exc:
+                    from genlab_core.llm.errors import classify_llm_error
+
                     logger.warning(
-                        "[caption_segments] OpenAI fallback ALSO failed: %s",
+                        "[caption_segments] OpenAI fallback ALSO failed "
+                        "(reason=%s): %s",
+                        classify_llm_error(openai_exc),
                         openai_exc,
+                        exc_info=True,
                     )
                     return None
             else:
                 # WARNING (not DEBUG) — silent failure here hid the OpenAI-
                 # spend-invisible bug for weeks. Same class-of-bug as YT #578.
-                logger.warning("[caption_segments] API call failed: %s", anthropic_exc)
+                # 2026-07-23: attribute the specific LLM error class.
+                from genlab_core.llm.errors import classify_llm_error
+
+                logger.warning(
+                    "[caption_segments] API call failed (reason=%s): %s",
+                    classify_llm_error(anthropic_exc),
+                    anthropic_exc,
+                    exc_info=True,
+                )
                 return None
         else:
             _cb_record_success()

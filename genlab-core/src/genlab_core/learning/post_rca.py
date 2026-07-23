@@ -237,9 +237,12 @@ def analyze_post(
             except Exception as anthropic_exc:
                 if _fallback_enabled() and _should_fallback(anthropic_exc) and _openai_key:
                     _cb_record_exhaustion()
+                    # 2026-07-23: classify_llm_error attributes the failure.
+                    from genlab_core.llm.errors import classify_llm_error
+
                     logger.warning(
-                        "[post_rca] Anthropic %s → OpenAI fallback",
-                        type(anthropic_exc).__name__,
+                        "[post_rca] Anthropic failed (reason=%s) → OpenAI fallback",
+                        classify_llm_error(anthropic_exc),
                     )
                     raw = _call_openai_fallback(
                         _RCA_SYSTEM_PROMPT, user, 200, 0.0, _openai_key

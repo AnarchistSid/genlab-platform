@@ -781,5 +781,17 @@ def _llm_judge_borderline(
         # invisibly shift the enforcement mix back to rule-only. Any
         # failure (API error, JSON parse, etc.) → return None so the
         # caller uses the unchanged rule-based decision.
-        logger.warning("[gate] LLM judge failed (using rule-based): %s", exc)
+        #
+        # 2026-07-23: classify with classify_llm_error so operators can
+        # tell "credit exhausted (top up)" from "rate limit (backoff)"
+        # from "JSON parse error (LLM regression)". Prior behaviour
+        # collapsed all three into the same opaque WARNING.
+        from genlab_core.llm.errors import classify_llm_error
+
+        logger.warning(
+            "[gate] LLM judge failed (using rule-based) — reason=%s: %s",
+            classify_llm_error(exc),
+            exc,
+            exc_info=True,
+        )
         return None

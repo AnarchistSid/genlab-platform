@@ -289,9 +289,12 @@ def generate_weekly_scratchpad(
             except Exception as anthropic_exc:
                 if _fallback_enabled() and _should_fallback(anthropic_exc) and _openai_key:
                     _cb_record_exhaustion()
+                    # 2026-07-23: classify for attribution.
+                    from genlab_core.llm.errors import classify_llm_error
+
                     logger.warning(
-                        "[scratchpad] Anthropic %s → OpenAI fallback",
-                        type(anthropic_exc).__name__,
+                        "[scratchpad] Anthropic failed (reason=%s) → OpenAI fallback",
+                        classify_llm_error(anthropic_exc),
                     )
                     text = _call_openai_fallback(_system, prompt, 2000, 0.7, _openai_key)
                 else:
