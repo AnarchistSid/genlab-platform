@@ -277,6 +277,64 @@ class ValidateVideos:
             "vmaf_skipped": vmaf_skipped,
         }
 
+        # 2026-07-23: emit decision trace — 6th stage in this session's
+        # symmetric trace-emission rollout (VideoGate + ViralityScoring
+        # + QCGates + PreDownloadDedup + AutoApprovalGate already).
+        # Motivating pattern: when a run reports blueprints=0 with
+        # video_validation.failed>0, the specific failure reasons
+        # currently live only in per-blueprint logger.warning lines
+        # that get journal-rotated away. Trace metadata carries the
+        # aggregate counts so operators can filter for validation
+        # blockers post-hoc.
+        try:
+            from genlab_core.observability.decision_trace import record_decision
+            from genlab_core.pipeline.reasoning_trace import append_trace
+
+            total_attempts = passed + failed + fixed
+            # WARN when validation had ANY failures (even 1) OR when
+            # everything was skipped (nothing to validate = precursor
+            # to zero_blueprints).
+            if failed > 0:
+                trace_decision = "warning"
+            elif total_attempts == 0 and skipped > 0:
+                trace_decision = "warning"
+            else:
+                trace_decision = "info"
+
+            reasons_line = (
+                f"passed={passed}, failed={failed}, fixed={fixed}, "
+                f"skipped={skipped}, vmaf_skipped={vmaf_skipped}"
+            )
+            metadata = {
+                "passed": passed,
+                "failed": failed,
+                "fixed": fixed,
+                "skipped": skipped,
+                "vmaf_skipped": vmaf_skipped,
+            }
+            append_trace(
+                context,
+                stage="ValidateVideos",
+                decision=trace_decision,
+                confidence=1.0,
+                reasons=[reasons_line],
+                metadata=metadata,
+            )
+            record_decision(
+                context,
+                stage="ValidateVideos",
+                decision=trace_decision,
+                reason=reasons_line,
+                confidence=1.0,
+                metadata=metadata,
+            )
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            logger.warning(
+                "[ValidateVideos] trace emission failed: %s",
+                exc,
+                exc_info=True,
+            )
+
         return context
 
     def _run_vmaf_gate(self, media: dict[str, Any], video_path: str) -> tuple[str, str | None]:

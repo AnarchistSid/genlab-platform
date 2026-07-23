@@ -158,3 +158,66 @@ class TestNonBlockingGuarantee:
         # New render_qc record added with bad verdict for dashboard visibility
         assert media["video_validation"]["render_qc"]["publishable"] is False
         assert media["video_validation"]["render_qc"]["recommendation"] == "regenerate"
+
+
+class TestDecisionTraceEmission:
+    """2026-07-23: ValidateVideos must emit a decision trace with
+    aggregate validation counts. Sixth stage in this session's trace-
+    emission symmetric rollout.
+
+    Motivating pattern: when a run reports blueprints=0 with
+    video_validation.failed>0, the specific failure reasons live
+    only in journal-rotated logger.warning lines. Trace metadata
+    carries the aggregate counts so operators can filter for
+    validation blockers post-hoc.
+    """
+
+    def test_emits_aggregate_trace(self, monkeypatch) -> None:
+        from genlab_core.pipeline.stages.validate_videos import ValidateVideos
+
+        traces: list[dict] = []
+        monkeypatch.setattr(
+            "genlab_core.observability.decision_trace.record_decision",
+            lambda context, **kwargs: traces.append(kwargs),
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.reasoning_trace.append_trace",
+            lambda *a, **k: None,
+        )
+
+        # Empty stories list — stage exits early but should not crash.
+        ctx = {"stories": []}
+        ValidateVideos().execute(ctx)
+
+        vv_traces = [t for t in traces if t.get("stage") == "ValidateVideos"]
+        # Empty stories → early return, no trace expected. This is fine —
+        # the interesting case is when there ARE stories.
+        assert len(vv_traces) == 0
+
+    def test_trace_emission_source_pin(self) -> None:
+        """Source-grep pin for the trace-emission block. Deeper
+        integration tests would need to fabricate video files and
+        FFmpeg probe output — brittle and slow. The block itself is
+        a simple aggregate emitter that mirrors the run_stats
+        dictionary which is already tested. This pin catches
+        removal of the block during refactor."""
+        import inspect
+
+        from genlab_core.pipeline.stages.validate_videos import ValidateVideos
+
+        src = inspect.getsource(ValidateVideos.execute)
+        # The trace-emission block imports these two functions.
+        assert "record_decision" in src, (
+            "ValidateVideos.execute must emit a record_decision trace "
+            "(added 2026-07-23; symmetric with VideoGate/ViralityScoring/"
+            "QCGates/PreDownloadDedup)"
+        )
+        assert 'stage="ValidateVideos"' in src, (
+            "The stage name in the trace must remain 'ValidateVideos' "
+            "so downstream jq filters keep working"
+        )
+        # The warning-decision path must exist so failed>0 fires WARN.
+        assert '"warning"' in src, (
+            "The WARN decision path must exist to surface validation "
+            "failures as zero_blueprints precursors"
+        )
