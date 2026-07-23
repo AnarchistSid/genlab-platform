@@ -737,14 +737,42 @@ def _llm_judge_borderline(
             llm_reason,
         )
 
+        # 2026-07-23: attribute LLM-driven overrides in passed_checks /
+        # failed_checks. Prior behavior was to preserve the rule-based
+        # lists verbatim, which produced two confusing states:
+        #   * LLM overrides "approve" → "reject" with rule_failed=[]
+        #     → row shows approved=False, failed_checks=[]. Downstream
+        #     confusion-matrix analysis couldn't attribute the reject.
+        #   * LLM overrides "reject" → "approve" with rule_failed=[...]
+        #     → row shows approved=True with populated failed_checks.
+        # Both directions now carry an explicit marker so the confusion-
+        # matrix breakdown attributes the LLM's contribution.
+        llm_marker = "llm_judge_override"
+        if llm_approved != rule_decision.approved:
+            if llm_approved:
+                # LLM overrode reject → approve: clear failed_checks,
+                # append marker to passed_checks.
+                override_passed = [*rule_decision.passed_checks, llm_marker]
+                override_failed: list[str] = []
+            else:
+                # LLM overrode approve → reject: mark failed_checks so
+                # analysis attributes the reject to the judge, not the
+                # (empty) rule-based list.
+                override_passed = list(rule_decision.passed_checks)
+                override_failed = [*rule_decision.failed_checks, llm_marker]
+        else:
+            # LLM agreed with rule-based — preserve verbatim.
+            override_passed = list(rule_decision.passed_checks)
+            override_failed = list(rule_decision.failed_checks)
+
         return AutoApprovalDecision(
             approved=llm_approved,
             # Bump confidence to 0.85 when LLM agrees, 0.7 when it
             # overrides — the LLM verdict on borderline cases is
             # higher-confidence than the rule-based 0.3..0.7 range.
             confidence=0.85 if llm_approved == rule_decision.approved else 0.7,
-            passed_checks=rule_decision.passed_checks,
-            failed_checks=rule_decision.failed_checks,
+            passed_checks=override_passed,
+            failed_checks=override_failed,
             reasons=[*rule_decision.reasons, audit_entry],
         )
     except Exception as exc:

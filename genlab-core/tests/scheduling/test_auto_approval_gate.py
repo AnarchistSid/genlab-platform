@@ -406,3 +406,135 @@ class TestShadowModeEnsembleWire:
             "shadow-mode ensemble_decide call must explicitly disable "
             "the LLM judge to keep cost bounded"
         )
+
+
+class TestLLMJudgeOverrideAttribution:
+    """2026-07-23: LLM judge override must attribute the reject/approve
+    to the judge via failed_checks / passed_checks so downstream
+    confusion-matrix analysis doesn't lose the signal.
+
+    Bug caught in prod: 5 gaming FN rows in auto_approval_calibration
+    have approved=false AND failed_checks=[] because the LLM overrode
+    a rule-based approve to reject, and the old code preserved the
+    (empty) rule-based failed_checks list.
+    """
+
+    def test_llm_override_reject_marks_failed_checks(self, monkeypatch):
+        """LLM overrides approve -> reject: failed_checks must gain
+        the 'llm_judge_override' marker so analysis attributes the
+        rejection reason."""
+        from unittest.mock import MagicMock, patch
+
+        from genlab_core.scheduling.auto_approval_gate import (
+            AutoApprovalDecision,
+            _llm_judge_borderline,
+        )
+
+        # Rule-based decision that approves everything.
+        rule_decision = AutoApprovalDecision(
+            approved=True,
+            confidence=0.5,  # Borderline so LLM fires.
+            passed_checks=["has_video", "has_hook", "qc_passed"],
+            failed_checks=[],
+            reasons=["all checks passed"],
+        )
+
+        # Mock Anthropic response to reject.
+        with patch("anthropic.Anthropic") as mock_client:
+            mock_resp = MagicMock()
+            mock_resp.content = [MagicMock(text='{"approved": false, "reason": "content quality low"}')]
+            mock_client.return_value.messages.create.return_value = mock_resp
+
+            monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+            monkeypatch.setenv("GENLAB_LLM_JUDGE_ENABLED", "1")
+            result = _llm_judge_borderline(
+                {"id": "test", "niche_id": "gaming", "extra": {}},
+                rule_decision,
+            )
+
+        assert result is not None
+        assert result.approved is False, "LLM overrode to reject"
+        assert "llm_judge_override" in result.failed_checks, (
+            "override marker must appear in failed_checks so downstream "
+            "analysis attributes the reject to the judge, not to an "
+            "empty rule-based failed list"
+        )
+
+    def test_llm_override_approve_marks_passed_checks(self, monkeypatch):
+        """LLM overrides reject -> approve: failed_checks cleared,
+        'llm_judge_override' appended to passed_checks."""
+        from unittest.mock import MagicMock, patch
+
+        from genlab_core.scheduling.auto_approval_gate import (
+            AutoApprovalDecision,
+            _llm_judge_borderline,
+        )
+
+        rule_decision = AutoApprovalDecision(
+            approved=False,
+            confidence=0.5,
+            passed_checks=["has_video"],
+            failed_checks=["virality_score"],
+            reasons=["low virality"],
+        )
+
+        with patch("anthropic.Anthropic") as mock_client:
+            mock_resp = MagicMock()
+            mock_resp.content = [MagicMock(text='{"approved": true, "reason": "strong hook"}')]
+            mock_client.return_value.messages.create.return_value = mock_resp
+
+            monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+            monkeypatch.setenv("GENLAB_LLM_JUDGE_ENABLED", "1")
+            result = _llm_judge_borderline(
+                {"id": "test", "niche_id": "gaming", "extra": {}},
+                rule_decision,
+            )
+
+        assert result is not None
+        assert result.approved is True, "LLM overrode to approve"
+        assert result.failed_checks == [], (
+            "failed_checks must be cleared when LLM approves — leaving "
+            "rule-based failures in place while approved=True is a "
+            "confusing/inconsistent row shape"
+        )
+        assert "llm_judge_override" in result.passed_checks, (
+            "override marker must appear in passed_checks so analysis "
+            "attributes the approval to the judge"
+        )
+
+    def test_llm_agree_preserves_rule_lists_verbatim(self, monkeypatch):
+        """When LLM agrees with rule-based, passed/failed lists match
+        the rule-based verbatim — no synthetic marker added."""
+        from unittest.mock import MagicMock, patch
+
+        from genlab_core.scheduling.auto_approval_gate import (
+            AutoApprovalDecision,
+            _llm_judge_borderline,
+        )
+
+        rule_decision = AutoApprovalDecision(
+            approved=False,
+            confidence=0.5,
+            passed_checks=["has_video"],
+            failed_checks=["virality_score"],
+            reasons=["low virality"],
+        )
+
+        with patch("anthropic.Anthropic") as mock_client:
+            mock_resp = MagicMock()
+            mock_resp.content = [MagicMock(text='{"approved": false, "reason": "agree with rule"}')]
+            mock_client.return_value.messages.create.return_value = mock_resp
+
+            monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+            monkeypatch.setenv("GENLAB_LLM_JUDGE_ENABLED", "1")
+            result = _llm_judge_borderline(
+                {"id": "test", "niche_id": "gaming", "extra": {}},
+                rule_decision,
+            )
+
+        assert result is not None
+        assert result.approved is False
+        assert result.passed_checks == ["has_video"]
+        assert result.failed_checks == ["virality_score"]
+        assert "llm_judge_override" not in result.failed_checks
+        assert "llm_judge_override" not in result.passed_checks
