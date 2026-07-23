@@ -187,9 +187,29 @@ def test_source_pin_helper_called_before_execute_approval():
     # Block reasons → continue (skip approval)
     assert "skipped_compliance_block" in src
     # Call site for _execute_approval comes AFTER call site for
-    # _check_compliance_gate
-    compliance_call = src.rindex("compliance_block_reasons = _check_compliance_gate(")
-    approval_call = src.rindex("if not _execute_approval(")
+    # _check_compliance_gate.
+    #
+    # 2026-07-23: `rindex` used to look for the single-line literal
+    # ``compliance_block_reasons = _check_compliance_gate(`` but the
+    # actual code has multi-arg wrap (call on line N, args on
+    # lines N+1..N+3). The rindex would raise ValueError silently
+    # under CI's tail-truncation. Switched to bare-function-name
+    # rindex which survives arg-wrap and still pins ordering.
+    # 2026-07-23: pin the CALL SITE ordering (not the def site).
+    # Prior pin used single-line literal ``compliance_block_reasons =
+    # _check_compliance_gate(`` + ``if not _execute_approval(`` — both
+    # broken by legit refactors (multi-arg wrap; assignment-form call).
+    #
+    # Switched to regex to survive multi-line arg wrap. Both regexes
+    # exclude the ``def`` prefix so we anchor on real call sites.
+    import re as _re
+
+    _compliance_match = list(_re.finditer(r"(?<!def )_check_compliance_gate\(", src))
+    _approval_match = list(_re.finditer(r"(?<!def )_execute_approval\(", src))
+    assert _compliance_match, "compliance call site not found"
+    assert _approval_match, "approval call site not found"
+    compliance_call = _compliance_match[-1].start()
+    approval_call = _approval_match[-1].start()
     assert compliance_call < approval_call, (
         "compliance check MUST run BEFORE _execute_approval — "
         "otherwise we'd publish then learn we shouldn't have"
