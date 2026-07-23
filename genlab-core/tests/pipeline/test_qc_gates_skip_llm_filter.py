@@ -270,3 +270,87 @@ class TestExistingBehaviorPreserved:
         )
         # And the story must be marked _skip_llm=True so downstream drops it
         assert broken_story.get("_skip_llm") is True
+
+
+class TestDecisionTraceEmission:
+    """2026-07-23: QCGates must emit a decision trace with per-run
+    summary + failure attribution.
+
+    Motivating incident: today's ai_creators run reported
+    blueprints=0 from stories=1 with excluded_incomplete_content=1.
+    run_report had the aggregate bucket but no story-level attribution
+    in decision_traces.jsonl. Trace-level visibility lets operators
+    jump straight to the failure cause.
+    """
+
+    def test_emits_aggregate_trace_with_failure_reasons(self, monkeypatch) -> None:
+        from genlab_core.pipeline.stages.qc_gates import QCGates
+
+        traces: list[dict] = []
+        monkeypatch.setattr(
+            "genlab_core.observability.decision_trace.record_decision",
+            lambda context, **kwargs: traces.append(kwargs),
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.reasoning_trace.append_trace",
+            lambda *a, **k: None,
+        )
+
+        # Two blueprints: one passes, one fails on missing hook.
+        good = {
+            "candidate_id": "good-1",
+            "hook": "Great hook here",
+            "content": {"caption": "Good body text with enough content"},
+            "source_url": "https://example.com/a",
+        }
+        bad = {
+            "candidate_id": "bad-1",
+            "hook": "",  # missing hook → real QC failure
+            "content": {"caption": "some body"},
+            "source_url": "https://example.com/b",
+        }
+
+        ctx = {"stories": [good, bad], "niche_config": {}}
+        QCGates().execute(ctx)
+
+        qc_traces = [t for t in traces if t.get("stage") == "QCGates"]
+        assert qc_traces, "expected QCGates decision trace"
+        trace = qc_traces[0]
+        assert trace["metadata"]["passed"] == 1
+        assert trace["metadata"]["failed"] == 1
+        assert trace["metadata"]["total"] == 2
+        # failure_reasons carries the aggregate bucket
+        assert "Missing required field" in trace["metadata"]["failure_reasons"]
+
+    def test_zero_passed_produces_warning_decision(self, monkeypatch) -> None:
+        """When all stories fail QC (and none excluded), decision=warning.
+        The zero_blueprints alert fires 30 min later — surfacing this in
+        the trace catches the precursor state before the alert."""
+        from genlab_core.pipeline.stages.qc_gates import QCGates
+
+        traces: list[dict] = []
+        monkeypatch.setattr(
+            "genlab_core.observability.decision_trace.record_decision",
+            lambda context, **kwargs: traces.append(kwargs),
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.reasoning_trace.append_trace",
+            lambda *a, **k: None,
+        )
+
+        # One blueprint that hard-fails QC — non-empty hook AND body but
+        # missing source_url → "No source URLs" (real failure, not
+        # upstream-thin bucket).
+        bad = {
+            "candidate_id": "no-src-1",
+            "hook": "A hook",
+            "content": {"caption": "some body"},
+            # No source_url, no sources
+        }
+        ctx = {"stories": [bad], "niche_config": {}}
+        QCGates().execute(ctx)
+
+        qc_traces = [t for t in traces if t.get("stage") == "QCGates"]
+        assert qc_traces
+        assert qc_traces[0]["decision"] == "warning"
+        assert qc_traces[0]["metadata"]["passed"] == 0

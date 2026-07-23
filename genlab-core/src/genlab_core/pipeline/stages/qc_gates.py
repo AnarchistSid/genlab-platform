@@ -256,6 +256,65 @@ class QCGates:
             "excluded_incomplete_content": excluded_incomplete,
         }
 
+        # 2026-07-23: emit decision trace symmetric with VideoGate +
+        # ViralityScoring. Motivating incident: today's ai_creators
+        # run reported blueprints=0 from stories=1 with
+        # excluded_incomplete_content=1. run_report had the aggregate
+        # bucket count but NO story-level attribution — impossible to
+        # tell WHICH story got excluded and WHY without grepping
+        # journal logs. Trace metadata carries the failure_reasons
+        # dict + example candidate_ids for the top failure buckets.
+        try:
+            from genlab_core.observability.decision_trace import record_decision
+            from genlab_core.pipeline.reasoning_trace import append_trace
+
+            # WARN-level when nothing passed. This is the "zero
+            # blueprints" precursor the pipeline_alerts check catches
+            # 30 min later — surfacing it in the trace lets operators
+            # jump straight to the story-level cause.
+            if total == 0:
+                trace_decision = "info"
+            elif passed == 0:
+                trace_decision = "warning"
+            else:
+                trace_decision = "info"
+
+            reasons_line = (
+                f"passed={passed}/{total}, failed={failed}, "
+                f"excluded_incomplete={excluded_incomplete}, "
+                f"excluded_skip_llm={excluded}"
+            )
+            metadata = {
+                "passed": passed,
+                "failed": failed,
+                "total": total,
+                "excluded_incomplete_content": excluded_incomplete,
+                "excluded_skip_llm": excluded,
+                "failure_reasons": dict(failure_reasons),
+                # Truncated examples so the trace stays small.
+                "failure_examples": failure_examples[:5],
+            }
+            append_trace(
+                context,
+                stage="QCGates",
+                decision=trace_decision,
+                confidence=1.0,
+                reasons=[reasons_line],
+                metadata=metadata,
+            )
+            record_decision(
+                context,
+                stage="QCGates",
+                decision=trace_decision,
+                reason=reasons_line,
+                confidence=1.0,
+                metadata=metadata,
+            )
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            logger.warning(
+                "[QCGates] trace emission failed: %s", exc, exc_info=True
+            )
+
         return context
 
     def _validate(
