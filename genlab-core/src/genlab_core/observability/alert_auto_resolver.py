@@ -684,9 +684,12 @@ def _query_arms_still_at_uniform_prior(niche_id: str) -> int | None:
         return None
     try:
         with conn_cm as conn:
+            # Note: _connect() uses row_factory=dict_row, so fetchone
+            # returns a dict, not a tuple. Alias the aggregate so we
+            # can read by key rather than positional index.
             row = conn.execute(
                 """
-                SELECT COUNT(*) FROM (
+                SELECT COUNT(*) AS drift_count FROM (
                     SELECT b.arm_id
                     FROM bandit_arms b
                     WHERE b.niche_id = %s
@@ -703,7 +706,7 @@ def _query_arms_still_at_uniform_prior(niche_id: str) -> int | None:
                 """,
                 (niche_id,),
             ).fetchone()
-        return int(row[0]) if row else 0
+        return int(row["drift_count"]) if row else 0
     except Exception as exc:  # noqa: BLE001 — fail-open
         logger.warning(
             "[alert_auto_resolver] drift-arms query failed niche=%s: %s",
