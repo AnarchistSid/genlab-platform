@@ -1,0 +1,14 @@
+[Unit]
+Description=Remediate content_gap alerts twice per hour
+Documentation=file:///opt/genlab/scripts/auto_remediate_content_gap.py
+
+[Timer]
+# Fire at *:15 and *:45 — twice per hour. Content_gap check runs on
+# the health_monitor cadence (10 min) so alerts appear within 10 min
+# of the state; this timer catches it within 15-30 min.
+OnCalendar=*-*-* *:15,45:00 UTC
+Persistent=true
+Unit=genlab-content-gap-remediator.service
+
+[Install]
+WantedBy=timers.target

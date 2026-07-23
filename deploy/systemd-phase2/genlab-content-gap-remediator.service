@@ -1,0 +1,24 @@
+[Unit]
+Description=GenLab content_gap alert auto-remediator — trigger niche pipelines when scheduling has 48h gaps
+After=network-online.target
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=UV_FROZEN=1
+TimeoutStartSec=5min
+ExecStart=/usr/local/bin/uv run python scripts/auto_remediate_content_gap.py --apply
+StandardOutput=journal
+StandardError=journal
+
+MemoryMax=256M
+CPUWeight=30
+
+[Install]
+WantedBy=multi-user.target
