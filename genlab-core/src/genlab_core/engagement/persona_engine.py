@@ -236,7 +236,15 @@ class PersonaEngine:
                     e,
                 )
                 if attempt >= max_retries:
-                    self._last_error_reason = "retries_exhausted"
+                    # 2026-07-23: use classify_llm_error to produce a
+                    # specific category (credit_exhausted / rate_limit /
+                    # auth / etc.) instead of the coarse
+                    # 'retries_exhausted'. That distinguishes "top up
+                    # Anthropic" from "rate-limit backoff" from "invalid
+                    # API key" downstream.
+                    from genlab_core.llm.errors import classify_llm_error
+
+                    self._last_error_reason = classify_llm_error(e)
                     return None
 
         logger.warning("[PERSONA] All %d reply attempts failed toxicity gate", max_retries + 1)

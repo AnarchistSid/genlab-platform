@@ -653,7 +653,21 @@ def generate_hook(
                 continue
             candidates.append(hook)
         except Exception as exc:
-            logger.debug("Hook candidate generation failed: %s", exc)
+            # 2026-07-23 (rule #19): elevate DEBUG to WARNING and
+            # classify the LLM error so operators can attribute why
+            # this candidate failed. 3 candidates × silent DEBUG =
+            # 3 opaque losses per hook generation. See
+            # [[class-of-bug-signal-loss-through-merged-failure-paths]].
+            from genlab_core.llm.errors import classify_llm_error
+
+            reason = classify_llm_error(exc)
+            logger.warning(
+                "[llm_hook_generator] hook candidate generation failed "
+                "(reason=%s): %s",
+                reason,
+                exc,
+                exc_info=True,
+            )
 
     if not candidates:
         return (None, chosen_style) if return_style else None
