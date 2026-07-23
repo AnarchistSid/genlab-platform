@@ -892,7 +892,28 @@ class InstagramClient:
                         "Reel published — post ID: %s (attempt %d)", payload["id"], attempt_num
                     )
                     return payload["id"], ""
-                error_msg = payload.get("error", {}).get("message", str(payload))
+                # 2026-07-23: capture the full Meta error envelope, not
+                # just error.message. 3 rows in the last 7d wrote the
+                # opaque "media_publish failed: An unknown error has
+                # occurred." with zero attribution. Meta's error object
+                # includes code + error_subcode + fbtrace_id which are
+                # critical for triage — the fbtrace_id lets Meta support
+                # look up the specific request in their logs.
+                err = payload.get("error", {}) if isinstance(payload.get("error"), dict) else {}
+                error_msg = err.get("message", str(payload))
+                code = err.get("code")
+                subcode = err.get("error_subcode")
+                fbtrace = err.get("fbtrace_id")
+                # Append attribution suffix in a grep-friendly shape.
+                suffix_parts = []
+                if code is not None:
+                    suffix_parts.append(f"code={code}")
+                if subcode is not None:
+                    suffix_parts.append(f"subcode={subcode}")
+                if fbtrace:
+                    suffix_parts.append(f"fbtrace_id={fbtrace}")
+                if suffix_parts:
+                    error_msg = f"{error_msg} [{', '.join(suffix_parts)}]"
                 return None, error_msg
             except Exception as exc:
                 return None, f"request error: {exc}"

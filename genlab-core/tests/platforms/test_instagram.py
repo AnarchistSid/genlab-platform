@@ -275,6 +275,113 @@ class TestPublish:
         assert "cover_url" in data_arg
 
 
+class TestMediaPublishErrorAttribution:
+    """2026-07-23: media_publish error extraction must capture Meta's
+    code + subcode + fbtrace_id, not just error.message. 3 rows in the
+    last 7d wrote the opaque "media_publish failed: An unknown error
+    has occurred." with zero attribution — fbtrace_id lets Meta support
+    look up the specific request, code + subcode distinguish
+    "rate limit" from "media invalid" etc."""
+
+    def test_error_captures_code_and_fbtrace_id(self, ig_client):
+        """When Meta returns an error with code + fbtrace_id, both must
+        appear in the error_message so operators can grep/report."""
+        payload = PublishPayload(
+            caption="test",
+            media_paths=[Path("/tmp/v.mp4")],
+            media_type="video",
+            hashtags=[],
+            hook="",
+            niche_id="gaming",
+            platform_specific=InstagramSpecific(share_to_feed=True),
+        )
+
+        post_call_count = {"n": 0}
+
+        def mock_post(*args, **kwargs):
+            post_call_count["n"] += 1
+            if post_call_count["n"] == 1:
+                # Container creation OK.
+                return MagicMock(status_code=200, json=lambda: {"id": "ctr_abc"})
+            # media_publish fails with a fully populated error object.
+            return MagicMock(
+                status_code=400,
+                json=lambda: {
+                    "error": {
+                        "message": "An unknown error has occurred.",
+                        "code": 1,
+                        "error_subcode": 2207032,
+                        "fbtrace_id": "AbCdEfGhIj12345",
+                    }
+                },
+            )
+
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
+            mock_req.post.side_effect = mock_post
+            mock_req.get.return_value = MagicMock(
+                status_code=200, json=lambda: {"status_code": "FINISHED"}
+            )
+            mock_req.head.return_value = MagicMock(
+                status_code=200, headers={"Content-Type": "video/mp4"}
+            )
+            result = ig_client.publish(payload)
+
+        assert result.success is False
+        # error_message should contain all three attribution fields
+        err = result.error or ""
+        assert "code=1" in err, (
+            f"Meta error code must appear in error attribution: {err}"
+        )
+        assert "subcode=2207032" in err, (
+            f"Meta error_subcode must appear in error attribution: {err}"
+        )
+        assert "fbtrace_id=AbCdEfGhIj12345" in err, (
+            f"fbtrace_id is critical for Meta support lookup: {err}"
+        )
+        # Original message preserved
+        assert "An unknown error has occurred" in err
+
+    def test_error_without_code_falls_back_gracefully(self, ig_client):
+        """Older Meta responses may omit code/fbtrace_id. Suffix must
+        be dropped entirely rather than appearing as empty brackets."""
+        payload = PublishPayload(
+            caption="test",
+            media_paths=[Path("/tmp/v.mp4")],
+            media_type="video",
+            hashtags=[],
+            hook="",
+            niche_id="gaming",
+            platform_specific=InstagramSpecific(share_to_feed=True),
+        )
+
+        post_call_count = {"n": 0}
+
+        def mock_post(*args, **kwargs):
+            post_call_count["n"] += 1
+            if post_call_count["n"] == 1:
+                return MagicMock(status_code=200, json=lambda: {"id": "ctr_abc"})
+            return MagicMock(
+                status_code=400,
+                json=lambda: {"error": {"message": "Something broke"}},
+            )
+
+        with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
+            mock_req.post.side_effect = mock_post
+            mock_req.get.return_value = MagicMock(
+                status_code=200, json=lambda: {"status_code": "FINISHED"}
+            )
+            mock_req.head.return_value = MagicMock(
+                status_code=200, headers={"Content-Type": "video/mp4"}
+            )
+            result = ig_client.publish(payload)
+
+        assert result.success is False
+        err = result.error or ""
+        assert "Something broke" in err
+        # No empty [] suffix
+        assert "[]" not in err, f"Empty attribution suffix leaked: {err}"
+
+
 class TestEngagement:
     def test_post_reply(self, ig_client):
         with patch("genlab_core.platforms.instagram._META_SESSION") as mock_req:
