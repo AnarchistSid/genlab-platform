@@ -1,0 +1,12 @@
+[Unit]
+Description=Auto-accept low-risk strategist proposals — daily 03:30 UTC
+Documentation=file:///opt/genlab/scripts/auto_accept_strategist_proposals.py
+
+[Timer]
+# 03:30 UTC — after hypothesis-promote (03:15) and strategist-apply (03:00).
+OnCalendar=*-*-* 03:30:00 UTC
+Persistent=true
+Unit=genlab-proposal-auto-accept.service
+
+[Install]
+WantedBy=timers.target
