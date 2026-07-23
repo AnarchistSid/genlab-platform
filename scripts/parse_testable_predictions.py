@@ -80,11 +80,21 @@ def _fetch_reports_with_hypotheses(conn, niche_id):
 
 
 def _fetch_existing_arm_ids(conn, niche_id):
+    """Return arm_ids for a niche. Handles both dict_row and tuple rows
+    since the caller configures the connection with row_factory=dict_row
+    but this function should tolerate either — same class-of-bug that
+    hit the drift resolver on 2026-07-23 (see c91bd77c)."""
     rows = conn.execute(
         "SELECT arm_id FROM bandit_arms WHERE niche_id = %s LIMIT 200",
         (niche_id,),
     ).fetchall()
-    return [str(r[0]) for r in rows]
+    result = []
+    for r in rows:
+        if hasattr(r, "get"):  # dict_row
+            result.append(str(r.get("arm_id", "")))
+        else:  # tuple row
+            result.append(str(r[0]))
+    return [a for a in result if a]
 
 
 def main() -> int:
