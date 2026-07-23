@@ -100,3 +100,99 @@ class TestFallbackWarn:
             and "DEFAULT_PATTERNS" in r.message
         ]
         assert warnings, "Missing niche_id should still trigger the fallback WARN"
+
+
+class TestDecisionTraceEmission:
+    """2026-07-23: ViralityScoring must emit a decision trace so
+    operators can diagnose ``avg_score=0.0`` mysteries post-hoc.
+
+    Motivating incident: today's movies pipeline reported
+    ``virality.avg_score=0.0`` in run_report but decision_traces.jsonl
+    contained ONLY VideoGate rows — no way to tell WHICH stories were
+    scored or WHAT patterns matched without re-running.
+    """
+
+    def test_emits_aggregate_trace(self, tmp_path, monkeypatch) -> None:
+        """One aggregate trace with stage=ViralityScoring, scored
+        count, avg_score, and per_story breakdown in metadata."""
+        stage = ViralityScoring()
+        traces: list[dict] = []
+
+        def _capture(context, **kwargs):
+            traces.append(kwargs)
+
+        monkeypatch.setattr(
+            "genlab_core.observability.decision_trace.record_decision",
+            _capture,
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.reasoning_trace.append_trace",
+            lambda *a, **k: None,
+        )
+
+        stage.execute({
+            "niche_id": "movies",
+            "niche_config": {
+                "scoring_weights": {
+                    "virality_scoring": {
+                        "patterns": {"named_tool": r"\btrailer\b"},
+                    }
+                }
+            },
+            "stories": [
+                {"title": "Final Trailer for Movie X", "hook": "wow"},
+                {"title": "No matches here", "hook": "nothing"},
+            ],
+        })
+
+        virality_traces = [t for t in traces if t.get("stage") == "ViralityScoring"]
+        assert virality_traces, "expected one ViralityScoring decision trace"
+        trace = virality_traces[0]
+        assert trace["metadata"]["scored"] == 2
+        assert trace["metadata"]["avg_score"] > 0.0
+        per_story = trace["metadata"]["per_story"]
+        assert len(per_story) == 2
+        # First story matched named_tool, second didn't.
+        assert per_story[0]["score"] > 0.0
+        assert "named_tool" in per_story[0]["matched"]
+        assert per_story[1]["score"] == 0.0
+        assert per_story[1]["matched"] == []
+
+    def test_warning_decision_when_avg_below_gate_floor(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """When avg_score < 0.05 (the auto_approval_gate floor), the
+        trace decision is 'warning' — so filtering
+        ``decision=='warning' AND stage=='ViralityScoring'`` surfaces
+        "gate would reject everything" runs at a glance."""
+        stage = ViralityScoring()
+        traces: list[dict] = []
+        monkeypatch.setattr(
+            "genlab_core.observability.decision_trace.record_decision",
+            lambda context, **kwargs: traces.append(kwargs),
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.reasoning_trace.append_trace",
+            lambda *a, **k: None,
+        )
+
+        stage.execute({
+            "niche_id": "movies",
+            "niche_config": {
+                "scoring_weights": {
+                    "virality_scoring": {
+                        "patterns": {"named_tool": r"\bunmatchable_needle\b"},
+                    }
+                }
+            },
+            "stories": [
+                {"title": "Doesn't match anything", "hook": "nothing"},
+            ],
+        })
+
+        virality = [t for t in traces if t.get("stage") == "ViralityScoring"]
+        assert virality
+        assert virality[0]["decision"] == "warning", (
+            "avg_score < 0.05 must produce decision='warning' so operators "
+            "can grep decision_traces for gate-rejection risk"
+        )

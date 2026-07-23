@@ -192,6 +192,67 @@ class ViralityScoring:
             "avg_score": round(avg, 4),
         }
 
+        # 2026-07-23: emit decision traces so operators can diagnose
+        # "why did this score X" and "why is avg=0.0" post-hoc without
+        # re-running the pipeline. Follows the VideoGate pattern
+        # (append_trace + record_decision, one aggregate row per fire).
+        #
+        # Motivating incident: today's movies pipeline reported
+        # avg_score=0.0 while a local probe on the same story titles
+        # scored 0.25 — the trace-emission gap made it impossible to
+        # tell which stories were actually scored, or what patterns
+        # matched. Adds per-story details to metadata so both mysteries
+        # answer themselves.
+        try:
+            from genlab_core.observability.decision_trace import record_decision
+            from genlab_core.pipeline.reasoning_trace import append_trace
+
+            # Per-story breakdown: title + score + matched pattern names.
+            # `virality_features` is the list of matched pattern names
+            # (list[str]) — see `_score` return value.
+            per_story = []
+            for bp in blueprints:
+                s = bp.get("virality_score")
+                features = bp.get("virality_features") or []
+                per_story.append(
+                    {
+                        "title": (bp.get("title") or "")[:80],
+                        "score": s,
+                        "matched": list(features),
+                    }
+                )
+            # WARN-level decision when avg is below auto_approval_gate
+            # floor (0.05) — the same threshold gate-rejection uses,
+            # so trace consumers can filter for "gate would reject
+            # everything" runs at a glance.
+            decision = "warning" if avg < 0.05 else "info"
+            reasons_line = f"scored={scored}, avg={avg:.3f}"
+            metadata = {
+                "scored": scored,
+                "avg_score": round(avg, 4),
+                "per_story": per_story,
+            }
+            append_trace(
+                context,
+                stage="ViralityScoring",
+                decision=decision,
+                confidence=1.0,
+                reasons=[reasons_line],
+                metadata=metadata,
+            )
+            record_decision(
+                context,
+                stage="ViralityScoring",
+                decision=decision,
+                reason=reasons_line,
+                confidence=1.0,
+                metadata=metadata,
+            )
+        except Exception as exc:  # noqa: BLE001 — trace emission is best-effort
+            logger.warning(
+                "[ViralityScoring] trace emission failed: %s", exc, exc_info=True
+            )
+
         return context
 
     @staticmethod
