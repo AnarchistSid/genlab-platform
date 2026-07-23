@@ -290,3 +290,47 @@ class TestFetchTrendingVideosStage:
         assert result["stories"][0]["video_source"] == "trending"
         assert result["stories"][1]["story_id"] == "existing"
         assert result["run_stats"]["trending_videos_found"] == 1
+
+
+class TestNoLiteralPercentInReadFromContentPoolSQL:
+    """2026-07-23 class-of-bug pin. The SQL string passed to
+    ``cur.execute()`` inside ``_read_from_content_pool`` MUST NOT
+    contain a literal ``%`` character in comment blocks. psycopg
+    parses the entire query string looking for parameter placeholders
+    including comment blocks — a stray ``%`` (as in "87% waste")
+    raises IncompletePlaceholder and swallows the whole query.
+
+    Real prod incident: on 2026-07-21 a comment ``(87% waste)`` was
+    added to explain a LIMIT bump. The content_pool consumer was
+    silently broken for 2 days, WARNING-swallowed by the outer
+    except handler; discovered on 2026-07-23 via probe execution
+    against prod DB.
+    """
+
+    def test_read_from_content_pool_sql_has_no_literal_percent(self):
+        """Grep the source of ``_read_from_content_pool`` for the
+        triple-quoted SQL block(s) and assert no literal ``%`` other
+        than valid placeholders (``%s``, ``%d``, ``%(name)s``)."""
+        import inspect
+        import re
+
+        from genlab_core.media.trending_video_fetcher import FetchTrendingVideos
+
+        src = inspect.getsource(FetchTrendingVideos._read_from_content_pool)
+
+        # Extract triple-quoted SQL strings.
+        sql_blocks = re.findall(r'"""(.*?)"""', src, re.DOTALL)
+        assert sql_blocks, "expected triple-quoted SQL in _read_from_content_pool"
+
+        # Any % must be followed by a valid psycopg placeholder character.
+        # Legal: %s, %d, %(name)s, %%. Illegal: bare % followed by whitespace,
+        # letters like 'w' in 'waste', digits like '87%' with word after.
+        illegal_percent_re = re.compile(r"%(?![sd%(])")
+        for block in sql_blocks:
+            offending_matches = illegal_percent_re.findall(block)
+            assert not offending_matches, (
+                f"Literal ``%`` in SQL comment/text raises "
+                f"psycopg IncompletePlaceholder. Found {len(offending_matches)} "
+                f"illegal ``%`` in SQL:\n{block[:800]}\n"
+                f"Fix: rewrite as 'pct' or escape as '%%'."
+            )

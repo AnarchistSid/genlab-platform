@@ -1248,11 +1248,16 @@ class FetchTrendingVideos(FetcherStage):
                           AND status = 'available'
                           AND video_url IS NOT NULL AND video_url != ''
                         ORDER BY view_velocity DESC NULLS LAST, fetched_at DESC
-                        -- 2026-07-21 Agent-2 fix: bumped 20 → 60.
+                        -- 2026-07-21 Agent-2 fix: bumped 20 -> 60.
                         -- Prod audit found 695 of 795 pool items rot
-                        -- per week (87% waste). Gaming/movies/sports
+                        -- per week (~87pct waste). Gaming/movies/sports
                         -- were saturating the LIMIT=20 cap daily
                         -- (verified: 20/20/20 claims yesterday).
+                        -- 2026-07-23 footgun-note: SQL comments cannot
+                        -- contain a bare percent-sign — psycopg parses
+                        -- the ENTIRE query looking for placeholders.
+                        -- Rewrite fractions as pct instead. Class-of-
+                        -- bug pinned in test_no_literal_percent_in_sql.
                         -- Downstream DailyCapEnforcer still enforces
                         -- 1 publish/channel/day, so bumping the fetch
                         -- LIMIT just gives the ranking layer more
