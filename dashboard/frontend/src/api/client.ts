@@ -1139,6 +1139,22 @@ export const counterfactualReplay = {
     ),
 };
 
+export const autoExperiments = {
+  /** Fetch the lifecycle summary — recent experiments + per-status
+   *  counts + last-30d verdict tally. Returns null on any server-side
+   *  error (fail-open). Cold-start scenario (empty queue) is a
+   *  populated envelope with zero counts, not null. */
+  summary: (nicheId: string, limit: number = 20) =>
+    get<{
+      data: import("./types").AutoExperimentsSummary | null;
+    }>("/auto-experiments/summary", {
+      niche_id: nicheId,
+      limit: String(limit),
+    }).then((d) =>
+      unwrapEnvelope<import("./types").AutoExperimentsSummary>(d),
+    ),
+};
+
 export const crossNicheTransfer = {
   /** Fetch the current cross-niche transferred priors. Returns null
    *  when the weekly runner hasn't fired yet (first Monday after

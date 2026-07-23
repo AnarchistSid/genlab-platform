@@ -1452,6 +1452,66 @@ export interface CrossNichePriorsArtifact {
 }
 
 // ───────────────────────────────────────────────────────────────
+// #9 auto-experiments observability (2026-07-23) — lifecycle summary.
+// ───────────────────────────────────────────────────────────────
+
+/** One auto_experiments row. The result object shape mirrors
+ *  ``measure_experiment_result`` in
+ *  ``genlab_core.scheduling.auto_experiment`` — the frontend renders
+ *  whatever the runner wrote, so evolutions on the write side stay
+ *  backward-compatible on read. */
+export interface AutoExperimentRow {
+  id: string;
+  source_report_id: string | null;
+  hypothesis_index: number | null;
+  niche_id: string;
+  spec: {
+    arms?: string[];
+    niche_id?: string;
+    expected_metric_shift?: number;
+    duration_days?: number;
+    notes?: string;
+  } | null;
+  status: "pending" | "running" | "completed";
+  result: {
+    arm_rewards?: Record<
+      string,
+      { observed_reward: number | null; n_samples: number }
+    >;
+    expected_metric_shift?: number;
+    observed_lift?: number | null;
+    met_threshold?: boolean;
+    sufficient_samples?: boolean;
+    min_samples_required?: number;
+    window_start?: string;
+    window_end?: string;
+  } | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface AutoExperimentsSummary {
+  /** Server-injected mirror of GENLAB_AUTO_EXPERIMENT_ENABLED.
+   *  Drives the same "active vs observation only" badge pattern as
+   *  the other lifecycle-adjacent cards. */
+  active_state: "active" | "observation_only";
+  flag_env_var: string;
+  niche_id: string;
+  counts: {
+    pending: number;
+    running: number;
+    completed: number;
+  };
+  verdicts_last_30d: {
+    met_threshold: number;
+    unmet_threshold: number;
+    insufficient_samples: number;
+  };
+  recent: AutoExperimentRow[];
+}
+
+// ───────────────────────────────────────────────────────────────
 // B.2 + B.3 observability (2026-07-08) — top-creator prior types.
 // Mirrors the artifacts written by
 // ``scripts/refit_top_creator_priors.py`` (B.2) and

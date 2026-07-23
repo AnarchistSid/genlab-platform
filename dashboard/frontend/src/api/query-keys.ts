@@ -157,6 +157,14 @@ export const queryKeys = {
     latest: (nicheId: string) =>
       ["counterfactual-replay", "latest", nicheId] as const,
   },
+  autoExperiments: {
+    /** #9 lifecycle observability (2026-07-23) — per-niche recent
+     *  experiments + verdicts. Lifecycle timer fires every 6h; a
+     *  5-minute poll is plenty of freshness. Keyed by niche_id and
+     *  limit so the queue-depth and results views can coexist. */
+    summary: (nicheId: string, limit: number) =>
+      ["auto-experiments", "summary", nicheId, limit] as const,
+  },
   trendAnticipation: {
     /** Intervention 5 Session 3 (2026-07-01) — per-niche latest artifact
      *  cache key. Polled every 10 minutes; artifact rewrites daily at

@@ -773,6 +773,7 @@ from server.api.analytics import bp as analytics_bp
 from server.api.attribution_health import bp as attribution_health_bp
 from server.api.audience import bp as audience_bp
 from server.api.auto_approval import bp as auto_approval_bp
+from server.api.auto_experiments import bp as auto_experiments_bp
 from server.api.bandit_hour_posteriors import bp as bandit_hour_posteriors_bp
 from server.api.bandit_platform_divergence import bp as bandit_platform_divergence_bp
 from server.api.bayesian_gate import bp as bayesian_gate_bp
@@ -881,6 +882,9 @@ app.register_blueprint(
 app.register_blueprint(
     drift_signals_bp
 )  # L7 (2026-07-08 audit): /api/v1/drift-signals/summary — bandit-arm drift regressions + improvements
+app.register_blueprint(
+    auto_experiments_bp
+)  # #9 lifecycle completer (2026-07-23): /api/v1/auto-experiments/summary — verdicts + counts
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)

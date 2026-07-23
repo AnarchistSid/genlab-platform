@@ -41,6 +41,7 @@ import { EnsembleVotesCard } from "./EnsembleVotesCard";
 import { FlagStateCard } from "./FlagStateCard";
 import { TopCreatorPriorsCard } from "./TopCreatorPriorsCard";
 import { CounterfactualReplayCard } from "./CounterfactualReplayCard";
+import { AutoExperimentsCard } from "./AutoExperimentsCard";
 import { ProductBanditCard } from "./ProductBanditCard";
 import { TransformationBanditCard } from "./TransformationBanditCard";
 import { BanditHourHeatmap } from "./BanditHourHeatmap";
@@ -399,6 +400,13 @@ export default function MissionControl() {
                 complements the daily bandit_arms view with a
                 counterfactual overlay. */}
             <CounterfactualReplayCard />
+            {/* #9 lifecycle observability (2026-07-23): auto-experiment
+                verdicts + queue depth. Sibling to the strategist card —
+                strategist proposes causal hypotheses; parser queues them;
+                lifecycle measures them; THIS card is where the operator
+                sees whether they held up. Active-vs-observation-only badge
+                matches the other lifecycle cards. */}
+            <AutoExperimentsCard />
             {/* PR #Layer5 (2026-07-11): post-Markanimation attribution
                 observability. Shows per-niche attribution_present_pct
                 over a rolling 24h window. Server-computed status
