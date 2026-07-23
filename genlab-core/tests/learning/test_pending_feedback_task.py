@@ -35,8 +35,12 @@ class TestPendingFeedbackTask:
             platform_post_id="ig_1",
             completed_windows=["6h", "24h"],
         )
-        assert task.pending_windows == ["48h", "168h"]
+        # 2026-07-23: default windows extended to include 336h + 720h for
+        # evergreen long-tail signal. Existing 4-window logic still holds:
+        # completed windows are excluded from pending.
+        assert task.pending_windows == ["48h", "168h", "336h", "720h"]
         assert "6h" not in task.pending_windows
+        assert "24h" not in task.pending_windows
 
     def test_is_complete_for_terminal_statuses(self):
         for status in ("complete", "error", "early_stopped"):

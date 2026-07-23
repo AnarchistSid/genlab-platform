@@ -41,12 +41,14 @@ def _post_id_with_platform_prefix(platform: str, post_id: str) -> str:
     return normalize_post_id(platform, post_id)
 
 
-CollectionWindow = Literal["6h", "24h", "48h", "168h"]
+CollectionWindow = Literal["6h", "24h", "48h", "168h", "336h", "720h"]
 CollectionStatus = Literal[
     "awaiting_6h",
     "awaiting_24h",
     "awaiting_48h",
     "awaiting_168h",
+    "awaiting_336h",
+    "awaiting_720h",
     "complete",
     "error",
     "early_stopped",
@@ -85,7 +87,13 @@ class PendingFeedbackTask(BaseModel):
     # sprint publishes) — the router skips iteration on empty.
     arm_ids_by_dimension: dict[str, str] = Field(default_factory=dict)
     collection_windows: list[CollectionWindow] = Field(
-        default_factory=lambda: ["6h", "24h", "48h", "168h"]
+        # 2026-07-23: extended from ["6h","24h","48h","168h"] to include
+        # 336h (14 day) and 720h (30 day) windows. Captures evergreen
+        # content that keeps gaining views beyond the 7-day cutoff.
+        # Historical posts stop at 168h — the store's _STATUS_TO_COMPLETED
+        # map preserves backward compat for rows with "complete" status
+        # from pre-extension era (they're treated as fully-collected).
+        default_factory=lambda: ["6h", "24h", "48h", "168h", "336h", "720h"]
     )
     completed_windows: list[CollectionWindow] = Field(default_factory=list)
     collection_status: CollectionStatus = "awaiting_6h"

@@ -182,13 +182,27 @@ class TestUpdateWindow:
         call_fields = mock_proxy.update.call_args[0][1]
         assert call_fields["reward_48h"] == 0.73
 
-    def test_update_168h_completes(self, store, mock_proxy):
+    def test_update_168h_transitions_to_awaiting_336h(self, store, mock_proxy):
+        """2026-07-23: 168h no longer terminal — advances to awaiting_336h
+        so the extended long-tail collection windows fire."""
         task = _make_task(
             sharepoint_id="sp_003",
             completed_windows=["6h", "24h", "48h"],
             collection_status="awaiting_168h",
         )
         store.update_window(task, "168h")
+        assert task.collection_status == "awaiting_336h"
+        assert not task.is_complete
+
+    def test_update_720h_completes(self, store, mock_proxy):
+        """720h is the new terminal window — advances collection_status
+        to complete after 30 days of long-tail signal capture."""
+        task = _make_task(
+            sharepoint_id="sp_004",
+            completed_windows=["6h", "24h", "48h", "168h", "336h"],
+            collection_status="awaiting_720h",
+        )
+        store.update_window(task, "720h")
         assert task.collection_status == "complete"
         assert task.is_complete
 

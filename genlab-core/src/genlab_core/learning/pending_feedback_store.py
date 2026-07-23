@@ -25,12 +25,16 @@ from genlab_core.learning.pending_feedback_task import (
 logger = logging.getLogger(__name__)
 
 
-# Status transitions: awaiting_6h → awaiting_24h → awaiting_48h → awaiting_168h → complete
+# Status transitions: awaiting_6h → awaiting_24h → awaiting_48h →
+# awaiting_168h → awaiting_336h → awaiting_720h → complete
+# 2026-07-23: 336h + 720h added to extend long-tail signal capture.
 _NEXT_STATUS: dict[CollectionWindow, CollectionStatus] = {
     "6h": "awaiting_24h",
     "24h": "awaiting_48h",
     "48h": "awaiting_168h",
-    "168h": "complete",
+    "168h": "awaiting_336h",
+    "336h": "awaiting_720h",
+    "720h": "complete",
 }
 
 # Minimum age (hours) before a window is eligible for collection
@@ -39,6 +43,8 @@ _WINDOW_MIN_HOURS: dict[CollectionWindow, float] = {
     "24h": 24.0,
     "48h": 48.0,
     "168h": 168.0,
+    "336h": 336.0,  # 14 days — evergreen resurfacing window
+    "720h": 720.0,  # 30 days — long-tail final capture
 }
 
 
@@ -261,12 +267,18 @@ class PendingFeedbackStore:
         status = _f(fields, "Status", "status", "collection_status", default="awaiting_6h")
 
         # Derive completed_windows from Status since they aren't persisted.
+        # 2026-07-23: added awaiting_336h + awaiting_720h. Legacy "complete"
+        # rows (pre-extension era) map to the OLD 4-window set — they're
+        # treated as fully-collected + the pipeline won't re-open 336h/720h
+        # for them (get_pending's completed_windows check excludes them).
         _STATUS_TO_COMPLETED: dict[str, list[CollectionWindow]] = {
             "awaiting_6h": [],
             "awaiting_24h": ["6h"],
             "awaiting_48h": ["6h", "24h"],
             "awaiting_168h": ["6h", "24h", "48h"],
-            "complete": ["6h", "24h", "48h", "168h"],
+            "awaiting_336h": ["6h", "24h", "48h", "168h"],
+            "awaiting_720h": ["6h", "24h", "48h", "168h", "336h"],
+            "complete": ["6h", "24h", "48h", "168h", "336h", "720h"],
         }
         completed = _STATUS_TO_COMPLETED.get(status, [])
 
