@@ -68,6 +68,46 @@ somewhere. At 15% ε, p(pure exploit) ≈ 17% — still frequent
 exploration but with more "learned choice" reels for engagement
 signal accumulation."""
 
+# 2026-07-23: exploration-debt–aware ε boost.
+# Anime + ai_creators had 50/51 and 41/52 untouched transformation arms
+# respectively (98% and 79% debt) after ~3 months of publishing. At the
+# static 15% ε rate the bandit sees each dimension's untouched arms
+# ~15% / n_arms of the time — even at 100 publishes, a dimension with
+# 5 arms only lands on any particular unplayed arm ~3 times. Some arms
+# never get sampled for months, meaning the bandit can never form an
+# opinion on them and picks them ~never (the Thompson posterior stays
+# at Beta(1,1) uniform prior forever).
+#
+# Boost ε when the current dimension has high fraction of unplayed arms.
+# Higher ε ≈ higher chance of picking uniformly-random rather than
+# argmax — which is the whole point when arms are unplayed and there's
+# nothing to argmax on. Propensity math is preserved because the
+# BOOSTED ε is what the chooser saw, so IPS reads the same value.
+_EPSILON_DEBT_HEAVY = 0.35  # >70% arms in this dimension untouched
+_EPSILON_DEBT_MODERATE = 0.25  # 40-70% untouched
+
+
+def _epsilon_for_candidates(candidates: list[tuple[str, str, float, float]]) -> float:
+    """Compute ε per-dimension based on exploration debt in the candidate
+    pool. Untouched = alpha == beta == 1.0 (Beta(1,1) uniform prior).
+
+    Returns _EPSILON (0.15) for well-explored dimensions; higher values
+    for dimensions with substantial unplayed arms so the bandit can
+    finally form posteriors on them.
+    """
+    if not candidates:
+        return _EPSILON
+    # Untouched = still at the Beta(1,1) uniform prior (α == 1 AND β == 1).
+    # Beta(1.5, 0.5) also sums to 2 but represents partial information
+    # (posterior mean 0.75) — don't count it as untouched.
+    untouched = sum(1 for _arm, _val, a, b in candidates if a == 1.0 and b == 1.0)
+    debt_ratio = untouched / len(candidates)
+    if debt_ratio > 0.7:
+        return _EPSILON_DEBT_HEAVY
+    if debt_ratio > 0.4:
+        return _EPSILON_DEBT_MODERATE
+    return _EPSILON
+
 _DIMENSION_ARM_LIST_FIELDS = {
     "music_mood": "moods",
     "caption_style": "styles",
@@ -180,15 +220,19 @@ def _pick_arm(
 
     r = rng or random
     n = len(candidates)
+    # 2026-07-23: per-dimension exploration-debt-aware ε. When a dimension
+    # has high fraction of unplayed arms, boost ε to accelerate coverage.
+    # IPS-safe because the BOOSTED ε is the one the chooser used.
+    epsilon = _epsilon_for_candidates(candidates)
 
-    if r.random() < _EPSILON:
+    if r.random() < epsilon:
         # Uniform exploration
         arm_id, value, _, _ = r.choice(candidates)
         return TransformationChoice(
             dimension=dimension,
             dimension_value=value,
             arm_id=arm_id,
-            propensity=_EPSILON / n,
+            propensity=epsilon / n,
         )
 
     # Thompson sampling — one Beta(α, β) draw per arm, pick argmax
@@ -201,7 +245,7 @@ def _pick_arm(
     # Propensity approximation — see module docstring.
     # True Thompson propensity requires integrating over Beta pdfs
     # which is O(n²). This lower bound is sufficient for IPS.
-    propensity = (1.0 - _EPSILON) / n + _EPSILON / n
+    propensity = (1.0 - epsilon) / n + epsilon / n
     return TransformationChoice(
         dimension=dimension,
         dimension_value=chosen_value,

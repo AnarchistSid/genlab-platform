@@ -324,5 +324,92 @@ class TestProxyFailure:
         assert result.is_empty()
 
 
+class TestExplorationDebtAwareEpsilon:
+    """2026-07-23: ε boosts when the current dimension has many unplayed arms.
+
+    Rationale: anime + ai_creators had 50/51 and 41/52 untouched
+    transformation arms respectively after ~3 months of publishing at
+    the static 15% ε. Each dimension's unplayed arms rarely got sampled.
+    Debt-aware ε redirects exploration budget to dimensions that need it.
+    """
+
+    def test_epsilon_default_when_all_arms_trained(self):
+        """When every candidate has been trained (α+β > 2), ε stays 0.15."""
+        from genlab_core.media.transformation_selector import (
+            _EPSILON,
+            _epsilon_for_candidates,
+        )
+
+        # 5 trained arms — no debt.
+        trained = [
+            (f"arm_{i}", f"val_{i}", 5.0, 15.0) for i in range(5)
+        ]
+        assert _epsilon_for_candidates(trained) == _EPSILON
+
+    def test_epsilon_boosted_moderate_when_50pct_untouched(self):
+        """40-70% untouched → 0.25 ε (moderate boost)."""
+        from genlab_core.media.transformation_selector import (
+            _EPSILON_DEBT_MODERATE,
+            _epsilon_for_candidates,
+        )
+
+        # 2 trained + 3 untouched = 60% debt
+        mix = [
+            ("a1", "v1", 5.0, 10.0),
+            ("a2", "v2", 3.0, 7.0),
+            ("a3", "v3", 1.0, 1.0),  # untouched
+            ("a4", "v4", 1.0, 1.0),  # untouched
+            ("a5", "v5", 1.0, 1.0),  # untouched
+        ]
+        assert _epsilon_for_candidates(mix) == _EPSILON_DEBT_MODERATE
+
+    def test_epsilon_boosted_heavy_when_over_70pct_untouched(self):
+        """>70% untouched → 0.35 ε (heavy boost). Matches anime's
+        actual state (50/51 = 98%)."""
+        from genlab_core.media.transformation_selector import (
+            _EPSILON_DEBT_HEAVY,
+            _epsilon_for_candidates,
+        )
+
+        # 1 trained + 4 untouched = 80% debt
+        heavy = [
+            ("a1", "v1", 5.0, 10.0),
+            ("a2", "v2", 1.0, 1.0),  # untouched
+            ("a3", "v3", 1.0, 1.0),
+            ("a4", "v4", 1.0, 1.0),
+            ("a5", "v5", 1.0, 1.0),
+        ]
+        assert _epsilon_for_candidates(heavy) == _EPSILON_DEBT_HEAVY
+
+    def test_empty_candidates_returns_default(self):
+        """Empty list defaults to _EPSILON — no division-by-zero risk."""
+        from genlab_core.media.transformation_selector import (
+            _EPSILON,
+            _epsilon_for_candidates,
+        )
+
+        assert _epsilon_for_candidates([]) == _EPSILON
+
+    def test_untouched_uses_alpha_plus_beta_eq_2(self):
+        """The untouched criterion is α+β == 2.0 (Beta(1,1) prior).
+        Beta(1.5, 0.5) has same alpha+beta but represents partial info
+        — should NOT count as untouched."""
+        from genlab_core.media.transformation_selector import (
+            _epsilon_for_candidates,
+        )
+
+        # 1 truly untouched + 4 partially-informed = 20% debt → default 0.15
+        mixed = [
+            ("a1", "v1", 1.0, 1.0),  # untouched
+            ("a2", "v2", 1.5, 0.5),  # partially informed
+            ("a3", "v3", 0.5, 1.5),  # partially informed
+            ("a4", "v4", 1.2, 0.8),  # partially informed
+            ("a5", "v5", 1.1, 0.9),  # partially informed
+        ]
+        # 1/5 = 20% debt → default 0.15
+        from genlab_core.media.transformation_selector import _EPSILON
+        assert _epsilon_for_candidates(mixed) == _EPSILON
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])
