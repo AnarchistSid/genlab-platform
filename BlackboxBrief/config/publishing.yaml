@@ -43,6 +43,27 @@
 #   - global kill switch (file at /opt/genlab/.runtime/auto_approve_kill_switch)
 #                       → disables for ALL niches; operator panic button
 
+# Per-platform enable/disable (2026-07-23 add).
+# BlackboxBrief historically had no ``platforms`` block → the publisher
+# default list (instagram, youtube, facebook, twitter, threads) was
+# passed to run_publish unchanged. Every ai_creators publish attempted
+# twitter, which fails every day with:
+#   - "Layer 4 attribution gate: tweet text missing credit line"
+#   - "402 Payment Required" (Twitter API paid tier not provisioned)
+# per rule #23 (CLAUDE.md): Twitter is EXPLICITLY OUT OF SCOPE. The
+# 4-platform focus is YT / FB / IG / Threads. Disabling twitter here
+# aligns ai_creators with the operator directive AND stops the daily
+# FAILED alerts that inflated publish-failure metrics.
+#
+# The other 4 niches already have ``platforms.x.enabled: false`` in
+# their publishing.yaml files (via the ``platforms.<name>.enabled:
+# false`` denylist shape). This block uses the same shape so
+# ``genlab_core.publishing.publish_all_platforms._filter_enabled_platforms``
+# strips twitter from the default list before run_publish sees it.
+platforms:
+  twitter:
+    enabled: false
+
 auto_publish:
   # 2026-06-22 DRAFT PR — ready-to-flip state for ai_creators AUTO #2
   # enforcement. This PR is held in GitHub Draft state until the
