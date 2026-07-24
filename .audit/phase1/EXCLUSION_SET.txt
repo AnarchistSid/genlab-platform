@@ -1,0 +1,1 @@
+.tmp .hypothesis .playwright-mcp .grimp_cache .import_linter_cache node_modules .venv dist build __pycache__ .audit .serena .media .logs ..bfg-report

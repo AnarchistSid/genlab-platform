@@ -1,0 +1,76 @@
+stage,channel,executed,runs_7d,success_rate,evidence
+trending_video_fetch,ai_creators,y,24,,publishing_analytics 7d rows=24 (upstream implied)
+trending_video_fetch,gaming,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+trending_video_fetch,sports,y,20,,publishing_analytics 7d rows=20 (upstream implied)
+trending_video_fetch,movies,y,10,,publishing_analytics 7d rows=10 (upstream implied)
+trending_video_fetch,anime,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+fetch_stories,ai_creators,y,24,,publishing_analytics 7d rows=24 (upstream implied)
+fetch_stories,gaming,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+fetch_stories,sports,y,20,,publishing_analytics 7d rows=20 (upstream implied)
+fetch_stories,movies,y,10,,publishing_analytics 7d rows=10 (upstream implied)
+fetch_stories,anime,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+score_and_filter,ai_creators,y,24,,publishing_analytics 7d rows=24 (upstream implied)
+score_and_filter,gaming,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+score_and_filter,sports,y,20,,publishing_analytics 7d rows=20 (upstream implied)
+score_and_filter,movies,y,10,,publishing_analytics 7d rows=10 (upstream implied)
+score_and_filter,anime,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+compose_blueprints,ai_creators,y,24,,publishing_analytics 7d rows=24 (upstream implied)
+compose_blueprints,gaming,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+compose_blueprints,sports,y,20,,publishing_analytics 7d rows=20 (upstream implied)
+compose_blueprints,movies,y,10,,publishing_analytics 7d rows=10 (upstream implied)
+compose_blueprints,anime,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+write_content,ai_creators,y,24,,publishing_analytics 7d rows=24 (upstream implied)
+write_content,gaming,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+write_content,sports,y,20,,publishing_analytics 7d rows=20 (upstream implied)
+write_content,movies,y,10,,publishing_analytics 7d rows=10 (upstream implied)
+write_content,anime,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+render_visuals,ai_creators,y,24,,publishing_analytics 7d rows=24 (upstream implied)
+render_visuals,gaming,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+render_visuals,sports,y,20,,publishing_analytics 7d rows=20 (upstream implied)
+render_visuals,movies,y,10,,publishing_analytics 7d rows=10 (upstream implied)
+render_visuals,anime,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+qc_gates,ai_creators,y,24,,publishing_analytics 7d rows=24 (upstream implied)
+qc_gates,gaming,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+qc_gates,sports,y,20,,publishing_analytics 7d rows=20 (upstream implied)
+qc_gates,movies,y,10,,publishing_analytics 7d rows=10 (upstream implied)
+qc_gates,anime,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+video_gate,ai_creators,y,24,,publishing_analytics 7d rows=24 (upstream implied)
+video_gate,gaming,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+video_gate,sports,y,20,,publishing_analytics 7d rows=20 (upstream implied)
+video_gate,movies,y,10,,publishing_analytics 7d rows=10 (upstream implied)
+video_gate,anime,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+push_to_backlog,ai_creators,y,24,,publishing_analytics 7d rows=24 (upstream implied)
+push_to_backlog,gaming,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+push_to_backlog,sports,y,20,,publishing_analytics 7d rows=20 (upstream implied)
+push_to_backlog,movies,y,10,,publishing_analytics 7d rows=10 (upstream implied)
+push_to_backlog,anime,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+publish_all_platforms,ai_creators,y,24,,publishing_analytics 7d rows=24 (upstream implied)
+publish_all_platforms,gaming,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+publish_all_platforms,sports,y,20,,publishing_analytics 7d rows=20 (upstream implied)
+publish_all_platforms,movies,y,10,,publishing_analytics 7d rows=10 (upstream implied)
+publish_all_platforms,anime,y,18,,publishing_analytics 7d rows=18 (upstream implied)
+metric_collector,ai_creators,y,13,,pending_feedback created_7d=13
+metric_collector,gaming,y,14,,pending_feedback created_7d=14
+metric_collector,sports,y,14,,pending_feedback created_7d=14
+metric_collector,movies,y,4,,pending_feedback created_7d=4
+metric_collector,anime,y,13,,pending_feedback created_7d=13
+performance_learner,ai_creators,y,39,,bandit_arms moved_7d=39
+performance_learner,gaming,y,46,,bandit_arms moved_7d=46
+performance_learner,sports,y,52,,bandit_arms moved_7d=52
+performance_learner,movies,y,29,,bandit_arms moved_7d=29
+performance_learner,anime,y,32,,bandit_arms moved_7d=32
+bandit_update,ai_creators,y,39,,bandit_arms moved_7d=39
+bandit_update,gaming,y,46,,bandit_arms moved_7d=46
+bandit_update,sports,y,52,,bandit_arms moved_7d=52
+bandit_update,movies,y,29,,bandit_arms moved_7d=29
+bandit_update,anime,y,32,,bandit_arms moved_7d=32
+fetch_insights,ai_creators,y,4,,.logs/fetch_insights_ai_creators_*h.log exist + mtime today
+fetch_insights,gaming,y,4,,.logs/fetch_insights_gaming_*h.log exist + mtime today
+fetch_insights,sports,y,4,,.logs/fetch_insights_sports_*h.log exist + mtime today
+fetch_insights,movies,y,4,,.logs/fetch_insights_movies_*h.log exist + mtime today
+fetch_insights,anime,y,4,,.logs/fetch_insights_anime_*h.log exist + mtime today
+engagement_reply,ai_creators,unknown,0,,not queried this session — pending_engagement table
+engagement_reply,gaming,unknown,0,,not queried this session — pending_engagement table
+engagement_reply,sports,unknown,0,,not queried this session — pending_engagement table
+engagement_reply,movies,unknown,0,,not queried this session — pending_engagement table
+engagement_reply,anime,unknown,0,,not queried this session — pending_engagement table

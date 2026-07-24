@@ -1,0 +1,35 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.7, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/anarchistsid/GenLab/genlab-core
+configfile: pyproject.toml
+plugins: anyio-4.12.1, timeout-2.4.0, hypothesis-6.151.9, cov-7.0.0
+collected 5 items
+
+genlab-core/tests/compliance/test_disclosure_and_health.py .             [ 20%]
+genlab-core/tests/engagement/test_outbound_targeting_competitor_filter.py F [ 40%]
+                                                                         [ 40%]
+genlab-core/tests/engagement/test_outbound_youtube_fetcher_pin.py F      [ 60%]
+genlab-core/tests/intel/test_refit_top_creator_priors.py F               [ 80%]
+genlab-core/tests/learning/test_rationale_classifier.py .                [100%]
+
+=================================== FAILURES ===================================
+____ TestCompetitorBlocklistFilter.test_no_blocklist_all_videos_considered _____
+genlab-core/tests/engagement/test_outbound_targeting_competitor_filter.py:50: in test_no_blocklist_all_videos_considered
+    assert len(targets) > 0, "expected at least one target from unblocked video"
+E   AssertionError: expected at least one target from unblocked video
+E   assert 0 > 0
+E    +  where 0 = len([])
+_________________ test_end_to_end_wire_with_all_layers_mocked __________________
+genlab-core/tests/engagement/test_outbound_youtube_fetcher_pin.py:281: in test_end_to_end_wire_with_all_layers_mocked
+    assert len(targets) > 0
+E   assert 0 > 0
+E    +  where 0 = len([])
+______________ TestFlagAndKeyGuards.test_missing_api_key_exits_1 _______________
+genlab-core/tests/intel/test_refit_top_creator_priors.py:105: in test_missing_api_key_exits_1
+    assert result == 1
+E   assert 0 == 1
+=========================== short test summary info ============================
+FAILED genlab-core/tests/engagement/test_outbound_targeting_competitor_filter.py::TestCompetitorBlocklistFilter::test_no_blocklist_all_videos_considered
+FAILED genlab-core/tests/engagement/test_outbound_youtube_fetcher_pin.py::test_end_to_end_wire_with_all_layers_mocked
+FAILED genlab-core/tests/intel/test_refit_top_creator_priors.py::TestFlagAndKeyGuards::test_missing_api_key_exits_1
+========================= 3 failed, 2 passed in 0.55s ==========================

@@ -1,0 +1,55 @@
+SET
+SET
+=== TRACE for bp a86a541f (anime, arm=adaptation_news, 3 rewards closed)
+                  bp                  |     arm_id      |     bp_updated      
+--------------------------------------+-----------------+---------------------
+ a86a541f-608f-4a39-a056-c15cf55bba2d | adaptation_news | 2026-07-16 07:05:58
+(1 row)
+
+=== PA rows
+ platform  |           post_id           |    status     |    published_at     | views | likes 
+-----------+-----------------------------+---------------+---------------------+-------+-------
+ facebook  | facebook:836650176049030    | INSIGHTS_168H | 2026-07-16 07:05:58 |     0 |     0
+ instagram | instagram:18111353339511729 | INSIGHTS_168H | 2026-07-16 07:03:04 |     0 |     8
+ youtube   | youtube:iWSugODIyg4         | INSIGHTS_168H | 2026-07-16 07:05:58 |     0 |     0
+(3 rows)
+
+=== pending_feedback with reward
+                                   task_id                                   | platform  |     arm_id      |      reward_48h      | collection_status |    publish_time     |     updated_at      
+-----------------------------------------------------------------------------+-----------+-----------------+----------------------+-------------------+---------------------+---------------------
+ 3178cba7a956a172c60f3f8823d46350d26e3e94105cb138fd602e0ff071127e__facebook  | facebook  | adaptation_news | 0.028290196078431373 | complete          | 2026-07-16 07:05:58 | 2026-07-23 07:24:51
+ 3178cba7a956a172c60f3f8823d46350d26e3e94105cb138fd602e0ff071127e__instagram | instagram | adaptation_news | 0.041666666666666664 | complete          | 2026-07-16 07:05:58 | 2026-07-23 07:24:53
+ 3178cba7a956a172c60f3f8823d46350d26e3e94105cb138fd602e0ff071127e__youtube   | youtube   | adaptation_news |                    0 | complete          | 2026-07-16 07:05:58 | 2026-07-23 07:24:52
+(3 rows)
+
+=== bandit_arm adaptation_news anime — history
+     arm_id      |       alpha       |        beta        |     updated_at      
+-----------------+-------------------+--------------------+---------------------
+ adaptation_news | 5.636692379084967 | 29.093294287581692 | 2026-07-23 14:34:14
+(1 row)
+
+=== any anime bandit_arms updated after 2026-07-18 (48h post reel publish)?
+                  arm_id                  |       alpha        |        beta        |     updated_at      
+------------------------------------------+--------------------+--------------------+---------------------
+ hour:7:facebook:anime                    | 1.2605414901960783 | 2.7394585098039217 | 2026-07-18 07:52:37
+ hour:10:instagram:anime                  |                  1 |                  2 | 2026-07-23 14:34:14
+ adaptation_news                          |  5.636692379084967 | 29.093294287581692 | 2026-07-23 14:34:14
+ hour:10:youtube:anime                    | 1.5625000000000002 |             2.4375 | 2026-07-23 14:34:15
+ hour:7:instagram:anime                   | 1.1467171717171718 |  4.853282828282829 | 2026-07-23 14:34:17
+ episode_moment                           |  5.708803082251082 |  86.35459691774889 | 2026-07-23 14:34:17
+ season_announcement                      |   9.34506082366522 |  90.65493917633472 | 2026-07-23 14:34:18
+ hour:7:youtube:anime                     |               1.57 |               5.43 | 2026-07-23 14:34:18
+ fight_scene                              | 3.9638061818181813 | 15.093753818181817 | 2026-07-23 14:34:18
+ style:anime:bold_claim                   | 4.0773927128427125 |  7.922607287157287 | 2026-07-23 14:34:18
+ style:anime:revelation                   | 1.7658328841354725 |  13.23416711586453 | 2026-07-23 14:34:18
+ style:anime:question                     |  2.909934248366013 | 22.090065751633986 | 2026-07-23 14:34:19
+ hour:6:threads:anime                     |                  1 |                  3 | 2026-07-23 14:34:19
+ style:anime:comparison                   | 2.8071804907902553 |  16.19281950920974 | 2026-07-23 14:34:19
+ transform__highlight_moment__audio_peak  |                  1 |                  2 | 2026-07-23 14:34:19
+ style:anime:controversy                  |  2.817813396825397 | 19.182186603174603 | 2026-07-23 14:34:19
+ hour:6:facebook:anime                    |  2.493340235294117 | 14.506659764705885 | 2026-07-24 06:53:23
+ hour:6:youtube:anime                     |             2.2105 |            16.7895 | 2026-07-24 06:53:35
+ transform__pan_zoom__punch_in            | 1.1263286274509805 | 3.8736713725490195 | 2026-07-24 06:53:40
+ transform__hook_framing__jump_cut_visual | 1.1263286274509805 |  4.873671372549019 | 2026-07-24 06:53:40
+(20 rows)
+

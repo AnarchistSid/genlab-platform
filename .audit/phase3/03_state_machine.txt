@@ -1,0 +1,118 @@
+SET
+SET
+=== blueprint status distribution
+    status    |                   action_taken                   | count 
+--------------+--------------------------------------------------+-------
+ PUBLISHED    | approved                                         |   527
+ ARCHIVED     | rejected                                         |   436
+ ARCHIVED     |                                                  |   367
+ ARCHIVED     | auto_archived_failed_video                       |   172
+ ARCHIVED     | auto_archived_missing_media                      |   130
+ ARCHIVED     | auto_archived_no_video                           |   118
+ ARCHIVED     | auto_archived_orphan                             |   116
+ ARCHIVED     | approved                                         |    89
+ ARCHIVED     | archived                                         |    27
+ ARCHIVED     | auto_archived_no_video_quota_exhausted           |    24
+ ARCHIVED     | auto_archived_generic_hook                       |    18
+ ARCHIVED     | auto_archived_stale_content                      |    17
+ ARCHIVED     | auto_archived_render_never_completed             |    16
+ ARCHIVED     | auto_archived_duplicate_story                    |    13
+ VISUAL_READY | approved                                         |    10
+ ARCHIVED     | auto_archived_stale_template_hooks               |     9
+ ARCHIVED     | auto_archived_source_not_downloadable            |     6
+ DRAFTED      |                                                  |     5
+ ARCHIVED     | auto_archived_stale_publish_failed               |     5
+ ARCHIVED     | auto_archived_rejected_shared_video              |     4
+ ARCHIVED     | auto_archived_stale_schedule                     |     4
+ ARCHIVED     | cancelled                                        |     3
+ ARCHIVED     | auto_archived_render_failed_pre_2026_07_07_guard |     3
+ VISUAL_READY |                                                  |     3
+ ARCHIVED     | archived_by_ops_2026_07_21                       |     2
+ ARCHIVED     | auto_archived_already_published_story            |     2
+ ARCHIVED     | auto_archived_video_too_short                    |     2
+ PUBLISHED    |                                                  |     1
+ ARCHIVED     | auto_archived_weak_hook                          |     1
+ ARCHIVED     | auto_archived_rejected_scheduled_game            |     1
+(30 rows)
+
+=== stuck non-terminal > 48h
+  niche_id   |    status    | count |   oldest   |   newest   
+-------------+--------------+-------+------------+------------
+ ai_creators | VISUAL_READY |     1 | 2026-07-21 | 2026-07-21
+ sports      | VISUAL_READY |     1 | 2026-07-21 | 2026-07-21
+ gaming      | VISUAL_READY |     1 | 2026-07-21 | 2026-07-21
+ anime       | VISUAL_READY |     1 | 2026-07-21 | 2026-07-21
+(4 rows)
+
+=== PUBLISHED with no publishing_analytics row (lies)
+  niche_id   | orphan_published_blueprints 
+-------------+-----------------------------
+ ai_creators |                           2
+ sports      |                           2
+ gaming      |                          15
+ anime       |                           3
+ movies      |                           3
+(5 rows)
+
+=== VISUAL_READY but never approved (publisher gate never met)
+ niche_id | count 
+----------+-------
+ gaming   |     3
+(1 row)
+
+=== bandit_arms movement over 30d
+  niche_id   | total | moved_30d | moved_7d 
+-------------+-------+-----------+----------
+ ai_creators |    77 |        77 |       39
+ anime       |    74 |        74 |       32
+ gaming      |    74 |        74 |       46
+ movies      |    73 |        72 |       29
+ sports      |    73 |        71 |       52
+(5 rows)
+
+=== pending_feedback reward completion
+  niche_id   | total | with_reward | created_7d 
+-------------+-------+-------------+------------
+ ai_creators |   284 |         248 |         13
+ anime       |   217 |         210 |         13
+ gaming      |   248 |         241 |         14
+ movies      |   192 |         189 |          4
+ sports      |   249 |         242 |         14
+(5 rows)
+
+=== rowsecurity + role bypass check
+ current_user | is_super 
+--------------+----------
+ genlab       | on
+(1 row)
+
+ rolsuper | rolbypassrls 
+----------+--------------
+ t        | t
+(1 row)
+
+=== RLS policies present
+      tablename       | rowsecurity 
+----------------------+-------------
+ affiliate_clicks     | t
+ blueprints           | t
+ affiliate_revenue    | t
+ analytics            | t
+ ab_tests             | t
+ assets               | t
+ content_memory       | t
+ email_subscribers    | t
+ monetisationprogress | t
+ audience_snapshots   | t
+ pending_feedback     | t
+ pending_engagement   | t
+ preference_data      | t
+ sources              | t
+ publishing_analytics | t
+ stories              | t
+ templates            | t
+ config_updates       | t
+ tier_history         | t
+ bandit_arms          | t
+(20 rows)
+

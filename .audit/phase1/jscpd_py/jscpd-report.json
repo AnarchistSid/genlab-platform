@@ -1,0 +1,645 @@
+{
+  "duplicates": [
+    {
+      "firstFile": {
+        "end": 235,
+        "endLoc": {
+          "column": 33,
+          "line": 235,
+          "position": 8207
+        },
+        "name": "execution/sources/youtube_connector.py",
+        "start": 220,
+        "startLoc": {
+          "column": 27,
+          "line": 220,
+          "position": 7698
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 16,
+      "secondFile": {
+        "end": 261,
+        "endLoc": {
+          "column": 13,
+          "line": 261,
+          "position": 9072
+        },
+        "name": "execution/sources/youtube_connector.py",
+        "start": 246,
+        "startLoc": {
+          "column": 40,
+          "line": 246,
+          "position": 8583
+        }
+      },
+      "tokens": 57
+    },
+    {
+      "firstFile": {
+        "end": 18,
+        "endLoc": {
+          "column": 17,
+          "line": 18,
+          "position": 392
+        },
+        "name": "run_pipeline.py",
+        "start": 3,
+        "startLoc": {
+          "column": 0,
+          "line": 3,
+          "position": 65
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 16,
+      "secondFile": {
+        "end": 18,
+        "endLoc": {
+          "column": 17,
+          "line": 18,
+          "position": 388
+        },
+        "name": "run_pipeline.py",
+        "start": 3,
+        "startLoc": {
+          "column": 0,
+          "line": 3,
+          "position": 61
+        }
+      },
+      "tokens": 64
+    },
+    {
+      "firstFile": {
+        "end": 18,
+        "endLoc": {
+          "column": 17,
+          "line": 18,
+          "position": 392
+        },
+        "name": "run_pipeline.py",
+        "start": 3,
+        "startLoc": {
+          "column": 0,
+          "line": 3,
+          "position": 65
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 16,
+      "secondFile": {
+        "end": 18,
+        "endLoc": {
+          "column": 17,
+          "line": 18,
+          "position": 388
+        },
+        "name": "run_pipeline.py",
+        "start": 3,
+        "startLoc": {
+          "column": 0,
+          "line": 3,
+          "position": 61
+        }
+      },
+      "tokens": 64
+    },
+    {
+      "firstFile": {
+        "end": 18,
+        "endLoc": {
+          "column": 17,
+          "line": 18,
+          "position": 392
+        },
+        "name": "run_pipeline.py",
+        "start": 3,
+        "startLoc": {
+          "column": 0,
+          "line": 3,
+          "position": 65
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 16,
+      "secondFile": {
+        "end": 18,
+        "endLoc": {
+          "column": 17,
+          "line": 18,
+          "position": 388
+        },
+        "name": "run_pipeline.py",
+        "start": 3,
+        "startLoc": {
+          "column": 0,
+          "line": 3,
+          "position": 61
+        }
+      },
+      "tokens": 64
+    },
+    {
+      "firstFile": {
+        "end": 43,
+        "endLoc": {
+          "column": 20,
+          "line": 43,
+          "position": 1353
+        },
+        "name": "run_pipeline.py",
+        "start": 24,
+        "startLoc": {
+          "column": 12,
+          "line": 24,
+          "position": 706
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 20,
+      "secondFile": {
+        "end": 43,
+        "endLoc": {
+          "column": 20,
+          "line": 43,
+          "position": 1331
+        },
+        "name": "run_pipeline.py",
+        "start": 24,
+        "startLoc": {
+          "column": 12,
+          "line": 24,
+          "position": 684
+        }
+      },
+      "tokens": 70
+    },
+    {
+      "firstFile": {
+        "end": 43,
+        "endLoc": {
+          "column": 20,
+          "line": 43,
+          "position": 1353
+        },
+        "name": "run_pipeline.py",
+        "start": 24,
+        "startLoc": {
+          "column": 12,
+          "line": 24,
+          "position": 706
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 20,
+      "secondFile": {
+        "end": 43,
+        "endLoc": {
+          "column": 20,
+          "line": 43,
+          "position": 1328
+        },
+        "name": "run_pipeline.py",
+        "start": 24,
+        "startLoc": {
+          "column": 12,
+          "line": 24,
+          "position": 681
+        }
+      },
+      "tokens": 70
+    },
+    {
+      "firstFile": {
+        "end": 43,
+        "endLoc": {
+          "column": 20,
+          "line": 43,
+          "position": 1353
+        },
+        "name": "run_pipeline.py",
+        "start": 24,
+        "startLoc": {
+          "column": 12,
+          "line": 24,
+          "position": 706
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 20,
+      "secondFile": {
+        "end": 43,
+        "endLoc": {
+          "column": 20,
+          "line": 43,
+          "position": 1331
+        },
+        "name": "run_pipeline.py",
+        "start": 24,
+        "startLoc": {
+          "column": 12,
+          "line": 24,
+          "position": 684
+        }
+      },
+      "tokens": 70
+    },
+    {
+      "firstFile": {
+        "end": 79,
+        "endLoc": {
+          "column": 7,
+          "line": 79,
+          "position": 2898
+        },
+        "name": "cw_strategies/scoring.py",
+        "start": 64,
+        "startLoc": {
+          "column": 29,
+          "line": 64,
+          "position": 2344
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 16,
+      "secondFile": {
+        "end": 138,
+        "endLoc": {
+          "column": 3,
+          "line": 138,
+          "position": 4602
+        },
+        "name": "niches/gaming/stages/score_gaming_clips.py",
+        "start": 120,
+        "startLoc": {
+          "column": 25,
+          "line": 120,
+          "position": 4101
+        }
+      },
+      "tokens": 89
+    },
+    {
+      "firstFile": {
+        "end": 28,
+        "endLoc": {
+          "column": 38,
+          "line": 28,
+          "position": 872
+        },
+        "name": "cw_strategies/visual_render.py",
+        "start": 5,
+        "startLoc": {
+          "column": 55,
+          "line": 5,
+          "position": 222
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 24,
+      "secondFile": {
+        "end": 26,
+        "endLoc": {
+          "column": 38,
+          "line": 26,
+          "position": 772
+        },
+        "name": "sr_strategies/visual_render.py",
+        "start": 3,
+        "startLoc": {
+          "column": 80,
+          "line": 3,
+          "position": 122
+        }
+      },
+      "tokens": 110
+    },
+    {
+      "firstFile": {
+        "end": 112,
+        "endLoc": {
+          "column": 62,
+          "line": 112,
+          "position": 4224
+        },
+        "name": "cw_strategies/visual_render.py",
+        "start": 89,
+        "startLoc": {
+          "column": 77,
+          "line": 89,
+          "position": 3349
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 24,
+      "secondFile": {
+        "end": 112,
+        "endLoc": {
+          "column": 62,
+          "line": 112,
+          "position": 4136
+        },
+        "name": "sr_strategies/visual_render.py",
+        "start": 89,
+        "startLoc": {
+          "column": 77,
+          "line": 89,
+          "position": 3261
+        }
+      },
+      "tokens": 99
+    },
+    {
+      "firstFile": {
+        "end": 152,
+        "endLoc": {
+          "column": 49,
+          "line": 152,
+          "position": 5830
+        },
+        "name": "cw_strategies/visual_render.py",
+        "start": 135,
+        "startLoc": {
+          "column": 48,
+          "line": 135,
+          "position": 5275
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 18,
+      "secondFile": {
+        "end": 163,
+        "endLoc": {
+          "column": 49,
+          "line": 163,
+          "position": 5786
+        },
+        "name": "sr_strategies/visual_render.py",
+        "start": 146,
+        "startLoc": {
+          "column": 33,
+          "line": 146,
+          "position": 5231
+        }
+      },
+      "tokens": 79
+    },
+    {
+      "firstFile": {
+        "end": 194,
+        "endLoc": {
+          "column": 63,
+          "line": 194,
+          "position": 7410
+        },
+        "name": "cw_strategies/visual_render.py",
+        "start": 169,
+        "startLoc": {
+          "column": 77,
+          "line": 169,
+          "position": 6338
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 26,
+      "secondFile": {
+        "end": 216,
+        "endLoc": {
+          "column": 63,
+          "line": 216,
+          "position": 7573
+        },
+        "name": "fd_strategies/visual_render.py",
+        "start": 191,
+        "startLoc": {
+          "column": 76,
+          "line": 191,
+          "position": 6501
+        }
+      },
+      "tokens": 160
+    },
+    {
+      "firstFile": {
+        "end": 200,
+        "endLoc": {
+          "column": 43,
+          "line": 200,
+          "position": 7748
+        },
+        "name": "cw_strategies/visual_render.py",
+        "start": 169,
+        "startLoc": {
+          "column": 77,
+          "line": 169,
+          "position": 6338
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 32,
+      "secondFile": {
+        "end": 213,
+        "endLoc": {
+          "column": 43,
+          "line": 213,
+          "position": 7805
+        },
+        "name": "sr_strategies/visual_render.py",
+        "start": 182,
+        "startLoc": {
+          "column": 77,
+          "line": 182,
+          "position": 6395
+        }
+      },
+      "tokens": 198
+    },
+    {
+      "firstFile": {
+        "end": 25,
+        "endLoc": {
+          "column": 46,
+          "line": 25,
+          "position": 776
+        },
+        "name": "cw_strategies/writing.py",
+        "start": 5,
+        "startLoc": {
+          "column": 55,
+          "line": 5,
+          "position": 238
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 21,
+      "secondFile": {
+        "end": 25,
+        "endLoc": {
+          "column": 46,
+          "line": 25,
+          "position": 791
+        },
+        "name": "sr_strategies/writing.py",
+        "start": 5,
+        "startLoc": {
+          "column": 66,
+          "line": 5,
+          "position": 253
+        }
+      },
+      "tokens": 76
+    },
+    {
+      "firstFile": {
+        "end": 44,
+        "endLoc": {
+          "column": 5,
+          "line": 44,
+          "position": 1383
+        },
+        "name": "cw_strategies/writing.py",
+        "start": 12,
+        "startLoc": {
+          "column": 0,
+          "line": 12,
+          "position": 305
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 33,
+      "secondFile": {
+        "end": 42,
+        "endLoc": {
+          "column": 5,
+          "line": 42,
+          "position": 1362
+        },
+        "name": "fd_strategies/writing.py",
+        "start": 10,
+        "startLoc": {
+          "column": 0,
+          "line": 10,
+          "position": 284
+        }
+      },
+      "tokens": 207
+    },
+    {
+      "firstFile": {
+        "end": 73,
+        "endLoc": {
+          "column": 10,
+          "line": 73,
+          "position": 2373
+        },
+        "name": "cw_strategies/writing.py",
+        "start": 56,
+        "startLoc": {
+          "column": 37,
+          "line": 56,
+          "position": 1845
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 18,
+      "secondFile": {
+        "end": 78,
+        "endLoc": {
+          "column": 10,
+          "line": 78,
+          "position": 2775
+        },
+        "name": "sr_strategies/writing.py",
+        "start": 61,
+        "startLoc": {
+          "column": 41,
+          "line": 61,
+          "position": 2247
+        }
+      },
+      "tokens": 110
+    },
+    {
+      "firstFile": {
+        "end": 315,
+        "endLoc": {
+          "column": 27,
+          "line": 315,
+          "position": 10350
+        },
+        "name": "niches/gaming/tools/ass_subtitle_generator.py",
+        "start": 296,
+        "startLoc": {
+          "column": 4,
+          "line": 296,
+          "position": 10004
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 20,
+      "secondFile": {
+        "end": 299,
+        "endLoc": {
+          "column": 27,
+          "line": 299,
+          "position": 9337
+        },
+        "name": "niches/gaming/tools/caption_generator.py",
+        "start": 280,
+        "startLoc": {
+          "column": 4,
+          "line": 280,
+          "position": 8991
+        }
+      },
+      "tokens": 53
+    }
+  ],
+  "statistics": {
+    "detectionDate": "2026-07-24T09:51:15.707Z",
+    "formats": {
+      "python": {
+        "clones": 17,
+        "duplicatedLines": 339,
+        "duplicatedTokens": 1640,
+        "lines": 18408,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 1.8415906127770534,
+        "percentageTokens": 1.688180676507525,
+        "sources": 83,
+        "tokens": 97146
+      }
+    },
+    "total": {
+      "clones": 17,
+      "duplicatedLines": 339,
+      "duplicatedTokens": 1640,
+      "lines": 18408,
+      "newClones": 0,
+      "newDuplicatedLines": 0,
+      "percentage": 1.8415906127770534,
+      "percentageTokens": 1.688180676507525,
+      "sources": 83,
+      "tokens": 97146
+    }
+  }
+}

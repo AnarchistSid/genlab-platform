@@ -1,0 +1,110 @@
+=== /opt/genlab/.tmp/runs/anime_20260723_060004/visuals/d3853a2b463dab51a368ef5c9bf435ffd9b818f049c334c0060e5ffb6155508f/d3853a2b463dab51_reel.mp4
+codec_name=h264
+codec_type=video
+width=1080
+height=1920
+nb_frames=482
+codec_name=aac
+codec_type=audio
+nb_frames=751
+duration=16.066667
+size=3614001
+=== /opt/genlab/.tmp/runs/anime_20260722_060005/visuals/2bfb9b201894f71f7aa9561d49c4b06cfca0947a9940fc86d83e1fe96435acb1/2bfb9b201894f71f_reel.mp4
+codec_name=h264
+codec_type=video
+width=1080
+height=1920
+nb_frames=482
+codec_name=aac
+codec_type=audio
+nb_frames=751
+duration=16.066016
+size=6207661
+=== /opt/genlab/.tmp/runs/ai_creators_20260724_023003/visuals/4ad0e776e2fd5774b786c77429f4dff335e66f62aa17f47f7f20c9f3a07658ae/4ad0e776e2fd5774_reel.mp4
+codec_name=h264
+codec_type=video
+width=1080
+height=1920
+nb_frames=630
+codec_name=aac
+codec_type=audio
+nb_frames=988
+duration=21.056000
+size=9447980
+=== /opt/genlab/.tmp/runs/ai_creators_20260724_023003/visuals/a649ee722f5e6dceb14193c9f9dd438c2e8f64b2886b0c218f62cc518422a9e7/a649ee722f5e6dce_reel.mp4
+codec_name=h264
+codec_type=video
+width=1080
+height=1920
+nb_frames=628
+codec_name=aac
+codec_type=audio
+nb_frames=987
+duration=21.034000
+size=1760775
+=== /opt/genlab/.tmp/runs/ai_creators_20260724_023003/visuals/e1e679f27298975d087a1023644c8002ddff6d28b1753d4988138666a9b2915e/e1e679f27298975d_reel.mp4
+codec_name=h264
+codec_type=video
+width=1080
+height=1920
+nb_frames=629
+codec_name=aac
+codec_type=audio
+nb_frames=987
+duration=21.034000
+size=850416
+=== /opt/genlab/.tmp/runs/ai_creators_20260724_023003/visuals/c13a72d01024c1146eeeb7d487ebba9471967ea9312d3445cc0a6f924dd27cba/c13a72d01024c114_reel.mp4
+codec_name=h264
+codec_type=video
+width=1080
+height=1920
+nb_frames=629
+codec_name=aac
+codec_type=audio
+nb_frames=987
+duration=21.034000
+size=7820676
+=== /opt/genlab/.tmp/runs/ai_creators_20260723_023004/visuals/c13a72d01024c1146eeeb7d487ebba9471967ea9312d3445cc0a6f924dd27cba/c13a72d01024c114_reel.mp4
+codec_name=h264
+codec_type=video
+width=1080
+height=1920
+nb_frames=479
+codec_name=aac
+codec_type=audio
+nb_frames=751
+duration=16.000000
+size=8562586
+=== /opt/genlab/.tmp/runs/movies_20260722_085311/visuals/fb4712844340439168f68ed7f8898c6a8c4f9da2ca59e061ad3f5bb7a29e1ffe/fb47128443404391_reel.mp4
+codec_name=h264
+codec_type=video
+width=1080
+height=1920
+nb_frames=524
+codec_name=aac
+codec_type=audio
+nb_frames=752
+duration=16.001000
+size=6946649
+=== /opt/genlab/.tmp/runs/anime_20260724_060006/visuals/cc7b493dbb385790fa4480aa68a2c2040ea3fa0a1e0009d5c6e73527bb6b1e6c/cc7b493dbb385790_reel.mp4
+codec_name=h264
+codec_type=video
+width=1080
+height=1920
+nb_frames=482
+codec_name=aac
+codec_type=audio
+nb_frames=751
+duration=16.066016
+size=7002582
+=== /opt/genlab/.tmp/runs/sports_20260723_050005/visuals/a0248c1c77cdddc101cb1a6827813de56e434873c48c6c68e6064cc9be661d98/a0248c1c77cdddc1_reel.mp4
+codec_name=h264
+codec_type=video
+width=1080
+height=1920
+nb_frames=630
+codec_name=aac
+codec_type=audio
+nb_frames=987
+duration=21.034000
+size=3917403

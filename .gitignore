@@ -154,3 +154,7 @@ CLEANUP_PLAN.sh
 # Trained ML model artifacts (regenerable from train_hook_classifier.py)
 genlab-core/models/
 deploy/.deploy.log
+
+# .audit/ — 9-phase audit workspace, un-ignored 2026-07-24 (Phase 8.2)
+# after the F-0024/F-0045/F-0048 port-5432 exposure was closed. Do not
+# re-ignore without redacting security-relevant findings first.

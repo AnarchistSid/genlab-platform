@@ -1,0 +1,46 @@
+SET
+SET
+=== STEP 1: SELECTION — blueprint b22419a7 details + candidate_id
+                bp_id                 | niche_id |     arm_id     |  status   | action_taken |                           candidate_id                           |     created_at      |     updated_at      | propensity | bandit_ctx_short | arm_dim 
+--------------------------------------+----------+----------------+-----------+--------------+------------------------------------------------------------------+---------------------+---------------------+------------+------------------+---------
+ b22419a7-a74c-4171-8b4b-edcec9e2ca73 | anime    | episode_moment | PUBLISHED | approved     | 3cb6e3639bf22506804fb0d0f72d0e393263d3d5029274112bb2c1d215e85c6d | 2026-07-15 06:04:58 | 2026-07-24 07:04:36 |            |                  | 
+(1 row)
+
+=== STEP 2: PUBLISH — 4 publishing_analytics rows for this bp
+ platform  |           post_id           |   status    |    published_at     | views | likes 
+-----------+-----------------------------+-------------+---------------------+-------+-------
+ instagram | instagram:18069464390457756 | INSIGHTS_6H | 2026-07-24 06:58:02 |     1 |     1
+ youtube   | youtube:g6785H_Vcd8         | INSIGHTS_6H | 2026-07-24 06:58:34 |     0 |     0
+ facebook  | facebook:1046384814548298   | INSIGHTS_6H | 2026-07-24 07:01:53 |     1 |     0
+ threads   | threads:17907387852278948   | INSIGHTS_6H | 2026-07-24 07:04:36 |    13 |     1
+(4 rows)
+
+=== STEP 3: PENDING_FEEDBACK — by candidate_id prefix
+                                   task_id                                   | platform  |     arm_id     | reward_48h | collection_status |    publish_time     |     created_at      
+-----------------------------------------------------------------------------+-----------+----------------+------------+-------------------+---------------------+---------------------
+ 3cb6e3639bf22506804fb0d0f72d0e393263d3d5029274112bb2c1d215e85c6d__facebook  | facebook  | episode_moment |            | awaiting_6h       | 2026-07-24 07:04:36 | 2026-07-24 07:04:36
+ 3cb6e3639bf22506804fb0d0f72d0e393263d3d5029274112bb2c1d215e85c6d__instagram | instagram | episode_moment |            | awaiting_6h       | 2026-07-24 07:04:36 | 2026-07-24 07:04:36
+ 3cb6e3639bf22506804fb0d0f72d0e393263d3d5029274112bb2c1d215e85c6d__threads   | threads   | episode_moment |            | awaiting_6h       | 2026-07-24 07:04:36 | 2026-07-24 07:04:36
+ 3cb6e3639bf22506804fb0d0f72d0e393263d3d5029274112bb2c1d215e85c6d__youtube   | youtube   | episode_moment |            | awaiting_6h       | 2026-07-24 07:04:36 | 2026-07-24 07:04:36
+(4 rows)
+
+=== STEP 4: ANALYTICS insight rows for these posts
+ platform  |           post_id           | views | likes | comments |   metrics_fetched   
+-----------+-----------------------------+-------+-------+----------+---------------------
+ facebook  | facebook:1046384814548298   |     1 |     0 |        0 | 2026-07-24 12:31:27
+ instagram | instagram:18069464390457756 |     1 |     1 |        0 | 2026-07-24 12:31:30
+ threads   | threads:17907387852278948   |    13 |     1 |        0 | 2026-07-24 12:31:26
+ youtube   | youtube:g6785H_Vcd8         |     0 |     0 |        0 | 2026-07-24 12:31:28
+(4 rows)
+
+=== STEP 5: BANDIT arm — did the arm from step 1 get updated after step 3?
+     arm_id     |       alpha       |       beta        |     updated_at      | niche_id 
+----------------+-------------------+-------------------+---------------------+----------
+ episode_moment | 5.708803082251082 | 86.35459691774889 | 2026-07-23 14:34:17 | anime
+(1 row)
+
+=== STEP 5b: any arm change in anime after 2026-07-24 06:58 (publish)?
+ arm_id | alpha | beta | updated_at 
+--------+-------+------+------------
+(0 rows)
+

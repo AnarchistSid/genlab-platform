@@ -1,0 +1,49 @@
+=== genlab-core/tests/compliance/test_disclosure_and_health.py
+..........                                                               [100%]
+10 passed in 0.17s
+
+=== genlab-core/tests/engagement/test_outbound_targeting_competitor_filter.py
+     +  where 0 = len([])
+/Users/anarchistsid/GenLab/genlab-core/tests/engagement/test_outbound_targeting_competitor_filter.py:55: assert 0 > 0
+E   AssertionError: sports run should be unaffected by gaming blocklist
+    assert 0 > 0
+     +  where 0 = len([])
+/Users/anarchistsid/GenLab/genlab-core/tests/engagement/test_outbound_targeting_competitor_filter.py:74: AssertionError: sports run should be unaffected by gaming blocklist
+E   assert 0 > 0
+     +  where 0 = len([])
+/Users/anarchistsid/GenLab/genlab-core/tests/engagement/test_outbound_targeting_competitor_filter.py:85: assert 0 > 0
+E   AssertionError: unblocked channel should get its full per_creator_count budget — blocked channel's rejection must not consume slots
+    assert 0 == 3
+     +  where 0 = len([])
+/Users/anarchistsid/GenLab/genlab-core/tests/engagement/test_outbound_targeting_competitor_filter.py:106: AssertionError: unblocked channel should get its full per_creator_count budget — blocked channel's rejection must not consume slots
+=========================== short test summary info ============================
+FAILED genlab-core/tests/engagement/test_outbound_targeting_competitor_filter.py::TestCompetitorBlocklistFilter::test_no_blocklist_all_videos_considered
+FAILED genlab-core/tests/engagement/test_outbound_targeting_competitor_filter.py::TestCompetitorBlocklistFilter::test_empty_blocklist_all_videos_considered
+FAILED genlab-core/tests/engagement/test_outbound_targeting_competitor_filter.py::TestCompetitorBlocklistFilter::test_niche_isolation
+FAILED genlab-core/tests/engagement/test_outbound_targeting_competitor_filter.py::TestCompetitorBlocklistFilter::test_partial_blocklist_only_blocks_matched
+FAILED genlab-core/tests/engagement/test_outbound_targeting_competitor_filter.py::TestCompetitorBlocklistFilter::test_blocked_channel_doesnt_consume_per_creator_budget
+5 failed, 1 passed in 0.20s
+
+=== genlab-core/tests/engagement/test_outbound_youtube_fetcher_pin.py
+......F                                                                  [100%]
+=================================== FAILURES ===================================
+E   assert 0 > 0
+     +  where 0 = len([])
+/Users/anarchistsid/GenLab/genlab-core/tests/engagement/test_outbound_youtube_fetcher_pin.py:281: assert 0 > 0
+=========================== short test summary info ============================
+FAILED genlab-core/tests/engagement/test_outbound_youtube_fetcher_pin.py::test_end_to_end_wire_with_all_layers_mocked
+1 failed, 6 passed in 0.20s
+
+=== genlab-core/tests/intel/test_refit_top_creator_priors.py
+.F............                                                           [100%]
+=================================== FAILURES ===================================
+E   assert 0 == 1
+/Users/anarchistsid/GenLab/genlab-core/tests/intel/test_refit_top_creator_priors.py:105: assert 0 == 1
+=========================== short test summary info ============================
+FAILED genlab-core/tests/intel/test_refit_top_creator_priors.py::TestFlagAndKeyGuards::test_missing_api_key_exits_1
+1 failed, 13 passed in 0.13s
+
+=== genlab-core/tests/learning/test_rationale_classifier.py
+.............                                                            [100%]
+13 passed in 0.45s
+

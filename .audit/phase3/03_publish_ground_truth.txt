@@ -1,0 +1,120 @@
+SET
+SET
+=== posts per niche per platform per day, last 30d
+  niche_id   | platform  |     d      | count 
+-------------+-----------+------------+-------
+ ai_creators | facebook  | 2026-07-24 |     1
+ ai_creators | instagram | 2026-07-24 |     1
+ ai_creators | threads   | 2026-07-24 |     1
+ ai_creators | youtube   | 2026-07-24 |     1
+ anime       | facebook  | 2026-07-24 |     1
+ anime       | instagram | 2026-07-24 |     1
+ anime       | threads   | 2026-07-24 |     1
+ anime       | youtube   | 2026-07-24 |     1
+ gaming      | facebook  | 2026-07-24 |     1
+ gaming      | instagram | 2026-07-24 |     1
+ gaming      | threads   | 2026-07-24 |     1
+ gaming      | youtube   | 2026-07-24 |     1
+ sports      | facebook  | 2026-07-24 |     1
+ sports      | instagram | 2026-07-24 |     1
+ sports      | threads   | 2026-07-24 |     1
+ sports      | youtube   | 2026-07-24 |     1
+ ai_creators | facebook  | 2026-07-23 |     1
+ ai_creators | instagram | 2026-07-23 |     1
+ ai_creators | threads   | 2026-07-23 |     1
+ ai_creators | twitter   | 2026-07-23 |     1
+(20 rows)
+
+=== total per niche+platform last 30d
+  niche_id   | platform  | count 
+-------------+-----------+-------
+ ai_creators | facebook  |    26
+ ai_creators | instagram |    26
+ ai_creators | threads   |    26
+ ai_creators | twitter   |    25
+ ai_creators | youtube   |    26
+ anime       | facebook  |    25
+ anime       | instagram |    25
+ anime       | threads   |     3
+ anime       | youtube   |    25
+ gaming      | facebook  |    24
+ gaming      | instagram |    24
+ gaming      | threads   |     3
+ gaming      | youtube   |    25
+ movies      | facebook  |    23
+ movies      | instagram |    24
+ movies      | threads   |     1
+ movies      | youtube   |    23
+ sports      | facebook  |    25
+ sports      | instagram |    25
+ sports      | threads   |     8
+ sports      | youtube   |    25
+(21 rows)
+
+=== real post_id vs missing, last 30d
+  niche_id   | platform  | with_id | without_id 
+-------------+-----------+---------+------------
+ ai_creators | facebook  |      24 |          2
+ ai_creators | instagram |      18 |          8
+ ai_creators | threads   |      22 |          4
+ ai_creators | twitter   |       8 |         17
+ ai_creators | youtube   |      24 |          2
+ anime       | facebook  |      22 |          3
+ anime       | instagram |      16 |          9
+ anime       | threads   |       3 |          0
+ anime       | youtube   |      19 |          6
+ gaming      | facebook  |      21 |          3
+ gaming      | instagram |      20 |          4
+ gaming      | threads   |       3 |          0
+ gaming      | youtube   |      22 |          3
+ movies      | facebook  |      18 |          5
+ movies      | instagram |      15 |          9
+ movies      | threads   |       1 |          0
+ movies      | youtube   |      17 |          6
+ sports      | facebook  |      20 |          5
+ sports      | instagram |      18 |          7
+ sports      | threads   |       6 |          2
+ sports      | youtube   |      22 |          3
+(21 rows)
+
+=== failures by status/error, last 30d
+  niche_id   | platform  |    status     | count 
+-------------+-----------+---------------+-------
+ ai_creators | facebook  | INSIGHTS_168H |    20
+ ai_creators | youtube   | INSIGHTS_168H |    20
+ gaming      | instagram | INSIGHTS_168H |    17
+ sports      | youtube   | INSIGHTS_168H |    17
+ gaming      | youtube   | INSIGHTS_168H |    17
+ ai_creators | threads   | SUCCESS       |    17
+ movies      | youtube   | INSIGHTS_168H |    16
+ gaming      | facebook  | INSIGHTS_168H |    16
+ sports      | facebook  | INSIGHTS_168H |    16
+ ai_creators | twitter   | FAILED        |    16
+ anime       | youtube   | INSIGHTS_168H |    15
+ movies      | facebook  | INSIGHTS_168H |    15
+ sports      | instagram | INSIGHTS_168H |    15
+ ai_creators | instagram | INSIGHTS_168H |    15
+ anime       | facebook  | INSIGHTS_168H |    14
+ movies      | instagram | INSIGHTS_168H |    14
+ anime       | instagram | INSIGHTS_168H |    13
+ anime       | instagram | FAILED        |     7
+ ai_creators | instagram | FAILED        |     7
+ ai_creators | twitter   | INSIGHTS_48H  |     5
+(20 rows)
+
+=== error_message top 10 last 30d
+  niche_id   |                                                                                                                  error_message                                                                                                                   | count 
+-------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------
+ ai_creators | 402 Payment Required                                                                                                                                                                                                                            +|    11
+             | Your enrolled account [2024161794126991362] does not have any credits to fulfill this request.                                                                                                                                                   | 
+ ai_creators | No valid media files for video publish (niche=ai_creators, format=reel, original_paths=['/opt/genlab/.tmp/runs/ai_creators_20260628_023003/visuals/a5b9d22f2739d8f81ec3c732147439ac1fa3a4a04fb27fd4e2697b3560500a18/a5b9d22f2739d8f8_reel.mp4']) |     5
+ ai_creators | Layer 4 attribution gate: tweet text missing credit line (set GENLAB_ATTRIBUTION_LAYER4_BLOCK=0 to bypass)                                                                                                                                       |     4
+ anime       | Container processing error: Error: Media upload has failed with error code 2207082                                                                                                                                                               |     4
+ anime       | YouTube quota at hard-stop (8300/9800 units, 84.7%). Next upload would exceed budget — wait for Pacific midnight reset.                                                                                                                          |     4
+ movies      | Container processing error: Error: Media upload has failed with error code 2207082                                                                                                                                                               |     4
+ movies      | No valid media files for video publish (niche=movies, format=reel, original_paths=['/opt/genlab/.tmp/runs/movies_20260618_082904/visuals/372c2effb09f8f865c15245bbc5f92db715d54fcdb6a56b9b5ba876385e01a33/372c2effb09f8f86_reel.mp4'])           |     3
+ anime       | No valid media files for video publish (niche=anime, format=reel, original_paths=['/opt/genlab/.tmp/runs/anime_20260627_060003/visuals/42652dfd7373633a436646e507eb1fa1fce5e4f320ed7195b5cb2a9bdc3850b3/42652dfd7373633a_reel.mp4'])             |     3
+ sports      | No valid media files for video publish (niche=sports, format=reel, original_paths=['/opt/genlab/.tmp/runs/sports_20260624_100002/visuals/790313d8c5b83375a469b5d62b0b933dce25a28712f08a9e83bb9ecc1dd74333/790313d8c5b83375_reel.mp4'])           |     3
+ movies      | No valid media files for video publish (niche=movies, format=reel, original_paths=['/opt/genlab/.tmp/runs/movies_20260626_080003/visuals/f7770b1f19dfe146e0a7cc2e4c86b5491cbe62de2c897507fdb4f14dae08f3a6/f7770b1f19dfe146_reel.mp4'])           |     3
+(10 rows)
+

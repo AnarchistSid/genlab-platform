@@ -1,0 +1,2 @@
+db_pw_hash=c7b89bffef3ad9ea227e6e3a81257a22a554b2bdaae220ddc1ee8819d662ea95
+db_pw_len=10

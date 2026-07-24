@@ -1,0 +1,9 @@
+member,src_files,src_lines,test_files,test_lines,ratio
+genlab-core,423,125716,731,158059,1.26
+dashboard,76,25985,105,24629,0.95
+scripts,74,20553,3,277,0.01
+BlackboxBrief,31,6220,23,3630,0.58
+CriticalRush,48,8462,31,6366,0.75
+ClutchWire,10,1107,17,1925,1.74
+SpliceReel,12,1460,18,2013,1.38
+FrameDrift,11,1238,17,2000,1.62

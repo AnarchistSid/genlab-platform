@@ -1,0 +1,17 @@
+category,item,estimated_loc,estimated_gb,evidence,verification_required,confidence
+systemd_unit,genlab-shadow-reviewer.timer (F-0033),0,0,LAST=- NEXT=- despite ENABLED=true,confirm not enabled via alternate trigger,high
+systemd_unit,3 other never-fired units (Phase 3A),0,0,Phase 3A stage×channel matrix identified 4 total,list names in follow-up query; unmask,high
+code,_hooks_legacy.py,unknown,0,filename suffix suggests deprecation,grep import call sites; if 0 then delete,medium
+code,1342 touched-once files (single-commit files),unknown,0,git log --format=%H per file has 1 result,per-file: last-commit date + is-imported check before delete,low
+ml_flag,GENLAB_BEDROCK_FINETUNE (F-0041),0,0,UNSET_AND_READ default OFF,decide: implement OR delete flag + downstream code path,high
+ml_flag,GENLAB_LINUCB_STOCHASTIC (unsuffixed - per-niche variants are set) (F-0041),0,0,UNSET_AND_READ default OFF,delete unsuffixed variable OR add fallthrough,high
+ml_flag,GENLAB_OPTIMAL_TIME_BANDIT (F-0041),0,0,UNSET_AND_READ default OFF,decide: implement OR delete,high
+ml_flag,GENLAB_THOMPSON_PROPENSITY (F-0041),0,0,UNSET_AND_READ default OFF,decide: implement OR delete (may need one prior fix in propensity capture code),high
+ml_flag,GENLAB_TOP_CREATOR_PRIORS (F-0041),0,0,UNSET_AND_READ default OFF (per MEMORY.md decision-2026-07-23: HOLD until correlations mature),operator decision awaiting n≥100,medium
+ml_flag,GENLAB_TREND_ANTICIPATION (F-0041),0,0,UNSET_AND_READ default OFF; card ready but unwired,decide + wire OR delete,medium
+scratch,.tmp/runs older than 3 recent,0,~17,cleanup_safety.md permits pruning,keep last 3 runs per CLEANUP_KEEP_RUNS=3,high
+code,4 files at MI=0.0 (push_to_backlog + review_server + dashboard/api/blueprints + dashboard/api/analytics),~30000,0,radon MI=0.0 F-0010,extract not delete; kill list is for consolidation/refactor,high
+security,rolsuper=t / rolbypassrls=t on genlab role,0,0,F-0048,DROP privileges via F-0049,high
+security,port 5432 internet exposure,0,0,F-0024/F-0045,docker-compose port bind 127.0.0.1:5432,high
+docs,agent-vision-2026-07-10.md claims Neural-LinUCB roadmap,0,0,F-0057 no impl in learning/,rewrite section OR ship impl,medium
+config,Threads/X/TikTok platform clients (rule #23 out of scope),unknown,0,MEMORY.md rule #23 4-platform focus,keep in tree OR delete officially - currently CLAIMED-but-ABSENT worst-case,medium

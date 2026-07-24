@@ -1,0 +1,18 @@
+### AUDIT TOOLCHAIN — 2026-07-24
+
+cloc            OK       2.10                                     /opt/homebrew/bin/cloc
+tokei           OK       tokei 14.0.0 compiled with serialization support: json, cbor, yaml /opt/homebrew/bin/tokei
+radon           OK       6.0.1                                    /Users/anarchistsid/.local/bin/radon
+vulture         OK       vulture 2.16                             /Users/anarchistsid/.local/bin/vulture
+ruff            OK       ruff 0.15.14                             /Users/anarchistsid/.local/bin/ruff
+pip-audit       OK       pip-audit 2.10.1                         /Users/anarchistsid/.local/bin/pip-audit
+pydeps          OK       pydeps v3.0.6                            /Users/anarchistsid/.local/bin/pydeps
+jscpd           OK       cpd 5.0.12                               /opt/homebrew/bin/jscpd
+
+### NOTES
+- grimp installed as Python library only (no CLI entrypoint).
+  Use via: python -c 'import grimp; g = grimp.build_graph(...)'
+  pydeps installed as alternate — has CLI entrypoint.
+- Python: Python 3.14.3
+- Node: v25.6.1
+- uv: uv 0.11.3 (45da18ac3 2026-04-01 aarch64-apple-darwin)

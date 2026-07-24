@@ -1,0 +1,49 @@
+SET
+SET
+=== column probe: pending_feedback has blueprint_id?
+     column_name      
+----------------------
+ id
+ niche_id
+ task_id
+ post_id
+ platform
+ arm_id
+ bandit_context
+ collection_status
+ reward_48h
+ publish_time
+ created_at
+ updated_at
+ extra
+ propensity
+ temperature
+ arm_ids_by_dimension
+(16 rows)
+
+=== closure rate — via task_id LIKE candidate_id (proper join path per Phase 3)
+  niche_id   | platform  | posts | with_pf | with_reward 
+-------------+-----------+-------+---------+-------------
+ ai_creators | facebook  |    33 |      14 |          14
+ ai_creators | instagram |    32 |       9 |           9
+ ai_creators | threads   |    18 |       7 |           7
+ ai_creators | twitter   |    43 |      17 |          11
+ ai_creators | youtube   |    38 |      17 |          17
+ anime       | facebook  |    42 |      15 |          15
+ anime       | instagram |    36 |      12 |          12
+ anime       | threads   |    30 |       6 |           6
+ anime       | youtube   |    44 |      13 |          13
+ gaming      | facebook  |    37 |      21 |          21
+ gaming      | instagram |    35 |      19 |          19
+ gaming      | threads   |    25 |       8 |           8
+ gaming      | youtube   |    40 |      22 |          22
+ movies      | facebook  |    35 |      13 |          13
+ movies      | instagram |    31 |       8 |           8
+ movies      | threads   |    28 |       5 |           5
+ movies      | youtube   |    34 |      12 |          12
+ sports      | facebook  |    41 |      17 |          17
+ sports      | instagram |    37 |      17 |          17
+ sports      | threads   |    27 |       4 |           4
+ sports      | youtube   |    51 |      19 |          19
+(21 rows)
+

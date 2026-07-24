@@ -1,0 +1,30 @@
+  actions.runner.AnarchistSid-genlab-platform.genlab-prod-vps-runner.service       loaded    active     running            GitHub Actions Runner (AnarchistSid-genlab-platform.genlab-prod-vps-runner)
+  genlab-affiliate-link-check.service                                              loaded    inactive   dead               GenLab Affiliate Link Checker
+  genlab-affiliate-scraper.service                                                 loaded    inactive   dead               GenLab Affiliate Revenue Scraper
+  genlab-agent-memory-scratchpad.service                                           loaded    inactive   dead               GenLab Agent Memory Scratchpad — weekly Opus reflection
+  genlab-alert-auto-resolve.service                                                loaded    inactive   dead               GenLab Alert Auto-Resolve — bleed out stale systemd_unit_failed alerts
+  genlab-alert-notifier.service                                                    loaded    inactive   dead               GenLab Cross-Source CRITICAL Alert Notifier (Slack/webhook pump)
+  genlab-anthropic-credit-monitor.service                                          loaded    inactive   dead               GenLab Anthropic Credit Monitor — surface credit-balance exhaustion as a CRITICAL alert
+  genlab-anticipate-trends.service                                                 loaded    inactive   dead               GenLab Trend Anticipation — daily rank of upcoming topics per niche
+  genlab-anticipation-accuracy.service                                             loaded    inactive   dead               GenLab Anticipation Accuracy — weekly Spearman validation of anticipation scores
+  genlab-archive-stale-drafted.service                                             loaded    inactive   dead               GenLab — auto-archive stale DRAFTED blueprints (no source video)
+  genlab-archive-stale-visuals.service                                             loaded    inactive   dead               GenLab Auto-Archive Stale visual_paths (2026-06-16 outage prevention)
+  genlab-attribution-health-monitor.service                                        loaded    inactive   dead               GenLab Attribution Health Monitor — surface low attribution_present_pct as a CRITICAL alert
+  genlab-audience-collector.service                                                loaded    inactive   dead               GenLab Audience Collector
+  genlab-auto-approver.service                                                     loaded    inactive   dead               GenLab AUTO #2 Auto-Approval Worker (enforce mode; per-niche via publishing.yaml)
+  genlab-auto2-ramp.service                                                        loaded    inactive   dead               GenLab AUTO #2 Auto-Ramp — weekly +10% rollout_pct per qualifying niche
+  genlab-backup-test.service                                                       loaded    inactive   dead               GenLab — weekly backup-restore dry-run validation
+  genlab-bandit-backfill.service                                                   loaded    inactive   dead               GenLab Bandit Backfill (replay unprocessed pending_feedback rewards)
+  genlab-bandit-snapshot.service                                                   loaded    inactive   dead               GenLab Bandit Arms Daily Snapshot (S6, AUTO #2 runbook)
+  genlab-bandit-validation.service                                                 loaded    inactive   dead               GenLab Bandit Validation — daily rank-correlation snapshot per niche
+  genlab-bayesian-gate-refit.service                                               loaded    inactive   dead               GenLab Bayesian Gate Refit — nightly per-niche LR posterior recomputation
+  genlab-cleanup.service                                                           loaded    inactive   dead               GenLab Media Cleanup
+  genlab-compliance-digest-sender.service                                          loaded    inactive   dead               GenLab Compliance Digest Sender — daily Slack digest of compliance events
+  genlab-config-updater.service                                                    loaded    inactive   dead               GenLab Config Updater
+  genlab-conformal-router-refit.service                                            loaded    inactive   dead               GenLab Conformal Router Refit — nightly per-niche posterior + calibration-score recomputation
+  genlab-content-gap-remediator.service                                            loaded    inactive   dead               GenLab content_gap alert auto-remediator — trigger niche pipelines when scheduling has 48h gaps
+  genlab-counterfactual-replay.service                                             loaded    inactive   dead               GenLab Counterfactual Replay — monthly IPS + DR estimator run
+  genlab-cross-niche-transfer.service                                              loaded    inactive   dead               GenLab Cross-Niche Transfer — weekly hierarchical Bayesian prior refit
+  genlab-cuelinks-campaign-refresh.service                                         loaded    inactive   dead               GenLab Cuelinks campaign shortlist refresh (weekly)
+  genlab-daily-verify.service                                                      loaded    inactive   dead               GenLab Daily Verification
+  genlab-dashboard.service                                                         loaded    active     running            GenLab Operations Dashboard

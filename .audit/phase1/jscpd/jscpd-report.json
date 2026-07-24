@@ -1,0 +1,4533 @@
+{
+  "duplicates": [
+    {
+      "firstFile": {
+        "end": 556,
+        "endLoc": {
+          "column": 23,
+          "line": 556,
+          "position": 20540
+        },
+        "name": "bb_strategies/_fetch.py",
+        "start": 546,
+        "startLoc": {
+          "column": 70,
+          "line": 546,
+          "position": 20224
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 11,
+      "secondFile": {
+        "end": 627,
+        "endLoc": {
+          "column": 23,
+          "line": 627,
+          "position": 23135
+        },
+        "name": "bb_strategies/_fetch.py",
+        "start": 617,
+        "startLoc": {
+          "column": 70,
+          "line": 617,
+          "position": 22819
+        }
+      },
+      "tokens": 61
+    },
+    {
+      "firstFile": {
+        "end": 875,
+        "endLoc": {
+          "column": 11,
+          "line": 875,
+          "position": 32695
+        },
+        "name": "bb_strategies/_fetch.py",
+        "start": 865,
+        "startLoc": {
+          "column": 4,
+          "line": 865,
+          "position": 32370
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 11,
+      "secondFile": {
+        "end": 1060,
+        "endLoc": {
+          "column": 15,
+          "line": 1060,
+          "position": 41010
+        },
+        "name": "bb_strategies/_scoring.py",
+        "start": 1050,
+        "startLoc": {
+          "column": 79,
+          "line": 1050,
+          "position": 40681
+        }
+      },
+      "tokens": 52
+    },
+    {
+      "firstFile": {
+        "end": 48,
+        "endLoc": {
+          "column": 42,
+          "line": 48,
+          "position": 1573
+        },
+        "name": "bb_strategies/visual_render.py",
+        "start": 36,
+        "startLoc": {
+          "column": 62,
+          "line": 36,
+          "position": 1197
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 13,
+      "secondFile": {
+        "end": 189,
+        "endLoc": {
+          "column": 42,
+          "line": 189,
+          "position": 7065
+        },
+        "name": "cw_strategies/visual_render.py",
+        "start": 178,
+        "startLoc": {
+          "column": 42,
+          "line": 178,
+          "position": 6690
+        }
+      },
+      "tokens": 66
+    },
+    {
+      "firstFile": {
+        "end": 70,
+        "endLoc": {
+          "column": 34,
+          "line": 70,
+          "position": 2304
+        },
+        "name": "config/ab_tests.yaml",
+        "start": 35,
+        "startLoc": {
+          "column": 2,
+          "line": 35,
+          "position": 1479
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 36,
+      "secondFile": {
+        "end": 73,
+        "endLoc": {
+          "column": 34,
+          "line": 73,
+          "position": 2432
+        },
+        "name": "docs/plans/2026-02-22-ab-testing-implementation.md:yaml",
+        "start": 38,
+        "startLoc": {
+          "column": 2,
+          "line": 38,
+          "position": 1607
+        }
+      },
+      "tokens": 77
+    },
+    {
+      "firstFile": {
+        "end": 16,
+        "endLoc": {
+          "column": 7,
+          "line": 16,
+          "position": 444
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 5,
+        "startLoc": {
+          "column": 2,
+          "line": 5,
+          "position": 97
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 16,
+        "endLoc": {
+          "column": 7,
+          "line": 16,
+          "position": 406
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 5,
+        "startLoc": {
+          "column": 2,
+          "line": 5,
+          "position": 59
+        }
+      },
+      "tokens": 50
+    },
+    {
+      "firstFile": {
+        "end": 32,
+        "endLoc": {
+          "column": 32,
+          "line": 32,
+          "position": 1067
+        },
+        "name": "config/visuals.yaml",
+        "start": 8,
+        "startLoc": {
+          "column": 0,
+          "line": 8,
+          "position": 251
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 25,
+      "secondFile": {
+        "end": 31,
+        "endLoc": {
+          "column": 32,
+          "line": 31,
+          "position": 1057
+        },
+        "name": "config/visuals.yaml",
+        "start": 8,
+        "startLoc": {
+          "column": 0,
+          "line": 8,
+          "position": 242
+        }
+      },
+      "tokens": 77
+    },
+    {
+      "firstFile": {
+        "end": 19,
+        "endLoc": {
+          "column": 23,
+          "line": 19,
+          "position": 630
+        },
+        "name": "config/visuals.yaml",
+        "start": 8,
+        "startLoc": {
+          "column": 0,
+          "line": 8,
+          "position": 251
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 19,
+        "endLoc": {
+          "column": 23,
+          "line": 19,
+          "position": 623
+        },
+        "name": "niches/_template/config/visuals.yaml",
+        "start": 8,
+        "startLoc": {
+          "column": 0,
+          "line": 8,
+          "position": 244
+        }
+      },
+      "tokens": 59
+    },
+    {
+      "firstFile": {
+        "end": 81,
+        "endLoc": {
+          "column": 31,
+          "line": 81,
+          "position": 3061
+        },
+        "name": "config/visuals.yaml",
+        "start": 8,
+        "startLoc": {
+          "column": 0,
+          "line": 8,
+          "position": 251
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 74,
+      "secondFile": {
+        "end": 73,
+        "endLoc": {
+          "column": 17,
+          "line": 73,
+          "position": 1779
+        },
+        "name": "niches/gaming/config/visuals.yaml",
+        "start": 8,
+        "startLoc": {
+          "column": 0,
+          "line": 8,
+          "position": 243
+        }
+      },
+      "tokens": 184
+    },
+    {
+      "firstFile": {
+        "end": 56,
+        "endLoc": {
+          "column": 61,
+          "line": 56,
+          "position": 2107
+        },
+        "name": "config/visuals.yaml",
+        "start": 8,
+        "startLoc": {
+          "column": 0,
+          "line": 8,
+          "position": 251
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 49,
+      "secondFile": {
+        "end": 53,
+        "endLoc": {
+          "column": 15,
+          "line": 53,
+          "position": 1942
+        },
+        "name": "config/visuals.yaml",
+        "start": 8,
+        "startLoc": {
+          "column": 0,
+          "line": 8,
+          "position": 306
+        }
+      },
+      "tokens": 122
+    },
+    {
+      "firstFile": {
+        "end": 129,
+        "endLoc": {
+          "column": 45,
+          "line": 129,
+          "position": 5161
+        },
+        "name": "config/visuals.yaml",
+        "start": 79,
+        "startLoc": {
+          "column": 92,
+          "line": 79,
+          "position": 3006
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 51,
+      "secondFile": {
+        "end": 120,
+        "endLoc": {
+          "column": 45,
+          "line": 120,
+          "position": 4746
+        },
+        "name": "config/visuals.yaml",
+        "start": 70,
+        "startLoc": {
+          "column": 73,
+          "line": 70,
+          "position": 2591
+        }
+      },
+      "tokens": 218
+    },
+    {
+      "firstFile": {
+        "end": 129,
+        "endLoc": {
+          "column": 45,
+          "line": 129,
+          "position": 5161
+        },
+        "name": "config/visuals.yaml",
+        "start": 79,
+        "startLoc": {
+          "column": 92,
+          "line": 79,
+          "position": 3006
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 51,
+      "secondFile": {
+        "end": 166,
+        "endLoc": {
+          "column": 45,
+          "line": 166,
+          "position": 5670
+        },
+        "name": "niches/gaming/config/visuals.yaml",
+        "start": 116,
+        "startLoc": {
+          "column": 68,
+          "line": 116,
+          "position": 3515
+        }
+      },
+      "tokens": 218
+    },
+    {
+      "firstFile": {
+        "end": 129,
+        "endLoc": {
+          "column": 45,
+          "line": 129,
+          "position": 5161
+        },
+        "name": "config/visuals.yaml",
+        "start": 79,
+        "startLoc": {
+          "column": 92,
+          "line": 79,
+          "position": 3006
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 51,
+      "secondFile": {
+        "end": 120,
+        "endLoc": {
+          "column": 45,
+          "line": 120,
+          "position": 4804
+        },
+        "name": "config/visuals.yaml",
+        "start": 70,
+        "startLoc": {
+          "column": 70,
+          "line": 70,
+          "position": 2649
+        }
+      },
+      "tokens": 218
+    },
+    {
+      "firstFile": {
+        "end": 103,
+        "endLoc": {
+          "column": 63,
+          "line": 103,
+          "position": 3884
+        },
+        "name": "config/visuals.yaml",
+        "start": 83,
+        "startLoc": {
+          "column": 4,
+          "line": 83,
+          "position": 3089
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 21,
+      "secondFile": {
+        "end": 103,
+        "endLoc": {
+          "column": 63,
+          "line": 103,
+          "position": 4199
+        },
+        "name": "config/visuals.yaml",
+        "start": 83,
+        "startLoc": {
+          "column": 4,
+          "line": 83,
+          "position": 3404
+        }
+      },
+      "tokens": 125
+    },
+    {
+      "firstFile": {
+        "end": 230,
+        "endLoc": {
+          "column": 5,
+          "line": 230,
+          "position": 7179
+        },
+        "name": "docs/archive/2026-02-18-phase6-content-to-publish.md:json",
+        "start": 180,
+        "startLoc": {
+          "column": 0,
+          "line": 180,
+          "position": 5445
+        }
+      },
+      "format": "json",
+      "fragment": "",
+      "lines": 51,
+      "secondFile": {
+        "end": 51,
+        "endLoc": {
+          "column": 5,
+          "line": 51,
+          "position": 1734
+        },
+        "name": "schemas/post_content.schema.json",
+        "start": 1,
+        "startLoc": {
+          "column": 0,
+          "line": 1,
+          "position": 0
+        }
+      },
+      "tokens": 285
+    },
+    {
+      "firstFile": {
+        "end": 468,
+        "endLoc": {
+          "column": 27,
+          "line": 468,
+          "position": 18353
+        },
+        "name": "docs/archive/2026-02-20-express-lane-e2e.md:markdown",
+        "start": 258,
+        "startLoc": {
+          "column": 16,
+          "line": 258,
+          "position": 11283
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 211,
+      "secondFile": {
+        "end": 1731,
+        "endLoc": {
+          "column": 10,
+          "line": 1731,
+          "position": 58462
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 1507,
+        "startLoc": {
+          "column": 30,
+          "line": 1507,
+          "position": 51420
+        }
+      },
+      "tokens": 6818
+    },
+    {
+      "firstFile": {
+        "end": 274,
+        "endLoc": {
+          "column": 41,
+          "line": 274,
+          "position": 11648
+        },
+        "name": "docs/archive/2026-02-20-express-lane-e2e.md:markdown",
+        "start": 260,
+        "startLoc": {
+          "column": 0,
+          "line": 260,
+          "position": 11287
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 15,
+      "secondFile": {
+        "end": 838,
+        "endLoc": {
+          "column": 3,
+          "line": 838,
+          "position": 38787
+        },
+        "name": "docs/plans/2026-02-27-operations-dashboard-design.md:markdown",
+        "start": 825,
+        "startLoc": {
+          "column": 0,
+          "line": 825,
+          "position": 38429
+        }
+      },
+      "tokens": 345
+    },
+    {
+      "firstFile": {
+        "end": 272,
+        "endLoc": {
+          "column": 21,
+          "line": 272,
+          "position": 11577
+        },
+        "name": "docs/archive/2026-02-20-express-lane-e2e.md:markdown",
+        "start": 260,
+        "startLoc": {
+          "column": 0,
+          "line": 260,
+          "position": 11287
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 13,
+      "secondFile": {
+        "end": 964,
+        "endLoc": {
+          "column": 2,
+          "line": 964,
+          "position": 43211
+        },
+        "name": "docs/plans/2026-02-27-operations-dashboard-design.md:markdown",
+        "start": 953,
+        "startLoc": {
+          "column": 0,
+          "line": 953,
+          "position": 42924
+        }
+      },
+      "tokens": 276
+    },
+    {
+      "firstFile": {
+        "end": 309,
+        "endLoc": {
+          "column": 15,
+          "line": 309,
+          "position": 12819
+        },
+        "name": "docs/archive/2026-02-20-express-lane-e2e.md:markdown",
+        "start": 288,
+        "startLoc": {
+          "column": 16,
+          "line": 288,
+          "position": 12142
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 22,
+      "secondFile": {
+        "end": 315,
+        "endLoc": {
+          "column": 2,
+          "line": 315,
+          "position": 13000
+        },
+        "name": "docs/archive/2026-02-20-express-lane-e2e.md:markdown",
+        "start": 296,
+        "startLoc": {
+          "column": 11,
+          "line": 296,
+          "position": 12325
+        }
+      },
+      "tokens": 656
+    },
+    {
+      "firstFile": {
+        "end": 406,
+        "endLoc": {
+          "column": 4,
+          "line": 406,
+          "position": 16247
+        },
+        "name": "docs/archive/2026-02-20-express-lane-e2e.md:markdown",
+        "start": 386,
+        "startLoc": {
+          "column": 36,
+          "line": 386,
+          "position": 15419
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 21,
+      "secondFile": {
+        "end": 485,
+        "endLoc": {
+          "column": 2,
+          "line": 485,
+          "position": 19186
+        },
+        "name": "docs/archive/2026-02-20-express-lane-e2e.md:markdown",
+        "start": 468,
+        "startLoc": {
+          "column": 37,
+          "line": 468,
+          "position": 18363
+        }
+      },
+      "tokens": 806
+    },
+    {
+      "firstFile": {
+        "end": 405,
+        "endLoc": {
+          "column": 20,
+          "line": 405,
+          "position": 16165
+        },
+        "name": "docs/archive/2026-02-20-express-lane-e2e.md:markdown",
+        "start": 386,
+        "startLoc": {
+          "column": 36,
+          "line": 386,
+          "position": 15419
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 20,
+      "secondFile": {
+        "end": 334,
+        "endLoc": {
+          "column": 17,
+          "line": 334,
+          "position": 12057
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 311,
+        "startLoc": {
+          "column": 32,
+          "line": 311,
+          "position": 11309
+        }
+      },
+      "tokens": 725
+    },
+    {
+      "firstFile": {
+        "end": 435,
+        "endLoc": {
+          "column": 5,
+          "line": 435,
+          "position": 17425
+        },
+        "name": "docs/archive/2026-02-20-express-lane-e2e.md:markdown",
+        "start": 386,
+        "startLoc": {
+          "column": 36,
+          "line": 386,
+          "position": 15419
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 50,
+      "secondFile": {
+        "end": 781,
+        "endLoc": {
+          "column": 17,
+          "line": 781,
+          "position": 28416
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 729,
+        "startLoc": {
+          "column": 116,
+          "line": 729,
+          "position": 26415
+        }
+      },
+      "tokens": 1949
+    },
+    {
+      "firstFile": {
+        "end": 421,
+        "endLoc": {
+          "column": 56,
+          "line": 421,
+          "position": 16685
+        },
+        "name": "docs/archive/2026-02-20-express-lane-e2e.md:markdown",
+        "start": 386,
+        "startLoc": {
+          "column": 35,
+          "line": 386,
+          "position": 15418
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 36,
+      "secondFile": {
+        "end": 1848,
+        "endLoc": {
+          "column": 10,
+          "line": 1848,
+          "position": 61583
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 1805,
+        "startLoc": {
+          "column": 87,
+          "line": 1805,
+          "position": 60314
+        }
+      },
+      "tokens": 1226
+    },
+    {
+      "firstFile": {
+        "end": 453,
+        "endLoc": {
+          "column": 6,
+          "line": 453,
+          "position": 17919
+        },
+        "name": "docs/archive/2026-02-20-express-lane-e2e.md:markdown",
+        "start": 442,
+        "startLoc": {
+          "column": 51,
+          "line": 442,
+          "position": 17733
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 616,
+        "endLoc": {
+          "column": 12,
+          "line": 616,
+          "position": 16877
+        },
+        "name": "docs/plans/2026-02-27-operations-dashboard-implementation.md:markdown",
+        "start": 605,
+        "startLoc": {
+          "column": 132,
+          "line": 605,
+          "position": 16691
+        }
+      },
+      "tokens": 175
+    },
+    {
+      "firstFile": {
+        "end": 496,
+        "endLoc": {
+          "column": 60,
+          "line": 496,
+          "position": 19546
+        },
+        "name": "docs/archive/2026-02-20-express-lane-e2e.md:markdown",
+        "start": 468,
+        "startLoc": {
+          "column": 35,
+          "line": 468,
+          "position": 18361
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 29,
+      "secondFile": {
+        "end": 132,
+        "endLoc": {
+          "column": 3,
+          "line": 132,
+          "position": 5524
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 92,
+        "startLoc": {
+          "column": 119,
+          "line": 92,
+          "position": 4327
+        }
+      },
+      "tokens": 1157
+    },
+    {
+      "firstFile": {
+        "end": 487,
+        "endLoc": {
+          "column": 23,
+          "line": 487,
+          "position": 19251
+        },
+        "name": "docs/archive/2026-02-20-express-lane-e2e.md:markdown",
+        "start": 468,
+        "startLoc": {
+          "column": 36,
+          "line": 468,
+          "position": 18362
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 20,
+      "secondFile": {
+        "end": 167,
+        "endLoc": {
+          "column": 3,
+          "line": 167,
+          "position": 6809
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 142,
+        "startLoc": {
+          "column": 2,
+          "line": 142,
+          "position": 5914
+        }
+      },
+      "tokens": 870
+    },
+    {
+      "firstFile": {
+        "end": 75,
+        "endLoc": {
+          "column": 58,
+          "line": 75,
+          "position": 3779
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 59,
+        "startLoc": {
+          "column": 77,
+          "line": 59,
+          "position": 3288
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 17,
+      "secondFile": {
+        "end": 90,
+        "endLoc": {
+          "column": 10,
+          "line": 90,
+          "position": 4171
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 71,
+        "startLoc": {
+          "column": 64,
+          "line": 71,
+          "position": 3677
+        }
+      },
+      "tokens": 475
+    },
+    {
+      "firstFile": {
+        "end": 138,
+        "endLoc": {
+          "column": 45,
+          "line": 138,
+          "position": 5712
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 59,
+        "startLoc": {
+          "column": 77,
+          "line": 59,
+          "position": 3288
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 80,
+      "secondFile": {
+        "end": 244,
+        "endLoc": {
+          "column": 10,
+          "line": 244,
+          "position": 9674
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 186,
+        "startLoc": {
+          "column": 81,
+          "line": 186,
+          "position": 7271
+        }
+      },
+      "tokens": 2345
+    },
+    {
+      "firstFile": {
+        "end": 77,
+        "endLoc": {
+          "column": 16,
+          "line": 77,
+          "position": 3831
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 59,
+        "startLoc": {
+          "column": 77,
+          "line": 59,
+          "position": 3288
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 19,
+      "secondFile": {
+        "end": 593,
+        "endLoc": {
+          "column": 10,
+          "line": 593,
+          "position": 16238
+        },
+        "name": "docs/plans/2026-02-27-operations-dashboard-implementation.md:markdown",
+        "start": 577,
+        "startLoc": {
+          "column": 86,
+          "line": 577,
+          "position": 15697
+        }
+      },
+      "tokens": 525
+    },
+    {
+      "firstFile": {
+        "end": 174,
+        "endLoc": {
+          "column": 71,
+          "line": 174,
+          "position": 6973
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 140,
+        "startLoc": {
+          "column": 20,
+          "line": 140,
+          "position": 5896
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 35,
+      "secondFile": {
+        "end": 284,
+        "endLoc": {
+          "column": 7,
+          "line": 284,
+          "position": 10769
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 244,
+        "startLoc": {
+          "column": 22,
+          "line": 244,
+          "position": 9686
+        }
+      },
+      "tokens": 1043
+    },
+    {
+      "firstFile": {
+        "end": 173,
+        "endLoc": {
+          "column": 18,
+          "line": 173,
+          "position": 6885
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 140,
+        "startLoc": {
+          "column": 32,
+          "line": 140,
+          "position": 5908
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 34,
+      "secondFile": {
+        "end": 373,
+        "endLoc": {
+          "column": 7,
+          "line": 373,
+          "position": 13060
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 334,
+        "startLoc": {
+          "column": 37,
+          "line": 334,
+          "position": 12077
+        }
+      },
+      "tokens": 944
+    },
+    {
+      "firstFile": {
+        "end": 158,
+        "endLoc": {
+          "column": 8,
+          "line": 158,
+          "position": 6419
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 140,
+        "startLoc": {
+          "column": 32,
+          "line": 140,
+          "position": 5908
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 19,
+      "secondFile": {
+        "end": 713,
+        "endLoc": {
+          "column": 10,
+          "line": 713,
+          "position": 25925
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 696,
+        "startLoc": {
+          "column": 47,
+          "line": 696,
+          "position": 25415
+        }
+      },
+      "tokens": 493
+    },
+    {
+      "firstFile": {
+        "end": 161,
+        "endLoc": {
+          "column": 20,
+          "line": 161,
+          "position": 6605
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 140,
+        "startLoc": {
+          "column": 32,
+          "line": 140,
+          "position": 5908
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 22,
+      "secondFile": {
+        "end": 808,
+        "endLoc": {
+          "column": 12,
+          "line": 808,
+          "position": 29133
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 781,
+        "startLoc": {
+          "column": 31,
+          "line": 781,
+          "position": 28430
+        }
+      },
+      "tokens": 676
+    },
+    {
+      "firstFile": {
+        "end": 168,
+        "endLoc": {
+          "column": 15,
+          "line": 168,
+          "position": 6825
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 140,
+        "startLoc": {
+          "column": 32,
+          "line": 140,
+          "position": 5908
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 29,
+      "secondFile": {
+        "end": 1502,
+        "endLoc": {
+          "column": 12,
+          "line": 1502,
+          "position": 51294
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 1469,
+        "startLoc": {
+          "column": 35,
+          "line": 1469,
+          "position": 50372
+        }
+      },
+      "tokens": 889
+    },
+    {
+      "firstFile": {
+        "end": 182,
+        "endLoc": {
+          "column": 7,
+          "line": 182,
+          "position": 7066
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 168,
+        "startLoc": {
+          "column": 21,
+          "line": 168,
+          "position": 6831
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 15,
+      "secondFile": {
+        "end": 1040,
+        "endLoc": {
+          "column": 9,
+          "line": 1040,
+          "position": 29486
+        },
+        "name": "docs/plans/2026-02-27-operations-dashboard-implementation.md:markdown",
+        "start": 1029,
+        "startLoc": {
+          "column": 13,
+          "line": 1029,
+          "position": 29254
+        }
+      },
+      "tokens": 221
+    },
+    {
+      "firstFile": {
+        "end": 293,
+        "endLoc": {
+          "column": 17,
+          "line": 293,
+          "position": 10941
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 282,
+        "startLoc": {
+          "column": 15,
+          "line": 282,
+          "position": 10748
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 1749,
+        "endLoc": {
+          "column": 12,
+          "line": 1749,
+          "position": 58808
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 1738,
+        "startLoc": {
+          "column": 13,
+          "line": 1738,
+          "position": 58615
+        }
+      },
+      "tokens": 182
+    },
+    {
+      "firstFile": {
+        "end": 742,
+        "endLoc": {
+          "column": 41,
+          "line": 742,
+          "position": 27003
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 729,
+        "startLoc": {
+          "column": 110,
+          "line": 729,
+          "position": 26409
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 14,
+      "secondFile": {
+        "end": 575,
+        "endLoc": {
+          "column": 3,
+          "line": 575,
+          "position": 15609
+        },
+        "name": "docs/plans/2026-02-27-operations-dashboard-implementation.md:markdown",
+        "start": 558,
+        "startLoc": {
+          "column": 26,
+          "line": 558,
+          "position": 15011
+        }
+      },
+      "tokens": 581
+    },
+    {
+      "firstFile": {
+        "end": 1823,
+        "endLoc": {
+          "column": 8,
+          "line": 1823,
+          "position": 60705
+        },
+        "name": "docs/plans/2026-02-20-video-review-app.md:markdown",
+        "start": 1790,
+        "startLoc": {
+          "column": 44,
+          "line": 1790,
+          "position": 59931
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 34,
+      "secondFile": {
+        "end": 696,
+        "endLoc": {
+          "column": 11,
+          "line": 696,
+          "position": 19116
+        },
+        "name": "docs/plans/2026-02-27-operations-dashboard-implementation.md:markdown",
+        "start": 673,
+        "startLoc": {
+          "column": 29,
+          "line": 673,
+          "position": 18354
+        }
+      },
+      "tokens": 739
+    },
+    {
+      "firstFile": {
+        "end": 916,
+        "endLoc": {
+          "column": 30,
+          "line": 916,
+          "position": 25967
+        },
+        "name": "docs/plans/2026-02-27-operations-dashboard-implementation.md:markdown",
+        "start": 734,
+        "startLoc": {
+          "column": 30,
+          "line": 734,
+          "position": 20043
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 183,
+      "secondFile": {
+        "end": 921,
+        "endLoc": {
+          "column": 12,
+          "line": 921,
+          "position": 26117
+        },
+        "name": "docs/plans/2026-02-27-operations-dashboard-implementation.md:markdown",
+        "start": 742,
+        "startLoc": {
+          "column": 32,
+          "line": 742,
+          "position": 20196
+        }
+      },
+      "tokens": 5742
+    },
+    {
+      "firstFile": {
+        "end": 829,
+        "endLoc": {
+          "column": 16,
+          "line": 829,
+          "position": 22935
+        },
+        "name": "docs/plans/2026-02-27-operations-dashboard-implementation.md:markdown",
+        "start": 742,
+        "startLoc": {
+          "column": 22,
+          "line": 742,
+          "position": 20186
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 88,
+      "secondFile": {
+        "end": 1023,
+        "endLoc": {
+          "column": 7,
+          "line": 1023,
+          "position": 29159
+        },
+        "name": "docs/plans/2026-02-27-operations-dashboard-implementation.md:markdown",
+        "start": 933,
+        "startLoc": {
+          "column": 23,
+          "line": 933,
+          "position": 26407
+        }
+      },
+      "tokens": 2662
+    },
+    {
+      "firstFile": {
+        "end": 430,
+        "endLoc": {
+          "column": 61,
+          "line": 430,
+          "position": 14249
+        },
+        "name": "docs/plans/2026-03-03-codebase-hardening-implementation.md:markdown",
+        "start": 402,
+        "startLoc": {
+          "column": 53,
+          "line": 402,
+          "position": 13317
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 29,
+      "secondFile": {
+        "end": 1366,
+        "endLoc": {
+          "column": 61,
+          "line": 1366,
+          "position": 42440
+        },
+        "name": "docs/plans/2026-03-03-codebase-hardening-implementation.md:markdown",
+        "start": 1329,
+        "startLoc": {
+          "column": 37,
+          "line": 1329,
+          "position": 41261
+        }
+      },
+      "tokens": 63
+    },
+    {
+      "firstFile": {
+        "end": 484,
+        "endLoc": {
+          "column": 8,
+          "line": 484,
+          "position": 15866
+        },
+        "name": "docs/plans/2026-03-03-codebase-hardening-implementation.md:markdown",
+        "start": 461,
+        "startLoc": {
+          "column": 43,
+          "line": 461,
+          "position": 15297
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 24,
+      "secondFile": {
+        "end": 1422,
+        "endLoc": {
+          "column": 8,
+          "line": 1422,
+          "position": 44004
+        },
+        "name": "docs/plans/2026-03-03-codebase-hardening-implementation.md:markdown",
+        "start": 1398,
+        "startLoc": {
+          "column": 37,
+          "line": 1398,
+          "position": 43359
+        }
+      },
+      "tokens": 53
+    },
+    {
+      "firstFile": {
+        "end": 1182,
+        "endLoc": {
+          "column": 8,
+          "line": 1182,
+          "position": 37138
+        },
+        "name": "docs/plans/2026-03-03-codebase-hardening-implementation.md:markdown",
+        "start": 1166,
+        "startLoc": {
+          "column": 107,
+          "line": 1166,
+          "position": 36829
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 17,
+      "secondFile": {
+        "end": 1599,
+        "endLoc": {
+          "column": 8,
+          "line": 1599,
+          "position": 48338
+        },
+        "name": "docs/plans/2026-03-03-codebase-hardening-implementation.md:markdown",
+        "start": 1583,
+        "startLoc": {
+          "column": 94,
+          "line": 1583,
+          "position": 48088
+        }
+      },
+      "tokens": 51
+    },
+    {
+      "firstFile": {
+        "end": 552,
+        "endLoc": {
+          "column": 1,
+          "line": 552,
+          "position": 16381
+        },
+        "name": "docs/plans/2026-03-03-dashboard-overhaul-v2-implementation.md:markdown",
+        "start": 542,
+        "startLoc": {
+          "column": 0,
+          "line": 542,
+          "position": 16164
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 11,
+      "secondFile": {
+        "end": 745,
+        "endLoc": {
+          "column": 1,
+          "line": 745,
+          "position": 21181
+        },
+        "name": "docs/plans/2026-03-03-dashboard-overhaul-v2-implementation.md:markdown",
+        "start": 735,
+        "startLoc": {
+          "column": 0,
+          "line": 735,
+          "position": 20964
+        }
+      },
+      "tokens": 64
+    },
+    {
+      "firstFile": {
+        "end": 1209,
+        "endLoc": {
+          "column": 32,
+          "line": 1209,
+          "position": 43640
+        },
+        "name": "docs/plans/2026-03-14-unified-video-pipeline-implementation.md:yaml",
+        "start": 1189,
+        "startLoc": {
+          "column": 2,
+          "line": 1189,
+          "position": 42880
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 21,
+      "secondFile": {
+        "end": 70,
+        "endLoc": {
+          "column": 30,
+          "line": 70,
+          "position": 1963
+        },
+        "name": "niches/_template/config/sources.yaml",
+        "start": 50,
+        "startLoc": {
+          "column": 0,
+          "line": 50,
+          "position": 1243
+        }
+      },
+      "tokens": 66
+    },
+    {
+      "firstFile": {
+        "end": 1262,
+        "endLoc": {
+          "column": 10,
+          "line": 1262,
+          "position": 45271
+        },
+        "name": "docs/plans/2026-03-14-unified-video-pipeline-implementation.md:yaml",
+        "start": 1245,
+        "startLoc": {
+          "column": 2,
+          "line": 1245,
+          "position": 44658
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 18,
+      "secondFile": {
+        "end": 87,
+        "endLoc": {
+          "column": 8,
+          "line": 87,
+          "position": 3174
+        },
+        "name": "config/sources.yaml",
+        "start": 70,
+        "startLoc": {
+          "column": 0,
+          "line": 70,
+          "position": 2595
+        }
+      },
+      "tokens": 56
+    },
+    {
+      "firstFile": {
+        "end": 25,
+        "endLoc": {
+          "column": 3,
+          "line": 25,
+          "position": 549
+        },
+        "name": "execution/sources/civitai_connector.py",
+        "start": 14,
+        "startLoc": {
+          "column": 0,
+          "line": 14,
+          "position": 246
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 26,
+        "endLoc": {
+          "column": 3,
+          "line": 26,
+          "position": 697
+        },
+        "name": "execution/sources/hf_spaces_connector.py",
+        "start": 15,
+        "startLoc": {
+          "column": 0,
+          "line": 15,
+          "position": 394
+        }
+      },
+      "tokens": 72
+    },
+    {
+      "firstFile": {
+        "end": 233,
+        "endLoc": {
+          "column": 21,
+          "line": 233,
+          "position": 8172
+        },
+        "name": "execution/sources/youtube_connector.py",
+        "start": 220,
+        "startLoc": {
+          "column": 27,
+          "line": 220,
+          "position": 7698
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 14,
+      "secondFile": {
+        "end": 259,
+        "endLoc": {
+          "column": 21,
+          "line": 259,
+          "position": 9057
+        },
+        "name": "execution/sources/youtube_connector.py",
+        "start": 246,
+        "startLoc": {
+          "column": 40,
+          "line": 246,
+          "position": 8583
+        }
+      },
+      "tokens": 57
+    },
+    {
+      "firstFile": {
+        "end": 204,
+        "endLoc": {
+          "column": 32,
+          "line": 204,
+          "position": 6805
+        },
+        "name": "execution/utils/html_scraper.py",
+        "start": 191,
+        "startLoc": {
+          "column": 8,
+          "line": 191,
+          "position": 6319
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 14,
+      "secondFile": {
+        "end": 249,
+        "endLoc": {
+          "column": 32,
+          "line": 249,
+          "position": 8230
+        },
+        "name": "execution/utils/html_scraper.py",
+        "start": 236,
+        "startLoc": {
+          "column": 8,
+          "line": 236,
+          "position": 7744
+        }
+      },
+      "tokens": 82
+    },
+    {
+      "firstFile": {
+        "end": 18,
+        "endLoc": {
+          "column": 17,
+          "line": 18,
+          "position": 392
+        },
+        "name": "run_pipeline.py",
+        "start": 3,
+        "startLoc": {
+          "column": 0,
+          "line": 3,
+          "position": 65
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 16,
+      "secondFile": {
+        "end": 18,
+        "endLoc": {
+          "column": 17,
+          "line": 18,
+          "position": 388
+        },
+        "name": "run_pipeline.py",
+        "start": 3,
+        "startLoc": {
+          "column": 0,
+          "line": 3,
+          "position": 61
+        }
+      },
+      "tokens": 64
+    },
+    {
+      "firstFile": {
+        "end": 18,
+        "endLoc": {
+          "column": 17,
+          "line": 18,
+          "position": 392
+        },
+        "name": "run_pipeline.py",
+        "start": 3,
+        "startLoc": {
+          "column": 0,
+          "line": 3,
+          "position": 65
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 16,
+      "secondFile": {
+        "end": 18,
+        "endLoc": {
+          "column": 17,
+          "line": 18,
+          "position": 388
+        },
+        "name": "run_pipeline.py",
+        "start": 3,
+        "startLoc": {
+          "column": 0,
+          "line": 3,
+          "position": 61
+        }
+      },
+      "tokens": 64
+    },
+    {
+      "firstFile": {
+        "end": 18,
+        "endLoc": {
+          "column": 17,
+          "line": 18,
+          "position": 392
+        },
+        "name": "run_pipeline.py",
+        "start": 3,
+        "startLoc": {
+          "column": 0,
+          "line": 3,
+          "position": 65
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 16,
+      "secondFile": {
+        "end": 18,
+        "endLoc": {
+          "column": 17,
+          "line": 18,
+          "position": 388
+        },
+        "name": "run_pipeline.py",
+        "start": 3,
+        "startLoc": {
+          "column": 0,
+          "line": 3,
+          "position": 61
+        }
+      },
+      "tokens": 64
+    },
+    {
+      "firstFile": {
+        "end": 43,
+        "endLoc": {
+          "column": 20,
+          "line": 43,
+          "position": 1353
+        },
+        "name": "run_pipeline.py",
+        "start": 24,
+        "startLoc": {
+          "column": 12,
+          "line": 24,
+          "position": 706
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 20,
+      "secondFile": {
+        "end": 43,
+        "endLoc": {
+          "column": 20,
+          "line": 43,
+          "position": 1331
+        },
+        "name": "run_pipeline.py",
+        "start": 24,
+        "startLoc": {
+          "column": 12,
+          "line": 24,
+          "position": 684
+        }
+      },
+      "tokens": 70
+    },
+    {
+      "firstFile": {
+        "end": 43,
+        "endLoc": {
+          "column": 20,
+          "line": 43,
+          "position": 1353
+        },
+        "name": "run_pipeline.py",
+        "start": 24,
+        "startLoc": {
+          "column": 12,
+          "line": 24,
+          "position": 706
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 20,
+      "secondFile": {
+        "end": 43,
+        "endLoc": {
+          "column": 20,
+          "line": 43,
+          "position": 1328
+        },
+        "name": "run_pipeline.py",
+        "start": 24,
+        "startLoc": {
+          "column": 12,
+          "line": 24,
+          "position": 681
+        }
+      },
+      "tokens": 70
+    },
+    {
+      "firstFile": {
+        "end": 43,
+        "endLoc": {
+          "column": 20,
+          "line": 43,
+          "position": 1353
+        },
+        "name": "run_pipeline.py",
+        "start": 24,
+        "startLoc": {
+          "column": 12,
+          "line": 24,
+          "position": 706
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 20,
+      "secondFile": {
+        "end": 43,
+        "endLoc": {
+          "column": 20,
+          "line": 43,
+          "position": 1331
+        },
+        "name": "run_pipeline.py",
+        "start": 24,
+        "startLoc": {
+          "column": 12,
+          "line": 24,
+          "position": 684
+        }
+      },
+      "tokens": 70
+    },
+    {
+      "firstFile": {
+        "end": 30,
+        "endLoc": {
+          "column": 32,
+          "line": 30,
+          "position": 1048
+        },
+        "name": "runbooks/orchestrator.sh",
+        "start": 18,
+        "startLoc": {
+          "column": 0,
+          "line": 18,
+          "position": 544
+        }
+      },
+      "format": "bash",
+      "fragment": "",
+      "lines": 13,
+      "secondFile": {
+        "end": 32,
+        "endLoc": {
+          "column": 32,
+          "line": 32,
+          "position": 1187
+        },
+        "name": "runbooks/weekly_inspo.sh",
+        "start": 20,
+        "startLoc": {
+          "column": 0,
+          "line": 20,
+          "position": 683
+        }
+      },
+      "tokens": 59
+    },
+    {
+      "firstFile": {
+        "end": 53,
+        "endLoc": {
+          "column": 17,
+          "line": 53,
+          "position": 1519
+        },
+        "name": "templates/slides/content_slide.html",
+        "start": 42,
+        "startLoc": {
+          "column": 107,
+          "line": 42,
+          "position": 1290
+        }
+      },
+      "format": "markup",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 56,
+        "endLoc": {
+          "column": 17,
+          "line": 56,
+          "position": 1323
+        },
+        "name": "templates/slides/image_content_slide.html",
+        "start": 45,
+        "startLoc": {
+          "column": 36,
+          "line": 45,
+          "position": 1094
+        }
+      },
+      "tokens": 69
+    },
+    {
+      "firstFile": {
+        "end": 53,
+        "endLoc": {
+          "column": 9,
+          "line": 53,
+          "position": 1511
+        },
+        "name": "templates/slides/content_slide.html",
+        "start": 42,
+        "startLoc": {
+          "column": 107,
+          "line": 42,
+          "position": 1290
+        }
+      },
+      "format": "markup",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 93,
+        "endLoc": {
+          "column": 9,
+          "line": 93,
+          "position": 2016
+        },
+        "name": "templates/slides/quote_slide.html",
+        "start": 82,
+        "startLoc": {
+          "column": 106,
+          "line": 82,
+          "position": 1795
+        }
+      },
+      "tokens": 68
+    },
+    {
+      "firstFile": {
+        "end": 53,
+        "endLoc": {
+          "column": 9,
+          "line": 53,
+          "position": 1511
+        },
+        "name": "templates/slides/content_slide.html",
+        "start": 42,
+        "startLoc": {
+          "column": 107,
+          "line": 42,
+          "position": 1290
+        }
+      },
+      "format": "markup",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 94,
+        "endLoc": {
+          "column": 9,
+          "line": 94,
+          "position": 1949
+        },
+        "name": "templates/slides/stat_slide.html",
+        "start": 83,
+        "startLoc": {
+          "column": 99,
+          "line": 83,
+          "position": 1728
+        }
+      },
+      "tokens": 68
+    },
+    {
+      "firstFile": {
+        "end": 77,
+        "endLoc": {
+          "column": 7,
+          "line": 77,
+          "position": 2029
+        },
+        "name": "templates/slides/content_slide.html",
+        "start": 60,
+        "startLoc": {
+          "column": 6,
+          "line": 60,
+          "position": 1709
+        }
+      },
+      "format": "markup",
+      "fragment": "",
+      "lines": 18,
+      "secondFile": {
+        "end": 78,
+        "endLoc": {
+          "column": 7,
+          "line": 78,
+          "position": 1812
+        },
+        "name": "templates/slides/image_content_slide.html",
+        "start": 61,
+        "startLoc": {
+          "column": 6,
+          "line": 61,
+          "position": 1492
+        }
+      },
+      "tokens": 95
+    },
+    {
+      "firstFile": {
+        "end": 77,
+        "endLoc": {
+          "column": 7,
+          "line": 77,
+          "position": 2029
+        },
+        "name": "templates/slides/content_slide.html",
+        "start": 63,
+        "startLoc": {
+          "column": 11,
+          "line": 63,
+          "position": 1854
+        }
+      },
+      "format": "markup",
+      "fragment": "",
+      "lines": 15,
+      "secondFile": {
+        "end": 112,
+        "endLoc": {
+          "column": 7,
+          "line": 112,
+          "position": 2362
+        },
+        "name": "templates/slides/stat_slide.html",
+        "start": 99,
+        "startLoc": {
+          "column": 46,
+          "line": 99,
+          "position": 2188
+        }
+      },
+      "tokens": 56
+    },
+    {
+      "firstFile": {
+        "end": 77,
+        "endLoc": {
+          "column": 7,
+          "line": 77,
+          "position": 2029
+        },
+        "name": "templates/slides/content_slide.html",
+        "start": 65,
+        "startLoc": {
+          "column": 4,
+          "line": 65,
+          "position": 1861
+        }
+      },
+      "format": "markup",
+      "fragment": "",
+      "lines": 13,
+      "secondFile": {
+        "end": 112,
+        "endLoc": {
+          "column": 7,
+          "line": 112,
+          "position": 2429
+        },
+        "name": "templates/slides/quote_slide.html",
+        "start": 100,
+        "startLoc": {
+          "column": 4,
+          "line": 100,
+          "position": 2261
+        }
+      },
+      "tokens": 55
+    },
+    {
+      "firstFile": {
+        "end": 62,
+        "endLoc": {
+          "column": 13,
+          "line": 62,
+          "position": 1224
+        },
+        "name": "templates/slides/cta_slide.html",
+        "start": 51,
+        "startLoc": {
+          "column": 14,
+          "line": 51,
+          "position": 1014
+        }
+      },
+      "format": "markup",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 79,
+        "endLoc": {
+          "column": 13,
+          "line": 79,
+          "position": 1573
+        },
+        "name": "templates/slides/quote_slide.html",
+        "start": 68,
+        "startLoc": {
+          "column": 24,
+          "line": 68,
+          "position": 1363
+        }
+      },
+      "tokens": 53
+    },
+    {
+      "firstFile": {
+        "end": 62,
+        "endLoc": {
+          "column": 13,
+          "line": 62,
+          "position": 1224
+        },
+        "name": "templates/slides/cta_slide.html",
+        "start": 51,
+        "startLoc": {
+          "column": 14,
+          "line": 51,
+          "position": 1014
+        }
+      },
+      "format": "markup",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 81,
+        "endLoc": {
+          "column": 13,
+          "line": 81,
+          "position": 1594
+        },
+        "name": "templates/slides/stat_slide.html",
+        "start": 70,
+        "startLoc": {
+          "column": 16,
+          "line": 70,
+          "position": 1384
+        }
+      },
+      "tokens": 53
+    },
+    {
+      "firstFile": {
+        "end": 46,
+        "endLoc": {
+          "column": 47,
+          "line": 46,
+          "position": 1557
+        },
+        "name": "config/lists_config.yaml",
+        "start": 1,
+        "startLoc": {
+          "column": 0,
+          "line": 1,
+          "position": 0
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 46,
+      "secondFile": {
+        "end": 46,
+        "endLoc": {
+          "column": 47,
+          "line": 46,
+          "position": 1557
+        },
+        "name": "config/lists_config.yaml",
+        "start": 1,
+        "startLoc": {
+          "column": 0,
+          "line": 1,
+          "position": 0
+        }
+      },
+      "tokens": 220
+    },
+    {
+      "firstFile": {
+        "end": 46,
+        "endLoc": {
+          "column": 47,
+          "line": 46,
+          "position": 1557
+        },
+        "name": "config/lists_config.yaml",
+        "start": 1,
+        "startLoc": {
+          "column": 0,
+          "line": 1,
+          "position": 0
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 46,
+      "secondFile": {
+        "end": 46,
+        "endLoc": {
+          "column": 47,
+          "line": 46,
+          "position": 1557
+        },
+        "name": "config/lists_config.yaml",
+        "start": 1,
+        "startLoc": {
+          "column": 0,
+          "line": 1,
+          "position": 0
+        }
+      },
+      "tokens": 220
+    },
+    {
+      "firstFile": {
+        "end": 46,
+        "endLoc": {
+          "column": 47,
+          "line": 46,
+          "position": 1557
+        },
+        "name": "config/lists_config.yaml",
+        "start": 1,
+        "startLoc": {
+          "column": 0,
+          "line": 1,
+          "position": 0
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 46,
+      "secondFile": {
+        "end": 46,
+        "endLoc": {
+          "column": 47,
+          "line": 46,
+          "position": 1557
+        },
+        "name": "config/lists_config.yaml",
+        "start": 1,
+        "startLoc": {
+          "column": 0,
+          "line": 1,
+          "position": 0
+        }
+      },
+      "tokens": 220
+    },
+    {
+      "firstFile": {
+        "end": 16,
+        "endLoc": {
+          "column": 7,
+          "line": 16,
+          "position": 406
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 1,
+        "startLoc": {
+          "column": 0,
+          "line": 1,
+          "position": 0
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 16,
+      "secondFile": {
+        "end": 16,
+        "endLoc": {
+          "column": 7,
+          "line": 16,
+          "position": 406
+        },
+        "name": "niches/gaming/config/platform_algorithms.yaml",
+        "start": 1,
+        "startLoc": {
+          "column": 0,
+          "line": 1,
+          "position": 0
+        }
+      },
+      "tokens": 58
+    },
+    {
+      "firstFile": {
+        "end": 41,
+        "endLoc": {
+          "column": 7,
+          "line": 41,
+          "position": 1124
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 20,
+        "startLoc": {
+          "column": 4,
+          "line": 20,
+          "position": 603
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 22,
+      "secondFile": {
+        "end": 41,
+        "endLoc": {
+          "column": 7,
+          "line": 41,
+          "position": 1119
+        },
+        "name": "niches/gaming/config/platform_algorithms.yaml",
+        "start": 20,
+        "startLoc": {
+          "column": 4,
+          "line": 20,
+          "position": 598
+        }
+      },
+      "tokens": 70
+    },
+    {
+      "firstFile": {
+        "end": 38,
+        "endLoc": {
+          "column": 17,
+          "line": 38,
+          "position": 1060
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 23,
+        "startLoc": {
+          "column": 6,
+          "line": 23,
+          "position": 661
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 16,
+      "secondFile": {
+        "end": 38,
+        "endLoc": {
+          "column": 17,
+          "line": 38,
+          "position": 1104
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 23,
+        "startLoc": {
+          "column": 6,
+          "line": 23,
+          "position": 705
+        }
+      },
+      "tokens": 55
+    },
+    {
+      "firstFile": {
+        "end": 41,
+        "endLoc": {
+          "column": 7,
+          "line": 41,
+          "position": 1124
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 23,
+        "startLoc": {
+          "column": 6,
+          "line": 23,
+          "position": 661
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 19,
+      "secondFile": {
+        "end": 41,
+        "endLoc": {
+          "column": 7,
+          "line": 41,
+          "position": 1148
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 23,
+        "startLoc": {
+          "column": 6,
+          "line": 23,
+          "position": 685
+        }
+      },
+      "tokens": 62
+    },
+    {
+      "firstFile": {
+        "end": 67,
+        "endLoc": {
+          "column": 7,
+          "line": 67,
+          "position": 1911
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 45,
+        "startLoc": {
+          "column": 4,
+          "line": 45,
+          "position": 1302
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 23,
+      "secondFile": {
+        "end": 67,
+        "endLoc": {
+          "column": 7,
+          "line": 67,
+          "position": 1889
+        },
+        "name": "niches/gaming/config/platform_algorithms.yaml",
+        "start": 45,
+        "startLoc": {
+          "column": 4,
+          "line": 45,
+          "position": 1280
+        }
+      },
+      "tokens": 70
+    },
+    {
+      "firstFile": {
+        "end": 111,
+        "endLoc": {
+          "column": 7,
+          "line": 111,
+          "position": 3135
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 70,
+        "startLoc": {
+          "column": 2,
+          "line": 70,
+          "position": 2055
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 42,
+      "secondFile": {
+        "end": 111,
+        "endLoc": {
+          "column": 7,
+          "line": 111,
+          "position": 3083
+        },
+        "name": "niches/gaming/config/platform_algorithms.yaml",
+        "start": 70,
+        "startLoc": {
+          "column": 2,
+          "line": 70,
+          "position": 2003
+        }
+      },
+      "tokens": 137
+    },
+    {
+      "firstFile": {
+        "end": 111,
+        "endLoc": {
+          "column": 7,
+          "line": 111,
+          "position": 3135
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 92,
+        "startLoc": {
+          "column": 0,
+          "line": 92,
+          "position": 2583
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 20,
+      "secondFile": {
+        "end": 111,
+        "endLoc": {
+          "column": 7,
+          "line": 111,
+          "position": 3235
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 92,
+        "startLoc": {
+          "column": 0,
+          "line": 92,
+          "position": 2683
+        }
+      },
+      "tokens": 71
+    },
+    {
+      "firstFile": {
+        "end": 136,
+        "endLoc": {
+          "column": 7,
+          "line": 136,
+          "position": 3831
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 114,
+        "startLoc": {
+          "column": 2,
+          "line": 114,
+          "position": 3280
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 23,
+      "secondFile": {
+        "end": 136,
+        "endLoc": {
+          "column": 7,
+          "line": 136,
+          "position": 3761
+        },
+        "name": "niches/gaming/config/platform_algorithms.yaml",
+        "start": 114,
+        "startLoc": {
+          "column": 2,
+          "line": 114,
+          "position": 3210
+        }
+      },
+      "tokens": 70
+    },
+    {
+      "firstFile": {
+        "end": 136,
+        "endLoc": {
+          "column": 7,
+          "line": 136,
+          "position": 3831
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 114,
+        "startLoc": {
+          "column": 2,
+          "line": 114,
+          "position": 3280
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 23,
+      "secondFile": {
+        "end": 136,
+        "endLoc": {
+          "column": 7,
+          "line": 136,
+          "position": 3943
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 114,
+        "startLoc": {
+          "column": 2,
+          "line": 114,
+          "position": 3392
+        }
+      },
+      "tokens": 70
+    },
+    {
+      "firstFile": {
+        "end": 136,
+        "endLoc": {
+          "column": 7,
+          "line": 136,
+          "position": 3831
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 122,
+        "startLoc": {
+          "column": 0,
+          "line": 122,
+          "position": 3450
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 15,
+      "secondFile": {
+        "end": 136,
+        "endLoc": {
+          "column": 7,
+          "line": 136,
+          "position": 3883
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 122,
+        "startLoc": {
+          "column": 0,
+          "line": 122,
+          "position": 3502
+        }
+      },
+      "tokens": 50
+    },
+    {
+      "firstFile": {
+        "end": 45,
+        "endLoc": {
+          "column": 10,
+          "line": 45,
+          "position": 1362
+        },
+        "name": "config/publishing.yaml",
+        "start": 35,
+        "startLoc": {
+          "column": 4,
+          "line": 35,
+          "position": 1056
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 11,
+      "secondFile": {
+        "end": 41,
+        "endLoc": {
+          "column": 10,
+          "line": 41,
+          "position": 1125
+        },
+        "name": "niches/_template/config/publishing.yaml",
+        "start": 31,
+        "startLoc": {
+          "column": 4,
+          "line": 31,
+          "position": 819
+        }
+      },
+      "tokens": 51
+    },
+    {
+      "firstFile": {
+        "end": 45,
+        "endLoc": {
+          "column": 10,
+          "line": 45,
+          "position": 1362
+        },
+        "name": "config/publishing.yaml",
+        "start": 35,
+        "startLoc": {
+          "column": 4,
+          "line": 35,
+          "position": 1056
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 11,
+      "secondFile": {
+        "end": 44,
+        "endLoc": {
+          "column": 10,
+          "line": 44,
+          "position": 1264
+        },
+        "name": "config/publishing.yaml",
+        "start": 34,
+        "startLoc": {
+          "column": 4,
+          "line": 34,
+          "position": 958
+        }
+      },
+      "tokens": 51
+    },
+    {
+      "firstFile": {
+        "end": 45,
+        "endLoc": {
+          "column": 10,
+          "line": 45,
+          "position": 1362
+        },
+        "name": "config/publishing.yaml",
+        "start": 35,
+        "startLoc": {
+          "column": 4,
+          "line": 35,
+          "position": 1056
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 11,
+      "secondFile": {
+        "end": 44,
+        "endLoc": {
+          "column": 10,
+          "line": 44,
+          "position": 1264
+        },
+        "name": "config/publishing.yaml",
+        "start": 34,
+        "startLoc": {
+          "column": 4,
+          "line": 34,
+          "position": 958
+        }
+      },
+      "tokens": 51
+    },
+    {
+      "firstFile": {
+        "end": 20,
+        "endLoc": {
+          "column": 20,
+          "line": 20,
+          "position": 442
+        },
+        "name": "config/schedule.yaml",
+        "start": 2,
+        "startLoc": {
+          "column": 0,
+          "line": 2,
+          "position": 39
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 19,
+      "secondFile": {
+        "end": 20,
+        "endLoc": {
+          "column": 20,
+          "line": 20,
+          "position": 442
+        },
+        "name": "config/schedule.yaml",
+        "start": 2,
+        "startLoc": {
+          "column": 0,
+          "line": 2,
+          "position": 39
+        }
+      },
+      "tokens": 52
+    },
+    {
+      "firstFile": {
+        "end": 31,
+        "endLoc": {
+          "column": 18,
+          "line": 31,
+          "position": 636
+        },
+        "name": "config/schedule.yaml",
+        "start": 2,
+        "startLoc": {
+          "column": 0,
+          "line": 2,
+          "position": 39
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 30,
+      "secondFile": {
+        "end": 31,
+        "endLoc": {
+          "column": 18,
+          "line": 31,
+          "position": 636
+        },
+        "name": "config/schedule.yaml",
+        "start": 2,
+        "startLoc": {
+          "column": 0,
+          "line": 2,
+          "position": 39
+        }
+      },
+      "tokens": 78
+    },
+    {
+      "firstFile": {
+        "end": 31,
+        "endLoc": {
+          "column": 18,
+          "line": 31,
+          "position": 636
+        },
+        "name": "config/schedule.yaml",
+        "start": 9,
+        "startLoc": {
+          "column": 4,
+          "line": 9,
+          "position": 216
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 23,
+      "secondFile": {
+        "end": 30,
+        "endLoc": {
+          "column": 18,
+          "line": 30,
+          "position": 585
+        },
+        "name": "niches/gaming/config/schedule.yaml",
+        "start": 8,
+        "startLoc": {
+          "column": 4,
+          "line": 8,
+          "position": 165
+        }
+      },
+      "tokens": 62
+    },
+    {
+      "firstFile": {
+        "end": 608,
+        "endLoc": {
+          "column": 13,
+          "line": 608,
+          "position": 14379
+        },
+        "name": "config/sources.yaml",
+        "start": 579,
+        "startLoc": {
+          "column": 4,
+          "line": 579,
+          "position": 13827
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 30,
+      "secondFile": {
+        "end": 608,
+        "endLoc": {
+          "column": 13,
+          "line": 608,
+          "position": 14070
+        },
+        "name": "config/sources.yaml",
+        "start": 579,
+        "startLoc": {
+          "column": 4,
+          "line": 579,
+          "position": 13518
+        }
+      },
+      "tokens": 78
+    },
+    {
+      "firstFile": {
+        "end": 608,
+        "endLoc": {
+          "column": 13,
+          "line": 608,
+          "position": 14379
+        },
+        "name": "config/sources.yaml",
+        "start": 579,
+        "startLoc": {
+          "column": 4,
+          "line": 579,
+          "position": 13827
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 30,
+      "secondFile": {
+        "end": 532,
+        "endLoc": {
+          "column": 13,
+          "line": 532,
+          "position": 12663
+        },
+        "name": "config/sources.yaml",
+        "start": 503,
+        "startLoc": {
+          "column": 4,
+          "line": 503,
+          "position": 12111
+        }
+      },
+      "tokens": 78
+    },
+    {
+      "firstFile": {
+        "end": 29,
+        "endLoc": {
+          "column": 1,
+          "line": 29,
+          "position": 598
+        },
+        "name": "cw_strategies/fetch_sports_news.py",
+        "start": 19,
+        "startLoc": {
+          "column": 0,
+          "line": 19,
+          "position": 402
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 11,
+      "secondFile": {
+        "end": 542,
+        "endLoc": {
+          "column": 5,
+          "line": 542,
+          "position": 19252
+        },
+        "name": "docs/plans/2026-03-09-niche-strategies-and-fetchers.md:python",
+        "start": 532,
+        "startLoc": {
+          "column": 0,
+          "line": 532,
+          "position": 19052
+        }
+      },
+      "tokens": 52
+    },
+    {
+      "firstFile": {
+        "end": 29,
+        "endLoc": {
+          "column": 1,
+          "line": 29,
+          "position": 598
+        },
+        "name": "cw_strategies/fetch_sports_news.py",
+        "start": 19,
+        "startLoc": {
+          "column": 0,
+          "line": 19,
+          "position": 402
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 11,
+      "secondFile": {
+        "end": 831,
+        "endLoc": {
+          "column": 5,
+          "line": 831,
+          "position": 30565
+        },
+        "name": "docs/plans/2026-03-09-niche-strategies-and-fetchers.md:python",
+        "start": 821,
+        "startLoc": {
+          "column": 0,
+          "line": 821,
+          "position": 30365
+        }
+      },
+      "tokens": 52
+    },
+    {
+      "firstFile": {
+        "end": 79,
+        "endLoc": {
+          "column": 7,
+          "line": 79,
+          "position": 2898
+        },
+        "name": "cw_strategies/scoring.py",
+        "start": 64,
+        "startLoc": {
+          "column": 29,
+          "line": 64,
+          "position": 2344
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 16,
+      "secondFile": {
+        "end": 138,
+        "endLoc": {
+          "column": 3,
+          "line": 138,
+          "position": 4602
+        },
+        "name": "niches/gaming/stages/score_gaming_clips.py",
+        "start": 120,
+        "startLoc": {
+          "column": 25,
+          "line": 120,
+          "position": 4101
+        }
+      },
+      "tokens": 89
+    },
+    {
+      "firstFile": {
+        "end": 209,
+        "endLoc": {
+          "column": 37,
+          "line": 209,
+          "position": 8551
+        },
+        "name": "cw_strategies/scoring.py",
+        "start": 198,
+        "startLoc": {
+          "column": 60,
+          "line": 198,
+          "position": 8031
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 180,
+        "endLoc": {
+          "column": 37,
+          "line": 180,
+          "position": 6642
+        },
+        "name": "fd_strategies/scoring.py",
+        "start": 169,
+        "startLoc": {
+          "column": 59,
+          "line": 169,
+          "position": 6122
+        }
+      },
+      "tokens": 92
+    },
+    {
+      "firstFile": {
+        "end": 210,
+        "endLoc": {
+          "column": 31,
+          "line": 210,
+          "position": 8583
+        },
+        "name": "cw_strategies/scoring.py",
+        "start": 199,
+        "startLoc": {
+          "column": 20,
+          "line": 199,
+          "position": 8053
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 181,
+        "endLoc": {
+          "column": 23,
+          "line": 181,
+          "position": 6666
+        },
+        "name": "fd_strategies/scoring.py",
+        "start": 170,
+        "startLoc": {
+          "column": 20,
+          "line": 170,
+          "position": 6144
+        }
+      },
+      "tokens": 87
+    },
+    {
+      "firstFile": {
+        "end": 28,
+        "endLoc": {
+          "column": 38,
+          "line": 28,
+          "position": 872
+        },
+        "name": "cw_strategies/visual_render.py",
+        "start": 5,
+        "startLoc": {
+          "column": 55,
+          "line": 5,
+          "position": 222
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 24,
+      "secondFile": {
+        "end": 26,
+        "endLoc": {
+          "column": 38,
+          "line": 26,
+          "position": 772
+        },
+        "name": "sr_strategies/visual_render.py",
+        "start": 3,
+        "startLoc": {
+          "column": 80,
+          "line": 3,
+          "position": 122
+        }
+      },
+      "tokens": 110
+    },
+    {
+      "firstFile": {
+        "end": 79,
+        "endLoc": {
+          "column": 22,
+          "line": 79,
+          "position": 2941
+        },
+        "name": "cw_strategies/visual_render.py",
+        "start": 67,
+        "startLoc": {
+          "column": 8,
+          "line": 67,
+          "position": 2487
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 13,
+      "secondFile": {
+        "end": 79,
+        "endLoc": {
+          "column": 22,
+          "line": 79,
+          "position": 2839
+        },
+        "name": "sr_strategies/visual_render.py",
+        "start": 67,
+        "startLoc": {
+          "column": 12,
+          "line": 67,
+          "position": 2385
+        }
+      },
+      "tokens": 54
+    },
+    {
+      "firstFile": {
+        "end": 112,
+        "endLoc": {
+          "column": 62,
+          "line": 112,
+          "position": 4224
+        },
+        "name": "cw_strategies/visual_render.py",
+        "start": 89,
+        "startLoc": {
+          "column": 77,
+          "line": 89,
+          "position": 3349
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 24,
+      "secondFile": {
+        "end": 112,
+        "endLoc": {
+          "column": 62,
+          "line": 112,
+          "position": 4136
+        },
+        "name": "sr_strategies/visual_render.py",
+        "start": 89,
+        "startLoc": {
+          "column": 77,
+          "line": 89,
+          "position": 3261
+        }
+      },
+      "tokens": 99
+    },
+    {
+      "firstFile": {
+        "end": 152,
+        "endLoc": {
+          "column": 49,
+          "line": 152,
+          "position": 5830
+        },
+        "name": "cw_strategies/visual_render.py",
+        "start": 135,
+        "startLoc": {
+          "column": 48,
+          "line": 135,
+          "position": 5275
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 18,
+      "secondFile": {
+        "end": 163,
+        "endLoc": {
+          "column": 49,
+          "line": 163,
+          "position": 5786
+        },
+        "name": "sr_strategies/visual_render.py",
+        "start": 146,
+        "startLoc": {
+          "column": 33,
+          "line": 146,
+          "position": 5231
+        }
+      },
+      "tokens": 79
+    },
+    {
+      "firstFile": {
+        "end": 194,
+        "endLoc": {
+          "column": 63,
+          "line": 194,
+          "position": 7410
+        },
+        "name": "cw_strategies/visual_render.py",
+        "start": 169,
+        "startLoc": {
+          "column": 77,
+          "line": 169,
+          "position": 6338
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 26,
+      "secondFile": {
+        "end": 216,
+        "endLoc": {
+          "column": 63,
+          "line": 216,
+          "position": 7573
+        },
+        "name": "fd_strategies/visual_render.py",
+        "start": 191,
+        "startLoc": {
+          "column": 76,
+          "line": 191,
+          "position": 6501
+        }
+      },
+      "tokens": 160
+    },
+    {
+      "firstFile": {
+        "end": 200,
+        "endLoc": {
+          "column": 43,
+          "line": 200,
+          "position": 7748
+        },
+        "name": "cw_strategies/visual_render.py",
+        "start": 169,
+        "startLoc": {
+          "column": 77,
+          "line": 169,
+          "position": 6338
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 32,
+      "secondFile": {
+        "end": 213,
+        "endLoc": {
+          "column": 43,
+          "line": 213,
+          "position": 7805
+        },
+        "name": "sr_strategies/visual_render.py",
+        "start": 182,
+        "startLoc": {
+          "column": 77,
+          "line": 182,
+          "position": 6395
+        }
+      },
+      "tokens": 198
+    },
+    {
+      "firstFile": {
+        "end": 201,
+        "endLoc": {
+          "column": 85,
+          "line": 201,
+          "position": 7834
+        },
+        "name": "cw_strategies/visual_render.py",
+        "start": 189,
+        "startLoc": {
+          "column": 39,
+          "line": 189,
+          "position": 7062
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 13,
+      "secondFile": {
+        "end": 214,
+        "endLoc": {
+          "column": 85,
+          "line": 214,
+          "position": 7891
+        },
+        "name": "sr_strategies/visual_render.py",
+        "start": 202,
+        "startLoc": {
+          "column": 39,
+          "line": 202,
+          "position": 7119
+        }
+      },
+      "tokens": 87
+    },
+    {
+      "firstFile": {
+        "end": 25,
+        "endLoc": {
+          "column": 46,
+          "line": 25,
+          "position": 776
+        },
+        "name": "cw_strategies/writing.py",
+        "start": 5,
+        "startLoc": {
+          "column": 55,
+          "line": 5,
+          "position": 238
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 21,
+      "secondFile": {
+        "end": 25,
+        "endLoc": {
+          "column": 46,
+          "line": 25,
+          "position": 791
+        },
+        "name": "sr_strategies/writing.py",
+        "start": 5,
+        "startLoc": {
+          "column": 66,
+          "line": 5,
+          "position": 253
+        }
+      },
+      "tokens": 76
+    },
+    {
+      "firstFile": {
+        "end": 44,
+        "endLoc": {
+          "column": 5,
+          "line": 44,
+          "position": 1383
+        },
+        "name": "cw_strategies/writing.py",
+        "start": 12,
+        "startLoc": {
+          "column": 0,
+          "line": 12,
+          "position": 305
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 33,
+      "secondFile": {
+        "end": 42,
+        "endLoc": {
+          "column": 5,
+          "line": 42,
+          "position": 1362
+        },
+        "name": "fd_strategies/writing.py",
+        "start": 10,
+        "startLoc": {
+          "column": 0,
+          "line": 10,
+          "position": 284
+        }
+      },
+      "tokens": 207
+    },
+    {
+      "firstFile": {
+        "end": 44,
+        "endLoc": {
+          "column": 5,
+          "line": 44,
+          "position": 1383
+        },
+        "name": "cw_strategies/writing.py",
+        "start": 34,
+        "startLoc": {
+          "column": 17,
+          "line": 34,
+          "position": 1041
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 11,
+      "secondFile": {
+        "end": 44,
+        "endLoc": {
+          "column": 5,
+          "line": 44,
+          "position": 1468
+        },
+        "name": "sr_strategies/writing.py",
+        "start": 34,
+        "startLoc": {
+          "column": 48,
+          "line": 34,
+          "position": 1126
+        }
+      },
+      "tokens": 82
+    },
+    {
+      "firstFile": {
+        "end": 73,
+        "endLoc": {
+          "column": 10,
+          "line": 73,
+          "position": 2373
+        },
+        "name": "cw_strategies/writing.py",
+        "start": 56,
+        "startLoc": {
+          "column": 37,
+          "line": 56,
+          "position": 1845
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 18,
+      "secondFile": {
+        "end": 78,
+        "endLoc": {
+          "column": 10,
+          "line": 78,
+          "position": 2775
+        },
+        "name": "sr_strategies/writing.py",
+        "start": 61,
+        "startLoc": {
+          "column": 41,
+          "line": 61,
+          "position": 2247
+        }
+      },
+      "tokens": 110
+    },
+    {
+      "firstFile": {
+        "end": 21,
+        "endLoc": {
+          "column": 12,
+          "line": 21,
+          "position": 424
+        },
+        "name": "pyproject.toml",
+        "start": 5,
+        "startLoc": {
+          "column": 0,
+          "line": 5,
+          "position": 123
+        }
+      },
+      "format": "toml",
+      "fragment": "# (2026.6.6.234447.dev0) which ships SABR + GVS-PO-Token workarounds ahead\n# of the stable channel. Without this, ``uv run`` re-resolves on every call\n# and silently downgrades to the latest stable (2026.3.17) that fails 100%\n# of YouTube downloads as of 2026-06-08.\nprerelease = \"allow\"\n\n# 2026-06-29: pin torch to the CPU-only wheel index. detoxify (engagement\n# toxicity gate) pulls torch as a transitive dep. The default index ships\n# the +cu12 build which pulls ~8 GB of NVIDIA CUDA wheels (nccl, cublas,\n# cudnn, cusparse, cusolver, cufft, etc.). Neither prod (Hetzner Xeon, no\n# GPU) nor CI (self-hosted runner on same Xeon) has CUDA, so the wheels are\n# wasted bandwidth + disk. The CPU wheel is ~200 MB. Functionally identical\n# for our use case (detoxify inference on short comment strings).\n[[tool.uv.index]]\nname = \"pytorch-cpu\"\nurl = \"https://download.pytorch.org/whl/cpu\"\nexplicit = true",
+      "lines": 17,
+      "secondFile": {
+        "end": 21,
+        "endLoc": {
+          "column": 12,
+          "line": 21,
+          "position": 438
+        },
+        "name": "pyproject.toml",
+        "start": 5,
+        "startLoc": {
+          "column": 0,
+          "line": 5,
+          "position": 137
+        }
+      },
+      "tokens": 62
+    },
+    {
+      "firstFile": {
+        "end": 213,
+        "endLoc": {
+          "column": 12,
+          "line": 213,
+          "position": 7040
+        },
+        "name": "core/pipeline_runner.py",
+        "start": 200,
+        "startLoc": {
+          "column": 71,
+          "line": 200,
+          "position": 6643
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 14,
+      "secondFile": {
+        "end": 47,
+        "endLoc": {
+          "column": 12,
+          "line": 47,
+          "position": 1219
+        },
+        "name": "niches/_template/run_pipeline.py",
+        "start": 34,
+        "startLoc": {
+          "column": 77,
+          "line": 34,
+          "position": 822
+        }
+      },
+      "tokens": 58
+    },
+    {
+      "firstFile": {
+        "end": 228,
+        "endLoc": {
+          "column": 1,
+          "line": 228,
+          "position": 13124
+        },
+        "name": "docs/merge_plan.md:markdown",
+        "start": 218,
+        "startLoc": {
+          "column": 186,
+          "line": 218,
+          "position": 12886
+        }
+      },
+      "format": "markdown",
+      "fragment": "",
+      "lines": 11,
+      "secondFile": {
+        "end": 274,
+        "endLoc": {
+          "column": 1,
+          "line": 274,
+          "position": 15676
+        },
+        "name": "docs/merge_plan.md:markdown",
+        "start": 264,
+        "startLoc": {
+          "column": 122,
+          "line": 264,
+          "position": 15430
+        }
+      },
+      "tokens": 57
+    },
+    {
+      "firstFile": {
+        "end": 127,
+        "endLoc": {
+          "column": 30,
+          "line": 127,
+          "position": 4907
+        },
+        "name": "docs/plans/2026-03-09-niche-strategies-and-fetchers.md:python",
+        "start": 112,
+        "startLoc": {
+          "column": 44,
+          "line": 112,
+          "position": 4486
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 16,
+      "secondFile": {
+        "end": 165,
+        "endLoc": {
+          "column": 30,
+          "line": 165,
+          "position": 6298
+        },
+        "name": "docs/plans/2026-03-09-niche-strategies-and-fetchers.md:python",
+        "start": 150,
+        "startLoc": {
+          "column": 43,
+          "line": 150,
+          "position": 5877
+        }
+      },
+      "tokens": 54
+    },
+    {
+      "firstFile": {
+        "end": 831,
+        "endLoc": {
+          "column": 5,
+          "line": 831,
+          "position": 30565
+        },
+        "name": "docs/plans/2026-03-09-niche-strategies-and-fetchers.md:python",
+        "start": 808,
+        "startLoc": {
+          "column": 40,
+          "line": 808,
+          "position": 30173
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 24,
+      "secondFile": {
+        "end": 904,
+        "endLoc": {
+          "column": 5,
+          "line": 904,
+          "position": 32855
+        },
+        "name": "docs/plans/2026-03-09-niche-strategies-and-fetchers.md:python",
+        "start": 881,
+        "startLoc": {
+          "column": 40,
+          "line": 881,
+          "position": 32463
+        }
+      },
+      "tokens": 81
+    },
+    {
+      "firstFile": {
+        "end": 1105,
+        "endLoc": {
+          "column": 14,
+          "line": 1105,
+          "position": 40252
+        },
+        "name": "docs/plans/2026-03-09-niche-strategies-and-fetchers.md:python",
+        "start": 1095,
+        "startLoc": {
+          "column": 8,
+          "line": 1095,
+          "position": 39757
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 11,
+      "secondFile": {
+        "end": 1135,
+        "endLoc": {
+          "column": 38,
+          "line": 1135,
+          "position": 41649
+        },
+        "name": "docs/plans/2026-03-09-niche-strategies-and-fetchers.md:python",
+        "start": 1125,
+        "startLoc": {
+          "column": 8,
+          "line": 1125,
+          "position": 41130
+        }
+      },
+      "tokens": 59
+    },
+    {
+      "firstFile": {
+        "end": 40,
+        "endLoc": {
+          "column": 5,
+          "line": 40,
+          "position": 1157
+        },
+        "name": "niches/_template/config/niche.yaml",
+        "start": 4,
+        "startLoc": {
+          "column": 0,
+          "line": 4,
+          "position": 75
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 37,
+      "secondFile": {
+        "end": 40,
+        "endLoc": {
+          "column": 5,
+          "line": 40,
+          "position": 1160
+        },
+        "name": "config/niche.yaml",
+        "start": 4,
+        "startLoc": {
+          "column": 0,
+          "line": 4,
+          "position": 78
+        }
+      },
+      "tokens": 110
+    },
+    {
+      "firstFile": {
+        "end": 50,
+        "endLoc": {
+          "column": 17,
+          "line": 50,
+          "position": 1260
+        },
+        "name": "niches/_template/config/sources.yaml",
+        "start": 3,
+        "startLoc": {
+          "column": 0,
+          "line": 3,
+          "position": 77
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 48,
+      "secondFile": {
+        "end": 52,
+        "endLoc": {
+          "column": 17,
+          "line": 52,
+          "position": 1433
+        },
+        "name": "config/sources.yaml",
+        "start": 5,
+        "startLoc": {
+          "column": 0,
+          "line": 5,
+          "position": 250
+        }
+      },
+      "tokens": 135
+    },
+    {
+      "firstFile": {
+        "end": 167,
+        "endLoc": {
+          "column": 38,
+          "line": 167,
+          "position": 4022
+        },
+        "name": "niches/_template/config/sources.yaml",
+        "start": 117,
+        "startLoc": {
+          "column": 4,
+          "line": 117,
+          "position": 2850
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 51,
+      "secondFile": {
+        "end": 320,
+        "endLoc": {
+          "column": 38,
+          "line": 320,
+          "position": 9222
+        },
+        "name": "config/sources.yaml",
+        "start": 270,
+        "startLoc": {
+          "column": 4,
+          "line": 270,
+          "position": 8050
+        }
+      },
+      "tokens": 108
+    },
+    {
+      "firstFile": {
+        "end": 48,
+        "endLoc": {
+          "column": 20,
+          "line": 48,
+          "position": 1219
+        },
+        "name": "niches/_template/config/visuals.yaml",
+        "start": 1,
+        "startLoc": {
+          "column": 0,
+          "line": 1,
+          "position": 0
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 48,
+      "secondFile": {
+        "end": 53,
+        "endLoc": {
+          "column": 15,
+          "line": 53,
+          "position": 1880
+        },
+        "name": "config/visuals.yaml",
+        "start": 1,
+        "startLoc": {
+          "column": 0,
+          "line": 1,
+          "position": 0
+        }
+      },
+      "tokens": 134
+    },
+    {
+      "firstFile": {
+        "end": 41,
+        "endLoc": {
+          "column": 67,
+          "line": 41,
+          "position": 1196
+        },
+        "name": "niches/gaming/flows/gaming_flow.py",
+        "start": 28,
+        "startLoc": {
+          "column": 0,
+          "line": 28,
+          "position": 816
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 14,
+      "secondFile": {
+        "end": 39,
+        "endLoc": {
+          "column": 67,
+          "line": 39,
+          "position": 1027
+        },
+        "name": "niches/gaming/flows/spike_detector_flow.py",
+        "start": 26,
+        "startLoc": {
+          "column": 0,
+          "line": 26,
+          "position": 647
+        }
+      },
+      "tokens": 80
+    },
+    {
+      "firstFile": {
+        "end": 97,
+        "endLoc": {
+          "column": 31,
+          "line": 97,
+          "position": 3306
+        },
+        "name": "niches/gaming/stages/generate_gaming_audio.py",
+        "start": 86,
+        "startLoc": {
+          "column": 73,
+          "line": 86,
+          "position": 2968
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 46,
+        "endLoc": {
+          "column": 31,
+          "line": 46,
+          "position": 1499
+        },
+        "name": "niches/gaming/stages/render_text_overlays.py",
+        "start": 35,
+        "startLoc": {
+          "column": 74,
+          "line": 35,
+          "position": 1161
+        }
+      },
+      "tokens": 68
+    },
+    {
+      "firstFile": {
+        "end": 315,
+        "endLoc": {
+          "column": 27,
+          "line": 315,
+          "position": 10350
+        },
+        "name": "niches/gaming/tools/ass_subtitle_generator.py",
+        "start": 296,
+        "startLoc": {
+          "column": 4,
+          "line": 296,
+          "position": 10004
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 20,
+      "secondFile": {
+        "end": 299,
+        "endLoc": {
+          "column": 27,
+          "line": 299,
+          "position": 9337
+        },
+        "name": "niches/gaming/tools/caption_generator.py",
+        "start": 280,
+        "startLoc": {
+          "column": 4,
+          "line": 280,
+          "position": 8991
+        }
+      },
+      "tokens": 53
+    },
+    {
+      "firstFile": {
+        "end": 68,
+        "endLoc": {
+          "column": 24,
+          "line": 68,
+          "position": 1786
+        },
+        "name": "niches/gaming/tools/audio_analyzer.py",
+        "start": 57,
+        "startLoc": {
+          "column": 46,
+          "line": 57,
+          "position": 1533
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 89,
+        "endLoc": {
+          "column": 24,
+          "line": 89,
+          "position": 2357
+        },
+        "name": "niches/gaming/tools/audio_analyzer.py",
+        "start": 78,
+        "startLoc": {
+          "column": 18,
+          "line": 78,
+          "position": 2104
+        }
+      },
+      "tokens": 50
+    },
+    {
+      "firstFile": {
+        "end": 177,
+        "endLoc": {
+          "column": 28,
+          "line": 177,
+          "position": 6511
+        },
+        "name": "niches/gaming/tools/bandit_optimizer.py",
+        "start": 166,
+        "startLoc": {
+          "column": 8,
+          "line": 166,
+          "position": 6087
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 216,
+        "endLoc": {
+          "column": 99,
+          "line": 216,
+          "position": 8117
+        },
+        "name": "niches/gaming/tools/bandit_optimizer.py",
+        "start": 209,
+        "startLoc": {
+          "column": 8,
+          "line": 209,
+          "position": 7755
+        }
+      },
+      "tokens": 52
+    },
+    {
+      "firstFile": {
+        "end": 16,
+        "endLoc": {
+          "column": 7,
+          "line": 16,
+          "position": 406
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 1,
+        "startLoc": {
+          "column": 0,
+          "line": 1,
+          "position": 0
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 16,
+      "secondFile": {
+        "end": 16,
+        "endLoc": {
+          "column": 7,
+          "line": 16,
+          "position": 406
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 1,
+        "startLoc": {
+          "column": 0,
+          "line": 1,
+          "position": 0
+        }
+      },
+      "tokens": 58
+    },
+    {
+      "firstFile": {
+        "end": 67,
+        "endLoc": {
+          "column": 7,
+          "line": 67,
+          "position": 1991
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 45,
+        "startLoc": {
+          "column": 4,
+          "line": 45,
+          "position": 1380
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 23,
+      "secondFile": {
+        "end": 67,
+        "endLoc": {
+          "column": 7,
+          "line": 67,
+          "position": 1943
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 45,
+        "startLoc": {
+          "column": 4,
+          "line": 45,
+          "position": 1332
+        }
+      },
+      "tokens": 70
+    },
+    {
+      "firstFile": {
+        "end": 111,
+        "endLoc": {
+          "column": 7,
+          "line": 111,
+          "position": 3235
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 70,
+        "startLoc": {
+          "column": 2,
+          "line": 70,
+          "position": 2150
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 42,
+      "secondFile": {
+        "end": 111,
+        "endLoc": {
+          "column": 7,
+          "line": 111,
+          "position": 3186
+        },
+        "name": "config/platform_algorithms.yaml",
+        "start": 70,
+        "startLoc": {
+          "column": 2,
+          "line": 70,
+          "position": 2101
+        }
+      },
+      "tokens": 137
+    },
+    {
+      "firstFile": {
+        "end": 88,
+        "endLoc": {
+          "column": 18,
+          "line": 88,
+          "position": 3628
+        },
+        "name": "config/publishing.yaml",
+        "start": 52,
+        "startLoc": {
+          "column": 4,
+          "line": 52,
+          "position": 1715
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 37,
+      "secondFile": {
+        "end": 90,
+        "endLoc": {
+          "column": 18,
+          "line": 90,
+          "position": 3760
+        },
+        "name": "config/publishing.yaml",
+        "start": 54,
+        "startLoc": {
+          "column": 4,
+          "line": 54,
+          "position": 1847
+        }
+      },
+      "tokens": 56
+    },
+    {
+      "firstFile": {
+        "end": 142,
+        "endLoc": {
+          "column": 14,
+          "line": 142,
+          "position": 4482
+        },
+        "name": "config/templates.yaml",
+        "start": 111,
+        "startLoc": {
+          "column": 41,
+          "line": 111,
+          "position": 3331
+        }
+      },
+      "format": "yaml",
+      "fragment": "",
+      "lines": 32,
+      "secondFile": {
+        "end": 190,
+        "endLoc": {
+          "column": 14,
+          "line": 190,
+          "position": 6402
+        },
+        "name": "config/templates.yaml",
+        "start": 159,
+        "startLoc": {
+          "column": 41,
+          "line": 159,
+          "position": 5251
+        }
+      },
+      "tokens": 126
+    },
+    {
+      "firstFile": {
+        "end": 102,
+        "endLoc": {
+          "column": 79,
+          "line": 102,
+          "position": 3670
+        },
+        "name": "fd_strategies/scoring.py",
+        "start": 91,
+        "startLoc": {
+          "column": 46,
+          "line": 91,
+          "position": 3240
+        }
+      },
+      "format": "python",
+      "fragment": "",
+      "lines": 12,
+      "secondFile": {
+        "end": 114,
+        "endLoc": {
+          "column": 79,
+          "line": 114,
+          "position": 4131
+        },
+        "name": "sr_strategies/scoring.py",
+        "start": 103,
+        "startLoc": {
+          "column": 45,
+          "line": 103,
+          "position": 3701
+        }
+      },
+      "tokens": 81
+    }
+  ],
+  "statistics": {
+    "detectionDate": "2026-07-24T09:50:28.066Z",
+    "formats": {
+      "bash": {
+        "clones": 1,
+        "duplicatedLines": 12,
+        "duplicatedTokens": 59,
+        "lines": 15105,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 0.07944389275074479,
+        "percentageTokens": 0.803924240359722,
+        "sources": 21,
+        "tokens": 7339
+      },
+      "css": {
+        "clones": 0,
+        "duplicatedLines": 0,
+        "duplicatedTokens": 0,
+        "lines": 1919,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 0.0,
+        "percentageTokens": 0.0,
+        "sources": 5,
+        "tokens": 10870
+      },
+      "javascript": {
+        "clones": 0,
+        "duplicatedLines": 0,
+        "duplicatedTokens": 0,
+        "lines": 1466,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 0.0,
+        "percentageTokens": 0.0,
+        "sources": 1,
+        "tokens": 4206
+      },
+      "json": {
+        "clones": 1,
+        "duplicatedLines": 50,
+        "duplicatedTokens": 285,
+        "lines": 2639,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 1.8946570670708602,
+        "percentageTokens": 4.25500149298298,
+        "sources": 21,
+        "tokens": 6698
+      },
+      "markdown": {
+        "clones": 30,
+        "duplicatedLines": 1112,
+        "duplicatedTokens": 32808,
+        "lines": 17534,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 6.341964183871336,
+        "percentageTokens": 56.23103950638444,
+        "sources": 25,
+        "tokens": 58345
+      },
+      "markup": {
+        "clones": 8,
+        "duplicatedLines": 98,
+        "duplicatedTokens": 517,
+        "lines": 3007,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 3.2590621882274693,
+        "percentageTokens": 6.829590488771466,
+        "sources": 11,
+        "tokens": 7570
+      },
+      "python": {
+        "clones": 38,
+        "duplicatedLines": 587,
+        "duplicatedTokens": 3062,
+        "lines": 31597,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 1.8577713074026014,
+        "percentageTokens": 2.390898656193146,
+        "sources": 100,
+        "tokens": 128069
+      },
+      "text": {
+        "clones": 0,
+        "duplicatedLines": 0,
+        "duplicatedTokens": 0,
+        "lines": 8010,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 0.0,
+        "percentageTokens": 0.0,
+        "sources": 14,
+        "tokens": 3559
+      },
+      "toml": {
+        "clones": 1,
+        "duplicatedLines": 16,
+        "duplicatedTokens": 62,
+        "lines": 202,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 7.920792079207921,
+        "percentageTokens": 9.077598828696926,
+        "sources": 5,
+        "tokens": 683
+      },
+      "tsx": {
+        "clones": 0,
+        "duplicatedLines": 0,
+        "duplicatedTokens": 0,
+        "lines": 1087,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 0.0,
+        "percentageTokens": 0.0,
+        "sources": 2,
+        "tokens": 2111
+      },
+      "txt": {
+        "clones": 0,
+        "duplicatedLines": 0,
+        "duplicatedTokens": 0,
+        "lines": 69,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 0.0,
+        "percentageTokens": 0.0,
+        "sources": 2,
+        "tokens": 349
+      },
+      "typescript": {
+        "clones": 0,
+        "duplicatedLines": 0,
+        "duplicatedTokens": 0,
+        "lines": 3058,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 0.0,
+        "percentageTokens": 0.0,
+        "sources": 3,
+        "tokens": 2845
+      },
+      "yaml": {
+        "clones": 42,
+        "duplicatedLines": 1235,
+        "duplicatedTokens": 4278,
+        "lines": 15636,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 7.898439498592991,
+        "percentageTokens": 10.457867846578825,
+        "sources": 102,
+        "tokens": 40907
+      }
+    },
+    "total": {
+      "clones": 121,
+      "duplicatedLines": 3110,
+      "duplicatedTokens": 41071,
+      "lines": 101329,
+      "newClones": 0,
+      "newDuplicatedLines": 0,
+      "percentage": 3.0692101964886658,
+      "percentageTokens": 15.014019323636177,
+      "sources": 312,
+      "tokens": 273551
+    }
+  }
+}

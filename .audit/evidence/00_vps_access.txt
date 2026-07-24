@@ -1,0 +1,46 @@
+### VPS ACCESS — 2026-07-24
+
+### SSH ALIAS
+Host genlab-prod
+    HostName 46.224.237.56
+    User root
+    IdentityFile ~/.ssh/id_ed25519
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+
+### CONNECTION TEST
+alive-as-root
+ubuntu-4gb-nbg1-1
+Linux ubuntu-4gb-nbg1-1 6.8.0-134-generic #134-Ubuntu SMP PREEMPT_DYNAMIC Fri Jun 26 18:43:11 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+ 14:52:41 up 8 days, 20:42,  1 user,  load average: 2.58, 3.13, 2.93
+
+### DISK + MEMORY
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda1        38G   29G  7.3G  80% /
+/dev/sda1        38G   29G  7.3G  80% /
+---
+               total        used        free      shared  buff/cache   available
+Mem:           3.7Gi       1.7Gi       452Mi       136Mi       2.0Gi       2.0Gi
+Swap:          1.0Gi       634Mi       389Mi
+
+### PROJECT ROOT ACCESS
+total 1296
+drwxr-x--- 26 genlab genlab   4096 Jul 24 14:44 .
+drwxr-xr-x  9 root   root     4096 Jul 23 17:57 ..
+drwxr-xr-x  3 genlab genlab   4096 Jul  6 00:33 assets
+drwxrwxr-x  3 genlab genlab   4096 Jul 24 06:30 .backups
+---owner---
+genlab:genlab /opt/genlab
+
+### SUDO CAPABILITY
+root
+
+### CAN READ .env?
+YES
+
+### DB REACH FROM VPS
+ current_user |                                                           version                                                            
+--------------+------------------------------------------------------------------------------------------------------------------------------
+ genlab       | PostgreSQL 16.14 (Debian 16.14-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+(1 row)
+

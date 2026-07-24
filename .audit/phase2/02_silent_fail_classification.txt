@@ -1,0 +1,5 @@
+INTENTIONAL (comment says fail-open/best-effort/etc): 146
+LOSSY (except Exception with logger.*): 743
+SILENT (no log AND pass/return None): 0
+
+### SILENT sites (up to 20 samples):

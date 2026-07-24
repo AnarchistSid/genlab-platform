@@ -1,0 +1,132 @@
+SET
+SET
+=== IG post_id coverage 30d
+  niche_id   | no_id | total | pct_missing 
+-------------+-------+-------+-------------
+ movies      |     9 |    24 |        37.5
+ anime       |     9 |    25 |        36.0
+ ai_creators |     8 |    26 |        30.8
+ sports      |     7 |    25 |        28.0
+ gaming      |     4 |    24 |        16.7
+(5 rows)
+
+=== Step 4: table sizes + rows
+       relname        | n_live_tup | total_size 
+----------------------+------------+------------
+ dashboard_events     |       4969 | 1200 kB
+ assets               |       3109 | 1472 kB
+ publishing_analytics |       2928 | 2520 kB
+ stories              |       2614 | 2176 kB
+ episodic_events      |       2317 | 1152 kB
+ analytics            |       2313 | 3136 kB
+ blueprints           |       2137 | 8760 kB
+ pipeline_alerts      |       1812 | 992 kB
+ content_memory       |       1541 | 728 kB
+ compliance_events    |       1432 | 552 kB
+ ensemble_votes       |       1352 | 528 kB
+ content_pool         |       1229 | 10216 kB
+ pending_feedback     |       1190 | 1776 kB
+ bandit_arms          |        371 | 840 kB
+ pipeline_run_costs   |        350 | 232 kB
+(15 rows)
+
+=== Step 4: sequential scans on large tables
+        relname         | idx_scan | seq_scan | seq_tup_read 
+------------------------+----------+----------+--------------
+ pipeline_alerts        |      297 |    21957 |     36578768
+ bandit_arms            |     5330 |     9601 |      3316200
+ templates              |        0 |       16 |         5280
+ monetisationprogress   |      150 |      336 |         5040
+ ensemble_votes         |        0 |       34 |         4752
+ outbound_reply_history |      238 |      945 |         4666
+ sources                |        0 |       16 |         3504
+ ab_tests               |        0 |       17 |         2369
+ affiliate_revenue      |        0 |       30 |         1500
+ product_embeddings     |        0 |       18 |          900
+(10 rows)
+
+=== Step 4: unused indexes
+               indexrelname               | idx_scan 
+------------------------------------------+----------
+ ab_tests_pkey                            |        0
+ affiliate_clicks_pkey                    |        0
+ affiliate_revenue_pkey                   |        0
+ alembic_version_pkc                      |        0
+ assets_asset_id_key                      |        0
+ assets_pkey                              |        0
+ content_memory_pkey                      |        0
+ dashboard_events_pkey                    |        0
+ email_subscribers_email_channel_slug_key |        0
+ email_subscribers_pkey                   |        0
+ monetisation_progress_pkey               |        0
+ preference_data_pkey                     |        0
+ sources_pkey                             |        0
+ templates_pkey                           |        0
+ templates_template_id_key                |        0
+(15 rows)
+
+=== Alembic head
+ version_num  
+--------------
+ m9h0i1j2k3l4
+(1 row)
+
+=== F-0046 distribution: 15 gaming orphans — updated_at clustering
+    day     |                bp_id                 | action_taken 
+------------+--------------------------------------+--------------
+ 2026-03-24 | 91d69eed-06cc-475f-a438-0751a8664e80 | approved
+ 2026-03-20 | 52e23f5f-e824-4073-81cc-eaaa3ddabf4c | approved
+ 2026-03-20 | 0a8515d7-c3e8-4cb5-9df9-ab815f004b1c | approved
+ 2026-03-20 | 34cfb90e-8149-43cf-9e91-a286805a1e03 | approved
+ 2026-03-20 | de3b4d19-a31b-4d9c-9ee3-19b51c39b851 | approved
+ 2026-03-17 | 3eed03c0-1b24-4ec9-aa23-03dbf243c229 | approved
+ 2026-03-17 | 9df21d01-8950-49ad-8ab2-1766e0537b76 | approved
+ 2026-03-17 | 2c34fd0f-318b-471f-8746-be0ff7257566 | approved
+ 2026-03-17 | d9b6aa22-3ae2-42af-afd5-7529986401ff | approved
+ 2026-03-17 | b3954889-3180-4d2b-a3df-8c31eade7282 | approved
+ 2026-03-17 | 5a5562e1-d7e2-480c-9072-e905e142eacc | approved
+ 2026-03-17 | bad7c18a-37d9-48e2-8f64-3b5ff0abc2c4 | approved
+ 2026-03-17 | 03e2ff26-48ef-49a7-8f3f-e71f36608886 | approved
+ 2026-03-17 | 188ca06c-827e-408f-88b0-2a8505cf6060 | approved
+ 2026-03-17 | 71dc3cdf-2278-47d5-9c93-f6a9b1bc35e6 | approved
+(15 rows)
+
+=== F-0047 stuck-4 cohort: visual paths
+                  id                  |  niche_id   | updated_at |                         hook_text                          |                                                                          vpaths                                                                          
+--------------------------------------+-------------+------------+------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------
+ ec7e2288-2764-4fae-ac84-f4c4fe05f309 | ai_creators | 2026-07-21 | The most impossible car shot in Locked (2025) is mostly... | ["/opt/genlab/.tmp/runs/ai_creators_20260712_023003/visuals/298636aa232b108cfb20f8219786362015a030f5c326ee5ffbe30c9d9d677b8b/298636aa232b108c_reel.mp4"]
+ 32719aa2-424e-49c6-b698-2a6a7e424e94 | anime       | 2026-07-21 | Subaru went from hero to monster                           | ["/opt/genlab/.tmp/runs/anime_20260714_060006/visuals/b93e289d7d393e72a3ad65e50a6e6f48d0009a7b3a181ee382786661f5296242/b93e289d7d393e72_reel.mp4"]
+ bb45b61d-d384-4f8b-b813-a419ad965486 | gaming      | 2026-07-21 | Why is Peterbot's eval cup run already broken?             | ["/opt/genlab/CriticalRush/.tmp/rendered/gaming_20260717_040006/fortnite_vertical.mp4"]
+ 02101684-4162-46bf-8aac-ed968e0d633e | sports      | 2026-07-21 | Boots is bringing the fight to Atlanta                     | ["/opt/genlab/.tmp/runs/sports_20260717_050004/visuals/0e361e6ee79af94d40b351226eff8bdcfd90a7ef40b7e21522ee317a3b8d3e2f/0e361e6ee79af94d_reel.mp4"]
+(4 rows)
+
+=== Step 6a: bandit_arms detailed activity
+  niche_id   | total | post_prior_alpha | post_prior_beta | avg_alpha | avg_beta 
+-------------+-------+------------------+-----------------+-----------+----------
+ ai_creators |    77 |               29 |              41 |     1.496 |    9.370
+ anime       |    74 |               29 |              36 |     1.510 |    7.028
+ gaming      |    74 |               49 |              69 |     1.886 |   14.130
+ movies      |    73 |               38 |              45 |     1.638 |    7.460
+ sports      |    73 |               50 |              63 |     1.834 |   12.972
+(5 rows)
+
+=== Step 6b: pending_feedback distribution
+  niche_id   | count | with_reward | with_arm | with_bctx 
+-------------+-------+-------------+----------+-----------
+ ai_creators |   284 |         248 |      284 |       234
+ anime       |   217 |         210 |      217 |       179
+ gaming      |   248 |         241 |      248 |       203
+ movies      |   192 |         189 |      192 |       160
+ sports      |   249 |         242 |      249 |       205
+(5 rows)
+
+=== Step 6c: pick ONE recent reel to trace
+                pa_id                 |                bp_id                 | niche_id | platform  |           post_id           |         published_at          
+--------------------------------------+--------------------------------------+----------+-----------+-----------------------------+-------------------------------
+ 38058c00-1dfd-4ce0-b52d-18a6c051de9d | b22419a7-a74c-4171-8b4b-edcec9e2ca73 | anime    | threads   | threads:17907387852278948   | 2026-07-24 07:04:36.090455+00
+ 76cf131d-daa7-4079-95d4-4a4014994afe | b22419a7-a74c-4171-8b4b-edcec9e2ca73 | anime    | facebook  | facebook:1046384814548298   | 2026-07-24 07:01:52.972204+00
+ ec8e8b7f-877f-4662-8ab6-14839fcb4ba6 | b22419a7-a74c-4171-8b4b-edcec9e2ca73 | anime    | youtube   | youtube:g6785H_Vcd8         | 2026-07-24 06:58:34.193801+00
+ 8b7d77ef-d134-4b51-918c-070cb580622d | b22419a7-a74c-4171-8b4b-edcec9e2ca73 | anime    | instagram | instagram:18069464390457756 | 2026-07-24 06:58:02.344937+00
+ caa9ae9c-8cce-460e-bd76-d7076fc97aa9 | e32e7412-1312-4cc2-84ef-19094718c6bc | sports   | threads   | threads:18005686793762665   | 2026-07-24 06:51:04.501711+00
+(5 rows)
+
