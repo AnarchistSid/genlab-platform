@@ -52,19 +52,33 @@ NICHE_CONFIG_PATHS: dict[str, Path] = {
     "gaming": _REPO_ROOT / "CriticalRush" / "niches" / "gaming" / "config" / "scoring_weights.yaml",
     "movies": _REPO_ROOT / "SpliceReel" / "config" / "scoring_weights.yaml",
     "anime": _REPO_ROOT / "FrameDrift" / "config" / "scoring_weights.yaml",
-    # ai_creators intentionally skipped — its default patterns match its
-    # vocabulary, so its historical scores were correct, not stuck.
+    # 2026-07-24: ai_creators added. Discovery via gate_examinations:
+    # "The Short Samsung Fold 8 - First Look" + "We made a FREE
+    # Blender Plugin" both scored 0.0 because DEFAULT_PATTERNS were
+    # AI-model-narrow (openai/chatgpt) — didn't match hardware brands
+    # or creator toolchains. Commit b996aedf widened DEFAULT_PATTERNS
+    # to include Samsung/Blender/personal-narrative vocab; this
+    # entry lets the rescore script pick up ai_creators's stuck
+    # blueprints too. The value is None (no per-niche config) — the
+    # scoring stage falls back to the widened DEFAULT_PATTERNS.
+    "ai_creators": None,
 }
 
 
 def _load_niche_patterns() -> dict[str, dict]:
-    """Load virality_scoring patterns for each non-AI niche. Fail-open
+    """Load virality_scoring patterns for each niche. Fail-open
     per niche: a missing/bad config produces empty patterns (which
     would score everything 0 — same as before the fix)."""
     import yaml
 
     out: dict[str, dict] = {}
     for niche_id, path in NICHE_CONFIG_PATHS.items():
+        if path is None:
+            # ai_creators — no per-niche config, uses widened
+            # DEFAULT_PATTERNS. Register empty dict so the compile
+            # step falls back to defaults.
+            out[niche_id] = {}
+            continue
         if not path.exists():
             logger.warning("[%s] config missing at %s, skipping", niche_id, path)
             continue
@@ -125,7 +139,7 @@ def main() -> int:
             FROM blueprints
             WHERE status = 'VISUAL_READY'
               AND scheduled_for IS NULL
-              AND niche_id IN ('sports', 'gaming', 'movies', 'anime')
+              AND niche_id IN ('sports', 'gaming', 'movies', 'anime', 'ai_creators')
               AND ((extra->>'virality_score')::float = 0.0
                    OR extra->>'virality_score' IS NULL)
             LIMIT 100
