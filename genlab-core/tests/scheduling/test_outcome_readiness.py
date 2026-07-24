@@ -199,3 +199,29 @@ class TestSQLShape:
         sql = conn.execute.call_args[0][0]
         assert "action_taken_source" in sql
         assert "pending_feedback" in sql
+
+    def test_join_uses_candidate_id_not_blueprint_uuid(self):
+        """2026-07-24 discovery: task_id shape is
+        ``{candidate_id}__{platform}`` where candidate_id is a 64-char
+        hash. Initial join used ``substring(blueprint_id FROM 1 FOR 16)``
+        which never matched the 64-hex prefix. Pin: SQL must reference
+        ``candidate_id`` in the JOIN condition."""
+        from genlab_core.scheduling.outcome_readiness import check_outcome_readiness
+
+        conn = MagicMock()
+        m = MagicMock()
+        m.fetchone.return_value = {
+            "sample_count": 0,
+            "outcome_good_count": 0,
+        }
+        conn.execute.return_value = m
+        check_outcome_readiness(conn, "gaming")
+        sql = conn.execute.call_args[0][0]
+        assert "candidate_id" in sql, (
+            "outcome_readiness JOIN must reference candidate_id — "
+            "task_id shape is {candidate_id}__{platform}, not "
+            "{blueprint_uuid[:16]}__{platform}. Regressing to the "
+            "old substring join returns 0 samples for every niche."
+        )
+        # The pattern-match on task_id must use LIKE with __.
+        assert "task_id LIKE" in sql

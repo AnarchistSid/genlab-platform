@@ -118,14 +118,17 @@ def check_outcome_readiness(
     """Compute the outcome-based readiness verdict for one niche.
 
     Linkage from blueprints to pending_feedback:
-        pending_feedback.task_id = f"{blueprints.id[:16]}__{platform}"
-    (see PendingFeedbackTask.to_sharepoint_fields — the load-bearing
-    convention across the pipeline). Since one blueprint publishes
-    to N platforms, we aggregate ``MAX(reward_48h)`` across all
-    matching pending_feedback rows — an outcome is "good" iff ANY
-    platform cleared the threshold. This mirrors real-world audience
-    reach: the goal is one viral post per blueprint, not uniform
-    performance across all platforms.
+        pending_feedback.task_id = f"{blueprints.candidate_id}__{platform}"
+    (see PendingFeedbackTask.to_sharepoint_fields at
+    feedback_registration.py:120 — ``content_id = candidate_id or
+    record_id[:16]``. In prod, ``candidate_id`` is a 64-char hash
+    always populated by push_to_backlog. My initial implementation
+    used record_id[:16] which never matches — 2026-07-24 discovery.)
+    Since one blueprint publishes to N platforms, we aggregate
+    ``MAX(reward_48h)`` across all matching pending_feedback rows —
+    an outcome is "good" iff ANY platform cleared the threshold.
+    This mirrors real-world audience reach: the goal is one viral
+    post per blueprint, not uniform performance across all platforms.
 
     Fail-open: any DB error returns an empty ready=False verdict
     rather than raising.
@@ -148,13 +151,14 @@ def check_outcome_readiness(
         row = conn.execute(
             """
             WITH auto_approved AS (
-                SELECT id::text AS blueprint_id
+                SELECT id::text AS blueprint_id, candidate_id
                 FROM blueprints
                 WHERE niche_id = %s
                   AND action_taken_source = %s
                   AND action_taken = 'approved'
                   AND reviewed_at IS NOT NULL
                   AND reviewed_at > NOW() - make_interval(days => %s)
+                  AND candidate_id IS NOT NULL
             ),
             per_bp_outcome AS (
                 SELECT
@@ -162,13 +166,12 @@ def check_outcome_readiness(
                     MAX(pf.reward_48h) AS max_reward
                 FROM auto_approved aa
                 LEFT JOIN pending_feedback pf
-                    -- task_id shape is "{blueprint_id[:16]}__{platform}".
-                    -- Match on the first 16 chars so we get all platform
-                    -- rows per blueprint. Cleaner than LIKE with escaped
-                    -- underscores (which triggers Python SyntaxWarning
-                    -- and needs ESCAPE clause in SQL).
-                    ON substring(pf.task_id FROM 1 FOR 16)
-                       = substring(aa.blueprint_id FROM 1 FOR 16)
+                    -- task_id = "{candidate_id}__{platform}" per
+                    -- feedback_registration.py:120. Prod discovery
+                    -- 2026-07-24: initial impl used blueprint_id[:16]
+                    -- which never matches (candidate_id is a 64-char
+                    -- hash, always populated).
+                    ON pf.task_id LIKE (aa.candidate_id || '__%%')
                     AND pf.reward_48h IS NOT NULL
                 GROUP BY aa.blueprint_id
             )
