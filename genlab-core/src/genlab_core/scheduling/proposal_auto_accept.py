@@ -104,6 +104,27 @@ def classify_arm_add(
         return AcceptDecision(False, "skip:not_arm_add")
 
     proposed = proposal.get("proposed") or {}
+    # 2026-07-24: strategist writes ``proposed`` as a JSON-encoded
+    # string, not a dict. Prod discovery: 9/9 arm_add proposals in the
+    # 5 unreviewed reports got skip:malformed_proposed_field because
+    # ``isinstance(str, dict)`` is False. Defensive parse when it
+    # looks like JSON, fall through to malformed for narrative
+    # descriptions (some proposed fields are prose, not structured).
+    if isinstance(proposed, str):
+        s = proposed.strip()
+        if s.startswith("{") and s.endswith("}"):
+            import json as _json
+
+            try:
+                proposed = _json.loads(s)
+            except Exception:
+                return AcceptDecision(
+                    False, "skip:malformed_proposed_field (unparseable JSON)"
+                )
+        else:
+            return AcceptDecision(
+                False, "skip:malformed_proposed_field (narrative not JSON)"
+            )
     if not isinstance(proposed, dict):
         return AcceptDecision(False, "skip:malformed_proposed_field")
 

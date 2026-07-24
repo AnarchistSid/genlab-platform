@@ -165,6 +165,60 @@ class TestMalformedProposal:
         assert d.reason == "skip:not_arm_add"
 
 
+class TestProposedFieldStringHandling:
+    """Prod discovery 2026-07-24: strategist writes ``proposed`` as
+    JSON-encoded string, not a dict. 9/9 arm_add proposals in the 5
+    unreviewed prod reports skipped as malformed. Classifier must
+    defensively parse JSON strings + reject narrative prose.
+
+    Sibling to test_missing_type_skips — these test the shape
+    normalisation guard."""
+
+    def test_proposed_as_json_string_parses_and_classifies(self):
+        from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+        # Real prod shape: proposed is a JSON string carrying arm_id.
+        d = classify_arm_add(
+            {
+                "type": "arm_add",
+                "proposed": '{"arm_id": "style:gaming:aggressive"}',
+            },
+            existing_arm_ids=frozenset({"style:gaming:cautious"}),
+            proposal_confidence="high",
+        )
+        # Should auto_accept the style variant, NOT skip.
+        assert d.should_auto_accept is True
+        assert d.reason.startswith("auto_accept:style_variant")
+
+    def test_proposed_as_narrative_prose_skips_cleanly(self):
+        from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+        # Real prod shape: some proposed fields are narrative strings
+        # like "Force-explore each of the 5 uninitiated transform arms...".
+        # These are not structured — should skip without raising.
+        d = classify_arm_add(
+            {
+                "type": "arm_add",
+                "proposed": "Force-explore each of the 5 uninitiated arms.",
+            },
+            proposal_confidence="high",
+        )
+        assert d.should_auto_accept is False
+        assert "narrative" in d.reason
+
+    def test_proposed_as_unparseable_json_skips_cleanly(self):
+        from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+        # Malformed JSON string — should skip, not raise.
+        d = classify_arm_add(
+            {"type": "arm_add", "proposed": "{malformed json here"},
+            proposal_confidence="high",
+        )
+        # Not JSON-looking (missing closing brace) — falls to narrative branch.
+        assert d.should_auto_accept is False
+        assert "narrative" in d.reason or "unparseable" in d.reason
+
+
 class TestRateLimitConstant:
     """Pin the max value so operator dashboards + downstream aggregators
     can rely on it."""
