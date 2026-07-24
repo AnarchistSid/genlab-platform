@@ -78,10 +78,16 @@ def _fetch_existing_arm_ids(conn, niche_id):
 
 def _count_recent_auto_accepts(conn, niche_id: str, days: int = 7) -> int:
     """Count auto_accept-tagged indices applied in the last N days
-    for this niche. Used as the rate-limit denominator."""
+    for this niche. Used as the rate-limit denominator.
+
+    2026-07-24 fix: main() opens the conn with row_factory=dict_row,
+    so ``row[0]`` raises KeyError. Same class-of-bug hit in c91bd77c
+    (drift resolver) and dd376829 (parser) earlier this session. Use
+    a named column (COUNT(*) AS n) + row["n"] with tuple fallback.
+    """
     row = conn.execute(
         """
-        SELECT COUNT(*)
+        SELECT COUNT(*)::int AS n
         FROM strategist_reports
         WHERE niche_id = %s
           AND run_at > NOW() - make_interval(days => %s)
@@ -89,7 +95,12 @@ def _count_recent_auto_accepts(conn, niche_id: str, days: int = 7) -> int:
         """,
         (niche_id, days),
     ).fetchone()
-    return int(row[0]) if row else 0
+    if not row:
+        return 0
+    # Support both dict_row and tuple cursors.
+    if hasattr(row, "get"):
+        return int(row.get("n") or 0)
+    return int(row[0] or 0)
 
 
 def _append_auto_accepted(conn, report_id: str, indices: list[int]) -> None:
