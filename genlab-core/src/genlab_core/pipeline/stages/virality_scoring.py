@@ -46,8 +46,24 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PATTERNS: dict[str, str] = {
     "hook_format_question": r"^(what|why|how|when|where|who|which|is|are|do|does|can|could|will|would|should|did)\b",
-    "pop_culture_reference": r"\b(openai|anthropic|google|meta|apple|nvidia|tesla|microsoft|amazon|netflix|disney|marvel)\b",
-    "named_tool": r"\b(chatgpt|claude|gemini|copilot|midjourney|dall[- ]?e|sora|cursor|devin|v0|bolt|replit|figma|notion)\b",
+    # 2026-07-24: widened. Original scope was AI-model vocab only
+    # (openai/anthropic/claude). Real ai_creators content covers the
+    # broader creator/tech space: hardware brands (samsung, apple),
+    # creator devices (quest, vision pro), robotics (boston dynamics,
+    # figure). Two live blueprints ("Samsung Fold 8 First Look",
+    # "FREE Blender Plugin") both scored 0.0 pre-widening -> gate
+    # rejected forever. See gate_examinations diagnostic (2026-07-24).
+    "pop_culture_reference": r"\b(openai|anthropic|google|meta|apple|nvidia|tesla|microsoft|amazon|netflix|disney|marvel|samsung|sony|huawei|xiaomi|oneplus|pixel|iphone|ipad|macbook|airpods|quest|vision\s?pro|spacex|boston\s?dynamics|figure|humane|rabbit)\b",
+    # Widened to include creator toolchain — video editing, 3D, AR/VR,
+    # streaming, design, no-code. These are the tools BlackboxBrief's
+    # content demos and reviews. Preserves the AI-tool subset.
+    "named_tool": r"\b(chatgpt|claude|gemini|copilot|midjourney|dall[- ]?e|sora|cursor|devin|v0|bolt|replit|figma|notion|blender|unreal|unity|godot|davinci|premiere|after\s?effects|capcut|obs|streamlabs|elgato|canva|framer|webflow|arc|obsidian|runway|pika|luma|suno|udio)\b",
+    # New pattern: personal-narrative hooks ("we made X", "first look",
+    # "hands-on"). Mirrors the ``ai_creator_showcase`` +
+    # ``human_interest`` categories from BlackboxBrief's virality_fit
+    # config — those signals were declared but never used because the
+    # pipeline stage reads a different config key.
+    "personal_narrative": r"\b(we\s+(made|built|created|designed|shipped|launched)|i\s+(made|built|created|designed)|our\s+team|first\s+look|hands[-\s]?on|behind[-\s]?the[-\s]?scenes|breakdown|deep\s?dive|explained)\b",
     "nostalgia_angle": r"\b(remember when|throwback|used to|back in|before [\w]+ existed|old school)\b",
     "dollar_amount": r"\$\s?\d+|\b\d+[BMK]\b|\bfunding\b|\brevenue\b|\bvaluation\b",
     "before_after": r"\b(before|after|vs\.?|versus|compared to|transformation|went from)\b",
@@ -61,6 +77,12 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "hook_format_question": 0.12,
     "pop_culture_reference": 0.10,
     "named_tool": 0.15,
+    # 2026-07-24 addition — mirrors BlackboxBrief's virality_fit
+    # ``ai_creator_showcase`` weight (0.25). Personal-narrative hooks
+    # ("we built X", "first look") have historically outperformed
+    # generic ones on creator channels, but the signal was invisible
+    # because no pattern matched them.
+    "personal_narrative": 0.15,
     "nostalgia_angle": 0.08,
     "dollar_amount": 0.10,
     "before_after": 0.10,
