@@ -155,6 +155,33 @@ _ALLOWLIST: frozenset[str] = frozenset(
         # Nightly-scheduled remediation of scheduler idempotency.
         # Cross-niche scan; matches the "connect once, scan all" shape.
         "scripts/nightly_schedule_remediate.py",
+        # ── Session 2026-07-24: autonomy roadmap + diagnostic sprint ─
+        # The autonomy scripts + diagnostic layer landed in a marathon
+        # session that shipped fast; migration to pg_connect is on the
+        # deferred list (session-2026-07-24-auto2-diagnostic-to-first-
+        # live-approval.md). All are systemd-timer-driven cron-style
+        # runners that connect once + scan across-niches or specific
+        # blueprints by ID — same bulk-runner category as the existing
+        # allowlist entries above. Should be migrated when we do the
+        # comprehensive pg_connect sweep.
+        "genlab-core/src/genlab_core/publishing/cross_platform_gate.py",
+        "genlab-core/src/genlab_core/scheduling/gate_examination_logger.py",
+        "genlab-core/src/genlab_core/writing/preference_hint.py",
+        "genlab-core/src/genlab_core/monitoring/checks/llm_cost.py",
+        "genlab-core/src/genlab_core/learning/metrics/follower_delta.py",
+        "scripts/auto_accept_strategist_proposals.py",
+        "scripts/parse_testable_predictions.py",
+        "scripts/backfill_orphan_rewards.py",
+        "scripts/drain_engagement_review_queue.py",
+        "scripts/auto_promote_hypotheses_to_findings.py",
+        "scripts/auto_remediate_content_gap.py",
+        "scripts/backfill_action_taken_source.py",
+        "scripts/import_cuelinks_conversions.py",
+        "scripts/backfill_historical_metrics.py",
+        "scripts/run_experiment_lifecycle.py",
+        "scripts/rerender_edited_hooks.py",
+        "scripts/run_outbound_reply_engine.py",
+        "scripts/run_shadow_reviewer.py",
     }
 )
 
