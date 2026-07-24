@@ -185,6 +185,19 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         # 23 auto-approvals stuck in extra. Backfill script:
         # scripts/backfill_action_taken_source.py.
         "action_taken_source",
+        # 2026-07-24 sweep — additional column-in-DB-not-promoted
+        # bugs caught by test_promoted_columns_vs_db_schema after
+        # the action_taken_source fix. hook_classifier_score had
+        # 34 rows silently in extra JSONB — conformal_router reads
+        # from extra so the pipeline works, but WHERE column > X
+        # filters miss all 34. variant_type + variant_payload have
+        # DEFAULT 'single_clip'/'{}' so the column populates from
+        # migration; adding them here makes future writes route
+        # correctly + prevents extra/column divergence if writer ever
+        # sends a non-default value.
+        "hook_classifier_score",
+        "variant_type",
+        "variant_payload",
         "reviewed_at",
         "source",
         "summary",

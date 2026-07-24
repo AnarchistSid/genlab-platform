@@ -175,7 +175,7 @@ _ALLOWLIST: frozenset[str] = frozenset(
         "scripts/drain_engagement_review_queue.py",
         "scripts/auto_promote_hypotheses_to_findings.py",
         "scripts/auto_remediate_content_gap.py",
-        "scripts/backfill_action_taken_source.py",
+        "scripts/backfill_column_from_extra.py",
         "scripts/import_cuelinks_conversions.py",
         "scripts/backfill_historical_metrics.py",
         "scripts/run_experiment_lifecycle.py",
