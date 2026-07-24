@@ -69,11 +69,18 @@ def _fetch_unreviewed_reports(conn, niche_id):
 
 
 def _fetch_existing_arm_ids(conn, niche_id):
+    """Fetch every arm_id for this niche. dict_row-safe: reads via
+    r["arm_id"] with r[0] fallback so the same code works whether
+    the caller opened conn with dict_row or default tuple cursor.
+    Same class-of-bug pattern fixed 3× this session (see
+    _count_recent_auto_accepts docstring)."""
     rows = conn.execute(
         "SELECT arm_id FROM bandit_arms WHERE niche_id = %s",
         (niche_id,),
     ).fetchall()
-    return frozenset(str(r[0]) for r in rows)
+    def _val(r):
+        return r.get("arm_id") if hasattr(r, "get") else r[0]
+    return frozenset(str(_val(r)) for r in rows)
 
 
 def _count_recent_auto_accepts(conn, niche_id: str, days: int = 7) -> int:
