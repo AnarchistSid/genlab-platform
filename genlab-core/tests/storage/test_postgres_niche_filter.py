@@ -134,6 +134,31 @@ def test_update_has_belt_and_suspenders_filter(postgres_source):
     )
 
 
+def test_action_taken_source_is_promoted(postgres_source):
+    """2026-07-24: action_taken_source column exists in the DB but was
+    silently absent from PROMOTED_COLUMNS['blueprints']. Result: auto-
+    approver's write ``{'action_taken_source': 'auto_approver_v1'}``
+    landed in extra JSONB instead of the dedicated column, invisible
+    to every downstream query filtering the column. 23 auto-approvals
+    accumulated in that state before discovery.
+
+    Pin: any refactor that removes action_taken_source from the
+    promoted set silently re-opens this bug — this test catches it."""
+    m = re.search(
+        r'"blueprints"\s*:\s*\{([^}]+)\}',
+        postgres_source,
+        re.DOTALL,
+    )
+    assert m is not None, "PROMOTED_COLUMNS['blueprints'] set missing"
+    assert '"action_taken_source"' in m.group(1), (
+        "action_taken_source MUST be in PROMOTED_COLUMNS['blueprints']. "
+        "Column exists in DB; if missing here, auto_approver writes "
+        "silently land in extra JSONB and every WHERE filter on the "
+        "column returns 0. 23 auto-approvals were invisible for weeks "
+        "because of this pre-fix state."
+    )
+
+
 def test_delete_has_belt_and_suspenders_filter(postgres_source):
     """PostgresBackend.delete() has the same class-of-bug as update.
     Delete is MORE destructive — cross-tenant deletion can't be

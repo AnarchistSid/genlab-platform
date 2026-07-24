@@ -174,6 +174,17 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "source_url",
         "priority_score",
         "action_taken",
+        # 2026-07-24: action_taken_source column exists in the DB but
+        # was NOT in PROMOTED_COLUMNS. Result: auto_approver's write
+        # ``{"action_taken_source": "auto_approver_v1"}`` silently
+        # landed in the extra JSONB, leaving the dedicated column
+        # NULL. Every downstream query filtering
+        # ``WHERE action_taken_source = 'auto_approver_v1'`` (my new
+        # outcome_readiness, calibration_logger's
+        # _NON_OPERATOR_SOURCE_TAGS check, dashboard filters) missed
+        # 23 auto-approvals stuck in extra. Backfill script:
+        # scripts/backfill_action_taken_source.py.
+        "action_taken_source",
         "reviewed_at",
         "source",
         "summary",
