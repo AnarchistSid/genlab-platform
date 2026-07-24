@@ -1,0 +1,14 @@
+[Unit]
+Description=Scan for stale durable-error files every 6 hours
+Documentation=file:///opt/genlab/scripts/scan_stale_durable_errors.py
+
+[Timer]
+# Every 6 hours at :35 past the hour (00:35, 06:35, 12:35, 18:35 UTC).
+# Offset past the top of the hour to avoid colliding with other :00
+# and :20 timers.
+OnCalendar=*-*-* 00,06,12,18:35:00 UTC
+Persistent=true
+Unit=genlab-scan-stale-durable-errors.service
+
+[Install]
+WantedBy=timers.target
