@@ -84,10 +84,22 @@ def _get_db_columns_per_table(conn: Any) -> dict[str, set[str]]:
     return result
 
 
+def _resolve_dsn() -> str:
+    """Read the DSN from env. Prefers ``GENLAB_SCHEMA_PIN_DSN`` over
+    ``DATABASE_URL`` — conftest.py strips DATABASE_URL from tests'
+    environment (see conftest.py:31; SharePoint fallback discipline),
+    so we need a dedicated env var to bypass the strip when we WANT
+    the pin to run against a real DB (prod CI, staging validation)."""
+    return (
+        os.environ.get("GENLAB_SCHEMA_PIN_DSN", "").strip()
+        or os.environ.get("DATABASE_URL", "").strip()
+    )
+
+
 def _live_db_available() -> bool:
     """Cheap probe. Returns True iff we can psycopg.connect and run
     a trivial SELECT within the standard connect timeout."""
-    dsn = os.environ.get("DATABASE_URL", "").strip()
+    dsn = _resolve_dsn()
     if not dsn:
         return False
     try:
@@ -125,15 +137,17 @@ def test_every_db_column_is_promoted_or_extra_only():
             pytest.fail(
                 "GENLAB_REQUIRE_SCHEMA_PIN=1 but DB is not reachable. "
                 "The schema pin needs a live Postgres to run. Either "
-                "unset the env var or fix the connection."
+                "unset the env var, set GENLAB_SCHEMA_PIN_DSN "
+                "(DATABASE_URL is stripped by conftest.py:31), or fix "
+                "the connection."
             )
-        pytest.skip("DATABASE_URL not set or DB unreachable")
+        pytest.skip("GENLAB_SCHEMA_PIN_DSN not set or DB unreachable")
 
     import psycopg
 
     from genlab_core.storage.postgres import PROMOTED_COLUMNS
 
-    dsn = os.environ.get("DATABASE_URL", "").strip()
+    dsn = _resolve_dsn()
 
     with psycopg.connect(dsn, connect_timeout=5) as conn:
         db_columns = _get_db_columns_per_table(conn)
