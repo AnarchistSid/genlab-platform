@@ -834,6 +834,21 @@ class PostgresBackend:
                     where = "WHERE extra->>'sp_id' = %s"
                 values.append(record_id)
 
+                # 2026-07-24: belt-and-suspenders niche_id filter on
+                # UPDATE — mirrors the fix in find(). RLS is bypassed
+                # for the genlab role, so relying on
+                # ``set_config('app.niche_id', ...)`` alone allows
+                # cross-niche UPDATEs to succeed when a caller passes
+                # a record_id belonging to a different niche than the
+                # niche_id kwarg. Explicit AND makes the SR-A
+                # docstring's promise ACTUALLY true.
+                if (
+                    niche_id
+                    and "niche_id" in PROMOTED_COLUMNS.get(table, set())
+                ):
+                    where += " AND niche_id = %s"
+                    values.append(niche_id)
+
                 sql = f"UPDATE {table} SET {', '.join(sets)} {where}"
                 cur.execute(sql, values)
                 conn.commit()
@@ -918,12 +933,31 @@ class PostgresBackend:
                     "SELECT set_config('app.niche_id', %s, true)",
                     (niche_id or "",),
                 )
+
+                # 2026-07-24: belt-and-suspenders niche_id filter on
+                # DELETE — the most-destructive of the three SR-A
+                # methods. Docstring warns "cross-tenant deletion can't
+                # be undone" but RLS is bypassed for the genlab role,
+                # so ``set_config`` alone doesn't enforce the promise.
+                # Explicit AND does.
+                niche_filter = ""
+                niche_params: tuple = ()
+                if (
+                    niche_id
+                    and "niche_id" in PROMOTED_COLUMNS.get(table, set())
+                ):
+                    niche_filter = " AND niche_id = %s"
+                    niche_params = (niche_id,)
+
                 if self._is_uuid(record_id):
-                    cur.execute(f"DELETE FROM {table} WHERE id = %s::uuid", (record_id,))
+                    cur.execute(
+                        f"DELETE FROM {table} WHERE id = %s::uuid{niche_filter}",
+                        (record_id, *niche_params),
+                    )
                 else:
                     cur.execute(
-                        f"DELETE FROM {table} WHERE extra->>'sp_id' = %s",
-                        (record_id,),
+                        f"DELETE FROM {table} WHERE extra->>'sp_id' = %s{niche_filter}",
+                        (record_id, *niche_params),
                     )
                 conn.commit()
 

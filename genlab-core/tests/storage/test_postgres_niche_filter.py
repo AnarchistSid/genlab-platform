@@ -108,3 +108,49 @@ def test_niche_filter_blueprints_table_included(postgres_source):
         "otherwise the fix doesn't apply and auto-approver is still "
         "cross-niche-leaky."
     )
+
+
+def test_update_has_belt_and_suspenders_filter(postgres_source):
+    """PostgresBackend.update() MUST inject niche_id into its WHERE
+    clause. Without it, a caller passing niche_id='ai_creators' with
+    a record_id belonging to a gaming blueprint could silently mutate
+    the wrong-niche row — exactly the SR-A promise the docstring
+    makes but RLS bypass defeats."""
+    # The update() function is ~L771. Extract just that function.
+    m = re.search(
+        r"def update\(\s*\n\s*self,[\s\S]+?(?=\n    def |\nclass )",
+        postgres_source,
+    )
+    assert m is not None, "PostgresBackend.update not found"
+    update_src = m.group(0)
+    assert "AND niche_id = %s" in update_src, (
+        "PostgresBackend.update MUST inject explicit niche_id filter "
+        "into the WHERE clause. Otherwise SR-A guarantees are defeated "
+        "by role RLS bypass."
+    )
+    # Parameter must be appended too.
+    assert "values.append(niche_id)" in update_src, (
+        "niche_id must be parameterized, not f-stringed."
+    )
+
+
+def test_delete_has_belt_and_suspenders_filter(postgres_source):
+    """PostgresBackend.delete() has the same class-of-bug as update.
+    Delete is MORE destructive — cross-tenant deletion can't be
+    undone. Pin the explicit niche filter."""
+    m = re.search(
+        r"def delete\(\s*\n\s*self,[\s\S]+?(?=\n    def |\nclass )",
+        postgres_source,
+    )
+    assert m is not None, "PostgresBackend.delete not found"
+    delete_src = m.group(0)
+    assert "AND niche_id = %s" in delete_src, (
+        "PostgresBackend.delete MUST inject explicit niche_id filter "
+        "into the WHERE clause. Otherwise SR-A guarantees are defeated "
+        "by role RLS bypass. Delete is the most destructive method — "
+        "cross-tenant deletion can't be undone."
+    )
+    # Parameter must appear in the DELETE call params tuple.
+    assert "niche_params" in delete_src, (
+        "niche_id must be parameterized, not f-stringed."
+    )
