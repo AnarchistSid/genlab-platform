@@ -44,6 +44,12 @@ def _fetch_threads(post_id: str, niche_id: str = "") -> dict:
 
     token, _user_id = resolve_threads_credentials(niche_id)
     if not token:
+        # F-0069 instrumentation: previously silent no-token path.
+        logger.warning(
+            "[metric_collector] F-0069: Threads no-token for niche=%s "
+            "post_id=%s — task status will not advance",
+            niche_id, post_id,
+        )
         return {}
     try:
         resp = _META_SESSION.get(
@@ -55,12 +61,29 @@ def _fetch_threads(post_id: str, niche_id: str = "") -> dict:
             timeout=15,
         )
         resp.raise_for_status()
+        payload = resp.json()
+        data_items = payload.get("data", [])
         metrics: dict[str, Any] = {}
-        for item in resp.json().get("data", []):
+        for item in data_items:
             name = item.get("name", "")
             vals = item.get("values", [{}])
             val = vals[0].get("value", 0) if vals else 0
             metrics[name] = val
+        # F-0069 instrumentation (2026-07-27): Threads has 35% stall
+        # rate on prod (14/40 rows stuck at status=SUCCESS in 30d)
+        # while YT+IG advance 100%. Existing WARN below fires only on
+        # exception; a 200-OK-empty-response was the invisible-stall
+        # case. Meta insights returns `{"data": []}` for fresh /
+        # deleted / permission-denied posts. Diagnose next session
+        # from these WARNs.
+        if not metrics:
+            logger.warning(
+                "[metric_collector] F-0069: Threads insights empty "
+                "for post_id=%s niche=%s (HTTP %s, data_items=%d, "
+                "payload_error=%r) — status will not advance",
+                post_id, niche_id, resp.status_code, len(data_items),
+                payload.get("error"),
+            )
         # discovery_share isn't exposed by the Threads API; omit the key
         # so compute_reward redistributes its 0.15 weight to observed
         # metrics (views / replies / reposts) rather than treating it
