@@ -117,7 +117,7 @@ class BaseHookStrategy(HookStrategy):
                 break
         return result
 
-    def _generate_hook(self, story: dict, used_hooks: set[str] | None = None) -> str:
+    def _generate_hook(self, story: dict, used_hooks: set[str] | None = None) -> str | None:
         """Generate a hook for a single story.
 
         Tries LLM first, falls back to category templates, then title-derived.
@@ -198,29 +198,36 @@ class BaseHookStrategy(HookStrategy):
             if hook.lower() not in used_hooks and not self._is_banned(hook):
                 return hook
 
-        # Fallback: title-derived hook. The "always unique" claim only
-        # holds when stories have distinct titles, which is normally true
-        # but fails when the same trend repeats across stories before
-        # dedup, or when the fixture deliberately stresses the fallback.
-        # Append a counter if the title-derived hook collides with a
-        # hook already in used_hooks so callers can rely on cross-story
-        # uniqueness.
-        title = story.get("title", self._title_fallback_label)
-        base_hook = title[:57].rsplit(" ", 1)[0].rstrip(".") + "..." if len(title) > 60 else title
-        if base_hook.lower() not in used_hooks:
-            return base_hook
-        # Disambiguate. " (2)", " (3)"... extend within the MAX_HOOK_CHARS budget.
-        # 2026-07-14: import shared constant instead of hardcoding 60.
-        from genlab_core.writing.constants import MAX_HOOK_CHARS
-
-        for suffix_idx in range(2, 100):
-            suffix = f" ({suffix_idx})"
-            max_base_len = MAX_HOOK_CHARS - len(suffix)
-            candidate_base = base_hook[:max_base_len].rstrip(". ")
-            candidate = candidate_base + suffix
-            if candidate.lower() not in used_hooks:
-                return candidate
-        return base_hook  # give up after 98 attempts — should never happen
+        # F-0080 HARD-FAIL (2026-07-27): previously the title-derived
+        # fallback returned `story["title"]` verbatim here when both the
+        # LLM path and the template path failed. That produced ~47% of
+        # published hooks matching source titles (Phase 8.3 read-through
+        # of 15 real recent hooks) — the exact "mass-produced templated"
+        # format YouTube terminated 16 channels for in Jan 2026 and
+        # Screen Culture / KH Studio for in Dec 2025. On the two
+        # auto-approved niches there is no operator review to catch a
+        # passthrough reel; on the other three the operator has been
+        # rejecting 40-58% of blueprints, and this fallback is a
+        # significant fraction of those rejections.
+        #
+        # Return None. The single caller (`execute` at ~line 418) treats
+        # None as "no hook produced" and drops the story with a WARN.
+        # The publisher tolerates a niche producing no reel that day
+        # (mandate is 41.4% per DECISION.md Rev 7); a missing reel
+        # beats a terminated channel.
+        #
+        # If you are tempted to re-add a fallback here, first read the
+        # Phase 8.3 HOOK_READTHROUGH.md and RESEARCH_2026_07.md — and
+        # confirm the fallback isn't shipping the same format that got
+        # 4.7B lifetime views permanently terminated on 2026-01.
+        logger.warning(
+            "[%s] F-0080 hard-fail: LLM path + template path both failed "
+            "for story title=%r; returning None (was: title-derived "
+            "passthrough hook)",
+            self._niche_id,
+            (story.get("title") or "")[:60],
+        )
+        return None
 
     @staticmethod
     def _is_banned(hook: str) -> bool:
@@ -416,6 +423,21 @@ class BaseHookStrategy(HookStrategy):
 
             category = self._classify_story(story)
             hook = self._generate_hook(story, used_hooks)
+            # F-0080 HARD-FAIL: _generate_hook returns None when the LLM
+            # path AND the template path both failed. The pre-fix code
+            # returned the source title as a fallback here — the exact
+            # format that got 16 YouTube channels terminated in Jan 2026.
+            # Drop the story instead. Publisher tolerates a niche
+            # producing no reel that day.
+            if hook is None:
+                rejected_count += 1
+                logger.warning(
+                    "[%s] F-0080: dropping story with no viable hook "
+                    "(title=%r) — LLM + template both failed",
+                    self._niche_id,
+                    (story.get("title") or "")[:60],
+                )
+                continue
             # R-50/R-51: template & fallback formulas (templates.yaml) ship
             # all-lowercase; normalize to sentence case before validate/store.
             hook = to_sentence_case(hook)

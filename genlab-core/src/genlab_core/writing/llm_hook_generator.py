@@ -651,6 +651,23 @@ def generate_hook(
             # Also reject the "X just <verb>" lead-in template
             if any(pat.search(hook) for pat in _BANNED_PATTERNS):
                 continue
+            # Phase 8 writer-fix: reject LLM refusal/meta-response shapes.
+            # Movies 07-07→07-12 shipped 9 hooks like "I need the Story
+            # Summary to write a hook. The title..." — the LLM's refusal
+            # text was persisted verbatim. See DIAGNOSTIC.md Step 2.
+            _rl = hook.lower().lstrip()
+            _refusal_prefixes = (
+                "i need ", "i cannot", "i can't", "as an ai",
+                "sure,", "here is", "here's ", "to write ", "based on ",
+                "the title ", "the story ", "please provide", "story summary",
+            )
+            if any(_rl.startswith(p) or p in _rl[:60] for p in _refusal_prefixes):
+                logger.warning(
+                    "[llm_hook_generator] rejecting refusal-shaped candidate "
+                    "(niche=%s, style=%s): %r",
+                    niche_id, chosen_style, hook[:80],
+                )
+                continue
             candidates.append(hook)
         except Exception as exc:
             # 2026-07-23 (rule #19): elevate DEBUG to WARNING and
@@ -1374,5 +1391,15 @@ def generate_platform_hooks(
 
         return result
     except Exception as exc:
-        logger.debug("Platform hook generation failed: %s", exc)
+        # Phase 8 writer-fix: elevated DEBUG → WARNING per audit rule #19.
+        # This is the source-title-fallback path — when it fires, every
+        # platform's hook becomes `base_hook` (typically the source
+        # title verbatim), producing FALLEN-day passthrough patterns
+        # (see DIAGNOSTIC.md Step 1). Silent DEBUG made it invisible.
+        from genlab_core.llm.errors import classify_llm_error
+        logger.warning(
+            "[llm_hook_generator] generate_platform_hooks fallback "
+            "(reason=%s, all platforms will receive base_hook verbatim): %s",
+            classify_llm_error(exc), exc, exc_info=True,
+        )
         return {p: base_hook for p in ("instagram", "youtube", "twitter", "facebook")}
