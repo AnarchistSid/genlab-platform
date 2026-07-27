@@ -102,6 +102,7 @@ Static reachability was never determined; this list is **candidates**, not confi
 - Phase 3B reel-trace was cherry-picked. Aggregate = 66.3% per-blueprint / 37.2% per-post.
 - Session 1's 10-hook read reversed direction. Aggregate: gaming carries the 51% burden.
 - Phase 2.5 leaked a live Slack webhook into `.audit/`. **F-0030 against the audit process.**
+- **Phase 8.5 (2026-07-27): F-0080's mechanism was misdiagnosed for fourteen sessions.** Every prior prompt including the writer-defect diagnosis targeted `llm_hook_generator.py:1385` as the source-title fallback site. On tracing callers during the write session, `:1385` turned out to be **dead code — zero external callers** (F-0083). The real passthrough site was `base_hooks.py:208-223`. F-0080 shipped correctly (commit `2ea7f12e`) only because the execution session traced the caller chain rather than trusting the finding. Note that the audit's discipline caught its own diagnosis — the discipline is why the guard shipped at the right site.
 
 ---
 
@@ -165,5 +166,18 @@ Part A of Phase 7 forced four corrections to this document:
 | COMPETENCY | 3 | 3 | held |
 
 **Sum 22 → 26/60.** The overall verdict does not change — working automation over a broken foundation — but the "working" half is meaningfully stronger than Session 1 said. The broken half (rolsuper + 5432 + Anthropic-empty cascade + CC=223 + 9,451 tests) is unchanged in severity and now includes F-0053's real cost (weekly 47-alert cascade).
+
+---
+
+## ⚠ SUPERSEDED-PENDING-REMEASURE (Phase 8.5, 2026-07-27)
+
+Two scorecard inputs have been disproved by execution and should not be quoted as current without re-measuring:
+
+- **COMPETENCY leaned on "9,451 tests cannot complete."** They complete in **2:08** — 333 pass, 1 unrelated fail, 1 skip, 40 deselect (Phase 8.4 execution session, commit `f87eb248`). The "cannot complete" claim was stale — likely a test-order-flake or an environment issue at audit time, not a live constraint. Re-measure: run the suite with `-x` off and pin the real pass/fail count once `test_backup_restore_dry_run` is quarantined.
+- **CREATIVITY was scored during the F-0080 outage contamination.** Phase 8.3 read-through showed 5/15 hooks match / 3 close / 7 behind — but ~47% of that "behind" was the source-title fallback that Phase 8.4 hard-fail eliminates. The dimension should be re-scored on a **clean week** (7 days after Anthropic is topped and F-0080 has run under a working writer), not on outage-era output.
+
+Both dimensions therefore contribute unreliable data to the 26/60 total until re-measured. The overall verdict — "working automation over a broken foundation" — is unaffected; the axis ranking may move.
+
+Also filed this session: **F-0083 LOW** — `llm_hook_generator.generate_platform_hooks` at :1290 is dead code. Every prior session including the audit prompts targeted its internal fallback at :1385 as the writer defect mechanism. Zero external callers; F-0080 evidence has been amended to point at the real site (`base_hooks.py:208-223`). This is a fourteen-session diagnostic error — the audit's own finding was wrong; execution correcting it in commit `2ea7f12e` is the discipline the audit was designed to enforce.
 
 **Word count ~1,900 with addendum. Prose-only ~1,600.** All shells exited before this summary.
