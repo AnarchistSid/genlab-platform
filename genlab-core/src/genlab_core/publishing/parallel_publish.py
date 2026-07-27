@@ -277,6 +277,12 @@ def _on_success(
     outcome.platform_status[platform] = "PUBLISHED"
     if result.post_id:
         outcome.successful_post_ids[platform] = result.post_id
+    else:
+        logger.warning(
+            "[pf-instr] SUCCESS_NO_POST_ID platform=%s record_id=%s "
+            "result_url=%s (successful_post_ids[%s] will be UNSET → downstream PF row un-joinable)",
+            platform, record_id, result.post_url, platform,
+        )
     if daily_cap:
         daily_cap.record_publish(platform)
     logger.info(

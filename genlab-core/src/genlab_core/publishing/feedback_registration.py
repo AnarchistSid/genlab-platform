@@ -48,10 +48,15 @@ def register_pending_feedback(
         from genlab_core.learning.pending_feedback_store import PendingFeedbackStore
         from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
     except Exception as e:
-        logger.warning("[publish] PendingFeedback imports failed (non-fatal): %s", e)
+        logger.warning(
+            "[pf-instr] IMPORT_FAILURE record_id=%s niche=%s err=%s",
+            record_id, niche_id, e,
+        )
         return
 
     fb_store = PendingFeedbackStore(backlog_client)
+    _platforms_seen: list[str] = []
+    _platforms_written: list[str] = []
     try:
         # Lift published_at out of the PendingFeedbackTask constructor
         # call so the SAME timestamp powers both the task.published_at
@@ -62,7 +67,12 @@ def register_pending_feedback(
         # consistent across all platforms in a single dispatch.
         published_at = datetime.now(UTC)
         for plat, pstatus in outcome.platform_status.items():
+            _platforms_seen.append(plat)
             if not _is_published_status(pstatus):
+                logger.warning(
+                    "[pf-instr] STATUS_SKIP record_id=%s niche=%s platform=%s pstatus=%r",
+                    record_id, niche_id, plat, pstatus,
+                )
                 continue
             # Pull the post_id from the outcome — cleaner than re-iterating
             # futures. For platforms in ``prior_published`` the post_id was
@@ -81,6 +91,13 @@ def register_pending_feedback(
             # with a one-off UPDATE if needed; new writes are correct
             # going forward.
             post_id_for_plat = outcome.successful_post_ids.get(plat, "")
+            if not post_id_for_plat:
+                logger.warning(
+                    "[pf-instr] EMPTY_POST_ID_FALLBACK record_id=%s niche=%s platform=%s "
+                    "successful_post_ids_keys=%s (will write un-joinable PF row)",
+                    record_id, niche_id, plat,
+                    list(outcome.successful_post_ids.keys()),
+                )
             post_id_for_plat = _normalize_post_id(plat, post_id_for_plat)
             bandit_ctx = _build_bandit_context(
                 fields,
@@ -132,8 +149,20 @@ def register_pending_feedback(
                 arm_ids_by_dimension=arm_ids_by_dim,
             )
             fb_store.create(task)
+            _platforms_written.append(plat)
     except Exception as e:
-        logger.warning("[publish] PendingFeedback registration failed (non-fatal): %s", e)
+        logger.warning(
+            "[pf-instr] REGISTRATION_EXCEPTION record_id=%s niche=%s seen=%s written=%s err=%s",
+            record_id, niche_id, _platforms_seen, _platforms_written, e,
+        )
+        return
+    # End-of-loop summary — should show seen==written when all publishes registered.
+    logger.warning(
+        "[pf-instr] REGISTRATION_SUMMARY record_id=%s niche=%s seen=%s written=%s "
+        "successful_post_ids_keys=%s",
+        record_id, niche_id, _platforms_seen, _platforms_written,
+        list(outcome.successful_post_ids.keys()),
+    )
 
 
 def _parse_arm_ids_by_dimension(raw: Any) -> dict[str, str]:
