@@ -21,6 +21,10 @@ jobs:
     # cost. Resource caps (MemoryMax=1.5G, OOMScoreAdjust=+1000) on the
     # systemd unit prevent CI from impacting prod publishing.
     runs-on: [self-hosted, genlab-prod]
+    # F-0032: fork PRs must NOT execute on the prod-host self-hosted
+    # runner. Same-repo PRs still run (contributor promotion is the
+    # attack vector; own-repo pushes are trusted).
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -42,6 +46,10 @@ jobs:
 
   test:
     runs-on: [self-hosted, genlab-prod]
+    # F-0032: fork PRs must NOT execute on the prod-host self-hosted
+    # runner. Same-repo PRs still run (contributor promotion is the
+    # attack vector; own-repo pushes are trusted).
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     services:
       postgres:
         image: postgres:16-alpine
@@ -142,6 +150,10 @@ jobs:
   # CI-validatable.
   test-storage:
     runs-on: [self-hosted, genlab-prod]
+    # F-0032: fork PRs must NOT execute on the prod-host self-hosted
+    # runner. Same-repo PRs still run (contributor promotion is the
+    # attack vector; own-repo pushes are trusted).
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     services:
       postgres:
         # pgvector image (superset of postgres:16) so the migration chain's
@@ -225,6 +237,10 @@ jobs:
   # deselects in a follow-up the moment #128 merges.
   integration:
     runs-on: [self-hosted, genlab-prod]
+    # F-0032: fork PRs must NOT execute on the prod-host self-hosted
+    # runner. Same-repo PRs still run (contributor promotion is the
+    # attack vector; own-repo pushes are trusted).
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -258,6 +274,10 @@ jobs:
 
   secret-scan:
     runs-on: [self-hosted, genlab-prod]
+    # F-0032: fork PRs must NOT execute on the prod-host self-hosted
+    # runner. Same-repo PRs still run (contributor promotion is the
+    # attack vector; own-repo pushes are trusted).
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v6
         with:

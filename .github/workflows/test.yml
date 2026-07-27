@@ -22,6 +22,10 @@ concurrency:
 jobs:
   test-core:
     runs-on: [self-hosted, genlab-prod]
+    # F-0032: gate against fork PRs on the prod-host self-hosted runner.
+    # `if:` is a control-flow expression, evaluated in GitHub's context;
+    # not a shell substitution — no injection risk. Same-repo PRs run.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     # 2026-06-18: 20-min job cap. test-core runs 4200+ tests across
     # a 3-version matrix; baseline ~2 minutes. 20min = ~10× headroom
     # for runner slowness, prevents indefinite hangs on a Postgres
@@ -148,6 +152,10 @@ jobs:
 
   test-dashboard:
     runs-on: [self-hosted, genlab-prod]
+    # F-0032: gate against fork PRs on the prod-host self-hosted runner.
+    # `if:` is a control-flow expression, evaluated in GitHub's context;
+    # not a shell substitution — no injection risk. Same-repo PRs run.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v6
         with:
@@ -196,6 +204,10 @@ jobs:
 
   test-channels:
     runs-on: [self-hosted, genlab-prod]
+    # F-0032: gate against fork PRs on the prod-host self-hosted runner.
+    # `if:` is a control-flow expression, evaluated in GitHub's context;
+    # not a shell substitution — no injection risk. Same-repo PRs run.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     # 2026-06-18: hard 15-minute cap. The chronic
     # ``test-channels (clutchwire|blackbox-brief|criticalrush)`` flake
     # observed 6+ times in one day hangs FOREVER without this — GitHub
@@ -253,6 +265,10 @@ jobs:
   # errors — is a separate triage task, not gated here yet.)
   test-frontend:
     runs-on: [self-hosted, genlab-prod]
+    # F-0032: gate against fork PRs on the prod-host self-hosted runner.
+    # `if:` is a control-flow expression, evaluated in GitHub's context;
+    # not a shell substitution — no injection risk. Same-repo PRs run.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     # 2026-07-07: raise Node.js heap ceiling for the self-hosted runner
     # on the 4 GB Hetzner VPS. Node's default old-space size (~512MB or
     # so, but effectively capped by whatever cgroup/env limits the box
@@ -304,6 +320,10 @@ jobs:
   # (or remove it) to turn this into a hard gate.
   mypy-check:
     runs-on: [self-hosted, genlab-prod]
+    # F-0032: gate against fork PRs on the prod-host self-hosted runner.
+    # `if:` is a control-flow expression, evaluated in GitHub's context;
+    # not a shell substitution — no injection risk. Same-repo PRs run.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     continue-on-error: true
     steps:
       - uses: actions/checkout@v6
