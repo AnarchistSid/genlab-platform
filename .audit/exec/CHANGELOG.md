@@ -117,3 +117,38 @@ RLS is 5 sub-steps each gated on verification. Doing steps 6.1 (enumerate) and 6
   * F-0069 WARN logs accumulated (24-48h post-`b458f499`)
   * `test_backup_restore_dry_run` failure investigated / fixed / quarantined
 
+
+## Phase 8.6 — Post-tripwire fixes (2026-07-28 12:35-13:00 IST)
+
+**Tripwire outcome:** MIXED. sports 4/4 real hooks (WIN), ai_creators 4/4 passthrough (SIBLING outcome). Investigation found the passthrough was NOT a guard-sibling — it was 1 blueprint × 4 platforms, created 2026-07-24 (pre-F-0080-fix), sitting in the VR-approved queue. F-0080 protects new writes; the queue itself needed scrubbing.
+
+### F-0080 stale-queue scrub (F-0084)
+
+7 VR blueprints identified with `hook_text = s.title` and `created_at < 2026-07-27 18:00` (pre-fix). All marked ARCHIVED with `action_taken='archived_by_f0080_queue_scrub_2026_07_28'`. 5 ai_creators + 2 gaming. Before-snapshot at `/tmp/scrub_before.out` on prod for rollback. Prevents 7 terminated-format publishes at 16:00 IST retry + 12:05 IST tomorrow.
+
+### F-0056 journald retention
+
+`/etc/systemd/journald.conf` — `SystemMaxUse: 500M → 2G`, `MaxRetentionSec: 30d` added. `.bak-2026-07-28` on prod. `systemctl restart systemd-journald` clean; service active. Retention window now ~30 days at ≤2G disk. Prevents future audit-blindness (does NOT retroactively recover F-0047 evidence — already vacuumed).
+
+### F-0049 role CREATE (cutover deferred)
+
+`genlab_app` role created with `rolsuper=f rolbypassrls=f rolcreaterole=f rolcreatedb=f`. `SELECT/INSERT/UPDATE/DELETE` on all public tables granted, plus USAGE on sequences, plus default privileges for future tables. Password (32-char hex) captured to operator's manager during the RAISE NOTICE — deliberately not persisted to `.audit/` per F-0030. **Cutover NOT executed** — DSN switches + fail-closed policies + service-by-service verification remain gated on Anthropic non-zero + 24-48h F-0069 WARN + suite green.
+
+### F-0023 INVALIDATED
+
+`uvx pip-audit --path /opt/genlab/.venv/lib/python3.13/site-packages` → **"No known vulnerabilities found."** The audit's "66 CVEs / 15 packages" figure was against pip-audit's OWN venv, not the project's. Venv confirmed real (anthropic 0.102.0, psycopg 3.3.4, yt_dlp 2026.06.06, aiohttp 3.13.3). Tenth methodology error caught by execution.
+
+### What's NOT fixed this session
+
+Everything gated on operator, or explicitly deferred to dedicated sessions:
+- **Anthropic top-up** (session 10 of un-done) — still blocks tripwire outcome + Blocks 1/4 of BACKLOG
+- **F-0065 fail-open RLS** — needs dedicated session (2A enumerate/hook, 2B cutover)
+- **F-0039 107 silent-except** — deferred per operator "safe pack" scope choice
+- **F-0031 pg_hba** — sibling of F-0024, needs careful edit-and-restart on prod PG
+- **F-0053 Anthropic cascade** — operator top-up is the fix
+- **F-0072 mandate 41.4%** — content/product decision, not code
+- **F-0074 AUTOMATION 4→3** — depends on Anthropic + product decisions on the 3 manual niches
+- **F-0054 gaming passthrough** — F-0080 covers writer side; re-measure on clean week to confirm
+- **F-0030 / F-0062 / F-0068** — methodology findings, can't be retroactively fixed
+- Kill list (4 items) — verification-before-delete work
+
