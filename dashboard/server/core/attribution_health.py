@@ -59,7 +59,10 @@ def compute_stats(
 
     Errors bubble up to the endpoint's fail-open wrapper.
     """
-    import psycopg
+    # A-0032b: use pg_connect + niche_id="all" (admin mode) — this metric
+    # aggregates PUBLISHED blueprints across all niches by design; the
+    # explicit admin declaration replaces the prior implicit fail-open.
+    from genlab_core.storage.tenant_context import pg_connect
 
     dsn = os.environ.get("DATABASE_URL") or "dbname=genlab"
 
@@ -77,7 +80,7 @@ def compute_stats(
     original_mark = _MARKER_ORIGINAL  # already lowercase
     footage_mark = _MARKER_FOOTAGE  # already lowercase
 
-    with psycopg.connect(dsn) as conn:
+    with pg_connect(dsn, niche_id="all") as conn:
         with conn.cursor() as cur:
             # Post-2026-07-11 audit tightening: the metric now requires
             # a credit marker to be present in AT LEAST ONE caption/

@@ -72,7 +72,10 @@ def compute_health(
     to depend on the dashboard package (systemd wiring installs are
     less brittle if the module is self-contained).
     """
-    import psycopg
+    # A-0032b: use pg_connect + niche_id="all" (admin mode) — this monitor
+    # iterates `niche_ids` below to compute per-niche attribution health
+    # across ALL 5 niches; admin declaration is correct here.
+    from genlab_core.storage.tenant_context import pg_connect
 
     dsn = dsn or os.environ.get("DATABASE_URL") or "dbname=genlab"
     # 2026-07-14 (class-of-bug scan): import the canonical markers +
@@ -93,7 +96,7 @@ def compute_health(
     footage_mark = _MARKER_FOOTAGE  # already lowercase
     niche_ids = ("ai_creators", "anime", "gaming", "movies", "sports")
 
-    with psycopg.connect(dsn) as conn:
+    with pg_connect(dsn, niche_id="all") as conn:
         with conn.cursor() as cur:
             # Post-2026-07-13 audit follow-up: kept in lockstep with
             # dashboard/server/core/attribution_health.py. Previous
