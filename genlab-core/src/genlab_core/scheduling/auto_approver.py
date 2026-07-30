@@ -526,7 +526,15 @@ class AutoApprovalPolicy:
     # across runs, which makes operator inspection harder (no
     # rerolling). Acceptable because the goal of rollout_pct is
     # *volume control*, not *fairness across blueprints*.
-    rollout_pct: float = 1.0
+    #
+    # A-0029 (Audit A Wave-5): default was 1.0 — silent 100% rollout if
+    # publishing.yaml omitted the key. That was the fail-open leg of the
+    # A-0027 × A-0029 × A-0028 interaction ("safe apart, dangerous
+    # together"). Changed to 0.0 so a missing key = no auto-approvals
+    # (deny-by-default posture, matches CLAUDE.md rules #32/#33). If any
+    # niche needs auto-approval, publishing.yaml MUST set rollout_pct
+    # explicitly; there is no silent fall-through.
+    rollout_pct: float = 0.0
 
 
 def load_policy(niche_id: str, *, genlab_root: Path | None = None) -> AutoApprovalPolicy:
