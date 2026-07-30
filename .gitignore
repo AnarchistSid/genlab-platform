@@ -17,7 +17,10 @@ venv/
 env/
 
 # uv
-.python-version
+# Note (A-0081, 2026-07-30): .python-version was previously gitignored (auto-managed
+# by pyenv). Now committed as the intentional dev/prod parity pin — see
+# .audit/fixes/FIX_A-0081_env-pinning.md. To re-hide, uncomment the line below.
+# .python-version
 
 # IDE
 .vscode/
