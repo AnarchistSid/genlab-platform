@@ -98,13 +98,15 @@ def get_follower_delta(
         return None
 
     try:
-        import psycopg
+        from genlab_core.storage.tenant_context import pg_connect
     except ImportError:
-        logger.debug("[follower_delta] psycopg not installed; returning None")
+        logger.debug("[follower_delta] psycopg/tenant_context not available; returning None")
         return None
 
     try:
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        # A-0032b: pg_connect sets app.niche_id GUC on connect so post-
+        # migration RLS permits the audience_snapshots rows for this niche.
+        with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 # Fetch the closest snapshot on or before each endpoint.
                 # The daily collect_audience_metrics timer may occasionally

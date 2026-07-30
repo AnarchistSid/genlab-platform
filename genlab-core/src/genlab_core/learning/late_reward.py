@@ -127,14 +127,19 @@ def recompute_late_reward(
     """
     if conn is None:
         try:
-            import psycopg
             from psycopg.rows import dict_row
+
+            from genlab_core.storage.tenant_context import pg_connect
 
             dsn = os.environ.get("DATABASE_URL", "").strip()
             if not dsn:
                 logger.warning("late_reward: no DATABASE_URL — skip %s", blueprint_id)
                 return None
-            conn = psycopg.connect(dsn, row_factory=dict_row)
+            # A-0032b: admin-mode connect — this function looks up the niche
+            # FROM the blueprint row (see JOIN below), so the niche isn't
+            # known at connect time. `niche_id="all"` is the migration-
+            # preserved escape hatch (RLS policy: ANY(ARRAY['','all'])).
+            conn = pg_connect(dsn, niche_id="all", row_factory=dict_row)
             own_conn = True
         except Exception as exc:
             logger.warning("late_reward: connect failed err=%s", exc)
@@ -342,14 +347,18 @@ def process_late_reward_batch(
 
     if conn is None:
         try:
-            import psycopg
             from psycopg.rows import dict_row
+
+            from genlab_core.storage.tenant_context import pg_connect
 
             dsn = os.environ.get("DATABASE_URL", "").strip()
             if not dsn:
                 logger.warning("late_reward.batch: DATABASE_URL not set — skipping batch")
                 return counters
-            conn = psycopg.connect(dsn, row_factory=dict_row)
+            # A-0032b: admin-mode batch scan — iterates blueprints across
+            # ALL niches to compute late-tail reward per blueprint. Explicit
+            # admin declaration replaces the prior implicit fail-open.
+            conn = pg_connect(dsn, niche_id="all", row_factory=dict_row)
             own_conn = True
         except Exception as exc:
             # 2026-07-14 class-of-bug fix: was silent ``return counters``.

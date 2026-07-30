@@ -360,6 +360,13 @@ def _fetch_rca_context(niche_id: str, blueprint_id: str) -> tuple[float, list[di
     try:
         with pool.connection() as conn:
             with conn.cursor() as cur:
+                # A-0032b: set niche context before queries so post-migration
+                # RLS (deny-by-default) permits the niche-scoped rows. Uses
+                # set_config LOCAL (3rd arg true) — transaction-scoped, does
+                # not leak to other pool consumers.
+                cur.execute(
+                    "SELECT set_config('app.niche_id', %s, true)", (niche_id,)
+                )
                 # Niche baseline — average over recent reward_48h values
                 cur.execute(
                     """
@@ -653,6 +660,11 @@ def get_channel_metrics(niche_id: str, platform: str) -> dict[str, float]:
     try:
         with pool.connection() as conn:
             with conn.cursor() as cur:
+                # A-0032b: set niche context so post-migration RLS permits
+                # the monetisationprogress rows for this niche.
+                cur.execute(
+                    "SELECT set_config('app.niche_id', %s, true)", (niche_id,)
+                )
                 cur.execute(
                     """
                     SELECT metric_name, current_value
