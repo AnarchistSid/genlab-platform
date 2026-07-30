@@ -187,9 +187,11 @@ def _load_catalog() -> dict | None:
 def _check_alembic_head(dsn: str) -> tuple[str | None, bool]:
     """Return (current_head_revision, matches_expected)."""
     try:
-        import psycopg
+        from genlab_core.storage.tenant_context import pg_connect
 
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        # A-0032b: preflight is cross-niche by design (each query does its
+        # own GROUP BY niche_id to summarise across niches). Admin mode.
+        with pg_connect(dsn, niche_id="all", connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT version_num FROM alembic_version LIMIT 1")
                 row = cur.fetchone()
@@ -208,9 +210,11 @@ def _check_tables(dsn: str) -> dict[str, bool]:
     distinguish "couldn't check" from "checked and confirmed missing".
     """
     try:
-        import psycopg
+        from genlab_core.storage.tenant_context import pg_connect
 
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        # A-0032b: preflight is cross-niche by design (each query does its
+        # own GROUP BY niche_id to summarise across niches). Admin mode.
+        with pg_connect(dsn, niche_id="all", connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT table_name FROM information_schema.tables "
@@ -229,9 +233,11 @@ def _check_arm_counts(dsn: str) -> dict[str, int]:
     """Return {niche_id: count} for arm_type='product'."""
     out: dict[str, int] = dict.fromkeys(KNOWN_NICHES, 0)
     try:
-        import psycopg
+        from genlab_core.storage.tenant_context import pg_connect
 
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        # A-0032b: preflight is cross-niche by design (each query does its
+        # own GROUP BY niche_id to summarise across niches). Admin mode.
+        with pg_connect(dsn, niche_id="all", connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT niche_id, COUNT(*) FROM bandit_arms "
@@ -250,9 +256,11 @@ def _check_blueprints_with_slug(dsn: str) -> dict[str, int]:
     """Return {niche_id: count of blueprints with product_slug populated}."""
     out: dict[str, int] = dict.fromkeys(KNOWN_NICHES, 0)
     try:
-        import psycopg
+        from genlab_core.storage.tenant_context import pg_connect
 
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        # A-0032b: preflight is cross-niche by design (each query does its
+        # own GROUP BY niche_id to summarise across niches). Admin mode.
+        with pg_connect(dsn, niche_id="all", connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT niche_id, COUNT(*) FROM blueprints "

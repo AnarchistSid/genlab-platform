@@ -189,13 +189,18 @@ def _load_env_file(path: Path) -> None:
 
 
 def _connect():
-    import psycopg
     from psycopg.rows import dict_row
+
+    from genlab_core.storage.tenant_context import pg_connect
 
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise SystemExit("DATABASE_URL not set; source /opt/genlab/.env before running.")
-    return psycopg.connect(url, row_factory=dict_row)
+    # A-0032b: this scheduler iterates ALL niches, computing "top blueprint
+    # per niche" — admin mode is correct. Per-niche WHERE clauses (present
+    # throughout main()) narrow the scope; admin GUC + niche WHERE is the
+    # belt-and-suspenders pattern (CLAUDE.md rule #27).
+    return pg_connect(url, niche_id="all", row_factory=dict_row)
 
 
 def compute_target_slot(

@@ -280,13 +280,16 @@ def write_alert(cur, niche: str, message: str) -> None:
 
 
 def _connect():
-    import psycopg
     from psycopg.rows import dict_row
+
+    from genlab_core.storage.tenant_context import pg_connect
 
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise SystemExit("DATABASE_URL not set; source /opt/genlab/.env before running.")
-    return psycopg.connect(url, row_factory=dict_row)
+    # A-0032b: remediation scans blueprints across ALL niches to detect
+    # scheduling gaps. Admin mode is correct.
+    return pg_connect(url, niche_id="all", row_factory=dict_row)
 
 
 def main() -> int:
