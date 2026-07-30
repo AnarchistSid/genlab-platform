@@ -824,6 +824,7 @@ from server.api.trend_anticipation import bp as trend_anticipation_bp
 from server.api.trends import bp as trends_bp
 from server.api.webhook_receiver import webhook_bp
 from server.api.youtube_quota import bp as youtube_quota_bp
+from server.api.yt_quota_demo import bp as yt_quota_demo_bp
 
 app.register_blueprint(blueprints_bp)
 app.register_blueprint(stories_bp)
@@ -843,6 +844,11 @@ app.register_blueprint(token_health_bp)
 app.register_blueprint(platform_posts_bp)
 app.register_blueprint(learning_bp)
 app.register_blueprint(compliance_bp)  # PR #578: /api/v1/compliance/{events,checks}
+# YouTube Data API v3 compliance recording endpoint. Gated by
+# GENLAB_YT_COMPLIANCE_DEMO=1 (default off — returns 404). Used only
+# during the YouTube API Services quota review recording session.
+# See compliance/youtube-quota/README.md.
+app.register_blueprint(yt_quota_demo_bp)
 app.register_blueprint(scheduling_pauses_bp)  # PR #577 consumer: /api/v1/scheduling/pauses
 app.register_blueprint(source_discovery_bp)  # PR after #586: /api/v1/source-discovery/proposals
 app.register_blueprint(source_performance_bp)  # Phase 2 L1: /api/v1/source-performance
