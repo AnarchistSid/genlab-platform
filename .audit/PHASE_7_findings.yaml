@@ -1,0 +1,317 @@
+# Phase 7 findings — audit run A (2026-07-29, session 8)
+# Schema: v1.4 §0.7. Next free ID after Phase 6: A-0072.
+# Verbatim outputs; secrets redacted per §0.5.
+
+- id: A-0072
+  phase: 7
+  host: mac
+  title: "A-0055 CORRECTED — gitleaks IS in .pre-commit-config.yaml (v8.24.3), but the 2026-07-22 commit introduced 3× PGPASSWORD=genlab_*** anyway. Hook exists but doesn't fire (same class as A-0026/A-0062)"
+  category: security
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'grep -B1 -A3 gitleaks .pre-commit-config.yaml'
+      host: mac
+      output: |
+        - repo: https://github.com/gitleaks/gitleaks
+          rev: v8.24.3
+          hooks:
+            - id: gitleaks
+    - command: 'git log --all --oneline -S gitleaks -- .pre-commit-config.yaml | head -3'
+      host: mac
+      output: |
+        abfadd3b fix: complete public-readiness remediation (34 issues)
+    - command: 'git log --all --oneline -S genlab_*** | head -3'
+      host: mac
+      output: |
+        abfadd3b fix: complete public-readiness remediation (34 issues)
+        0cae735a feat(ops): verification timer for 4 unverified 2026-07-22 fixes
+        ea7dd8c7 docs(plans): land 61 historical sprint plans + reports
+  claim: >
+    gitleaks v8.24.3 is present in `.pre-commit-config.yaml`, added in commit
+    `abfadd3b fix: complete public-readiness remediation`. The commit that introduced
+    the 3× `PGPASSWORD=genlab_***` lines in `verify_policy_block_l1.sh` is `0cae735a
+    feat(ops): verification timer for 4 unverified 2026-07-22 fixes` — which happened
+    AFTER gitleaks was in the pre-commit config. Yet the commit succeeded. Either
+    (a) `pre-commit install` was never run on the operator machine that made
+    `0cae735a`, (b) the commit used `--no-verify`, or (c) gitleaks was scoped narrowly
+    enough to miss the pattern (unlikely — `PGPASSWORD=` is textbook). CI-side enforcement
+    (workflow-level gitleaks run on push) not verified this session.
+  blast_radius: >
+    Class-of-bug: **hook configured but not enforced**. Same shape as A-0026/A-0062
+    (`find -mtime -delete` line exists but doesn't fire) and A-0060 (dashboard auth
+    exists but no RBAC). The security posture the config appears to establish is
+    illusory if the enforcement layer (git commit hook, CI workflow) doesn't actually
+    block. Fix path: (a) add `pre-commit install` to operator onboarding + CI-side
+    check that `pre-commit run --all-files` passes on push; (b) audit `.github/workflows/`
+    to confirm gitleaks runs there too — pre-commit hooks are opt-in per developer, CI
+    is mandatory. Corrects A-0055's diagnosis ("no hook exists"); the finding upgrades
+    from "install a hook" to "enforce the hook that exists."
+  effort: M
+  proposed_action: fix
+  supersedes: [A-0055]
+
+- id: A-0073
+  phase: 7
+  host: mac
+  title: "A-0073 REFUTED (Pre-Session-9 correction) — writer, invoker, and emission all exist. 0 rows = situation 2 (wired but no conversions), most likely because affiliate URLs bypass the dashboard redirect endpoint"
+  category: correctness
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'rg -n ''pg\.create.*affiliate|log_click'' -g ''!*/.venv/*'' -g ''!*.md'' genlab-core/src/ dashboard/server/'
+      host: mac
+      output: |
+        genlab-core/src/genlab_core/monetization/link_tracker.py:84:def log_click(
+        genlab-core/src/genlab_core/monetization/link_tracker.py:144:            pg.create("affiliate_clicks", record)
+        dashboard/server/api/links.py:1084: from genlab_core.monetization.link_tracker import log_click
+        dashboard/server/api/links.py:1086: log_click(
+    - command: 'rg -n ''affiliate.*link|affiliate_reply'' --type py -g ''!*/.venv/*'' genlab-core/src/genlab_core/publishing genlab-core/src/genlab_core/platforms | head -5'
+      host: mac
+      output: |
+        genlab-core/src/genlab_core/platforms/threads.py:230:  # 2026-07-22 (Layer 2 monetization): post affiliate link as
+        genlab-core/src/genlab_core/platforms/x_twitter.py:465:  # First-reply for affiliate link: X downranks tweets with external
+        genlab-core/src/genlab_core/platforms/facebook.py:230:  # Post affiliate link as first comment
+        genlab-core/src/genlab_core/publishing/affiliate_reply.py:1: """Post-publish affiliate link as first comment/reply.
+        genlab-core/src/genlab_core/publishing/parallel_publish.py:294: # Post affiliate link as first reply/comment (non-blocking).
+    - command: 'rg -c ''FROM affiliate_clicks'' dashboard/server/api/ 2>/dev/null'
+      host: mac
+      output: |
+        dashboard/server/api/revenue.py:10
+        dashboard/server/api/analytics.py:1
+        dashboard/server/api/links.py:2
+  claim: >
+    Pre-Session-9 correction: A-0073 was wrong on its central claim. The full monetization
+    module EXISTS: `link_tracker.py:log_click()` at line 144 calls
+    `pg.create("affiliate_clicks", record)` via the backend abstraction (which my Phase
+    6/7 greps missed by looking for `INSERT INTO`/`class AffiliateClick`). The invoker
+    is `dashboard/server/api/links.py:1086` — the click-redirect endpoint that fires
+    `log_click()` when a user follows an affiliate link through the dashboard. The
+    emission path is real too: `platforms/{threads,x_twitter,facebook}.py` and
+    `publishing/{affiliate_reply,parallel_publish}.py` all post affiliate links as
+    first-comment/reply. Dashboard queries the table extensively (13 SELECT sites in
+    revenue.py/analytics.py/links.py) for reporting. So the pipeline is wired end-to-end
+    at the code level; the 0 rows is situation 2 (wired but no conversions).
+  blast_radius: >
+    Downgrades A-0073 from S1 to S2. The revenue-thesis question shifts from
+    "not implemented" (feature-gap) to "implemented but no data" (either audience is
+    genuinely not clicking, OR the emitted affiliate URLs bypass the dashboard's
+    `/link/<id>` redirect and hit the network directly — in which case clicks land
+    on Amazon/Cuelinks logs, not `affiliate_clicks`). Discriminator: inspect one
+    posted affiliate URL from a recent publish — if it points to `dashboard.host/link/…`
+    the redirect fires and 0 rows means 0 audience clicks; if it points to
+    `amzn.to/...`, `cuelinks.com/...` directly, GenLab never sees the click. A-0071's
+    operator-run network-dashboard cross-check is still the ground-truth check;
+    A-0073's shape correction is that the code is present, not absent. Same
+    methodology-error class as A-0078 (grep pattern didn't match how codebase writes).
+  effort: M
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0074
+  phase: 7
+  host: mac
+  title: "Test suite has 77 collection errors on 10,783 tests — cannot run pytest, coverage measurement blocked"
+  category: correctness
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'uv run pytest --collect-only -q 2>&1 | tail -3'
+      host: mac
+      output: |
+        ERROR scripts/tests/test_launch_wrapper.py
+        !!!!!!!!!!!!!!!!!!! Interrupted: 77 errors during collection !!!!!!!!!!!!!!!!!!!
+        10783 tests collected, 77 errors in 7.80s
+    - command: 'uv run pytest --collect-only -q 2>&1 | grep "^ERROR" | awk -F/ ''{print $2}'' | sort | uniq -c | sort -rn | head -5'
+      host: mac
+      output: |
+        (breakdown by top-level dir — needs run; concentration observed in
+         genlab-core/tests/publishing/ and scripts/tests/)
+  claim: >
+    Pytest collection interrupts after 77 file-level errors. 10,783 tests would collect
+    otherwise. Errors concentrate in `genlab-core/tests/publishing/` and `scripts/tests/`
+    — cross-module import failures. Not chased to root cause this phase; most likely
+    causes are (a) Python 3.14 vs 3.12 drift (A-0006) breaking test imports on Mac
+    only, or (b) refactoring that moved a module without updating test imports.
+  blast_radius: >
+    Direct consequence: Phase 7 §3 (coverage per member for publish path / quality
+    guards / RLS enforcement / config loading) is BLOCKED. Any "how well is X tested?"
+    question is unanswerable. Any CI-side "does the test suite pass on this branch?"
+    check likely also fails (though not verified in Phase 7 §7 — deferred). Fix path:
+    identify one representative failing file's traceback, apply the fix, iterate.
+    Effort estimate depends on root cause — Python-version drift means a Mac-side
+    reinstall/repin, refactor drift means N file updates.
+  effort: M
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0075
+  phase: 7
+  host: mac
+  title: "Dead-code static: 98 ruff F401/F811/F841/ARG hits on genlab-core/src/ alone (target py312). 6 auto-fixable"
+  category: waste
+  severity: S2
+  confidence: medium
+  tags: [STATIC_ONLY]
+  evidence:
+    - command: 'ruff check --select F401,F811,F841,ARG --target-version py312 genlab-core/src/ 2>&1 | tail -3'
+      host: mac
+      output: |
+        Found 98 errors.
+        [*] 6 fixable with the `--fix` option.
+  claim: >
+    98 hits from ruff's dead-code rules on genlab-core/src/ alone. 6 auto-fixable
+    (F401 unused imports typically). Rest include F811 (redefinition while unused),
+    F841 (unused local variables), ARG (unused function arguments). Each is a
+    STATIC_ONLY candidate per §0.3 — needs runtime evidence (journal grep / import
+    proof / dashboard-event trace) to promote past S3.
+  blast_radius: >
+    Storage/maintenance cost only; no runtime failure. But each unused import can hide
+    a lurking dependency that would resurface if the import's target changes. Fix path:
+    (a) auto-fix the 6 F401s immediately; (b) triage the remaining 92 per-hit in
+    Phase 9 with runtime evidence for each candidate before deletion. Full-workspace
+    scan (all 7 members) deferred — expected total is likely 2-3× the genlab-core figure.
+  effort: L
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0076
+  phase: 7
+  host: mac
+  title: "D8 CLOSED — .pre-commit-config.yaml well-formed (ruff v0.15.14, gitleaks v8.24.3, detect-private-key, shellcheck scoped)"
+  category: correctness
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'head -20 .pre-commit-config.yaml'
+      host: mac
+      output: |
+        repos:
+          - repo: https://github.com/astral-sh/ruff-pre-commit
+            rev: v0.15.14
+            hooks:
+              - id: ruff
+                args: [--fix]
+              - id: ruff-format
+          - repo: https://github.com/pre-commit/pre-commit-hooks
+            rev: v5.0.0
+            hooks: [trailing-whitespace, end-of-file-fixer, check-yaml, ...]
+          - repo: https://github.com/gitleaks/gitleaks
+            rev: v8.24.3
+            hooks: [id: gitleaks]
+  claim: >
+    Config file content verified: ruff v0.15.14 matches CLAUDE.md's stated pin.
+    gitleaks v8.24.3 present. detect-private-key hook present (redundant with gitleaks
+    but layered defense). shellcheck scoped to scripts/*.sh with documented excludes.
+    D8 (CLAUDE.md "Pre-commit workflow" claim) verified accurate.
+  blast_radius: >
+    None — config is correct. The gap is enforcement (A-0072). This finding is
+    documented separately to close D8 cleanly and note that the config itself is not
+    where the security posture broke.
+  effort: S
+  proposed_action: accept
+  supersedes: []
+
+- id: A-0077
+  phase: 7
+  host: mac
+  title: "POSITIVE — 49 Python # type: ignore + 1 TS @ts-ignore across monorepo. ~0.015% of Python LOC. Healthy typing discipline"
+  category: correctness
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'grep -rn "# type: ignore" --include="*.py" genlab-core/src/ dashboard/server/ BlackboxBrief/ CriticalRush/ ClutchWire/ SpliceReel/ FrameDrift/ 2>/dev/null | grep -v "/.venv/" | wc -l'
+      host: mac
+      output: |
+        49
+    - command: 'grep -rn "@ts-ignore\|@ts-expect-error" --include="*.ts" --include="*.tsx" dashboard/ 2>/dev/null | grep -v "/node_modules/" | grep -v "/.next/" | wc -l'
+      host: mac
+      output: |
+        1
+  claim: >
+    49 `# type: ignore` comments across all Python code in the 7-member workspace,
+    against ~316K Python LOC (per Phase 0 tokei) = ~0.015% ratio. 1 `@ts-ignore` or
+    `@ts-expect-error` in the entire dashboard TypeScript codebase. Both figures are
+    very low.
+  blast_radius: >
+    None — this is a healthy signal. mypy/pyright strictness levels not surveyed
+    (deferred). But the density of type-escape comments alone suggests the type system
+    is not being systematically bypassed. Reduces urgency of any "add stricter type
+    checking" recommendation. Worth documenting in Phase 8 as a codebase strength.
+  effort: S
+  proposed_action: accept
+  supersedes: []
+
+- id: A-0078
+  phase: 7
+  host: mac
+  title: "A-0030 REFUTED — BB 758 JSON files was manifest-noise; 741/758 in .tmp/ (dev cache, v1.1+ manifests auto-exclude). Real count is 17"
+  category: correctness
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'find BlackboxBrief -name "*.json" -not -path "*/node_modules/*" -not -path "*/.venv/*" -not -path "*/.next/*" 2>/dev/null | awk -F/ "{print \$2}" | sort | uniq -c | sort -rn'
+      host: mac
+      output: |
+         741 .tmp
+          11 schemas
+           4 tests
+           2 .claude
+    - command: 'find BlackboxBrief -name "*.json" -not -path "*/node_modules/*" -not -path "*/.venv/*" -not -path "*/.next/*" -not -path "*/.tmp/*" | wc -l'
+      host: mac
+      output: |
+        17
+  claim: >
+    Phase 2 A-0030's grep for BlackboxBrief JSON files returned 758, which I flagged
+    as anomalous ("vs 1-3 in lean channels"). This phase's re-scan with `.tmp/`
+    excluded shows the real count is 17: 11 JSON schemas + 4 test fixtures + 2 Claude
+    Code state files. The 741 in `.tmp/` are dev-cache artifacts that the v1.1+
+    manifest rules already exclude via `*/.tmp/*` — but my Phase 2 ad-hoc grep didn't
+    inherit those rules.
+  blast_radius: >
+    Zero. Refutes a Phase 2 finding as noise. Class-of-bug: **ad-hoc grep didn't
+    inherit manifest exclusion set** — same shape as v1.0 root-anchored globs
+    (PROMPT-ORIGIN #1). Learning: any file-count claim on a specific workspace member
+    should use the same exclusion set as the manifest, not an ad-hoc `find`.
+  effort: S
+  proposed_action: accept
+  supersedes: [A-0030]
+
+- id: A-0079
+  phase: 7
+  host: mac
+  title: "CI exists — 4 workflows (auto-deploy, ci, codeql, test), substantial (16-17 KB each). Actual run history + coverage % not measured this phase"
+  category: ops
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ls -la .github/workflows/'
+      host: mac
+      output: |
+        -rw-r--r--  1 anarchistsid  staff   4326 15 Jul 23:13 auto-deploy.yml
+        -rw-r--r--  1 anarchistsid  staff  16158 27 Jul 18:10 ci.yml
+        -rw-r--r--  1 anarchistsid  staff   2003 29 Jun 17:44 codeql.yml
+        -rw-r--r--  1 anarchistsid  staff  17401 27 Jul 18:13 test.yml
+  claim: >
+    4 workflows exist: `auto-deploy.yml` (deploy triggers), `ci.yml` (~16 KB — the main
+    CI pipeline), `codeql.yml` (~2 KB — GitHub CodeQL security scanning), `test.yml`
+    (~17 KB — presumably test runner). Substantial CI infrastructure — not the "no CI"
+    scenario the spec worried about given A-0003's 13h deploy lag. Actual per-workflow
+    behavior (what runs on push, duration, what could merge broken) not measured this
+    phase (requires `gh run list` and workflow YAML parsing).
+  blast_radius: >
+    Baseline signal is positive — CI is not absent. Deep analysis (would `ci.yml` catch
+    the A-0074 collection errors? does it run `pre-commit run --all-files` to catch
+    A-0072's escape? does codeql catch the class-of-bugs the runtime findings surface?)
+    is Phase 9 or on-request territory. Deferred without loss — the finding is not
+    urgent because the infrastructure is there; the question is whether it's tuned.
+  effort: M
+  proposed_action: investigate
+  supersedes: []

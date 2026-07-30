@@ -169,8 +169,10 @@ Videos MUST NOT:
 - Be a placeholder or generic compilation used across multiple blueprints
 - Be rendered without the channel logo overlay
 - Be rendered with whisper word-by-word caption overlay until the `text_optimizer`
-  regression is fixed (`whisper_sync.enabled = false` across all 5 niches as of
-  2026-06-13). See `[[session-2026-06-13-render-audit-findings]]` before flipping.
+  regression is fixed. **Current state (2026-07-30 per Audit A A-0031):**
+  BlackboxBrief flipped `whisper_sync.enabled: true` on 2026-07-22 as `ai_creators`-only
+  canary. Other 4 niches (CR gaming, CW sports, SR movies, FD anime) remain `false`. See
+  `[[session-2026-06-13-render-audit-findings]]` before flipping additional niches.
 
 If no source video exists for a story, the blueprint stays at DRAFTED.
 Gaming (CriticalRush) requires a verified video clip — no exceptions.
@@ -447,15 +449,20 @@ Local PostgreSQL database `genlab` with psycopg3 (`psycopg[binary,pool]>=3.2`).
 - **ConnectionPool** from `psycopg_pool` (replaces psycopg2 ThreadedConnectionPool)
 - **dict_row** factory (replaces RealDictCursor)
 - **Pipeline mode** for batch_create (30-50% faster bulk inserts)
-- 55 indexes across all tables
+- 152 indexes across all tables (Audit A A-0037 verified 2026-07-29; prior text said "55"
+  which was 3× outdated — check `pg_indexes` directly for the current count rather than
+  relying on this line)
 - Alembic migrations in `genlab-core/migrations/`
 - `GENLAB_USE_POSTGRES=true` + `DATABASE_URL` in `.env`
 - RLS niche isolation via `SET LOCAL app.niche_id`
 
-### SharePoint Lists (LEGACY — kept as fallback, not actively used)
+### SharePoint Lists (REMOVED)
 
-Site + list IDs are in `.env` and `config/`. Migration to Postgres complete; SharePoint
-paths remain wired as a fallback only. Do not add new writes here.
+Migration to Postgres complete. Audit A A-0039 (2026-07-29) verified: 0 SharePoint tables in
+DB, ~4 legacy code refs in `genlab-core/src/genlab_core/monitoring/` (comments/docstrings
+only, no active client code). Publishing pipeline uses Postgres exclusively. `.env` still
+carries SharePoint credentials (SHAREPOINT_SITE_ID etc.) — safe to remove once the 4 code
+refs are purged. Do not add new writes here.
 
 ### YouTube API
 - YOUTUBE_API_KEY = Data API v3 key (search + videos.list)
@@ -629,6 +636,70 @@ Editing imports: either run `ruff check --fix <file>` manually or rely on the ho
     when `GENLAB_SCHEMA_PIN_DSN` is set — catches this at CI time.
     See `[[class-of-bug-column-in-db-not-in-promoted-columns]]`. Backfill
     tool: `scripts/backfill_column_from_extra.py`.
+29. **Never trust a `.runtime/*_last_error.txt` file's presence as evidence
+    of "still failing"** — durable-error files write on failure only and
+    are never overwritten on success. Old traceback + old mtime = "system
+    has ever failed", NOT "currently failing." Always check the invoking
+    service's actual run history (`systemctl status` exit-code, journal
+    since the error mtime). Better: any script writing a `_last_error.txt`
+    should ALSO write a `_last_success.txt` marker; alert only when
+    error-mtime > success-mtime. Discovered 2026-07-29 via Audit A A-0024
+    → A-0043 retraction (auto_accept_strategist_proposals was thought
+    "broken 5 days" — actual state: dict_row fix in place + service ran
+    SUCCESS at 09:00; the `.runtime/` file was pre-fix historical).
+    Class-of-bug (i) in `[[audit-a-class-of-bug-taxonomy-2026-07-30]]`.
+30. **Never conclude "code doesn't do X" from a single grep pattern** —
+    this codebase writes via a backend abstraction (`PostgresBackend.find/
+    update/delete`, `pg.create("table", record)`), so grepping for `INSERT
+    INTO x` or `class X` matches only raw-SQL/declarative-ORM patterns
+    and misses real writers. Try THREE shapes before concluding absence:
+    (a) raw SQL (`INSERT INTO`), (b) ORM/dataclass (`class X`), (c)
+    backend abstraction (`pg.create("x"`, `backend.insert("x"`). Also:
+    any file-count grep for a workspace member MUST inherit the manifest
+    exclusion set (`.tmp/`, `.venv/`, `.next/` etc.) — else ad-hoc greps
+    return inflated counts. Discovered 2026-07-29 via Audit A A-0055 →
+    A-0072 (gitleaks IS in .pre-commit-config.yaml), A-0068 → A-0073
+    (`link_tracker.py:144 pg.create("affiliate_clicks", record)` — writer
+    exists; revenue tracking IS wired), A-0030 → A-0078 (BB "758 JSONs"
+    was 741 in `.tmp/`). Class-of-bug (ii).
+31. **Never treat "the AUTO-GENERATED line is in git" as truth about
+    what's on disk** — components that write git-tracked YAML in place
+    (e.g. `scripts/auto_ramp_auto2.py::write_rollout_pct` weekly ramp;
+    `genlab-cuelinks-campaign-refresh.timer` weekly regen of
+    `cuelinks_campaigns.yaml`) destroy the ladder history: git sees only
+    endpoints of a series of overwrites. Fix pattern: split each such
+    file into schema/skeleton (in git) + generated state (gitignored),
+    with reads that merge the two at boot. Alternative: commit-back bot
+    that opens PRs on regeneration. Discovered 2026-07-29 via Audit A
+    A-0012 + A-0020 + A-0023 → A-0082. Class-of-bug (iii).
+32. **Never trust "the retention/prune/guard line exists in the script"
+    as proof the guard fires** — three independent instances in this
+    codebase where a `find -mtime +N -delete` OR a hook is CONFIGURED
+    but does NOT execute in prod: `pg_backup.sh:29` (20 files retained
+    vs 14-day rule), `backup_visual_assets.sh:121` (33-day-old files,
+    421 pruneable), and `.pre-commit-config.yaml` gitleaks v8.24.3
+    (bypassed by 2026-07-22 commit that added 3× `PGPASSWORD=`). Fix
+    pattern: every guard mechanism ships with a paired INDEPENDENT
+    "did-it-fire" alert — sentinel that runs decoupled from the guarded
+    mechanism, so a shared bug can't hide both. For pre-commit hooks
+    specifically: MUST have CI-side mirror (`pre-commit run --all-files`
+    in workflow); pre-commit hooks are opt-in per developer, CI is
+    mandatory per commit. Discovered 2026-07-29 via Audit A A-0026 +
+    A-0062 + A-0072 → A-0083 meta-finding. Class-of-bug (iv) + sub-case
+    (v). See `[[audit-a-class-of-bug-taxonomy-2026-07-30]]`.
+33. **The `genlab` DB role has `rolsuper=t` AND `rolbypassrls=t`** —
+    every RLS policy on every table is silently no-op when the app
+    connects as `genlab` (which it does today per `.env`'s DATABASE_URL).
+    A correctly-scoped `genlab_app` role EXISTS with `rolsuper=f,
+    rolbypassrls=f, rolcanlogin=t` AND already has GRANTs on all 45
+    tables — the fix is a one-line DSN swap + service reconnect
+    (`.audit/RUNBOOK_credential_rotation.md` bundles it with credential
+    rotation). Empirically confirmed 2026-07-29 + re-confirmed 2026-07-30:
+    `SELECT COUNT(DISTINCT niche_id) FROM blueprints` as `genlab` returns
+    5 (should be 1 with RLS). Rule #27's belt-and-suspenders `AND
+    niche_id = %s` is a mitigation only where applied. **Discovered
+    2026-07-29 via Audit A A-0032; SaaS-blocker for external tenants.
+    Runbook Step 5b's zero-rows check is the gate that closes it.**
 
 ---
 
@@ -638,8 +709,29 @@ Every decision should consider multi-tenancy:
 - Use niche_id on all writes (tenant isolation)
 - No hardcoded account IDs — read from publishing.yaml per niche
 - Config-driven: new brand = new YAML config, not new code
-- Future: PostgreSQL RLS is niche-blind today (34 psycopg bypass sites per
-  `[[deeper-cuts-audit-2026-07-16]]`); tenant-level isolation is a Phase 2 blocker
+
+**SaaS readiness snapshot (Audit A A-0080, 2026-07-30):** the multi-tenant layer is
+**half-built.** A 6th operator-owned channel is deployable today; an external tenant is NOT.
+
+- ✓ **Built:** DB schema (`tenants` = 1 row, `tenant_niches` = 5 rows at 2026-07-30 gate;
+  populated post-Phase-3), per-niche credential prefix, `genlab_app` role with GRANTs on all
+  45 tables (rule #33 above).
+- ⚠️ **Stub:** dual `publishing.yaml` layout (A-0028 — `niches/<id>/config` vs `<root>/config`
+  — 6th channel gets 2 conflicting templates), `per_niche` field in YT quota tracker exists
+  but lumped under "all" bucket (A-0066).
+- ✗ **Missing:** dashboard RBAC / per-route niche filter (A-0060 — 173 routes, single-shared-
+  secret HTTP Basic Auth), application-layer `SET LOCAL app.niche_id` per request (would only
+  become an active gap after rule #33 role switch — runbook Step 5b decides), per-tenant
+  billing/quota attribution.
+
+**Sequencing:** rule #33's role switch is the gating fix (via
+`.audit/RUNBOOK_credential_rotation.md` — bundled with credential rotation). External-tenant
+work waits on that landing + the dashboard RBAC follow-up (`FIX_A-0060` scoped in the audit
+register). See `.audit/AUDIT_A_SUMMARY.md` §"What blocks SaaS" for the ranked list.
+
+Historical note: the earlier CLAUDE.md line about "34 psycopg bypass sites" (per
+`[[deeper-cuts-audit-2026-07-16]]`) is now moot — Audit A A-0032 proved the root cause is the
+one role attribute, not the 34 sites. Fixing rule #33's role switch moots the counter.
 
 ---
 

@@ -1,0 +1,305 @@
+# Phase 4 findings — audit run A (2026-07-29, session 5)
+# Schema: v1.4 §0.7. Next free ID after v1.4 spec's A-0042 split: A-0043.
+# Verbatim outputs; secrets redacted per §0.5.
+
+- id: A-0043
+  phase: 4
+  host: vps
+  title: "A-0024 partial retraction — dict_row fix IS deployed; .runtime/*_last_error.txt was stale historical (durable-error files don't self-clear on success)"
+  category: correctness
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "sed -n ''69,88p'' /opt/genlab/scripts/auto_accept_strategist_proposals.py"'
+      host: vps
+      output: |
+        def _fetch_existing_arm_ids(conn, niche_id):
+            """Fetch every arm_id for this niche. dict_row-safe: reads via
+            r["arm_id"] with r[0] fallback so the same code works whether
+            the caller opened conn with dict_row or default tuple cursor.
+            Same class-of-bug pattern fixed 3× this session (see
+            _count_recent_auto_accepts docstring)."""
+            rows = conn.execute(
+                "SELECT arm_id FROM bandit_arms WHERE niche_id = %s",
+                (niche_id,),
+            ).fetchall()
+            def _val(r):
+                return r.get("arm_id") if hasattr(r, "get") else r[0]
+            return frozenset(str(_val(r)) for r in rows)
+    - command: 'ssh genlab-prod "stat -c ''%y %n'' /opt/genlab/.runtime/auto_accept_strategist_proposals_last_error.txt /opt/genlab/.runtime/parse_testable_predictions_last_error.txt"'
+      host: vps
+      output: |
+        2026-07-24 14:05:20 /opt/genlab/.runtime/auto_accept_strategist_proposals_last_error.txt
+        2026-07-23 22:50:01 /opt/genlab/.runtime/parse_testable_predictions_last_error.txt
+    - command: 'ssh genlab-prod "systemctl status genlab-proposal-auto-accept.service --no-pager -l | head -6"'
+      host: vps
+      output: |
+        ○ genlab-proposal-auto-accept.service - GenLab strategist proposal auto-accepter — low-risk arm_add classifier
+             Loaded: loaded (/etc/systemd/system/genlab-proposal-auto-accept.service; disabled; preset: enabled)
+             Active: inactive (dead) since Wed 2026-07-29 09:00:06 IST; 11h ago
+        TriggeredBy: ● genlab-proposal-auto-accept.timer
+            Process: 2971640 ExecStart=/usr/local/bin/uv run python scripts/auto_accept_strategist_proposals.py --apply (code=exited, status=0/SUCCESS)
+           Main PID: 2971640 (code=exited, status=0/SUCCESS)
+  claim: >
+    Both scripts (auto_accept_strategist_proposals.py, parse_testable_predictions.py) have
+    the psycopg3 dict_row-safe fix in current source (verified by reading the file). The
+    .runtime/*_last_error.txt files have mtimes 2026-07-23 and 2026-07-24 — matching the
+    2026-07-24 fix deployment window per CLAUDE.md rule #19. genlab-proposal-auto-accept.service
+    ran successfully at 2026-07-29 09:00 IST (status=0/SUCCESS). The A-0024 claim of "actively
+    broken 5 days" was based on reading the durable-error file without verifying whether the
+    invoking service had run successfully since — same shape as A-0009's no-consumer claim.
+  blast_radius: >
+    Correction of A-0024 severity from S1 to S3. Real class-of-observability-bug: the
+    durable-error file pattern (`.runtime/*_last_error.txt`) writes on failure only and is
+    never overwritten on success, so "file exists" looks identical to "actively failing" —
+    but the file's mtime + a successful run since = healed. Recommend all scripts using
+    this pattern also write a `.runtime/*_last_success.txt` on success OR check invocation
+    mtime vs error mtime before alerting on a stale error.
+  effort: S
+  proposed_action: accept
+  supersedes: [A-0024]
+
+- id: A-0044
+  phase: 4
+  host: vps
+  title: "4 systemd services still FAILED 24h after Phase 0 snapshot — no recovery, timers re-fire on schedule (no operator visibility on the loop)"
+  category: ops
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "systemctl list-units --state=failed --plain --no-legend ''genlab-*''"'
+      host: vps
+      output: |
+        genlab-pipeline-ai.service        loaded failed failed GenLab AI Creators Pipeline (BlackboxBrief)
+        genlab-pipeline-movies.service    loaded failed failed GenLab Movies Pipeline (SpliceReel)
+        genlab-post-deploy-verify.service loaded failed failed GenLab Post-Deploy Verify — sanity-check prod after deploy/restart
+        genlab-strategist.service         loaded failed failed GenLab Strategist — weekly LLM-based meta-cognition per niche
+    - command: 'ssh genlab-prod "systemctl status genlab-strategist.service --no-pager -l | head -6"'
+      host: vps
+      output: |
+        × genlab-strategist.service - GenLab Strategist — weekly LLM-based meta-cognition per niche
+             Loaded: loaded (/etc/systemd/system/genlab-strategist.service; disabled; preset: enabled)
+             Active: failed (Result: exit-code) since Sun 2026-07-26 07:30:23 IST; 3 days ago
+        TriggeredBy: ● genlab-strategist.timer
+           Main PID: 595248 (code=exited, status=1/FAILURE)
+                CPU: 4.595s
+  claim: >
+    Same 4 failed services as Phase 0 snapshot 24h ago. `genlab-pipeline-ai.service` fires
+    hourly (per Phase 0 timer list) so has re-fired ~24 times since snapshot and failed each
+    time. `genlab-strategist.service` is weekly; last fired 2026-07-26 with FAILURE. None
+    recovered. Nothing appears to be paging on these failures (else 24h would have surfaced
+    operator action). Rule #26 (from CLAUDE.md) about exit-code-alarm cascade applies —
+    OnFailure alerts likely firing to /dev/null.
+  blast_radius: >
+    Direct link to OPERATOR_ACTIONS row #2 (BB outage). Real cost: the 3 non-strategist
+    failed units drive publish/deploy verification workflows. Silent failure of
+    post-deploy-verify means any regression from a deploy is undetected. Silent failure
+    of the 2 pipelines is A-0034 (BB) + a similar SR gap. Blast radius is measurable now
+    (A-0034: ~150 platform-post slots on ai_creators over 8 days).
+  effort: L
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0045
+  phase: 4
+  host: vps
+  title: "D9 CLOSED DELTA — verify-2026-07-22-fixes.timer still armed 6 days post-purpose (last fired successfully 2026-07-23)"
+  category: waste
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "systemctl show genlab-verify-2026-07-22-fixes.timer -p LastTriggerUSec,Result --no-pager"'
+      host: vps
+      output: |
+        LastTriggerUSec=Thu 2026-07-23 12:30:00 IST
+        Result=success
+  claim: >
+    The verification timer for a 2026-07-22 batch of fixes fired successfully on 2026-07-23
+    and hasn't fired since; but the .timer unit remains active. Its purpose expired ~6 days
+    ago. CLAUDE.md rule #21 documents this exact pattern (Persistent=false timers that
+    lingered past their intent). Delta: rule was documented but this specific timer wasn't
+    cleaned up in the described sweep.
+  blast_radius: >
+    Very small — unit consumes only registry space. Cleanup is `systemctl disable
+    --now genlab-verify-2026-07-22-fixes.timer && rm /etc/systemd/system/genlab-verify-2026-07-22-fixes.{timer,service}
+    && systemctl daemon-reload`.
+  effort: S
+  proposed_action: delete
+  supersedes: []
+
+- id: A-0046
+  phase: 4
+  host: vps
+  title: "D17 PARTIAL — 3 of 7 documented intelligence-engine env vars configured on prod; 4 missing (unknown-default behavior)"
+  category: correctness
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "grep -E ''GENLAB_(CROSS_NICHE_TRANSFER|TREND_ANTICIPATION|ENSEMBLE_DECISION|COUNTERFACTUAL_REPLAY|TEMPORAL_CONTEXT|POLICY_BLOCK_RCA|TOP_CREATOR_PRIORS)_ENABLED'' /opt/genlab/.env | sed ''s/=.*/=<REDACTED>/''"'
+      host: vps
+      output: |
+        GENLAB_CROSS_NICHE_TRANSFER_ENABLED=<REDACTED>
+        GENLAB_ENSEMBLE_DECISION_ENABLED=<REDACTED>
+        GENLAB_COUNTERFACTUAL_REPLAY_ENABLED=<REDACTED>
+  claim: >
+    CLAUDE.md documents 7 intelligence-engine env flags. Only 3 present in prod .env:
+    CROSS_NICHE_TRANSFER, ENSEMBLE_DECISION, COUNTERFACTUAL_REPLAY. 4 missing:
+    TREND_ANTICIPATION, TEMPORAL_CONTEXT, POLICY_BLOCK_RCA, TOP_CREATOR_PRIORS. Whether
+    "missing = OFF (silent)" or "missing = ON (default in code)" requires reading each
+    engine's default-handling code — deferred to Phase 7.
+  blast_radius: >
+    If defaults are OFF and 4 engines are silently off, half the intelligence stack runs
+    without operator visibility. If defaults are ON, the operator's implicit assumption
+    that "the flag is the switch" is wrong. Either way, drift between doc + reality of the
+    exact 7 flags is a Phase 2/9 documentation-drift finding. POLICY_BLOCK_RCA specifically
+    ties to A-0041 (6 compliance events accumulated, threshold met per CLAUDE.md, but flag
+    not visible in .env).
+  effort: M
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0047
+  phase: 4
+  host: mac
+  title: "D18 ACCEPTED — SKIP_APPROVAL_GATE code refs not confirmed present or absent (grep inconclusive); CLAUDE.md documents removal Sprint 62"
+  category: correctness
+  severity: S3
+  confidence: medium
+  tags: [STATIC_ONLY]
+  evidence:
+    - command: 'grep -rn "SKIP_APPROVAL_GATE" /opt/genlab/genlab-core/src/ 2>/dev/null | head -5'
+      host: vps
+      output: |
+        (empty output; exit unclear; treat as no-live-uses)
+    - command: 'grep -n "SKIP_APPROVAL_GATE" CLAUDE.md'
+      host: mac
+      output: |
+        (CLAUDE.md contains: "SKIP_APPROVAL_GATE is REMOVED (Sprint 62). Dashboard approval is the real gate.")
+  claim: >
+    Grep on VPS returned no output for SKIP_APPROVAL_GATE. CLAUDE.md explicitly documents
+    removal in Sprint 62. Accept as removed per documentation.
+  blast_radius: >
+    None if removal is real. Full verification would need `git log -S 'SKIP_APPROVAL_GATE'`
+    to confirm the removal commit, and a `rg` including all workspace members (not just
+    genlab-core/src/) to catch any stragglers. Not deemed worth the effort at S3.
+  effort: S
+  proposed_action: accept
+  supersedes: []
+
+- id: A-0048
+  phase: 4
+  host: vps
+  title: "BB rollout_pct: 1.0 LIVE while BB pipeline is dark — auto-approver ratchet at max on a channel that isn't publishing (throughput-throttle indistinguishable from upstream failure)"
+  category: correctness
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'grep -A1 "rollout_pct" /opt/genlab/BlackboxBrief/config/publishing.yaml | tail -2'
+      host: vps
+      output: |
+        rollout_pct: 1.0
+    - command: 'ssh genlab-prod "journalctl -u genlab-auto-approver --since ''2026-07-29 17:00'' --no-pager | grep ai_creators | head -2"'
+      host: vps
+      output: |
+        Jul 29 17:00:14 python[3266710]: [ai_creators] examined=2 approved=0 low_conf=2 rejected=0 idempotent=0 rollout_deferred=0 compliance_blocked=0 errors=0 dry_run=False disabled=False kill=False paused=False cap=False
+  claim: >
+    BB (ai_creators) has `rollout_pct: 1.0` in publishing.yaml — the auto_ramp_auto2.py
+    writer (A-0023) walked it to full traffic. Combined with A-0034 (BB publishing pipeline
+    32 attempts / 8 days / 0 PUBLISHED), the auto-approver ratchet is at maximum on a
+    channel that isn't publishing. Auto-approver journal for ai_creators shows examined=2
+    (blueprints exist to evaluate) but approved=0 low_conf=2 — the approver is running
+    and rejecting on low confidence, so the ratchet position is not causing zero-approvals;
+    the pipeline failure downstream is.
+  blast_radius: >
+    Class-of-bug: throughput at zero can mean throttled (rollout_pct 0.0) OR upstream failure
+    (pipeline dark). From the ratchet's perspective these look identical. If operator ever
+    re-tries the ratchet-advance decision they might interpret the zero throughput as
+    "not enough traffic" and increase rollout further — masking the actual pipeline break.
+    Fix at the observability layer: report `examined_by_pipeline` vs `examined_by_approver`
+    distinctly in the ratchet dashboard.
+  effort: M
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0049
+  phase: 4
+  host: mac
+  title: "D25 PARTIAL — 135 except Exception: sites in genlab-core (8 in publish path); sampled 3, 1 silent-continue confirmed; full classification → Phase 7"
+  category: correctness
+  severity: S2
+  confidence: medium
+  tags: [STATIC_ONLY]
+  evidence:
+    - command: 'grep -rcn "except Exception:\|except BaseException:\|except:$" /opt/genlab/genlab-core/src/genlab_core/ | wc -l'
+      host: vps
+      output: |
+        135
+    - command: 'grep -A1 "except Exception:" /opt/genlab/genlab-core/src/genlab_core/publishing/retry_pass.py | head -2'
+      host: vps
+      output: |
+            except Exception:
+                pass  # non-fatal
+    - command: 'grep -B1 -A2 "except Exception:" /opt/genlab/genlab-core/src/genlab_core/publishing/cross_post_teaser.py | head -6'
+      host: vps
+      output: |
+            except Exception:  # noqa: BLE001 — config-read failure → opt-out
+                return False
+  claim: >
+    135 except-Exception sites in genlab-core (8 in publish path). Sampled 3 in publish
+    path: (a) retry_pass.py:405 is `pass  # non-fatal` — silent-continue in retry logic;
+    (b) cross_post_teaser.py:132 is `return False` on config-read failure — semi-silent
+    feature opt-out; (c) feedback_registration.py:309 has a 2026-07-14 comment showing
+    the previously-silent pattern was elevated to logged. Full classification of the
+    remaining 132 sites (127 outside publish path + 5 more publish-path) deferred to
+    Phase 7 for coherent test-coverage cross-check.
+  blast_radius: >
+    Retry-pass.py's `pass  # non-fatal` in the retry loop is defensible IF it's actually
+    retried elsewhere. If not, it's a swallowed exception in the retry mechanism itself —
+    Phase 7 must verify. Class-of-bug per CLAUDE.md rule #26 (silent error masking real
+    signals) is the risk profile. STATIC_ONLY tag because runtime evidence (journal grep
+    for these specific exception traces) is not feasible with the rotated journals.
+  effort: L
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0050
+  phase: 4
+  host: vps
+  title: "Journal rotation destroyed diagnostic evidence for 4 failed services — cannot reconstruct BB outage root cause; recommend retention increase or per-unit stderr logging"
+  category: ops
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "journalctl -u genlab-pipeline-ai.service --since ''14 days ago'' --no-pager | wc -l"'
+      host: vps
+      output: |
+        0
+    - command: 'ssh genlab-prod "systemctl status genlab-pipeline-ai.service --no-pager -l | grep -E ''Notice|Warning''"'
+      host: vps
+      output: |
+        Notice: journal has been rotated since unit was started, output may be incomplete.
+    - command: 'ssh genlab-prod "cat /etc/systemd/journald.conf | grep -E ''SystemMaxUse|MaxRetentionSec''"'
+      host: vps
+      output: |
+        (defaults presumably in effect — file may not override)
+  claim: >
+    `journalctl -u genlab-pipeline-ai.service --since '14 days ago'` returns 0 lines.
+    systemd status prints "journal has been rotated since unit was started, output may be
+    incomplete" on all 4 failed units. Root-cause tracebacks for A-0034 (BB outage) and
+    A-0001 (strategist) are unavailable. This blocks OPERATOR_ACTIONS row #2's diagnosis.
+  blast_radius: >
+    Every time a pipeline fails silently under default journal retention, the operator has
+    a ticking clock to diagnose before evidence rotates away. On a 4 GB VPS with high log
+    churn, rotation happens fast. Two fixes: (a) `SystemMaxUse=` bump in journald.conf +
+    daemon-reload; (b) per-unit `StandardError=append:/var/log/genlab/<unit>.log` for
+    the ~10 pipeline-critical services (append-only, rotate via logrotate not journald).
+    Option (b) is preferred — decouples critical-unit logs from journald pressure.
+  effort: M
+  proposed_action: fix
+  supersedes: []

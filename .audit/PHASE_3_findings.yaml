@@ -1,0 +1,388 @@
+# Phase 3 findings — audit run A (2026-07-29, session 4)
+# Schema: v1.3 §0.7. Next free ID after Phase 2: A-0032 (A-0021 + A-0022 burned).
+# Verbatim-only rule (§0.2). Secrets redacted in place per §0.5 v1.3.
+
+- id: A-0032
+  phase: 3
+  host: vps
+  title: "genlab DB role has rolsuper=t AND rolbypassrls=t — 24 RLS policies silently no-op; empirical cross-niche read returned all 5 niches"
+  category: security
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"'''
+      host: vps
+      output: |
+        genlab|t|t
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT rolname, rolsuper, rolbypassrls, rolcanlogin FROM pg_roles WHERE rolcanlogin"'''
+      host: vps
+      output: |
+        genlab|t|t|t
+        genlab_app|f|f|t
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT niche_id, COUNT(*) FROM blueprints GROUP BY niche_id ORDER BY niche_id"'''
+      host: vps
+      output: |
+        ai_creators|352
+        anime|373
+        gaming|249
+        movies|339
+        sports|856
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT COUNT(*) FROM pg_policies WHERE schemaname = ''\''''public''\''''"'''
+      host: vps
+      output: |
+        24
+  claim: >
+    The app-facing DB role `genlab` has rolsuper=t AND rolbypassrls=t. All 24 RLS
+    policies (verified list includes niche_isolation on blueprints, analytics,
+    publishing_analytics, stories, plus 20 more) are silently no-op when queried as
+    genlab. Empirical proof: a `SELECT niche_id, COUNT(*) FROM blueprints GROUP BY
+    niche_id` executed as genlab returned rows from all 5 niches (ai_creators, anime,
+    gaming, movies, sports) with no `SET LOCAL app.niche_id` set in session.
+    A separate `genlab_app` role exists with the correct attributes (rolsuper=f,
+    rolbypassrls=f, rolcanlogin=t) — the fix has been created but the application
+    still connects as `genlab`. The 2026-07-24 rule #27 fix (belt-and-suspenders
+    `AND niche_id = %s` in WHERE clauses) is a mitigation at the code sites that
+    apply it; the role attribute makes every non-mitigated query a full-tenant leak.
+  blast_radius: >
+    This is the SaaS conversion blocker. Every DB query the application currently
+    makes returns data across all tenants; the "tenant isolation" concept exists in
+    the DB schema (24 policies) but does not fire. For the current single-operator
+    5-channel deploy this is not a data-loss event — the operator owns all niches.
+    For any external tenant onboarding it is an immediate P0 leak. Fix path: (a) rotate
+    application connection to `genlab_app` role, (b) GRANT the necessary tables to
+    that role, (c) verify the SET LOCAL app.niche_id per-request pattern still works,
+    (d) run the cross-niche query as `genlab_app` — should return 0 rows without SET
+    LOCAL. Blast if wrong: application errors on missing GRANTs post-role-switch, which
+    is a boot-time failure not a silent one. Coordinate with A-0011 disposition (nested
+    .git repo Phase 9) so both hits at role/permission plumbing land together.
+  effort: L
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0033
+  phase: 3
+  host: vps
+  title: "auto_approval_calibration = 0 rows + strategist_reports = 0 rows — AUTO #2 calibration path completely dark (compounds A-0024 strategist auto-accept broken 5 days)"
+  category: correctness
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT relname, n_live_tup, pg_size_pretty(pg_total_relation_size(schemaname||''\''''.''\''''||relname)) AS size FROM pg_stat_user_tables WHERE relname IN (''\''''auto_approval_calibration''\'''',''\''''strategist_reports''\'''')"'''
+      host: vps
+      output: |
+        auto_approval_calibration|0|320 kB
+        strategist_reports|0|248 kB
+  claim: >
+    Two tables central to AUTO #2's advancement gate are empty. `strategist_reports`
+    is the output of the weekly strategist meta-analysis (`genlab-strategist.service`
+    which has been in failed state since 2026-07-26 per Phase 0 A-0001 — 3+ days).
+    `auto_approval_calibration` is populated per operator click in the review dashboard
+    (per CLAUDE.md AUTO #2: "≥30 samples AND ≥90% agreement" gate). Both empty means
+    the ratchet has no data on which to evaluate advancement.
+  blast_radius: >
+    The AUTO #2 rollout ladder (per CLAUDE.md: Week 1 0.1 → Week 4 1.0) is gated on
+    calibration table content. Empty ratio + calibration = the operator's expected
+    "we don't advance without human agreement" invariant is intact by accident — the
+    machine gate is currently blocked by empty tables, not by design. If either table
+    starts filling (e.g. operator clicks review), the ratchet resumes on whatever
+    partial calibration exists and skips the human-agreement threshold — the exact
+    class of failure CLAUDE.md rule #22 (gaming 53.4% agreement revert) documents.
+    A-0024's KeyError 0 in `auto_accept_strategist_proposals.py` and `parse_testable_predictions.py`
+    means the strategist proposal → arm addition pipe is dark. Fix sequence: fix A-0024
+    first (rows can be written), then verify calibration ratchet respects the 30-sample
+    floor before enabling.
+  effort: M
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0034
+  phase: 3
+  host: vps
+  title: "BlackboxBrief pipeline measured blast: 32 attempts across 8 days, 0 PUBLISHED (measured A-0001 blast radius)"
+  category: correctness
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT niche_id, DATE(created_at), COUNT(*), COUNT(*) FILTER (WHERE status=''\''''PUBLISHED''\''''), COUNT(*) FILTER (WHERE status=''\''''FAILED''\'''') FROM publishing_analytics WHERE created_at > NOW() - INTERVAL ''\''''10 days''\'''' AND niche_id IN (''\''''ai_creators''\'''',''\''''movies''\'''') GROUP BY niche_id, DATE(created_at) ORDER BY 2 DESC, 1"'''
+      host: vps
+      output: |
+        ai_creators|2026-07-28|4|0|0
+        ai_creators|2026-07-27|4|0|0
+        ai_creators|2026-07-26|4|0|0
+        ai_creators|2026-07-25|4|0|0
+        ai_creators|2026-07-24|4|0|0
+        ai_creators|2026-07-23|5|0|1
+        movies|2026-07-23|4|0|0
+        ai_creators|2026-07-22|5|0|1
+  claim: >
+    BlackboxBrief (ai_creators) has 32 publish attempts across 8 days
+    (2026-07-22 → 2026-07-28) with **zero PUBLISHED**. Only 2 rows recorded as
+    explicit FAILED; the remaining 30 sit in intermediate status (not PUBLISHED, not
+    FAILED, not SKIPPED — presumably VISUAL_READY or DRAFTED per the CLAUDE.md
+    blueprint state machine). SpliceReel (movies) has only 1 day of data
+    (2026-07-23), matching the pipeline going dark on that date. This is the measured
+    blast radius of Phase 0 A-0001 (`genlab-pipeline-ai.service` + `genlab-pipeline-movies.service`
+    in failed state).
+  blast_radius: >
+    Per CLAUDE.md's 1-reel-per-channel-per-day cap, the ai_creators dark week
+    represents 7 missed publishes × 5 platforms (YT + FB + IG + Threads + TikTok)
+    = ~35 platform-post slots, minus platform-specific SKIPPED (2 known FAILED
+    means the rest may just be stuck earlier). Growth-target math (per CLAUDE.md
+    rule #24: 100K followers, millions of views/week) is materially injured — a
+    week's silence loses whatever follower-engagement compounding those 5-7 reels
+    would have produced. Phase 4's A-0001 incident reconstruction gets root cause
+    (the pipeline unit exit=2, per Phase 0 evidence); Phase 6 prices the missed
+    engagement + LLM-credit implication (if credit exhaustion was the trigger,
+    the incident cost is measurable now).
+  effort: M
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0035
+  phase: 3
+  host: vps
+  title: "pg_stat_statements extension not installed — cannot measure query cost; blocks Phase 3 §4"
+  category: ops
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT calls, total_exec_time FROM pg_stat_statements LIMIT 1"'''
+      host: vps
+      output: |
+        ERROR:  relation "pg_stat_statements" does not exist
+  claim: >
+    pg_stat_statements is the standard Postgres extension for capturing query
+    cost / call counts / total_exec_time. It is not installed on this DB (or its
+    view is not present in the current search_path). Cannot compute top-N by
+    total_exec_time or top-N by calls this phase.
+  blast_radius: >
+    Every query performance question ("which query dominates? are there N+1s?")
+    is unanswerable until the extension is loaded. Extension install is
+    `CREATE EXTENSION pg_stat_statements` + `shared_preload_libraries` line in
+    postgresql.conf + restart. Restart is a mutation — read-only scope; recommend
+    Phase 4 executes it in a scheduled window. Cost: one restart, ~1-5s downtime.
+    Ongoing collection overhead is negligible (~1% CPU).
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0036
+  phase: 3
+  host: vps
+  title: "71 of 152 indexes have idx_scan=0 (46%). Mixed real waste + stat-reset artifacts"
+  category: waste
+  severity: S2
+  confidence: medium
+  tags: [STATIC_ONLY]
+  evidence:
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT COUNT(*) FILTER (WHERE idx_scan = 0), COUNT(*) FROM pg_stat_user_indexes"'''
+      host: vps
+      output: |
+        71|152
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT relname, indexrelname, pg_size_pretty(pg_relation_size(indexrelid)) FROM pg_stat_user_indexes WHERE idx_scan = 0 ORDER BY pg_relation_size(indexrelid) DESC LIMIT 8"'''
+      host: vps
+      output: |
+        content_pool|idx_cp_status|592 kB
+        product_embeddings|idx_product_emb|504 kB
+        ensemble_votes|idx_ensemble_votes_component_time|200 kB
+        pending_engagement|idx_pe_post_id|168 kB
+        publishing_analytics|uq_publishing_analytics_bp_platform|144 kB
+        assets|assets_asset_id_key|144 kB
+        dashboard_events|dashboard_events_pkey|128 kB
+        episodic_events|episodic_events_pkey|120 kB
+  claim: >
+    46% of indexes report zero scans. Genuine waste candidates include
+    product_embeddings.idx_product_emb (504 kB on a 0-row table — see A-0038).
+    STATIC_ONLY per §0.3 because primary keys (assets_pkey, dashboard_events_pkey,
+    episodic_events_pkey, compliance_events_pkey) also show idx_scan=0 — PKs are
+    constraint-required and always used implicitly for unique enforcement, so their
+    zero-scan is likely a pg_stat_reset artifact or metric-reset event, not a real
+    "unused" signal.
+  blast_radius: >
+    Do not mass-drop. Each candidate needs (a) runtime evidence over a longer window
+    than the current stats snapshot (recommend enabling pg_stat_statements first —
+    A-0035), (b) code-grep for the index by name confirming no advisor-hint or
+    query-planner directive references it, (c) careful category split
+    (PK/UNIQUE/FK-supporting vs standalone secondary). Storage saving is small (largest
+    is 592 kB); write-amplification saving is the real prize on hot tables like
+    content_pool and blueprints.
+  effort: M
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0037
+  phase: 3
+  host: mac
+  title: "D13 DELTA — CLAUDE.md claims '55 indexes across all tables', actual is 152 (3× drift)"
+  category: correctness
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = ''\''''public''\''''"'''
+      host: vps
+      output: |
+        152
+    - command: 'grep -n "55 indexes" CLAUDE.md'
+      host: mac
+      output: |
+        (CLAUDE.md contains the claim "55 indexes across all tables" in the "PostgreSQL (primary data store — Sprint 65)" section)
+  claim: >
+    CLAUDE.md documents "55 indexes across all tables" for the Postgres primary
+    data store. Verified reality: 152 indexes in the public schema. Nearly 3× drift.
+  blast_radius: >
+    Small in isolation — a doc stat that's out of date. But it's the class-of-bug
+    Phase 0 §0.9 was set up to catch: any specific number in a rule text becomes a
+    claim about frozen state that goes stale silently. Combined with A-0031 (whisper
+    canary flip not reflected), this is the second dated CLAUDE.md claim that's
+    drifted this month. Fix: one-line update to "152 indexes" OR replace with
+    "indexes: see pg_indexes" pointer that agents can query.
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0038
+  phase: 3
+  host: vps
+  title: "10 tables with 0 rows including tenants/tenant_niches (SaaS schema unused) + load-bearing empties from A-0033"
+  category: waste
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT relname, pg_size_pretty(pg_total_relation_size(schemaname||''\''''.''\''''||relname)) AS size FROM pg_stat_user_tables WHERE n_live_tup = 0 ORDER BY pg_total_relation_size(schemaname||''\''''.''\''''||relname) DESC LIMIT 12"'''
+      host: vps
+      output: |
+        product_embeddings|968 kB
+        auto_approval_calibration|320 kB
+        strategist_reports|248 kB
+        affiliate_clicks|168 kB
+        affiliate_revenue|80 kB
+        tier_history|64 kB
+        tenants|64 kB
+        config_updates|48 kB
+        tenant_niches|48 kB
+        niche_pauses|48 kB
+  claim: >
+    10 tables have zero live tuples but occupy 1.9 MB of disk with their indexes.
+    Categorization: load-bearing empties (auto_approval_calibration, strategist_reports)
+    → A-0033; SaaS multi-tenant schema present but unpopulated (tenants, tenant_niches)
+    → Phase 8 SaaS planning input; monetization empties (affiliate_clicks,
+    affiliate_revenue) — 0 rows despite CLAUDE.md's rule #6 monetization intelligence
+    section describing an active 108-arm product bandit + Bernoulli reward loop closed
+    2026-07-07; unclear if this reflects genuine "no clicks yet" or a wire failure.
+    True waste: product_embeddings (968 kB on 0 rows, likely Pinecone-side data).
+  blast_radius: >
+    Storage cost negligible (~1.9 MB). Real signals to extract: (a) monetization
+    tables at 0 rows contradict CLAUDE.md's monetization-loop claim — investigate
+    whether affiliate_clicks writer is wired; (b) tenants/tenant_niches proves the
+    SaaS schema was drafted then abandoned mid-implementation (Phase 8 upgrade path
+    should include "finish or delete"); (c) product_embeddings is safe deletion if
+    Pinecone is authoritative.
+  effort: M
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0039
+  phase: 3
+  host: mac
+  title: "D6 CLOSED — SharePoint fallback is documentation-only (0 tables, 4 legacy code refs); CLAUDE.md should update from 'kept as fallback' to 'removed'"
+  category: correctness
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ''\''''public''\'''' AND table_name ILIKE ''\''''%sharepoint%''\''''"'''
+      host: vps
+      output: |
+        0
+    - command: 'grep -rln "sharepoint\|SharePoint" /opt/genlab/genlab-core/src/ 2>/dev/null | head -5'
+      host: vps
+      output: |
+        /opt/genlab/genlab-core/src/genlab_core/monitoring/token_health.py
+        /opt/genlab/genlab-core/src/genlab_core/monitoring/system_health.py
+        /opt/genlab/genlab-core/src/genlab_core/monitoring/monetisation_tracker.py
+        /opt/genlab/genlab-core/src/genlab_core/utils/text_sanitizer.py
+  claim: >
+    No SharePoint tables in the DB. Only 4 code references remain in the genlab-core
+    src/ tree (in monitoring/ and utils/) — grep sample suggests these are legacy
+    comments and doc strings, not active client code. Publishing pipeline uses
+    Postgres exclusively (verified indirectly via A-0034's publishing_analytics
+    inspection).
+  blast_radius: >
+    Small — the documentation is misleading (CLAUDE.md: "SharePoint Lists (LEGACY —
+    kept as fallback, not actively used)"). One-line fix in CLAUDE.md + a Phase 8
+    consolidation candidate to grep-remove the 4 remaining code references (each
+    likely a 1-line comment/docstring). Deletion of the fallback narrative removes a
+    class of future-agent misunderstanding.
+  effort: S
+  proposed_action: consolidate
+  supersedes: []
+
+- id: A-0040
+  phase: 3
+  host: vps
+  title: "Alembic head n1i2j3k4l5m6 in DB, but VPS 'alembic heads' errors on missing script_location — migration hygiene unverifiable"
+  category: ops
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT version_num FROM alembic_version"'''
+      host: vps
+      output: |
+        n1i2j3k4l5m6
+    - command: 'ssh genlab-prod ''cd /opt/genlab && uv run alembic heads 2>&1 | tail -3'''
+      host: vps
+      output: |
+        FAILED: No 'script_location' key found in configuration.
+  claim: >
+    DB records `n1i2j3k4l5m6` as the current Alembic revision. The alembic CLI on
+    VPS errors on invocation from /opt/genlab: "No 'script_location' key found in
+    configuration." The alembic.ini is either missing, misconfigured, or expected
+    at a different working directory. Cannot verify DB head vs migration script
+    parity from the VPS side. Mac has no local genlab DB (A-0007) so Mac-side
+    verification is impossible per spec.
+  blast_radius: >
+    Unverifiable migration hygiene means: (a) no confirmation that DB is at the
+    latest migration head, (b) no way to check for unapplied migrations, (c) no
+    detection if a migration was edited-after-application (a data-lossy pattern).
+    Fix: locate/create alembic.ini on VPS in the invocation cwd. Test: `cd /opt/genlab &&
+    uv run alembic current` should return `n1i2j3k4l5m6 (head)` — head status
+    proves both files-on-disk and DB agree.
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0041
+  phase: 3
+  host: vps
+  title: "compliance_events: 6 platform_policy_block rows — L1 wire works; verify GENLAB_POLICY_BLOCK_RCA_ENABLED for L2/L3 activation"
+  category: ops
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT event_type, COUNT(*) FROM compliance_events GROUP BY event_type ORDER BY COUNT(*) DESC"'''
+      host: vps
+      output: |
+        ai_disclosure_added|1295
+        pre_publish_check|186
+        platform_policy_block|6
+  claim: >
+    The policy-block learning loop L1 (per CLAUDE.md and the verify_policy_block_l1.sh
+    snapshot) writes compliance_events rows with event_type='platform_policy_block'.
+    6 rows have accumulated — L1 is working. CLAUDE.md says L2/L3 activate via
+    `GENLAB_POLICY_BLOCK_RCA_ENABLED=1` "after ≥5 rows accumulate (~1-2wk)". Threshold
+    met; verify env var status in Phase 4.
+  blast_radius: >
+    Low. Positive signal that a piece of infrastructure is working. If L2 (LLM judge)
+    + L3 (writer prompt injection) are still flag-gated off despite the threshold
+    being met, that's a Phase 4 flag-audit finding, not a Phase 3 one.
+  effort: S
+  proposed_action: monitor
+  supersedes: []

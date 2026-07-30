@@ -1,0 +1,17 @@
+# Never commit prod-filesystem inventories or manifest artifacts.
+# Spec ref: v1.1 §0.5 — "Manifests and prod-filesystem inventories are NEVER published."
+# Created 2026-07-29 during audit run A, Session 2 pre-step.
+
+manifest_*
+*_paths.txt
+*_hashed.txt
+
+# Session working scratch — full command outputs may contain paths, sizes,
+# and other reconnaissance material. Findings YAML and summary docs may quote
+# individual paths as evidence; raw dumps stay local.
+exec/
+
+# Snapshots of uncommitted prod scripts / configs. Even after redaction, better
+# to keep local — prod scripts often embed hostnames, ports, table names, and
+# other reconnaissance material we don't want in a public repo.
+snapshots/

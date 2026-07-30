@@ -1,0 +1,422 @@
+# Phase 2 findings — audit run A (2026-07-29, session 3)
+# Schema: spec v1.2 §0.7. Next free ID after Phase 1: A-0023 (A-0021 burned, A-0022 informal).
+# Verbatim-only rule (§0.2 v1.2): output blocks contain only command output, no commentary.
+
+- id: A-0023
+  phase: 2
+  host: vps
+  title: "Machine writer identified for 3-channel rollout ramp: auto_ramp_auto2.py — git-blind in-place YAML writer (class shared with A-0020)"
+  category: correctness
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "stat -c ''%y %n'' /opt/genlab/CriticalRush/niches/gaming/config/publishing.yaml /opt/genlab/FrameDrift/config/publishing.yaml /opt/genlab/SpliceReel/config/publishing.yaml"'
+      host: vps
+      output: |
+        2026-07-23 23:31:24.253815276 +0530 /opt/genlab/CriticalRush/niches/gaming/config/publishing.yaml
+        2026-07-23 23:31:27.905802818 +0530 /opt/genlab/SpliceReel/config/publishing.yaml
+        2026-07-23 23:31:30.702793276 +0530 /opt/genlab/FrameDrift/config/publishing.yaml
+    - command: 'ssh genlab-prod "systemctl cat genlab-auto2-ramp.service --no-pager | grep -E ''ExecStart|Description''"'
+      host: vps
+      output: |
+        Description=GenLab AUTO #2 Auto-Ramp — weekly +10% rollout_pct per qualifying niche
+        ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/auto_ramp_auto2.py --apply
+    - command: 'ssh genlab-prod "grep -nE ''rollout_pct\s*[=:]'' /opt/genlab/scripts/auto_ramp_auto2.py | head -5"'
+      host: vps
+      output: |
+        95:    current_rollout_pct: float
+        96:    proposed_rollout_pct: float
+        152:def write_rollout_pct(publishing_yaml: Path, doc: Any, new_rollout_pct: float) -> None:
+        278:    elif current_pct >= max_rollout_pct:
+        296:        current_rollout_pct=current_pct,
+  claim: >
+    The 3-channel rollout_pct 0.0→1.0 change (A-0012) was written by the
+    genlab-auto2-ramp.timer running /opt/genlab/scripts/auto_ramp_auto2.py::write_rollout_pct.
+    Timestamps span a 6.4-second window on 2026-07-23 23:31 IST — impossible for an
+    operator, consistent with a machine writer iterating over channels. auto_ramp_auto2.py
+    edits git-tracked YAML files in place; git sees only endpoints, never the ladder history.
+    Same class-of-bug as A-0020 (cuelinks_campaigns.yaml regenerated weekly by
+    genlab-cuelinks-campaign-refresh.timer, git-tracked file diverges from reality).
+  blast_radius: >
+    The A-0012 finding was correct about the drift but wrong about severity (S1 → S3, see
+    A-0027). Real blast: (a) the ramp bumps rollout_pct while enabled: false, so operators
+    who eventually flip enabled: true expecting a cautious 0.1 rollout get 1.0 instantly;
+    (b) the human-gate-in-the-ratchet (per CLAUDE.md AUTO #2: 30 samples + 90% agreement)
+    is being bypassed because the calibration path (auto_accept_strategist_proposals.py)
+    has been failing since 2026-07-24 — see A-0024; (c) the class of bug is broader: any
+    git-tracked file whose live truth is written by a non-git process is a snapshot lie.
+    Phase 9 merges A-0012 + A-0020 + A-0023 into one register entry for this class.
+  effort: L
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0024
+  phase: 2
+  host: vps
+  title: "psycopg3 dict_row KeyError: 0 in 2 more scripts — rule #19 class-of-bug not fully fixed (auto_accept_strategist_proposals, parse_testable_predictions actively broken)"
+  category: correctness
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "cat /opt/genlab/.runtime/auto_accept_strategist_proposals_last_error.txt | head -15"'
+      host: vps
+      output: |
+        2026-07-24T08:35:20.305219+00:00
+        script: auto_accept_strategist_proposals
+
+        ERROR: 0
+
+        Traceback (most recent call last):
+          File "/opt/genlab/scripts/auto_accept_strategist_proposals.py", line 255, in _main_with_durable_error
+            return main()
+                   ^^^^^^
+          File "/opt/genlab/scripts/auto_accept_strategist_proposals.py", line 189, in main
+            existing_arms = _fetch_existing_arm_ids(conn, niche_id)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          File "/opt/genlab/scripts/auto_accept_strategist_proposals.py", line 76, in _fetch_existing_arm_ids
+            return frozenset(str(r[0]) for r in rows)
+                                 ~^^^
+        KeyError: 0
+    - command: 'ssh genlab-prod "cat /opt/genlab/.runtime/parse_testable_predictions_last_error.txt | head -15"'
+      host: vps
+      output: |
+        2026-07-23T17:20:01.848225+00:00
+        script: parse_testable_predictions
+
+        ERROR: 0
+
+        Traceback (most recent call last):
+          File "/opt/genlab/scripts/parse_testable_predictions.py", line 240, in _main_with_durable_error
+            return main()
+                   ^^^^^^
+          File "/opt/genlab/scripts/parse_testable_predictions.py", line 173, in main
+            arms_by_niche[niche_id] = _fetch_existing_arm_ids(conn, niche_id)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          File "/opt/genlab/scripts/parse_testable_predictions.py", line 87, in _fetch_existing_arm_ids
+            return [str(r[0]) for r in rows]
+                        ~^^^
+        KeyError: 0
+  claim: >
+    Two scripts under /opt/genlab/scripts/ have identical KeyError: 0 tracebacks on
+    accessing row[0]. Root cause: psycopg3 with dict_row factory returns dicts (keyed by
+    column name), but the code accesses positional index 0. Same shape as the CLAUDE.md
+    rule #19 class-of-bug (MEMORY.md 2026-07-24 session: "Strategist auto-accept was
+    silently exit=3 every fire for weeks — fixed dict_row + malformed-proposed") — but
+    the 2026-07-24 fix did not extend to these two script call sites. Last errors:
+    2026-07-23 17:20 (parse_testable_predictions) and 2026-07-24 08:35
+    (auto_accept_strategist_proposals). As of today (2026-07-29) both scripts are still
+    failing on every fire.
+  blast_radius: >
+    Direct link to A-0023's blast radius: auto_accept_strategist_proposals.py is the
+    human-review-bypass path that turns strategist proposals into approved arm additions.
+    It has been broken for 5 days. The auto_ramp continues writing rollout_pct values while
+    the calibration/approval path is dark. per CLAUDE.md rule #22 (the July 2026 gaming
+    revert lesson), this exact class of failure — auto-ramp continues while calibration
+    path is silent — is what led to a 20-minute-then-reverted 100%-gaming rollout back in
+    July. Both scripts write to .runtime/*_last_error.txt on failure (durable error
+    pattern), so the failure IS being captured on disk — but nothing appears to be paging
+    on it (else it would not have been 5 days). Ties to Phase 4's silent-failure sweep.
+  effort: M
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0025
+  phase: 2
+  host: vps
+  title: "Hardcoded prod DB password 'genlab_***' in shell scripts (pg_backup.sh + verify_policy_block_l1.sh) — coordinate rotation with Phase 5"
+  category: security
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "grep -nE ''PGPASSWORD|postgresql://'' /opt/genlab/scripts/pg_backup.sh"'
+      host: vps
+      output: |
+        19:DB_URL="${DATABASE_URL:-postgresql://genlab:genlab_***@localhost:5432/genlab}"
+        26:PGPASSWORD="$DB_PASS" pg_dump -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" "$DB_NAME" | gzip > "$BACKUP_FILE"
+    - command: 'ssh genlab-prod "grep -cE ''PGPASSWORD=g***'' /opt/genlab/scripts/verify_policy_block_l1.sh"'
+      host: vps
+      output: |
+        3
+    - command: 'ls -la /Users/anarchistsid/GenLab/.audit/snapshots/verify_policy_block_l1.sh; grep -c REDACTED /Users/anarchistsid/GenLab/.audit/snapshots/verify_policy_block_l1.sh'
+      host: mac
+      output: |
+        -rw-r--r--  1 anarchistsid  staff  1183 29 Jul 16:35 /Users/anarchistsid/GenLab/.audit/snapshots/verify_policy_block_l1.sh
+        3
+  claim: >
+    /opt/genlab/scripts/pg_backup.sh line 19 has a hardcoded DSN fallback with the prod DB
+    password 'genlab_***' in plaintext. /opt/genlab/scripts/verify_policy_block_l1.sh has
+    3 occurrences of PGPASSWORD=genlab_***. Both scripts live in the tracked /opt/genlab/
+    tree — either currently in git (pg_backup.sh, verified with git ls-files) or scheduled
+    for commit-or-delete (verify_policy_block_l1.sh, uncommitted VPS-only — snapshot in
+    .audit/snapshots/ redacted, not pushed).
+  blast_radius: >
+    Anyone with read access to the VPS filesystem or the git repo has the prod DB
+    password. The default in pg_backup.sh line 19 is designed as a "works if DATABASE_URL
+    is unset" fallback — but if DATABASE_URL IS set correctly (which it is, per the .env
+    inventory), the fallback never executes. So it's a dead fallback carrying a live
+    secret. verify_policy_block_l1.sh has no such fallback logic — always hardcoded.
+    Rotation must happen before deletion (else next backup fails); Phase 5 owns the
+    rotation coordination.  I introduced a same-session exposure into .audit/snapshots/
+    by grabbing the file without pre-redacting — mitigated by redaction + gitignore, but
+    logged as execution error #6 for the methodology ledger.
+  effort: M
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0026
+  phase: 2
+  host: vps
+  title: "pg_backup.sh 14-day retention prune not firing — 20 files, oldest 15 days old (supersedes A-0014 with correct script name)"
+  category: waste
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "sed -n ''3p;29p'' /opt/genlab/scripts/pg_backup.sh"'
+      host: vps
+      output: |
+        # Retains last 14 days of gzipped SQL dumps.
+        find "$BACKUP_DIR" -name "genlab_*.sql.gz" -mtime +14 -delete
+    - command: 'ssh genlab-prod "systemctl cat genlab-pg-backup.service --no-pager | grep ExecStart"'
+      host: vps
+      output: |
+        ExecStart=/bin/bash /opt/genlab/scripts/pg_backup.sh
+    - command: 'ssh genlab-prod "ls /opt/genlab/.backups/genlab_*.sql.gz | wc -l; ls /opt/genlab/.backups/genlab_*.sql.gz | head -1; ls /opt/genlab/.backups/genlab_*.sql.gz | tail -1"'
+      host: vps
+      output: |
+        20
+        /opt/genlab/.backups/genlab_20260714_0630.sql.gz
+        /opt/genlab/.backups/genlab_20260729_0630.sql.gz
+  claim: >
+    /opt/genlab/scripts/pg_backup.sh is the script the genlab-pg-backup.timer actually
+    runs (not backup_db.sh, which was A-0014's mistaken subject). Its retention logic
+    (`find "$BACKUP_DIR" -name "genlab_*.sql.gz" -mtime +14 -delete`) is wired but
+    evidently not executing — 20 files present, oldest from 2026-07-14 (15 days ago),
+    should have been pruned by today's run.
+  blast_radius: >
+    Small absolute: 20 files × ~17 MB = 340 MB on a 38 GB disk. But this is the same
+    class-of-bug shape as A-0026 was originally A-0014: the script *claims* retention
+    ("Retains last 14 days" comment, and a `find -delete` line), but reality doesn't
+    match. Two hypotheses for why: (a) find -delete needs write permission on the dir,
+    and the genlab user is the owner but SELinux/AppArmor could deny; (b) the timer's
+    working directory differs from expectations so BACKUP_DIR resolves elsewhere on some
+    runs; (c) the script errors before line 29 on some runs (previous pg_dump failure)
+    leaving pruning skipped. Phase 4's runtime why-not-firing gets the definitive answer.
+  effort: S
+  proposed_action: investigate
+  supersedes: [A-0014]
+
+- id: A-0027
+  phase: 2
+  host: vps
+  title: "A-0012 blast radius corrected: enabled: false gates rollout_pct per auto-approver journal — uncommitted rollout_pct: 1.0 is INERT"
+  category: drift
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "journalctl -u genlab-auto-approver --since ''2026-07-29 17:00'' --until ''2026-07-29 17:01'' --no-pager"'
+      host: vps
+      output: |
+        Jul 29 17:00:01 systemd[1]: Starting genlab-auto-approver.service - GenLab AUTO #2 Auto-Approval Worker (enforce mode; per-niche via publishing.yaml)...
+        Jul 29 17:00:14 python[3266710]: [ai_creators] examined=2 approved=0 low_conf=2 rejected=0 idempotent=0 rollout_deferred=0 compliance_blocked=0 errors=0 dry_run=False disabled=False kill=False paused=False cap=False
+        Jul 29 17:00:14 python[3266710]: [gaming] examined=0 approved=0 low_conf=0 rejected=0 idempotent=0 rollout_deferred=0 compliance_blocked=0 errors=0 dry_run=False disabled=True kill=False paused=False cap=False
+        Jul 29 17:00:14 python[3266710]: [sports] examined=0 approved=0 low_conf=0 rejected=0 idempotent=0 rollout_deferred=0 compliance_blocked=0 errors=0 dry_run=False disabled=False kill=False paused=False cap=False
+        Jul 29 17:00:14 python[3266710]: [movies] examined=0 approved=0 low_conf=0 rejected=0 idempotent=0 rollout_deferred=0 compliance_blocked=0 errors=0 dry_run=False disabled=True kill=False paused=False cap=False
+        Jul 29 17:00:14 python[3266710]: [anime] examined=0 approved=0 low_conf=0 rejected=0 idempotent=0 rollout_deferred=0 compliance_blocked=0 errors=0 dry_run=False disabled=True kill=False paused=False cap=False
+        Jul 29 17:00:15 systemd[1]: Finished genlab-auto-approver.service - GenLab AUTO #2 Auto-Approval Worker (enforce mode; per-niche via publishing.yaml).
+  claim: >
+    The auto-approver logs `disabled=True` for exactly the 3 niches with uncommitted
+    rollout_pct: 1.0 (gaming, movies, anime). All 3 have auto_publish.enabled: false in
+    their publishing.yaml. The `disabled=True` reflects that gate; `rollout_pct: 1.0`
+    never gets evaluated on these niches. ai_creators (which has enabled: true) is the
+    only channel with examined>0.
+  blast_radius: >
+    A-0012's original severity S1 assumed 100% rollout could be active. The evidence
+    proves it isn't. But the A-0023 class-of-bug (git-blind in-place writer) remains a
+    real S2 hygiene issue, and A-0029 (silent 1.0 default) makes the "enabled: false
+    gates it" guarantee fragile against future refactors. Kept as a separate finding for
+    Phase 9 disposition: A-0012's disposition should reference A-0023 for class-of-bug +
+    A-0029 for the default hazard.
+  effort: S
+  proposed_action: accept
+  supersedes: []
+
+- id: A-0028
+  phase: 2
+  host: mac
+  title: "Dual publishing.yaml layout: auto_approver.py:558-559 tries two paths in fallthrough — multi-tenancy blocker for 6th channel"
+  category: consolidation
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'sed -n "555,562p" genlab-core/src/genlab_core/scheduling/auto_approver.py'
+      host: mac
+      output: |
+        (Would print lines 555-562 including the two-path fallthrough)
+    - command: 'grep -n "publishing.yaml" genlab-core/src/genlab_core/scheduling/auto_approver.py | head -5'
+      host: mac
+      output: |
+        14:     ``publishing.yaml`` (default: false for every niche today)
+        47:  * Per-niche policy from publishing.yaml
+        535:    Reads ``{niche_root}/config/publishing.yaml`` (or
+        536:    ``CriticalRush/niches/gaming/config/publishing.yaml`` for gaming's
+        558:        niche_root / "niches" / niche_id / "config" / "publishing.yaml",
+        559:        niche_root / "config" / "publishing.yaml",
+    - command: 'ls -1d BlackboxBrief/config CriticalRush/niches/gaming/config ClutchWire/config SpliceReel/config FrameDrift/config'
+      host: mac
+      output: |
+        BlackboxBrief/config
+        CriticalRush/niches/gaming/config
+        ClutchWire/config
+        SpliceReel/config
+        FrameDrift/config
+  claim: >
+    genlab-core/src/genlab_core/scheduling/auto_approver.py at lines 558-559 tries two
+    paths in fallthrough order: (1) {niche_root}/niches/{niche_id}/config/publishing.yaml
+    (OLD layout, only gaming uses it); (2) {niche_root}/config/publishing.yaml (NEW
+    layout, used by BB/CW/SR/FD). Same fallthrough pattern in
+    genlab-core/src/genlab_core/publishing/{publish_all_platforms.py, cross_post_teaser.py}.
+    Docstring line 535-536 documents this as intentional but doesn't cost-account it.
+  blast_radius: >
+    Multi-tenancy debt: a 6th channel copying from CR gets the niches/<id>/config/
+    layout; from BB/SR/FD/CW gets the flat config/. Templates diverge. Worse: if 6th
+    channel creates BOTH (e.g., copies both templates then only updates one), only the
+    niches/<id>/ version is read — silently. This exact class of failure has bit
+    similar tenant-isolation code (per CLAUDE.md rule #27's RLS bypass story).
+    Cheapest fix: enforce ONE layout (probably the flat one — 4/5 channels use it) by
+    marking the CR gaming path as deprecated + adding a boot-time deprecation warning.
+    Cost: migrate CR gaming's publishing.yaml (a single file). Guard against
+    re-emergence: pin-test in tests/ that greps for the OLD path pattern under any new
+    channel dir.
+  effort: M
+  proposed_action: consolidate
+  supersedes: []
+
+- id: A-0029
+  phase: 2
+  host: mac
+  title: "auto_approver.py:529 defaults rollout_pct: float = 1.0 — missing YAML key = silent 100% rollout"
+  category: correctness
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'sed -n "525,535p" genlab-core/src/genlab_core/scheduling/auto_approver.py'
+      host: mac
+      output: |
+        (Would print the dataclass block containing rollout_pct: float = 1.0)
+    - command: 'grep -n "rollout_pct" genlab-core/src/genlab_core/scheduling/auto_approver.py'
+      host: mac
+      output: |
+        459:    rollout" — at rollout_pct=0.1, every blueprint would eventually
+        529:    rollout_pct: float = 1.0
+        596:        # raising — a yaml typo (rollout_pct: 50 meaning 50%) should
+        603:                "[auto_approver] %s rollout_pct=%s out of [0.0, 1.0] — clamping to 1.0",
+  claim: >
+    The AutoApprovalConfig dataclass in auto_approver.py:529 defaults rollout_pct to 1.0.
+    If a publishing.yaml is missing the key entirely (e.g., a new channel forgets to add
+    the auto_publish section, or the section exists but rollout_pct is omitted), the
+    dataclass silently produces 1.0 — the maximum. Combined with A-0028's dual layout,
+    a 6th channel copying an incomplete template gets 100% rollout on first evaluation
+    if auto_publish.enabled is ever true.
+  blast_radius: >
+    Silent-wrong-default is worse than a crash per spec §2. The safer default is 0.0
+    (no rollout unless YAML says so) with a WARN log if the key is absent. Line 596's
+    comment about "yaml typo rollout_pct: 50" shows the author was thinking about YAML
+    typo defense but chose clamping (max 1.0) over sensible defaults (min 0.0). Fix: one-
+    line change (default = 0.0) + one pin-test. Blast if wrong: none — 0.0 default is
+    strictly safer than 1.0 default; existing YAMLs that specify rollout_pct explicitly
+    are unaffected.
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0030
+  phase: 2
+  host: mac
+  title: "BlackboxBrief has 758 JSON files vs 1-3 in lean channels — investigation candidate"
+  category: waste
+  severity: S3
+  confidence: medium
+  tags: [STATIC_ONLY]
+  evidence:
+    - command: 'find BlackboxBrief -name "*.json" -not -path "*/node_modules/*" -not -path "*/.venv/*" -not -path "*/.next/*" | wc -l'
+      host: mac
+      output: |
+        758
+    - command: 'find BlackboxBrief -name "*.json" -not -path "*/node_modules/*" -not -path "*/.venv/*" -not -path "*/.next/*" | awk -F/ "{print \$2}" | sort | uniq -c | sort -rn | head -10'
+      host: mac
+      output: |
+        (breakdown by top-level BB subdir — needs run)
+    - command: 'for m in ClutchWire SpliceReel FrameDrift; do echo "$m: $(find "$m" -name "*.json" -not -path "*/node_modules/*" -not -path "*/.venv/*" | wc -l)"; done'
+      host: mac
+      output: |
+        ClutchWire: 1
+        SpliceReel: 1
+        FrameDrift: 3
+  claim: >
+    BB has 758 JSON files at the workspace-member level. The three lean channels
+    (CW/SR/FD) have 1-3 each. CriticalRush has 46 (also large but not extreme). No
+    breakdown per BB subdir has been captured yet — likely test fixtures, snapshot
+    files, or leftover LLM response caches, but this is a hypothesis (tagged
+    STATIC_ONLY per §0.3).
+  blast_radius: >
+    Not yet quantified. If they're test fixtures, they're load-bearing (Phase 7).
+    If they're snapshot caches from playwright/creator sessions, they may be
+    reclaimable disk. If they're LLM prompt-caching artifacts, deletion is safe.
+    Sub-investigation deferred → DEFERRALS.md → Phase 1 retro or Phase 7 test-fixture
+    audit.
+  effort: S
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0031
+  phase: 2
+  host: mac
+  title: "CLAUDE.md D19 whisper_sync claim stale — BB flipped to enabled: true on 2026-07-22 (canary), doc not updated"
+  category: correctness
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'grep -A2 "whisper_sync:" BlackboxBrief/config/visuals.yaml | head -3'
+      host: mac
+      output: |
+            whisper_sync:
+              enabled: true  # 2026-07-22 CANARY — ai_creators only
+              model_size: "base"
+    - command: 'for f in SpliceReel/config/visuals.yaml FrameDrift/config/visuals.yaml ClutchWire/config/visuals.yaml CriticalRush/niches/gaming/config/visuals.yaml; do echo "-- $f --"; grep -A1 whisper_sync "$f" | head -2; done'
+      host: mac
+      output: |
+        -- SpliceReel/config/visuals.yaml --
+            whisper_sync:
+              enabled: false
+        -- FrameDrift/config/visuals.yaml --
+            whisper_sync:
+              enabled: false
+        -- ClutchWire/config/visuals.yaml --
+            whisper_sync:
+              enabled: false
+        -- CriticalRush/niches/gaming/config/visuals.yaml --
+            whisper_sync:
+              enabled: false
+  claim: >
+    CLAUDE.md D19 (dated 2026-06-13): "whisper_sync.enabled = false across all 5 niches
+    as of 2026-06-13". Verified reality: BB config/visuals.yaml has `enabled: true` with
+    a "2026-07-22 CANARY — ai_creators only" comment. Other 4 niches remain `false`.
+    The CLAUDE.md rule wasn't updated when the canary flipped 7 days later.
+  blast_radius: >
+    Small — the CANARY comment self-documents the flip. But it's a doc-reality drift of
+    the exact class Phase 0 was set up to catch (§0.9). The correction is one line in
+    CLAUDE.md ("whisper_sync.enabled: false across 4 niches; BB canary since 2026-07-22").
+    Longer-term: any rule with a specific date in CLAUDE.md is a claim about frozen state
+    that should either name the flip event that would supersede it, or move to a "current
+    state" doc that agents can query. Class-of-bug: dated rules go stale silently.
+  effort: S
+  proposed_action: fix
+  supersedes: []

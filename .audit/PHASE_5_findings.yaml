@@ -1,0 +1,390 @@
+# Phase 5 findings — audit run A (2026-07-29, session 6)
+# Schema: v1.4 §0.7. Next free ID after Phase 4: A-0051.
+# Verbatim outputs; secrets redacted per §0.5 v1.3.
+
+- id: A-0051
+  phase: 5
+  host: vps
+  title: "/opt/genlab/.env mode 644 world-readable on VPS — any shell user reads live prod credentials"
+  category: security
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "ls -la /opt/genlab/.env"'
+      host: vps
+      output: |
+        -rw-r--r-- 1 genlab genlab 16558 Jul 23 22:38 /opt/genlab/.env
+  claim: >
+    The live prod .env file on VPS is mode 644 (world-readable). Any user with any shell
+    on the VPS — including future support access, compromised low-privilege services,
+    debugging shells — reads all 208 credential values including DATABASE_URL,
+    ANTHROPIC_API_KEY, per-niche Meta EAA tokens, etc.
+  blast_radius: >
+    In the current single-operator deploy this is theoretical (only genlab + root shell
+    exist), but the exposure surface widens with every added user. Combined with
+    A-0053 (genlab_*** still-live-rotation-not-done) and A-0055 (post-BFG re-introduction
+    of secrets), the credential-hygiene surface is the largest single risk in the audit.
+    Fix: chmod 600 /opt/genlab/.env; verify all consumers still authenticate (they should,
+    since genlab is the owning user and root can read anything anyway).
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0052
+  phase: 5
+  host: vps
+  title: "7 of 14 .env.bak.* files (2026-07-23+) are 644 world-readable — permission drift started 2026-07-23"
+  category: security
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "ls -la /opt/genlab/.env.bak* | awk ''{print \$1, \$9}''"'
+      host: vps
+      output: |
+        -rw------- .env.bak.1784640444
+        -rw------- .env.bak.20260622-165154
+        -rw------- .env.bak.20260622-180609
+        -rw------- .env.bak.20260717
+        -rw------- .env.bak.20260718_125959
+        -rw------- .env.bak.20260718_131614_anticipation_flags
+        -rw------- .env.bak.20260718_132557_thompson_prop
+        -rw-r--r-- .env.bak.20260723_154728_slo_disable
+        -rw-r--r-- .env.bak.20260723_155549_threads_sync
+        -rw-r--r-- .env.bak-shadow-1784823647
+        -rw-r--r-- .env.bak-autonomy-flags-1784825710
+        -rw-r--r-- .env.bak-autonomy-round2-1784826525
+        -rw-r--r-- .env.bak.stochastic-widen-2026-07-23
+  claim: >
+    All .env.bak.* files created on or after 2026-07-23 have mode 644 (world-readable);
+    all older ones are 600. The permission drift is real — someone/something switched
+    from `chmod 600` to letting the umask default apply (022 → 644) on 2026-07-23. 7
+    world-readable backup files hold snapshots of prod credentials at that time.
+  blast_radius: >
+    Every .bak file contains a full snapshot of .env at creation time — so a rotated
+    credential is still exposed via any backup taken before rotation. Coordinated with
+    A-0016 (13 total .env.bak.* files on both hosts) and A-0053 (rotation not done): if
+    rotation eventually happens, all 7 world-readable + 7 chmod-600 backups still hold
+    the un-rotated credential. Fix path: chmod 600 all backups now; institute a policy
+    that .env writers use umask 077 or explicit chmod 600 post-write.
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0053
+  phase: 5
+  host: vps
+  title: "A-0025 rotation NOT DONE — genlab_*** hash-verified still live 24h+ after Phase 3 disclosure; OPERATOR_ACTIONS row #1 stays PENDING"
+  category: security
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; printf "%s" "$DATABASE_URL" | sed -n "s|.*://[^:]*:\([^@]*\)@.*|\1|p" | sha256sum | cut -c1-12'''
+      host: vps
+      output: |
+        c7b89bffef3a
+    - command: 'printf "%s" "genlab_***" | shasum -a 256 | cut -c1-12'
+      host: mac
+      output: |
+        c7b89bffef3a
+  claim: >
+    Hash of the literal 'genlab_***' (12-char prefix c7b89bffef3a) matches the hash of the
+    live prod DB password extracted from VPS DATABASE_URL. The credential remains
+    unchanged 24h+ after Phase 3 documented it as burned (public source repo, 10+
+    commits). OPERATOR_ACTIONS row #1 stays PENDING (target: 2026-08-05).
+  blast_radius: >
+    Every day this delays multiplies the exposure. The source repo is public;
+    `git log --all -S 'genlab_***' --oneline` on `github.com/AnarchistSid/genlab-platform`
+    returns 10+ commits touching the literal, and the platform's search UI indexes them.
+    Any anonymous visitor can retrieve the password. Fix path: OPERATOR_ACTIONS row #1
+    (rotate + strip fallback DSN + reconnect); Phase 9 will verify.
+  effort: M
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0054
+  phase: 5
+  host: vps
+  title: "POSITIVE-DESIGN — genlab_app role has GRANTs on all 45 tables; A-0032 fix reduces to DATABASE_URL username swap + reconnect"
+  category: correctness
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT COUNT(DISTINCT table_name) FROM information_schema.table_privileges WHERE grantee = ''\''''genlab_app''\''''"'''
+      host: vps
+      output: |
+        45
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; psql "$DATABASE_URL" -tAc "SELECT table_name, string_agg(privilege_type, ''\'''',''\'''') FROM information_schema.table_privileges WHERE grantee = ''\''''genlab_app''\'''' GROUP BY table_name LIMIT 5"'''
+      host: vps
+      output: |
+        ab_tests|INSERT,UPDATE,DELETE,SELECT
+        affiliate_clicks|INSERT,UPDATE,DELETE,SELECT
+        affiliate_revenue|INSERT,UPDATE,DELETE,SELECT
+        analytics|INSERT,UPDATE,DELETE,SELECT
+        assets|INSERT,UPDATE,DELETE,SELECT
+  claim: >
+    genlab_app role has full CRUD (INSERT/UPDATE/DELETE/SELECT) grants on all 45 tables
+    in the public schema. Combined with Phase 3 A-0032 (genlab_app has rolsuper=f,
+    rolbypassrls=f, rolcanlogin=t), the RLS bypass fix reduces to changing the DATABASE_URL
+    username from `genlab` to `genlab_app` and reconnecting consumers.
+  blast_radius: >
+    None if grants are complete (verified: 45 tables covered, all with the 4 CRUD ops).
+    One risk: sequences (`SERIAL`/`nextval()`) and views may need separate GRANTs — Phase 9
+    fix script should include `GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO genlab_app`
+    and `GRANT SELECT ON ALL VIEWS ...` for completeness. Fix delivered as sketch to
+    Phase 9 (see PHASE_5_security.md §5).
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0055
+  phase: 5
+  host: mac
+  title: "genlab_*** NOT in April 2026 BFG purge list — post-BFG re-introduction; no post-BFG secret-scan CI to catch new leaks"
+  category: security
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ls ..bfg-report/2026-04-03/21-58-04/'
+      host: mac
+      output: |
+        cache-stats.txt
+        changed-files.txt
+        object-id-map.old-new.txt
+    - command: 'grep -l "genlab_***\|genlab_\*\*\*" ..bfg-report/2026-04-03/21-58-04/*'
+      host: mac
+      output: |
+        (no matches)
+    - command: 'head -3 ..bfg-report/2026-04-03/21-58-04/changed-files.txt'
+      host: mac
+      output: |
+        eae2eb49bfb7cc8e9803b53fbef8aaa1bcf3158b 493a41e83db797f46d27704c697a46a24ecabcb9 .env.example
+        58ed58cb0aa567b4866991a5175e13ceb60a420a b77e4a48ae4e067ec3210955a5df8cbca6885f67 2026-03-09-dashboard-extraction-plan.md
+        c0622726db58f47db304cd05a22f40c12b179ce8 4f5b2033fce9229e44170441757d49a2673f2b99 2026-03-09-dashboard-extraction-plan.md
+  claim: >
+    The BFG rewrite of 2026-04-03 purged 20+ files (from changed-files.txt including
+    .env.example and various affiliate_catalog.yaml revisions). The literal 'genlab_***'
+    is NOT in the purge list — grep across the BFG report returns no matches. Combined
+    with Phase 3's finding that the literal appears in 10+ post-April commits on public
+    repo, this confirms `genlab_***` was INTRODUCED post-BFG, not re-introduced from a
+    purged occurrence. No CI or hook exists that caught the re-introduction (else
+    `pg_backup.sh:19`'s DSN would not have been committed).
+  blast_radius: >
+    The pattern that made BFG necessary in April continues today — same shape of secret
+    leaking into tracked files. Fix: install pre-commit hook running gitleaks; add a CI
+    gate on push. Prevents the next re-introduction. Cost: ~1h. Same-class-of-bug memory:
+    the CLAUDE.md `Pre-commit workflow` section documents ruff pins but not secret
+    scanning.
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0056
+  phase: 5
+  host: both
+  title: "FB_APP_SECRET and META_APP_SECRET have identical hashes — same value under two names (credential duplication with confusable names)"
+  category: security
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'awk -F= "!/^#/ && (\$1 == \"FB_APP_SECRET\" || \$1 == \"META_APP_SECRET\") { val=substr(\$0, index(\$0, \"=\")+1); cmd=\"printf %s \" val \" | shasum -a 256 | cut -c1-12\"; cmd | getline hash; printf \"%-20s hash=%s\n\", \$1, hash; close(cmd) }" /Users/anarchistsid/GenLab/.env'
+      host: mac
+      output: |
+        FB_APP_SECRET        hash=67c264537735
+        META_APP_SECRET      hash=67c264537735
+  claim: >
+    Both keys hold the same value (identical 12-char SHA-256 prefix 67c264537735).
+    Neither actual value printed. The naming is confusable — FB_APP_SECRET vs
+    META_APP_SECRET — leading a reader to think they refer to different apps when
+    they refer to the same Meta app credential.
+  blast_radius: >
+    Class-of-bug: renamed-but-not-deleted. A caller reading FB_APP_SECRET vs
+    META_APP_SECRET believes they have separate rotation paths; they don't. On rotation
+    of one, forgetting to rotate the other leaves stale material. Fix: pick one canonical
+    name (recommend META_APP_SECRET since CLAUDE.md rule "Always use graph.facebook.com"
+    already normalizes Meta terminology); remove the other; grep code for all usages
+    before deletion.
+  effort: S
+  proposed_action: consolidate
+  supersedes: []
+
+- id: A-0057
+  phase: 5
+  host: vps
+  title: "4 untracked prod credential files are 664 world-readable — YT session/cookies, conformal state, version tag"
+  category: security
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "ls -la /opt/genlab/.youtube_cookies.txt /opt/genlab/.youtube_session.json /opt/genlab/.threads_tokens.json /opt/genlab/.reddit_cookies.txt /opt/genlab/.conformal_router_state.json /opt/genlab/.version.env"'
+      host: vps
+      output: |
+        -rw-r--r-- 1 genlab genlab 1283 Jul 29 08:30 /opt/genlab/.conformal_router_state.json
+        -rw------- 1 genlab genlab 2289 Jun 18 17:46 /opt/genlab/.reddit_cookies.txt
+        -rw------- 1 genlab genlab 1981 Jul 29 09:00 /opt/genlab/.threads_tokens.json
+        -rw-rw-r-- 1 genlab genlab   66 Jul 21 17:11 /opt/genlab/.version.env
+        -rw-rw-r-- 1 genlab genlab    0 Jul  1 13:31 /opt/genlab/.youtube_cookies.txt
+        -rw-rw-r-- 1 genlab genlab  670 Jun 17 19:36 /opt/genlab/.youtube_session.json
+  claim: >
+    Threads tokens and Reddit cookies are correctly 600 (owner-only). YT session
+    (670 bytes) and YT cookies (0 bytes now) are 664. Conformal router state and
+    version.env are also 664 — those are non-secret state files, but their permission
+    should match a policy. Session state files typically hold refresh tokens or
+    authenticated session identifiers.
+  blast_radius: >
+    YT session file at 664 exposes any auth material it holds to non-genlab shell users.
+    Fix: chmod 600 on all files under /opt/genlab that hold or may hold secrets. Same
+    pattern as A-0051/A-0052 (umask discipline).
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0058
+  phase: 5
+  host: vps
+  title: "Two Postgres instances — Docker (5432, in use per DATABASE_URL) + native Postgres 18 (5433, unknown purpose)"
+  category: waste
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "ss -tlnp | grep -E ''5432|5433''"'
+      host: vps
+      output: |
+        LISTEN 0 4096  127.0.0.1:5432 users:(("docker-proxy",pid=3734138,fd=8))
+        LISTEN 0 200   127.0.0.1:5433 users:(("postgres",pid=2890957,fd=7))
+        LISTEN 0 200      [::1]:5433 users:(("postgres",pid=2890957,fd=6))
+    - command: 'ssh genlab-prod ''set -a; . /opt/genlab/.env; set +a; echo "$DATABASE_URL" | sed "s|://[^:]*:[^@]*@|://***:***@|"'''
+      host: vps
+      output: |
+        postgresql://***:***@127.0.0.1:5432/genlab
+    - command: 'ssh genlab-prod "docker ps --format ''table {{.Names}}\t{{.Ports}}''"'
+      host: vps
+      output: |
+        NAMES             PORTS
+        genlab-postgres   127.0.0.1:5432->5432/tcp
+        genlab-redis      127.0.0.1:6379->6379/tcp
+  claim: >
+    Two Postgres instances run: Docker container `genlab-postgres` on 5432 (in use
+    per DATABASE_URL) and a native Postgres 18 on 5433 (owner root or postgres user,
+    purpose not identified from systemd/config grep in this session).
+  blast_radius: >
+    Two Postgres instances consuming RAM on a 4 GB VPS (per A-0007 Phase 0 baseline:
+    151 MiB free). Native postgres could be legacy dev instance, replication target,
+    or forgotten. If unused: memory + disk waste. If used by unknown consumer:
+    Phase 4 §2 duplicate/zombie schedulers question. Investigation: `ps -o pid,cmd -p
+    2890957` + which config file drives it. Not chased this phase (context tight).
+    Defer to Phase 4 revisit or Phase 8 consolidation.
+  effort: M
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0059
+  phase: 5
+  host: vps
+  title: "A-0008 git gc REFUTED-as-gated — pre-BFG blob test showed rewrite propagated to VPS; gc safe from secret-retrieval angle"
+  category: waste
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "cd /opt/genlab && git cat-file -e eae2eb49bfb7cc8e9803b53fbef8aaa1bcf3158b 2>&1 && echo OLD_BLOB_EXISTS || echo old blob purged"'
+      host: vps
+      output: |
+        old blob purged from VPS too
+    - command: 'ssh genlab-prod "cd /opt/genlab && git count-objects -vH"'
+      host: vps
+      output: |
+        count: 2075
+        size: 11.20 MiB
+        in-pack: 39802
+        packs: 25
+        size-pack: 133.84 MiB
+  claim: >
+    Direct blob-existence check on a known-purged pre-BFG SHA (from the April 2026
+    changed-files.txt) returned "old blob purged" on VPS too. The BFG rewrite
+    propagated. The VPS 25-packs / 39,802-objects vs Mac 2-packs / 16,636 asymmetry is
+    packing/reflog difference, not pre-BFG history retention.
+  blast_radius: >
+    A-0008 (Phase 0's `git gc` recommendation) was GATED by Phase 5's pre-rewrite-history
+    check in the v1.3 spec. Now REFUTED — no purged secrets recoverable from VPS `.git`.
+    `git gc --aggressive` on VPS is safe from the secret-retrieval angle. Only remaining
+    risk is running gc during a deploy window (unaffected here). Ready for Phase 9
+    execution.
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0060
+  phase: 5
+  host: mac
+  title: "Dashboard: 173 routes, HTTP Basic Auth (single-shared-secret) + session cookie; no RBAC or tenant-aware access — matches A-0032 at UI layer"
+  category: security
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'grep -rE "^\s*@(app|bp)\.(route|get|post|put|delete)" dashboard/server/ 2>/dev/null | wc -l'
+      host: mac
+      output: |
+        173
+    - command: 'grep -n "HTTP Basic Auth\|_AUTH_USER\|login_required\|require_auth" dashboard/server/review_server.py | head -5'
+      host: mac
+      output: |
+        282:# ── Security: HTTP Basic Auth ──────────────────────────────
+        290:    logger.info("HTTP Basic Auth enabled (user: %s)", _AUTH_USER)
+        528:    """Verify auth via session cookie (preferred) or HTTP Basic Auth (fallback)."""
+  claim: >
+    173 route definitions in dashboard/server/. Authentication is HTTP Basic Auth with
+    a single shared `_AUTH_USER`, with session cookie preferred and Basic Auth as
+    fallback (per docstring line 528). No RBAC layer, no per-niche access control. Every
+    dashboard user has full cross-niche access via the UI.
+  blast_radius: >
+    Matches A-0032 (RLS bypass at DB layer) but at the UI layer — even after fixing
+    A-0032 (role switch to genlab_app), the dashboard doesn't wrap queries in
+    `SET LOCAL app.niche_id`, so it will error on cross-niche queries. For the current
+    single-operator deploy this is intended; for SaaS this is a 2-layer tenant-isolation
+    gap. Fix path (Phase 9 sequencing): pair A-0032 with per-route niche_id resolution
+    (from URL param or session) that sets the DB variable before query.
+  effort: L
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0061
+  phase: 5
+  host: mac
+  title: "Nested genlab-core/.git has 1 committed PGPASSWORD change (audit-remediation cleanup); no genlab_*** — doesn't add fresh secret exposure vector to A-0011 disposition"
+  category: security
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'GIT_DIR=genlab-core/.git git log --all --oneline -S PGPASSWORD 2>&1 | head -3'
+      host: mac
+      output: |
+        5650beb fix: comprehensive audit remediation — critical + high + medium issues
+    - command: 'GIT_DIR=genlab-core/.git git log --all --oneline -S genlab_*** 2>&1 | head -3'
+      host: mac
+      output: |
+        (empty)
+  claim: >
+    Only one commit in the nested genlab-core/.git repo touches the `PGPASSWORD`
+    literal — a subject line "fix: comprehensive audit remediation" that strongly
+    suggests a cleanup, not a leak. The literal `genlab_***` (or `genlab_***`) does not
+    appear anywhere in the nested repo's history. A-0011's Phase 9 disposition should
+    include a gitleaks pass but need not treat this repo as a fresh secret-exposure
+    vector.
+  blast_radius: >
+    Reduces A-0011's blast radius. The nested repo is still an orphan-history hazard
+    (Phase 1 finding: phantom commit ec9925c vs parent 4e48cd29), but it's not a secret
+    exposure. Phase 9 disposition sequencing unchanged (subject+date cross-ref, archive
+    before delete, add recurrence guard) — just doesn't need a rotation gate.
+  effort: S
+  proposed_action: accept
+  supersedes: []

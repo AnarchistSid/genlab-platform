@@ -1,0 +1,1034 @@
+==========================
+FILE: CriticalRush/niches/gaming/config/publishing.yaml
+STATUS:  M CriticalRush/niches/gaming/config/publishing.yaml
+DIFF:
+diff --git a/CriticalRush/niches/gaming/config/publishing.yaml b/CriticalRush/niches/gaming/config/publishing.yaml
+index 6d57755a..267ec51a 100644
+--- a/CriticalRush/niches/gaming/config/publishing.yaml
++++ b/CriticalRush/niches/gaming/config/publishing.yaml
+@@ -121,4 +121,4 @@ auto_publish:
+   enabled: false
+   min_confidence: 0.85
+   max_approvals_per_pass: 3
+-  rollout_pct: 0.0
++  rollout_pct: 1.0
+
+==========================
+FILE: FrameDrift/config/publishing.yaml
+STATUS:  M FrameDrift/config/publishing.yaml
+DIFF:
+diff --git a/FrameDrift/config/publishing.yaml b/FrameDrift/config/publishing.yaml
+index 8e0e5311..047df08d 100644
+--- a/FrameDrift/config/publishing.yaml
++++ b/FrameDrift/config/publishing.yaml
+@@ -24,7 +24,7 @@ platforms:
+     # Disabled 2026-06-05: see ClutchWire/config/publishing.yaml — no creds,
+     # 100% SKIPPED, negligible engagement everywhere.
+     enabled: false
+-    account_id: null  # TODO: Create X developer app for FrameDrift
++    account_id:       # TODO: Create X developer app for FrameDrift
+     content_types: [video_tweet, image_tweet]
+     aspect_ratio: "9:16"
+     link_placement: first_reply   # CRITICAL: no links in main tweet
+@@ -35,7 +35,7 @@ platforms:
+     aspect_ratio: "9:16"
+   tiktok:
+     enabled: false
+-    account_id: null
++    account_id:
+     content_types: [video]
+     aspect_ratio: "9:16"
+     note: >-
+@@ -50,7 +50,7 @@ platforms:
+     # engagement pre-2026-06 was actually the second-highest across
+     # niches — worth reopening this channel.
+     enabled: true
+-    account_id: null  # Token resolved via /opt/genlab/.threads_tokens.json cache
++    account_id:       # Token resolved via /opt/genlab/.threads_tokens.json cache
+     content_types: [video_post, text_post]
+     aspect_ratio: "1:1"
+ 
+@@ -85,4 +85,4 @@ auto_publish:
+   enabled: false
+   min_confidence: 0.85
+   max_approvals_per_pass: 3
+-  rollout_pct: 0.0
++  rollout_pct: 1.0
+
+==========================
+FILE: SpliceReel/config/publishing.yaml
+STATUS:  M SpliceReel/config/publishing.yaml
+DIFF:
+diff --git a/SpliceReel/config/publishing.yaml b/SpliceReel/config/publishing.yaml
+index 12fb82f6..495a4165 100644
+--- a/SpliceReel/config/publishing.yaml
++++ b/SpliceReel/config/publishing.yaml
+@@ -24,7 +24,7 @@ platforms:
+     # Disabled 2026-06-05: see ClutchWire/config/publishing.yaml — no creds,
+     # 100% SKIPPED, negligible engagement everywhere.
+     enabled: false
+-    account_id: null  # TODO: Create X developer app for SpliceReel
++    account_id:       # TODO: Create X developer app for SpliceReel
+     content_types: [video_tweet, image_tweet]
+     aspect_ratio: "9:16"
+     link_placement: first_reply   # CRITICAL: no links in main tweet
+@@ -35,7 +35,7 @@ platforms:
+     aspect_ratio: "9:16"
+   tiktok:
+     enabled: false
+-    account_id: null
++    account_id:
+     content_types: [video]
+     aspect_ratio: "9:16"
+     note: >-
+@@ -52,7 +52,7 @@ platforms:
+     # container-creation failures return, flip back to false and file
+     # for token/permission diagnosis.
+     enabled: true
+-    account_id: null  # Token resolved via /opt/genlab/.threads_tokens.json cache
++    account_id:       # Token resolved via /opt/genlab/.threads_tokens.json cache
+     content_types: [video_post, text_post]
+     aspect_ratio: "1:1"
+ 
+@@ -87,4 +87,4 @@ auto_publish:
+   enabled: false
+   min_confidence: 0.85
+   max_approvals_per_pass: 3
+-  rollout_pct: 0.0
++  rollout_pct: 1.0
+
+==========================
+FILE: genlab-core/config/cuelinks_campaigns.yaml
+STATUS:  M genlab-core/config/cuelinks_campaigns.yaml
+DIFF:
+diff --git a/genlab-core/config/cuelinks_campaigns.yaml b/genlab-core/config/cuelinks_campaigns.yaml
+index 4d31dd9f..1d2fcbfe 100644
+--- a/genlab-core/config/cuelinks_campaigns.yaml
++++ b/genlab-core/config/cuelinks_campaigns.yaml
+@@ -1,19 +1,903 @@
+-# AUTO-GENERATED — do not hand-edit.
+-#
+-# This file is rewritten weekly by
+-# ``genlab-cuelinks-campaign-refresh.timer`` (Mon 04:00 UTC).
+-# Manual edits will be overwritten on the next fire.
+-#
+-# Empty on first commit (2026-07-16); populated on first successful
+-# timer fire after CUELINKS_V3_API_KEY is provisioned on prod.
+-#
+-# Consumers (PR 3): ``affiliate_matcher`` reads the ``campaigns``
+-# list and matches by ``category`` for niche-appropriate merchant
+-# suggestions. See scripts/refresh_cuelinks_campaigns.py for the
+-# artifact-shape contract.
+-
+-generated_at: null
++generated_at: '2026-07-27T04:00:15.587374+00:00'
+ per_page_requested: 500
+-total_returned: 0
++total_returned: 500
+ top_by_epc: 100
+-campaigns: []
++campaigns:
++- id: 7445
++  name: Verpex
++  category:
++    id: 12
++    name: Others
++  country: IN
++  access_status: open
++  epc_7d: 157.43
++  merchant_url: https://verpex.com/
++- id: 8599
++  name: Traveloka Indonesia
++  category:
++    id: 11
++    name: Travel
++  country: IN
++  access_status: open
++  epc_7d: 96.41
++  merchant_url: https://www.traveloka.com/id-id
++- id: 4386
++  name: Oppo India
++  category:
++    id: 4
++    name: Electronics
++  country: IN
++  access_status: open
++  epc_7d: 91.87
++  merchant_url: https://www.oppo.com/in/store
++- id: 8581
++  name: Baby Central - HK
++  category:
++    id: 2
++    name: Baby & Kids
++  country: IN
++  access_status: open
++  epc_7d: 79.17
++  merchant_url: https://babycentral.com.hk/
++- id: 7679
++  name: Airwallex
++  category:
++    id: 14
++    name: Services
++  country: IN
++  access_status: open
++  epc_7d: 65.18
++  merchant_url: https://www.airwallex.com/business-account
++- id: 4241
++  name: SBI Sprint Simply Click Credit Card CPL
++  category:
++    id: 20
++    name: Credit Card
++  country: IN
++  access_status: open
++  epc_7d: 52.5
++  merchant_url: https://www.sbicard.com/sprint/simplyClickMaster
++- id: 6190
++  name: Photobook - HK
++  category:
++    id: 12
++    name: Others
++  country: IN
++  access_status: open
++  epc_7d: 52.18
++  merchant_url: https://www.photobookhongkong.com/
++- id: 6458
++  name: World of Asaya
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 48.36
++  merchant_url: https://worldofasaya.com/
++- id: 12090
++  name: Shokz
++  category:
++    id: 4
++    name: Electronics
++  country: IN
++  access_status: open
++  epc_7d: 45.83
++  merchant_url: https://shokz.com/
++- id: 8186
++  name: Luxo Living
++  category:
++    id: 9
++    name: Home & Kitchen
++  country: IN
++  access_status: open
++  epc_7d: 34.58
++  merchant_url: https://www.luxoliving.com.au/
++- id: 6617
++  name: Carwow UK
++  category:
++    id: 12
++    name: Others
++  country: IN
++  access_status: open
++  epc_7d: 33.5
++  merchant_url: https://www.carwow.co.uk/
++- id: 6354
++  name: SBI Sprint Cashback Credit Card CPL
++  category:
++    id: 20
++    name: Credit Card
++  country: IN
++  access_status: open
++  epc_7d: 31.3
++  merchant_url: https://www.sbicard.com/sprint/cashback
++- id: 5249
++  name: IPSY
++  category: '?'
++  country: IN
++  access_status: open
++  epc_7d: 30.2
++  merchant_url: https://www.ipsy.com/
++- id: 3624
++  name: Zurich Kotak Car Insurance
++  category:
++    id: 5
++    name: Finance
++  country: IN
++  access_status: open
++  epc_7d: 29.37
++  merchant_url: https://www.zurichkotak.com/motor-insurance/car-insurance
++- id: 9223
++  name: Greg Norman Collection
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 27.57
++  merchant_url: https://gregnormancollection.com/
++- id: 11135
++  name: Autodoc UK
++  category:
++    id: 14
++    name: Services
++  country: IN
++  access_status: open
++  epc_7d: 25.5
++  merchant_url: https://www.autodoc.co.uk/
++- id: 2191
++  name: Adidas
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 24.19
++  merchant_url: https://www.adidas.co.in/
++- id: 6271
++  name: appsumo
++  category:
++    id: 16
++    name: Education
++  country: IN
++  access_status: open
++  epc_7d: 22.97
++  merchant_url: https://www.appsumo.com
++- id: 4459
++  name: SurfShark VPN
++  category:
++    id: 12
++    name: Others
++  country: IN
++  access_status: open
++  epc_7d: 21.58
++  merchant_url: https://surfshark.com/
++- id: 9901
++  name: Startselect
++  category:
++    id: 13
++    name: Gaming
++  country: IN
++  access_status: open
++  epc_7d: 18.29
++  merchant_url: https://startselect.com/gb-en
++- id: 5111
++  name: Under Armour Hong Kong
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 17.08
++  merchant_url: https://www.underarmour.hk/en-hk/
++- id: 2973
++  name: FitFlop
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 16.26
++  merchant_url: https://www.fitflop.com/us/en/
++- id: 5491
++  name: Mymuse
++  category:
++    id: 12
++    name: Others
++  country: IN
++  access_status: open
++  epc_7d: 14.4
++  merchant_url: https://mymuse.in/
++- id: 13357
++  name: reolink DE
++  category:
++    id: 9
++    name: Home & Kitchen
++  country: IN
++  access_status: open
++  epc_7d: 13.99
++  merchant_url: https://reolink.com/de/
++- id: 3081
++  name: Jaypore
++  category:
++    id: 6
++    name: Flowers & Gifts
++  country: IN
++  access_status: open
++  epc_7d: 13.06
++  merchant_url: https://www.jaypore.com/
++- id: 11173
++  name: LG Australia
++  category:
++    id: 4
++    name: Electronics
++  country: IN
++  access_status: open
++  epc_7d: 13.04
++  merchant_url: https://www.lg.com/au/
++- id: 213
++  name: At Home
++  category:
++    id: 9
++    name: Home & Kitchen
++  country: IN
++  access_status: open
++  epc_7d: 12.45
++  merchant_url: https://www.athome.com/
++- id: 29
++  name: Cleartrip Flight
++  category:
++    id: 11
++    name: Travel
++  country: IN
++  access_status: open
++  epc_7d: 12.39
++  merchant_url: https://www.cleartrip.com/
++- id: 3529
++  name: Trip.com
++  category:
++    id: 11
++    name: Travel
++  country: IN
++  access_status: open
++  epc_7d: 12.27
++  merchant_url: https://www.trip.com/
++- id: 5657
++  name: Adidas HK
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 12.1
++  merchant_url: https://www.adidas.com.hk/
++- id: 4784
++  name: Nexo
++  category:
++    id: 5
++    name: Finance
++  country: IN
++  access_status: open
++  epc_7d: 11.53
++  merchant_url: https://welcome.nexo.com/partners
++- id: 4745
++  name: iMobie
++  category:
++    id: 21
++    name: Software
++  country: IN
++  access_status: open
++  epc_7d: 10.84
++  merchant_url: https://www.imobie.com/anytrans/
++- id: 6205
++  name: Pepe Jeans
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 10.81
++  merchant_url: https://www.pepejeans.in/
++- id: 3965
++  name: Birdsnest
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 9.83
++  merchant_url: https://www.birdsnest.com.au/
++- id: 5259
++  name: Muscletech
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 9.44
++  merchant_url: https://www.muscletech.in/
++- id: 6232
++  name: Federal Scapia Credit card CPL
++  category:
++    id: 20
++    name: Credit Card
++  country: IN
++  access_status: open
++  epc_7d: 9.34
++  merchant_url: https://apply.scapia.cards/landing_page
++- id: 4225
++  name: Sleepycat
++  category:
++    id: 9
++    name: Home & Kitchen
++  country: IN
++  access_status: open
++  epc_7d: 9.06
++  merchant_url: https://sleepycat.in/
++- id: 6813
++  name: ZenniOptical
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 8.98
++  merchant_url: https://www.zennioptical.com/
++- id: 4161
++  name: Kama Ayurveda
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 8.62
++  merchant_url: https://www.kamaayurveda.in/
++- id: 4289
++  name: WONDERSHARE TECHNOLOGY
++  category:
++    id: 12
++    name: Others
++  country: IN
++  access_status: open
++  epc_7d: 8.51
++  merchant_url: https://www.wondershare.com/
++- id: 4765
++  name: Vevor US
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 7.73
++  merchant_url: https://www.vevor.com/
++- id: 2397
++  name: Jockey
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 7.28
++  merchant_url: https://www.jockey.in/
++- id: 4713
++  name: Rachael ray
++  category:
++    id: 9
++    name: Home & Kitchen
++  country: IN
++  access_status: open
++  epc_7d: 7.1
++  merchant_url: https://rachaelray.com/
++- id: 7252
++  name: PDF Filler
++  category:
++    id: 12
++    name: Others
++  country: IN
++  access_status: open
++  epc_7d: 6.88
++  merchant_url: https://www.pdffiller.com/
++- id: 5122
++  name: Kindlife
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 6.16
++  merchant_url: https://kindlife.in/
++- id: 5114
++  name: Perfora
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 5.64
++  merchant_url: https://perforacare.com/
++- id: 4469
++  name: Wellbeing Nutrition
++  category:
++    id: 12
++    name: Others
++  country: IN
++  access_status: open
++  epc_7d: 5.55
++  merchant_url: https://wellbeingnutrition.com
++- id: 4922
++  name: CDKeys
++  category:
++    id: 13
++    name: Gaming
++  country: IN
++  access_status: open
++  epc_7d: 5.37
++  merchant_url: https://www.cdkeys.com/
++- id: 5457
++  name: Unicoeye
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 4.94
++  merchant_url: https://unicoeye.com/
++- id: 7855
++  name: Brevo
++  category:
++    id: 14
++    name: Services
++  country: IN
++  access_status: open
++  epc_7d: 4.72
++  merchant_url: https://www.brevo.com/
++- id: 819
++  name: Forest Essentials
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 4.7
++  merchant_url: https://www.forestessentialsindia.com/
++- id: 4458
++  name: Envato Market CPS
++  category:
++    id: 12
++    name: Others
++  country: IN
++  access_status: open
++  epc_7d: 4.64
++  merchant_url: https://themeforest.net/category/wordpress
++- id: 2932
++  name: GeekBuying
++  category:
++    id: 4
++    name: Electronics
++  country: IN
++  access_status: open
++  epc_7d: 4.59
++  merchant_url: https://www.geekbuying.com/
++- id: 3955
++  name: Reliance Digital
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 4.42
++  merchant_url: https://www.reliancedigital.in/
++- id: 6521
++  name: World of Warships
++  category:
++    id: 13
++    name: Gaming
++  country: IN
++  access_status: open
++  epc_7d: 4.05
++  merchant_url: https://promo.worldofwarships.asia/glows-34505/asia-en/
++- id: 8575
++  name: Erli.pl
++  category:
++    id: 9
++    name: Home & Kitchen
++  country: IN
++  access_status: open
++  epc_7d: 3.98
++  merchant_url: https://erli.pl/
++- id: 3553
++  name: Klook
++  category:
++    id: 11
++    name: Travel
++  country: IN
++  access_status: open
++  epc_7d: 3.94
++  merchant_url: https://www.klook.com/
++- id: 4474
++  name: The House of Rare
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 3.67
++  merchant_url: https://thehouseofrare.com/
++- id: 4094
++  name: Marks and Spencer
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 3.61
++  merchant_url: https://www.marksandspencer.in/
++- id: 5370
++  name: Gowabi TH
++  category:
++    id: 11
++    name: Travel
++  country: IN
++  access_status: open
++  epc_7d: 3.41
++  merchant_url: https://www.gowabi.com/en
++- id: 2523
++  name: bluehost
++  category:
++    id: 12
++    name: Others
++  country: IN
++  access_status: open
++  epc_7d: 3.33
++  merchant_url: https://www.bluehost.com/
++- id: 5087
++  name: Gamivo
++  category:
++    id: 13
++    name: Gaming
++  country: IN
++  access_status: open
++  epc_7d: 3.2
++  merchant_url: https://www.gamivo.com/
++- id: 9482
++  name: Melvita - HK
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 2.96
++  merchant_url: https://hk.melvita.com/
++- id: 6563
++  name: Touchstone Essentials
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 2.92
++  merchant_url: https://aff.thegoodinside.com/
++- id: 18
++  name: BigRock
++  category:
++    id: 14
++    name: Services
++  country: IN
++  access_status: open
++  epc_7d: 2.79
++  merchant_url: https://www.bigrock.in
++- id: 763
++  name: AliExpress
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 2.76
++  merchant_url: https://www.aliexpress.com/
++- id: 9624
++  name: OneBioShopAU
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 2.7
++  merchant_url: https://onebioshop.com/en
++- id: 9588
++  name: PMI Iqos
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 2.63
++  merchant_url: https://it.iqos.com/it
++- id: 3567
++  name: Movavi
++  category:
++    id: 12
++    name: Others
++  country: IN
++  access_status: open
++  epc_7d: 2.62
++  merchant_url: https://www.movavi.com/
++- id: 2536
++  name: Moglix
++  category:
++    id: 4
++    name: Electronics
++  country: IN
++  access_status: open
++  epc_7d: 2.39
++  merchant_url: https://www.moglix.com/
++- id: 4486
++  name: Hkvitals
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 2.34
++  merchant_url: https://www.hkvitals.com/
++- id: 3989
++  name: hostinger
++  category:
++    id: 14
++    name: Services
++  country: IN
++  access_status: open
++  epc_7d: 2.31
++  merchant_url: https://www.hostinger.com
++- id: 7884
++  name: Pizzahut - PH
++  category:
++    id: 7
++    name: Food & Grocery
++  country: IN
++  access_status: open
++  epc_7d: 2.25
++  merchant_url: https://www.pizzahut.com.ph/
++- id: 5799
++  name: Bliss Club
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 2.25
++  merchant_url: https://blissclub.com/
++- id: 6086
++  name: EasyBook
++  category:
++    id: 11
++    name: Travel
++  country: IN
++  access_status: open
++  epc_7d: 2.19
++  merchant_url: https://www.easybook.com/
++- id: 6456
++  name: The Bear House
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 2.17
++  merchant_url: https://thebearhouse.com/
++- id: 4211
++  name: The Derma Co
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 2.11
++  merchant_url: https://thedermaco.com/
++- id: 5336
++  name: SEAGM
++  category:
++    id: 13
++    name: Gaming
++  country: IN
++  access_status: open
++  epc_7d: 2.1
++  merchant_url: https://www.seagm.com/
++- id: 238
++  name: Godrej Interio
++  category:
++    id: 9
++    name: Home & Kitchen
++  country: IN
++  access_status: open
++  epc_7d: 2.07
++  merchant_url: https://interio.com/
++- id: 9581
++  name: GetYourGuide
++  category:
++    id: 11
++    name: Travel
++  country: IN
++  access_status: open
++  epc_7d: 2.07
++  merchant_url: https://www.getyourguide.com/
++- id: 3618
++  name: Mivi
++  category:
++    id: 4
++    name: Electronics
++  country: IN
++  access_status: open
++  epc_7d: 2.04
++  merchant_url: https://www.mivi.in/
++- id: 6566
++  name: Bacca Bucci
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 2.03
++  merchant_url: https://baccabucci.com/
++- id: 5355
++  name: Tommy Hilfiger
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 1.99
++  merchant_url: https://usa.tommy.com/en/
++- id: 3650
++  name: Only
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 1.98
++  merchant_url: https://www.only.in/
++- id: 5280
++  name: hyugalife
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 1.94
++  merchant_url: https://www.hyugalife.com
++- id: 11152
++  name: Reisemoto
++  category:
++    id: 12
++    name: Others
++  country: IN
++  access_status: open
++  epc_7d: 1.91
++  merchant_url: https://www.reisemoto.com/
++- id: 3082
++  name: Changi Airport
++  category:
++    id: 11
++    name: Travel
++  country: IN
++  access_status: open
++  epc_7d: 1.84
++  merchant_url: https://www.ishopchangi.com/en/home
++- id: 4830
++  name: iMyFone
++  category:
++    id: 12
++    name: Others
++  country: IN
++  access_status: open
++  epc_7d: 1.81
++  merchant_url: https://www.imyfone.com/
++- id: 3636
++  name: AliExpress BR
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 1.68
++  merchant_url: https://pt.aliexpress.com/
++- id: 7656
++  name: Tata Neu HDFC Credit Card CPL
++  category:
++    id: 5
++    name: Finance
++  country: IN
++  access_status: open
++  epc_7d: 1.56
++  merchant_url: https://www.tataneu.com/creditcard/
++- id: 7366
++  name: Oyela
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 1.52
++  merchant_url: https://oyela.in/
++- id: 4095
++  name: TrueBasics
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 1.45
++  merchant_url: https://www.truebasics.com/
++- id: 7288
++  name: JetBlue TrueBlue - Points.com
++  category:
++    id: 11
++    name: Travel
++  country: IN
++  access_status: open
++  epc_7d: 1.43
++  merchant_url: https://www.jetblue.com/signin
++- id: 1207
++  name: Shopbop
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 1.39
++  merchant_url: https://www.shopbop.com/
++- id: 5242
++  name: Watsons Malaysia
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 1.39
++  merchant_url: https://www.watsons.com.my/
++- id: 9568
++  name: Ajio Gram
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 1.36
++  merchant_url: https://ajiogram.ajio.com/
++- id: 4787
++  name: Tiqets
++  category:
++    id: 11
++    name: Travel
++  country: IN
++  access_status: open
++  epc_7d: 1.36
++  merchant_url: https://www.tiqets.com/en/
++- id: 3398
++  name: Titan Watches
++  category:
++    id: 1
++    name: Fashion
++  country: IN
++  access_status: open
++  epc_7d: 1.31
++  merchant_url: https://www.titan.co.in/
++- id: 3971
++  name: Alibaba
++  category:
++    id: 14
++    name: Services
++  country: IN
++  access_status: open
++  epc_7d: 1.29
++  merchant_url: https://offer.alibaba.com/
++- id: 4957
++  name: Swiss Beauty
++  category:
++    id: 8
++    name: Health & Beauty
++  country: IN
++  access_status: open
++  epc_7d: 1.27
++  merchant_url: https://swissbeauty.in/
+
+==========================
+FILE: genlab-core/config/affiliate_catalog.yaml
+STATUS: 
+DIFF:
+

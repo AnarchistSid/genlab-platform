@@ -1,0 +1,294 @@
+# Phase 8 findings — audit run A (2026-07-29, session 9)
+# Schema: v1.4 §0.7. Next free ID after Phase 7: A-0080.
+# Verbatim outputs; secrets redacted per §0.5.
+
+- id: A-0080
+  phase: 8
+  host: both
+  title: "SaaS multi-tenant layer half-built — DB/role architecture ready, dashboard/quota/per-request session-context unfinished. 6th operator-owned channel deployable; external tenant NOT deployable"
+  category: consolidation
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: '(synthesis of A-0032, A-0054, A-0038, A-0066, A-0060, A-0028, A-0073 corrected)'
+      host: both
+      output: |
+        DB tenant tables (tenants/tenant_niches): schema ✓, 0 rows, writer code absent
+        Role isolation (genlab_app): GRANTs on all 45 tables ✓; app connects as genlab (bypassrls=t)
+        Per-niche credential prefix: works today (A-0056/D26 confirmed)
+        Per-niche config layout: dual (niches/<id>/config vs <root>/config) — 6th channel gets 2 templates
+        Dashboard RBAC: single-shared-secret Basic Auth, no per-niche
+        YT quota per-niche: schema field exists, only "all" bucket populated
+        Affiliate revenue attribution: wired end-to-end (A-0073 corrected), 0 rows = wired-but-no-conversions
+  claim: >
+    Composite Phase-3+5+6+7 finding. The SaaS multi-tenant story is half-built. DB schema
+    and role architecture ready (or one-DSN-swap away). Application layer (dashboard RBAC,
+    per-request `SET LOCAL app.niche_id`, per-niche quota populate, dual-layout collapse)
+    has 3-4 unfinished pieces. Deployability today:
+    (a) 6th operator-owned niche: works using per-niche prefix + shared dashboard.
+    (b) External tenant: NOT deployable — dashboard has no tenant boundary; runbook Step 5b
+        will decide whether the DB-role switch alone establishes isolation.
+  blast_radius: >
+    Single-most-decision-relevant Phase 8 output for SaaS go/no-go. If the SaaS thesis
+    depends on external tenant onboarding within 3-6 months, the outstanding work is
+    substantial: (i) dashboard RBAC / per-route niche filter, (ii) application-layer
+    `SET LOCAL app.niche_id` wrap on every DB access, (iii) tenants/tenant_niches writer
+    code, (iv) YT quota per-niche actual populate, (v) dual-config-layout collapse. Each
+    is L-XL effort. If SaaS is >12 months out, this is a Phase 8 map to build to.
+    Combined with A-0073's monetization-wired-but-0-conversions state, SaaS revenue
+    thesis itself is unproven at the local data layer regardless of platform completeness.
+  effort: XL
+  proposed_action: consolidate
+  supersedes: []
+
+- id: A-0081
+  phase: 8
+  host: both
+  title: "Env-pinning class fix — A-0005+A-0006+A-0007 collapse to one root cause (no dev/prod pin). One FIX file covers .python-version + container-parity render + docker-compose Postgres"
+  category: consolidation
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: '(synthesis of A-0005 FFmpeg 8.1 vs 6.1, A-0006 Python 3.14 vs 3.12, A-0007 Postgres 14 vs 18)'
+      host: both
+      output: |
+        Mac Python 3.14.3   |  VPS Python 3.12.3   -> tests may pass on Mac, fail on prod
+        Mac FFmpeg 8.1      |  VPS FFmpeg 6.1.1    -> media renders may differ
+        Mac Postgres 14.19  |  VPS Postgres 18.3   -> SQL/DDL that lints on Mac may misbehave on 18
+  claim: >
+    Three Phase-0 findings share one root cause: no environment pinning between dev and
+    prod. Test outcomes don't transfer reliably (A-0074 collection errors likely include
+    Python version drift). Media renders can produce subtly different output. Local dev
+    Postgres is effectively unusable for reproducing prod SQL behavior.
+  blast_radius: >
+    Per addendum: "one fix, one entry." Delivered as a single `FIX_env-pinning.md` in
+    Phase 9A:
+    (a) `.python-version` file at repo root pinning `3.12`; `uv` respects it on `uv run`.
+    (b) FFmpeg: either downgrade Mac (`brew install ffmpeg@6`) OR (better) docker-compose
+    a render container matching prod base image.
+    (c) Postgres: docker-compose Postgres 18 for local dev; ignore/uninstall Homebrew 14.
+    Effort M (single-day). Blast if wrong: none — pins are strictly narrower than current
+    unbounded dev env.
+  effort: M
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0082
+  phase: 8
+  host: vps
+  title: "Git-blind in-place config writers class fix — A-0012+A-0020+A-0023. Schema-in-git + state-out-of-git for auto_ramp_auto2.py + cuelinks_campaigns.yaml regenerator"
+  category: consolidation
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: '(synthesis of A-0012 3× rollout_pct uncommitted, A-0020 cuelinks_campaigns regen, A-0023 auto_ramp_auto2.py identified writer)'
+      host: vps
+      output: |
+        Two confirmed instances of components that write git-tracked YAML in place:
+        (1) scripts/auto_ramp_auto2.py::write_rollout_pct  (weekly, +10% ramp)
+        (2) genlab-cuelinks-campaign-refresh.timer -> regenerates cuelinks_campaigns.yaml weekly
+        Both edit files that git tracks; git sees only endpoints, never ladder history.
+  claim: >
+    Class-of-bug: git-tracked file whose runtime truth is written by a non-git process.
+    Two known instances; likely more (any AUTO-GENERATED-in-place regeneration inherits
+    the pattern).
+  blast_radius: >
+    Ops confusion (git diff shows only jumps in ladder), rollback surprise (git checkout
+    restores whatever git remembers, not the operator's intended live state), and
+    debugging failure (running rollout_pct = 1.0 with no history of how it got there).
+    Fix options ranked:
+    (a) Split each file: schema/skeleton (in git) + generated state (gitignored). Reads
+        merge at boot. Effort M per file, ~2 files = one week.
+    (b) Commit-back bot opens a PR on regeneration. Preserves history in git properly.
+    (c) Least effort: prominent "actual truth lives on VPS at /opt/genlab/<path>" header
+        + operator `gen-status` command. Documents but doesn't solve the debugging problem.
+    Recommendation: (a). Blast if wrong: reads must merge correctly — testable at CI time.
+  effort: L
+  proposed_action: consolidate
+  supersedes: []
+
+- id: A-0083
+  phase: 8
+  host: both
+  title: "META-FINDING: line-exists-doesn't-fire (A-0026+A-0062+A-0072) — 3 independent instances = systemic gap in how the system verifies its own guardrails fire"
+  category: correctness
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: '(synthesis of 3 confirmed instances)'
+      host: both
+      output: |
+        A-0026: pg_backup.sh:29 `find -mtime +14 -delete` present; 20 files retained > 14 days
+        A-0062: backup_visual_assets.sh:121 same predicate; 33-day-old files retained, 421 pruneable
+        A-0072: .pre-commit-config.yaml gitleaks v8.24.3 present; 2026-07-22 commit added
+                3× PGPASSWORD=genlab_*** anyway (hook not enforced / --no-verify used)
+  claim: >
+    Three independent "configured but not enforced" instances across two subsystems
+    (backup pruning + secret scanning). The pattern isn't unique to a single file or
+    author — it's a repeated shape in the codebase's guard mechanism. Each of the three
+    would be caught by adding a "test the mechanism itself" pass separate from the
+    guard's own operation.
+  blast_radius: >
+    The security/hygiene posture the codebase appears to establish is illusory anywhere
+    the enforcement layer doesn't actually block. Class-fix (one, spanning all three):
+    (i) For prunes: `find … -mtime +N | wc -l` sentinel alert that fires when count is
+    non-zero after expected prune interval — completely decoupled from the prune script
+    itself.
+    (ii) For hooks: CI-side `pre-commit run --all-files` that fails PRs if any hook
+    would trigger. Doesn't rely on developer's local `pre-commit install`.
+    (iii) Forward: every new guard (auto-approver kill switch, disk-quota monitor,
+    token expiry) ships with a paired "verify-fired" alert.
+    Effort M (each half is one small script + one systemd timer or GH Actions job).
+  effort: M
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0084
+  phase: 8
+  host: both
+  title: "Actionable consolidation list — FB/META secret dedup, native 5433 Postgres retire, SharePoint refs purge, .env.bak.* cleanup post-rotation"
+  category: consolidation
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: '(synthesis of A-0056 dup secret, A-0058 dead Postgres, A-0039 SharePoint refs, A-0016+A-0052 .env.bak sprawl)'
+      host: both
+      output: |
+        A-0056: FB_APP_SECRET and META_APP_SECRET same hash -> pick one, delete other
+        A-0058: native Postgres 18 on 5433 -> shut down (or firewall) — Docker 5432 is the used one
+        A-0039: 4 SharePoint code refs left (all in monitoring/) -> delete + CLAUDE.md update
+        A-0016+A-0052: 14 .env.bak.* files across both hosts (7 world-readable) -> delete post-rotation
+  claim: >
+    Small, high-confidence consolidation items. Each is single-day effort. Total: dedup
+    one env var, retire one Postgres process (frees ~40 MB RAM per A-0067 top-RSS list),
+    delete ~40 LOC + one CLAUDE.md paragraph, remove ~180 KB of stale env backups.
+  blast_radius: >
+    None if sequenced correctly (rotation before .env.bak deletion). Native Postgres
+    retirement requires confirming no other consumer references 5433 (grep + `sudo ss
+    -tlnp` before and after).
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0085
+  phase: 8
+  host: both
+  title: "Upgrade currency summary — no runtime/library within 6 months of deprecation; no S1 upgrade finding"
+  category: upgrade
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: '(synthesis of Phase 0 tool versions + Phase 1 uv tree)'
+      host: both
+      output: |
+        Python 3.12 (LTS through 2028), Node 22 (LTS through 2027), Postgres 18 (current),
+        FFmpeg 6.1 (2 majors behind but not deprecated), Anthropic SDK 0.102.0 (current),
+        detoxify + torch CPU wheel (correct choice per CLAUDE.md rationale).
+  claim: >
+    Prod runs current-generation LTS software across the stack. FFmpeg is the largest
+    single upgrade opportunity (2 versions behind), but pinning (A-0081) is a better
+    fix than upgrading — the drift is what causes reproducibility failures, not the
+    version itself.
+  blast_radius: >
+    None. No urgent upgrade action. Documented as positive posture.
+  effort: S
+  proposed_action: accept
+  supersedes: []
+
+- id: A-0086
+  phase: 8
+  host: both
+  title: "Deletion queue ranked — ~2.7 GB verified-removable disk (blocked by A-0062 prune fix); ~70 LOC deletable with no blockers"
+  category: waste
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: '(synthesis of A-0011, A-0017, A-0026, A-0039, A-0045, A-0052, A-0062, A-0063, A-0075)'
+      host: both
+      output: |
+        (See PHASE_8_consolidation.md §7 for full table. Top items:
+         2.5 GB stale .backups/visuals/ files (blocked by A-0062 fix)
+         200 MB stale .sql.gz (blocked by A-0026 fix)
+         180 KB .env.bak.* post-rotation
+         12 MB nested genlab-core/.git (blocked by commit-set diff)
+         ~70 LOC no-blockers: libx265 dead branch, 6 ruff-auto-fix, SharePoint refs, orphan systemd files.)
+  claim: >
+    Ordered by (bytes ÷ effort). Total verified-removable disk: ~2.7 GB, most blocked
+    by prune-fix (A-0062). Immediately-deletable in Phase 9: ~70 LOC.
+  blast_radius: >
+    None if sequencing is honored. Deleting the 2.7 GB pre-fixing the prune scripts
+    would just re-accumulate.
+  effort: L
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0087
+  phase: 8
+  host: both
+  title: "POSITIVE-ARCHITECTURE — cross-channel imports 0/5, per-niche prefix architecture holds, genlab_app role designed. The 3-layer discipline is honored where it was built"
+  category: correctness
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: '(synthesis of A-0022 informal Phase 1 note, A-0054, D26 close)'
+      host: both
+      output: |
+        Phase 1: cross-channel imports 0/5 (perfect 3-layer isolation)
+        Phase 5: genlab_app role has GRANTs on all 45 tables (isolation-ready)
+        Phase 5: per-niche credential prefix (CLUTCHWIRE_*, SPLICEREEL_*...) works
+  claim: >
+    Where the 3-layer architecture (Layer 1 genlab-core / Layer 2 strategies / Layer 3
+    config) was implemented, it holds. Zero channel-to-channel import leakage across
+    all 5 channels. Adding a 6th operator-owned channel is genuinely `new YAML + new
+    strategies + new env prefix` per CLAUDE.md's design intent.
+  blast_radius: >
+    Positive signal. Reduces urgency of any "refactor for isolation" recommendation.
+    Complements A-0080's SaaS-tally: the layers that WERE built are clean; the layers
+    that were left half-built are the SaaS blocker. Not a criticism of the completed
+    work, a call-out of what still needs building.
+  effort: S
+  proposed_action: accept
+  supersedes: []
+
+- id: A-0088
+  phase: 8
+  host: both
+  title: "Class-of-bug taxonomy from this run — 5 named recurring classes across 79 findings. Phase 9 methodology ledger inherits"
+  category: correctness
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: '(synthesis of methodology-error patterns across all 9 sessions)'
+      host: both
+      output: |
+        (i)  durable-error-file-stale-state         (A-0024 → A-0043; also A-0009)
+        (ii) grep-pattern-doesn't-match-codebase    (A-0073 corr, A-0078; also A-0055)
+        (iii) git-blind in-place writers             (A-0012+A-0020+A-0023 → A-0082)
+        (iv) line-exists-doesn't-fire               (A-0026+A-0062+A-0072 → A-0083)
+        (v)  hook-configured-but-not-enforced       (A-0072 — sub-case of iv)
+  claim: >
+    Meta-observation from doing the audit: 5 recurring shapes of bug appeared multiple
+    times, several caught only after the second or third instance. Phase 9 methodology
+    ledger inherits this taxonomy so it's carried into any future audit. Prevention
+    lens: each class has a general-purpose detection heuristic (below).
+  blast_radius: >
+    Zero (this is observation, not finding-for-fix). Prevention heuristics:
+    (i) any durable-state file: also write a `_last_success` marker; alert on
+    error-file-newer-than-success-file.
+    (ii) any grep for "does this exist in the code": try 3 shapes (raw SQL, ORM, backend
+    abstraction) before concluding absence.
+    (iii) any file with "AUTO-GENERATED" comment: gitignore it; commit a schema instead.
+    (iv) any guard mechanism: pair with an independent "did it fire?" alert (see A-0083).
+    (v) any hook: enforce at CI, not just at pre-commit (see A-0072 fix path).
+  effort: S
+  proposed_action: accept
+  supersedes: []

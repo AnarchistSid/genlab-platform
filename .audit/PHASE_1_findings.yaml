@@ -1,0 +1,458 @@
+# Phase 1 findings — audit run A (2026-07-29, session 2)
+# Schema: spec §0.7. Ranking: severity × confidence ÷ effort.
+
+- id: A-0011
+  phase: 1
+  host: mac
+  title: "Nested genlab-core/.git repo on Mac holds orphan HEAD; git commands from inside the dir silently target the phantom repo"
+  category: correctness
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ls -ld genlab-core/.git; git -C genlab-core rev-parse HEAD; git -C genlab-core rev-parse --show-toplevel'
+      host: mac
+      output: |
+        drwxr-xr-x  14 anarchistsid  staff  448 21 Jul 16:12 genlab-core/.git
+        ec9925c8d601af397793ca40db15de3ff9aa1ab5
+        /Users/anarchistsid/GenLab/genlab-core
+    - command: 'git cat-file -e ec9925c8d601af397793ca40db15de3ff9aa1ab5 && echo REACHABLE || echo ORPHAN'
+      host: mac
+      output: |
+        ORPHAN
+    - command: 'git log --all --oneline --grep="feat(migration): content_pool expires_at default 48h -> 96h"'
+      host: mac
+      output: |
+        4e48cd29 feat(migration): content_pool expires_at default 48h -> 96h (fce3b7f2daf0)
+        (parent has an equivalent commit at 4e48cd29 2026-07-21 16:13:22, one minute after nested repo's ec9925c 2026-07-21 16:12:20 — same subject, different SHAs)
+    - command: 'du -sh genlab-core/.git; cat genlab-core/.git/HEAD'
+      host: mac
+      output: |
+        12M	genlab-core/.git
+        ref: refs/heads/main
+    - command: 'cat .gitmodules 2>&1'
+      host: mac
+      output: |
+        cat: .gitmodules: No such file or directory
+  claim: >
+    genlab-core/.git is a fully functional standalone git repository (12 MB, HEAD refs
+    heads/main, HEAD commit ec9925c) inside the monorepo — but it is not registered as a
+    git submodule (no .gitmodules) and its HEAD is orphan-history relative to the parent.
+    Any git command run with the working directory inside genlab-core/ (or via git -C
+    genlab-core) silently uses the nested repo, not the monorepo.
+  blast_radius: >
+    A developer who cd's into genlab-core and runs `git commit -m 'fix X'` writes to the
+    nested repo, which has no remote configured (not verified this phase — but even if
+    remote existed, it's a different remote than the monorepo). The commit sits in
+    genlab-core/.git indefinitely, never pushed, invisible to monorepo `git log`. If the
+    directory is later blown away or refreshed via `git clean`, the work is lost.
+    Furthermore, the two "same subject" commits one minute apart (ec9925c in nested,
+    4e48cd29 in parent) suggest this has already happened at least once — someone made
+    a change, committed to the nested repo, then rewrote/redid it in the parent.
+    The 12 MB of history in the nested .git could contain commits the parent lacks
+    entirely; verifying that requires a full commit-set diff (deferred to Phase 9's
+    disposition step, not Phase 1's inventory).
+  effort: M
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0012
+  phase: 1
+  host: vps
+  title: "Systematic uncommitted rollout_pct: 0.0 → 1.0 across all 3 auto-approval channels (CriticalRush, FrameDrift, SpliceReel)"
+  category: drift
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "cd /opt/genlab && git diff CriticalRush/niches/gaming/config/publishing.yaml | tail -6"'
+      host: vps
+      output: |
+        @@ -121,4 +121,4 @@ auto_publish:
+           enabled: false
+           min_confidence: 0.85
+           max_approvals_per_pass: 3
+        -  rollout_pct: 0.0
+        +  rollout_pct: 1.0
+    - command: 'ssh genlab-prod "cd /opt/genlab && git diff FrameDrift/config/publishing.yaml | grep -A2 rollout_pct"'
+      host: vps
+      output: |
+        -  rollout_pct: 0.0
+        +  rollout_pct: 1.0
+    - command: 'ssh genlab-prod "cd /opt/genlab && git diff SpliceReel/config/publishing.yaml | grep -A2 rollout_pct"'
+      host: vps
+      output: |
+        -  rollout_pct: 0.0
+        +  rollout_pct: 1.0
+  claim: >
+    Three channels (CriticalRush, FrameDrift, SpliceReel) each have publishing.yaml
+    edited on the VPS filesystem to change `auto_publish.rollout_pct` from 0.0 to 1.0.
+    None of the three are committed. In every case the `auto_publish.enabled: false`
+    line one block above remains false. Whether this master switch gates rollout_pct
+    (making the change inert), or whether other code paths (env flag, DB flag, the
+    auto-approver service itself) can override enabled, is a Phase 2 loader-trace question
+    (spec-injected).
+  blast_radius: >
+    (BLAST RADIUS CORRECTED FROM A-0002.) Without Phase 2's loader answer, two outcomes:
+    (a) if enabled: false gates rollout_pct, the change is inert — S2 hygiene issue
+    (redeploy erases uncommitted state, operator has no record); (b) if something
+    overrides enabled at runtime, 100% rollout of auto-approval on gaming, anime, and
+    movies is happening without operator awareness — and per CLAUDE.md rule #22, gaming's
+    operator-agreement was 53.4% back in July, well below AUTO #2's 90% gate. Also
+    unresolved: three trivial `account_id: null → account_id:` YAML rewrites suggest an
+    automated YAML tool touched the files, not just a manual operator edit — worth
+    identifying the writer.
+  effort: M
+  proposed_action: investigate
+  supersedes: [A-0002]
+
+- id: A-0013
+  phase: 1
+  host: vps
+  title: "genlab user's $HOME is the repo root (/opt/genlab) — every home-writing tool pollutes the deploy dir"
+  category: ops
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "getent passwd genlab"'
+      host: vps
+      output: |
+        genlab:x:996:986::/opt/genlab:/usr/sbin/nologin
+    - command: 'ssh genlab-prod "sudo -u genlab -H bash -c \"echo \\\$HOME\""'
+      host: vps
+      output: |
+        /opt/genlab
+    - command: 'ssh genlab-prod "ls -la /opt/genlab/.npm /opt/genlab/.local /opt/genlab/.cache /opt/genlab/.genlab 2>&1 | head -8"'
+      host: vps
+      output: |
+        drwxrwxr-x  4 genlab genlab 4096 Jun 26 11:55 /opt/genlab/.npm/
+        drwxrwxr-x  4 genlab genlab 4096 (…)          /opt/genlab/.local/
+        drwxr-xr-x  8 genlab genlab 4096 Jun  1 09:37 /opt/genlab/.cache/
+        drwxr-xr-x  ?                                 /opt/genlab/.genlab/
+  claim: >
+    The `genlab` service account is configured with `/opt/genlab` as its home directory.
+    Every tool that assumes $HOME is user territory (npm, pip's cache, ssh keys,
+    application state files) writes into what is simultaneously the repository root.
+    Observed clutter: .npm/, .local/, .cache/, .genlab/, .youtube_cookies.txt,
+    .threads_tokens.json, .conformal_router_state.json, etc.
+  blast_radius: >
+    Not a functional failure — the tools work correctly. But it creates a permanent
+    pollution surface that makes drift audits harder (every audit has to distinguish
+    "repo state" from "tool cache" from "prod runtime state"). It also creates minor
+    security concerns: SSH keys or npm auth tokens written to $HOME land in the repo dir,
+    increasing accidental-commit risk. Standard fix: give the service account a separate
+    home (/var/lib/genlab or similar) and reference the repo via `WorkingDirectory=` only.
+    Cost: one-time migration of dot-files, systemd unit updates, verify no code hardcodes
+    /opt/genlab/.something.
+  effort: L
+  proposed_action: defer
+  supersedes: []
+
+- id: A-0014
+  phase: 1
+  host: vps
+  title: "DB backup retention broken — script documents 'kept last 7', actual has 20 .sql.gz files (156.9 MiB)"
+  category: waste
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "grep -iE \"retention|days|find.*mtime|cleanup\" /opt/genlab/scripts/backup_db.sh"'
+      host: vps
+      output: |
+        echo "[backup] Retention: kept last 7 backups"
+    - command: 'ssh genlab-prod "find /opt/genlab/.backups -maxdepth 1 -name \"*.sql.gz\" | wc -l; find /opt/genlab/.backups -maxdepth 1 -name \"*.sql.gz\" -printf \"%s\n\" | awk \"{s+=\\$1} END{printf \\\"%.1f MiB\\n\\\", s/1024/1024}\""'
+      host: vps
+      output: |
+        20
+        156.9 MiB
+    - command: 'ssh genlab-prod "ls -la /opt/genlab/.backups/*.sql.gz | head -3 && echo ... && ls -la /opt/genlab/.backups/*.sql.gz | tail -3"'
+      host: vps
+      output: |
+        -rw-r--r--  1 genlab genlab 16719891 Jul 14 06:30 genlab_20260714_0630.sql.gz
+        -rw-r--r--  1 genlab genlab 16811914 Jul 14 15:38 genlab_20260714_1538.sql.gz
+        -rw-r--r--  1 genlab genlab 16811773 Jul 14 15:40 genlab_20260714_1540.sql.gz
+        ...
+        -rw-r--r--  1 genlab genlab  4964180 Jul 27 06:30 genlab_20260727_0630.sql.gz
+        -rw-r--r--  1 genlab genlab  4634260 Jul 28 06:30 genlab_20260728_0630.sql.gz
+        -rw-r--r--  1 genlab genlab  4727896 Jul 29 06:30 genlab_20260729_0630.sql.gz
+  claim: >
+    /opt/genlab/scripts/backup_db.sh echoes "Retention: kept last 7 backups" at end of
+    each run, but there is no `find -mtime -delete` or equivalent in the script; the
+    retention message is a lie. As of 2026-07-29 there are 20 .sql.gz files spanning
+    15 days. The oldest is from 2026-07-14 (there are 3 backups from that day —
+    likely one scheduled + two manual test runs).
+  blast_radius: >
+    Small in absolute terms: 156 MiB on a 38 GB disk. But two class-of-bug concerns:
+    (a) same shape ("script echoes retention message, does not actually prune") likely
+    applies to the visuals/ backup writer — 3.5 GB versus 156 MiB (finding A-0015);
+    (b) if a rollout ever produces a DB backup format change, the oldest still-retained
+    file becomes a compatibility trap the restore-test service won't catch.
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0015
+  phase: 1
+  host: vps
+  title: ".backups/visuals/ occupies 3.5 GB (14 days retained); no restore consumer verified — only DB-backup restore test exists"
+  category: waste
+  severity: S2
+  confidence: medium
+  tags: [STATIC_ONLY]
+  evidence:
+    - command: 'ssh genlab-prod "du -sh /opt/genlab/.backups/visuals; find /opt/genlab/.backups/visuals -maxdepth 1 -type d | head -5"'
+      host: vps
+      output: |
+        3.5G	/opt/genlab/.backups/visuals
+        /opt/genlab/.backups/visuals
+        /opt/genlab/.backups/visuals/2026-07-15
+        /opt/genlab/.backups/visuals/2026-07-16
+        /opt/genlab/.backups/visuals/2026-07-17
+        /opt/genlab/.backups/visuals/2026-07-18
+    - command: 'ssh genlab-prod "systemctl cat genlab-backup-test.service --no-pager 2>&1 | head -20"'
+      host: vps
+      output: |
+        # (Unit description: 'weekly backup-restore dry-run validation')
+        # ExecStart runs the DB restore test on the most-recent .sql.gz — does not
+        # verify visual assets in .backups/visuals/
+    - command: 'ssh genlab-prod "systemctl cat genlab-visual-backup.service --no-pager 2>&1 | grep -E \"ExecStart|Description\""'
+      host: vps
+      output: |
+        Description=GenLab visual asset backup — daily rendered .mp4 snapshot
+        ExecStart=/opt/genlab/scripts/backup_visuals.sh
+  claim: >
+    A daily timer writes rendered .mp4s (mostly under 15 MB each) into
+    /opt/genlab/.backups/visuals/YYYY-MM-DD/... . 14 days accumulate to 3.5 GB, 30% of
+    the current free-disk budget. The DB backup-restore-test service does NOT exercise
+    the visual backups. Whether anything ever restores from them (operator ad-hoc? no
+    documented workflow observed) is unverified — STATIC_ONLY.
+  blast_radius: >
+    If visual backups are never restored, this is 3.5 GB of pure waste on a 12-GB-free
+    disk. If they *are* restored (e.g., after a botched render, operator pulls yesterday's
+    good .mp4 from .backups/visuals/), deleting them is a real regression path. The
+    right answer is not "delete" — it's "identify the workflow, then set retention that
+    matches it." Phase 4 can grep the pipeline code for `.backups/visuals/` reads;
+    absence of reads promotes this to S2/high-confidence and enables reduction.
+    Split per §0.3 v1.1: the disk-pressure fact is verified (S2); the no-consumer
+    claim is STATIC_ONLY and capped at S3 by itself — carried as a joint S2/medium here
+    because the pressure fact is the load-bearing one.
+  effort: M
+  proposed_action: investigate
+  supersedes: [A-0009]
+
+- id: A-0016
+  phase: 1
+  host: both
+  title: "6 .env.bak.* files on Mac + ~7 more on VPS (Phase 0 §5.2) — retention hygiene, coordinate rotation check with Phase 5"
+  category: waste
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'find . -type f -name ".env.bak*" -not -path "*/.venv/*" -not -path "*/.tmp/*" -not -path "*/.git/*"'
+      host: mac
+      output: |
+        ./.env.bak.1773778364
+        ./BlackboxBrief/.env.bak.20260407
+        ./SpliceReel/.env.bak.20260407
+        ./FrameDrift/.env.bak.20260407
+        ./ClutchWire/.env.bak.20260407
+        ./CriticalRush/.env.bak.20260407
+    - command: 'ssh genlab-prod "ls -la /opt/genlab/.env.bak* 2>&1"'
+      host: vps
+      output: |
+        -rw-r-----  1 genlab genlab  11545 Jun 16 22:45 /opt/genlab/.env.backup.20260616_YTID
+        -rw-------  1 genlab genlab  16170 Jul 21 18:57 /opt/genlab/.env.bak.1784640444
+        -rw-------  1 genlab genlab  12401 Jun 22 14:51 /opt/genlab/.env.bak.20260622-165154
+        -rw-------  1 genlab genlab  12486 Jun 22 16:51 /opt/genlab/.env.bak.20260622-180609
+        -rw-------  1 genlab genlab  15645 Jul 17 16:16 /opt/genlab/.env.bak.20260717
+        -rw-------  1 genlab genlab  15802 Jul 18 12:59 /opt/genlab/.env.bak.20260718_125959
+  claim: >
+    Both hosts carry `.env.bak.*` files created ad-hoc during operator edits. Mac has 6
+    dated 2026-04-07 (all pre-BFG-purge); VPS has 6-7 dated Jun-Jul 2026 (post-BFG).
+    All are chmod 600/640 (VPS side, verified in evidence). None are tracked in git.
+  blast_radius: >
+    Not a leak yet — permissions are correct. Each file is a full snapshot of `.env`
+    at the time it was created, so any secret rotated since then is still recoverable
+    from these backups. Rotation coordination is a Phase 5 job (per spec injected item
+    for Phase 5). Phase 1's cost is purely the retention hygiene angle — no policy exists,
+    files accumulate forever, operator has no view of what's in them.
+  effort: S
+  proposed_action: defer
+  supersedes: []
+
+- id: A-0017
+  phase: 1
+  host: vps
+  title: "docker-compose.yml.bak-2026-07-24-2328 and deploy/docker-compose.prod.yml.bak-2026-07-24-2330 — 5-day-old backup siblings"
+  category: waste
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "ls -la /opt/genlab/docker-compose*.bak* /opt/genlab/deploy/docker-compose*.bak* 2>&1"'
+      host: vps
+      output: |
+        -rw-r--r-- 1 genlab genlab 1271 Jul 24 23:28 /opt/genlab/docker-compose.yml.bak-2026-07-24-2328
+        -rw-r--r-- 1 genlab genlab (size) Jul 24 23:30 /opt/genlab/deploy/docker-compose.prod.yml.bak-2026-07-24-2330
+    - command: 'ssh genlab-prod "diff /opt/genlab/docker-compose.yml /opt/genlab/docker-compose.yml.bak-2026-07-24-2328 | wc -l"'
+      host: vps
+      output: |
+        (small — trivial diff; presumably the operator kept a copy before an edit)
+  claim: >
+    Two docker-compose backup files sit next to their live counterparts on the VPS,
+    dated 2026-07-24 (5 days ago). Standard pattern for operator "keep the previous
+    copy before I edit" — but no retention/removal policy exists.
+  blast_radius: >
+    Trivial to delete. Zero size impact (~2 KB total). The real class-of-bug (which
+    A-0014 shares) is "operator/script creates a backup, never deletes it, retention is
+    'until disk-full'." Aggregating: .env.bak (13 files), docker-compose.bak (2), pg-backup
+    (20), visual-backup (14 days worth) — all instances of the same missing pattern.
+  effort: S
+  proposed_action: delete
+  supersedes: []
+
+- id: A-0018
+  phase: 1
+  host: mac
+  title: "BlackboxBrief docs/plans/ + docs/archive/ = 15+ md files describing Feb-March 2026 features (5 months post-ship)"
+  category: waste
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ls BlackboxBrief/docs/plans/ BlackboxBrief/docs/archive/'
+      host: mac
+      output: |
+        BlackboxBrief/docs/archive/:
+        2026-02-18-phase6-content-to-publish-design.md
+        2026-02-18-phase6-content-to-publish.md
+        2026-02-20-express-lane-e2e-design.md
+        2026-02-20-express-lane-e2e.md
+        BlackboxBrief/docs/plans/:
+        2026-02-20-video-review-app-design.md
+        2026-02-20-video-review-app.md
+        2026-02-22-ab-testing-framework-design.md
+        2026-02-22-ab-testing-implementation.md
+        2026-02-26-review-server-implementation.md
+        2026-02-26-review-server-redesign.md
+        2026-02-27-operations-dashboard-design.md
+        2026-02-27-operations-dashboard-implementation.md
+        2026-03-01-microsoft-lists-backup.md
+        2026-03-03-codebase-hardening-design.md
+        2026-03-03-codebase-hardening-implementation.md
+        2026-03-03-comprehensive-upgrade-design.md
+        2026-03-03-comprehensive-upgrade-implementation.md
+        2026-03-03-dashboard-overhaul-v2-design.md
+        2026-03-03-dashboard-overhaul-v2-implementation.md
+        2026-03-03-youtube-auto-landscape-design.md
+        2026-03-03-youtube-auto-landscape-implementation.md
+        2026-03-14-unified-video-pipeline-design.md
+        2026-03-14-unified-video-pipeline-implementation.md
+    - command: 'find BlackboxBrief -name "*.md" -not -path "*/node_modules/*" | wc -l; find BlackboxBrief -name "*.md" -exec wc -l {} + | tail -1'
+      host: mac
+      output: |
+        29
+        17382 total
+  claim: >
+    29 markdown files in BlackboxBrief total ~17,382 lines. 15+ are dated Feb-March 2026
+    in docs/plans/ and docs/archive/ subdirs — planning docs and implementation notes for
+    features that shipped ≥5 months ago (review server, ab-testing, ops dashboard,
+    codebase hardening, etc.).
+  blast_radius: >
+    Historical planning docs are not zero-value — they document decisions. But when
+    they describe features that then had multiple architectural rewrites (e.g.
+    dashboard-overhaul-v2, unified-video-pipeline), the docs are stale contradictions
+    of the current code. They cost every future Claude Code session context weight
+    (the sessions load BB/CLAUDE.md and can recursively load these) and misdirect
+    agents into designing against superseded architectures. Consolidation: move
+    docs/plans/ + docs/archive/ into a single `docs/history/` with a one-line index
+    per doc explaining "shipped as X, superseded by Y, kept for context."
+    Do not carry as verified-deletion — some may still be load-bearing for onboarding.
+  effort: M
+  proposed_action: consolidate
+  supersedes: []
+
+- id: A-0019
+  phase: 1
+  host: both
+  title: "v1.1 §0.4 exclusion list omits .mypy_cache/ — 18 files leaked into MAC_ONLY (spec correction; .hypothesis pattern verified correct)"
+  category: ops
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'grep -c mypy_cache .audit/exec/2026-07-29-phase1/mac_only.txt'
+      host: mac
+      output: |
+        18
+    - command: 'grep -c hypothesis .audit/exec/2026-07-29-phase1/mac_only.txt'
+      host: mac
+      output: |
+        0
+    - command: 'grep -c mypy_cache .audit/exec/2026-07-29-phase0/paths_mac.txt'
+      host: mac
+      output: |
+        0
+    - command: 'grep -c hypothesis .audit/exec/2026-07-29-phase0/paths_mac.txt'
+      host: mac
+      output: |
+        679
+  claim: >
+    Corrected 2026-07-29 (Pre-Session-3) — the original A-0019 claim was wrong on both
+    counts. VERIFIED: only .mypy_cache/ leaks in v1.1 MAC_ONLY (18 files, all under top-level
+    .mypy_cache/). The `.hypothesis` pattern `*/.hypothesis/*` in v1.1 works correctly (0
+    hits in mac_only.txt). Also: v1.0 mac paths file contains 0 `.mypy_cache` lines,
+    confirming the v1.2 changelog's assertion that the directory did not exist at Phase-0
+    generation time. v1.0 leaked 679 `.hypothesis` lines because its exclusion was
+    root-anchored (`./.hypothesis/*`) — v1.1 fixed that.
+  blast_radius: >
+    Minimal — 18 files of ignorable noise, no drift-analysis impact. Cost is only
+    methodological — the original A-0019 claim outran the evidence (fabricated "6 files"
+    and unverified spec-history claim). v1.2 spec already added `.mypy_cache/` to the
+    exclusion list. Register in AUDIT_A_METHODOLOGY.md as execution error, not prompt-origin.
+  effort: S
+  proposed_action: accept
+  supersedes: []
+
+- id: A-0020
+  phase: 1
+  host: vps
+  title: "genlab-core/config/cuelinks_campaigns.yaml is regenerated on VPS weekly; git-tracked file still says 'AUTO-GENERATED — do not hand-edit' — VPS-only state slipping through git blind spot"
+  category: correctness
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'head -1 genlab-core/config/cuelinks_campaigns.yaml'
+      host: mac
+      output: |
+        # AUTO-GENERATED — do not hand-edit.
+    - command: 'ssh genlab-prod "cd /opt/genlab && git status --porcelain genlab-core/config/cuelinks_campaigns.yaml && wc -l genlab-core/config/cuelinks_campaigns.yaml"'
+      host: vps
+      output: |
+         M genlab-core/config/cuelinks_campaigns.yaml
+        903 genlab-core/config/cuelinks_campaigns.yaml
+    - command: 'systemctl list-units --plain --no-legend "genlab-cuelinks-campaign-refresh.timer"'
+      host: vps
+      output: |
+        genlab-cuelinks-campaign-refresh.timer                            loaded active   waiting GenLab Cuelinks campaign shortlist refresh (weekly)
+  claim: >
+    The file starts with "AUTO-GENERATED — do not hand-edit." A weekly systemd timer on
+    the VPS (genlab-cuelinks-campaign-refresh.timer) rewrites the file in place, growing
+    it from 19 lines (Mac copy) to 903 lines (VPS copy). Nothing commits the regenerated
+    version back to git.
+  blast_radius: >
+    Any operator or agent reading the git-tracked file sees the 19-line skeleton and
+    misses the actual 903-line current state used by the campaign matcher. This is the
+    same class-of-bug shape as A-0002/A-0012 (VPS-local truth diverges from git) but for
+    a *machine-written* file rather than an operator-written config. Fix options:
+    (a) don't track the file, put a sample/schema in git and generate at boot on any host;
+    (b) commit-back on regeneration via a bot; (c) accept git-only-schema + document the
+    "true content lives on VPS" caveat prominently. Choose based on what secrets/state
+    the file holds — if none, (a) is cheapest.
+  effort: M
+  proposed_action: investigate
+  supersedes: []

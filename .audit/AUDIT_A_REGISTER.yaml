@@ -1,0 +1,896 @@
+# AUDIT A — REGISTER (Phase 9A output, 2026-07-30)
+# Schema: v1.5 §Phase-9A §2. Full evidence + claim + blast_radius in per-phase findings YAML files.
+# This register carries: id, phase source, title, severity/confidence, category, disposition,
+# gate/trigger/reversal, sequencing, owner. Full context in referenced phase YAMLs.
+#
+# Rank formula: (severity_numeric × confidence_numeric) ÷ effort_numeric
+#   severity: S0=10, S1=5, S2=2, S3=1
+#   confidence: high=3, medium=2, low=1
+#   effort: S=1, M=2, L=4, XL=8
+#
+# Retracted / superseded: A-0002, A-0009, A-0014 (chain to A-0026), A-0015 (→A-0062),
+#   A-0019 (in-place corrected), A-0024 (→A-0043), A-0030 (→A-0078), A-0055 (→A-0072),
+#   A-0068 (→A-0073), A-0069 (→A-0062). Burned IDs: A-0021, A-0022.
+# Materially amended at Session-10 gate: A-0033, A-0034, A-0038, A-0044, A-0080 (see PHASE_9A_gate.md).
+
+# ═══════════════════════════════════════════════════════════════════════════════════
+# TIER 1 — S1, AWAITING_OPERATOR (rotation gate)
+# ═══════════════════════════════════════════════════════════════════════════════════
+
+- id: A-0053
+  title: "Live prod DB password `genlab_***` (hash c7b89bffef3a) in public source-repo history + world-readable .env; rotation NOT DONE 30+ hours after disclosure"
+  phase_source: 5
+  severity: S1
+  confidence: high
+  category: security
+  register_disposition: AWAITING_OPERATOR
+  register_verification_gate: "hash of new prod password ≠ c7b89bffef3a; grep -rIn genlab_*** /opt/genlab/ returns 0"
+  register_trigger: "OPERATOR_ACTIONS row #1 status = DONE (runbook Step 5a passes)"
+  register_target_date: "2026-08-05"
+  register_owner: operator
+  register_sequencing_before: []
+  register_related_operator_action: 1
+
+- id: A-0025
+  title: "Hardcoded `genlab_***` in pg_backup.sh + verify_policy_block_l1.sh (4 occurrences total)"
+  phase_source: 2
+  severity: S1
+  confidence: high
+  category: security
+  register_disposition: FIX
+  register_verification_gate: "grep -c genlab_*** on both files = 0 after runbook Step 6"
+  register_owner: operator
+  register_sequencing_before: [A-0053]
+  register_related_operator_action: 1
+
+- id: A-0032
+  title: "genlab DB role has rolsuper=t + rolbypassrls=t; 24 RLS policies silently no-op (empirically re-confirmed 5 niches returned)"
+  phase_source: 3
+  severity: S1
+  confidence: high
+  category: security
+  register_disposition: AWAITING_OPERATOR
+  register_verification_gate: "runbook Step 5b returns 0 rows without SET LOCAL app.niche_id (cross-niche read as genlab_app)"
+  register_trigger: "OPERATOR_ACTIONS row #3 done (runbook Steps 2-3-4 executed)"
+  register_target_date: "2026-08-05"
+  register_owner: operator + Phase 9 fix-queue
+  register_sequencing_before: [A-0053]
+  register_related_operator_action: 3
+  register_note: "If Step 5b returns rows (not 0), spawns new register entry: 'app doesn't SET LOCAL app.niche_id per request' (code fix, effort L)"
+
+- id: A-0051
+  title: ".env mode 644 world-readable on prod VPS — any shell user reads live prod creds"
+  phase_source: 5
+  severity: S1
+  confidence: high
+  category: security
+  register_disposition: FIX
+  register_verification_gate: "stat -c '%a %U' /opt/genlab/.env → 600 genlab"
+  register_owner: operator (bundled into runbook Step 3)
+  register_sequencing_before: [A-0053]
+  register_related_operator_action: 1
+
+# ═══════════════════════════════════════════════════════════════════════════════════
+# TIER 2 — S1, still open (independent of rotation gate)
+# ═══════════════════════════════════════════════════════════════════════════════════
+
+- id: A-0044
+  title: "3 systemd services FAILED at Session-10 re-check: genlab-pipeline-sports (newly), genlab-post-deploy-verify (5+ days), genlab-strategist (5+ days)"
+  phase_source: 4
+  severity: S1
+  confidence: high
+  category: ops
+  register_disposition: FIX
+  register_verification_gate: "systemctl list-units --state=failed 'genlab-*' returns empty"
+  register_owner: operator + dev
+  register_sequencing_before: []
+  register_note: "AMENDED at Session-10 gate: BB + Movies recovered; CW newly failed. Journal-rotation (A-0050) blocks root-cause; needs a fresh live failure to diagnose."
+
+- id: A-0034
+  title: "BB pipeline mode changed from failing (Phase 3: 32/8/0) to silent (0 attempts last 2 days). Root cause dark per A-0050 journal rotation"
+  phase_source: 3
+  severity: S1
+  confidence: high
+  category: correctness
+  register_disposition: FIX
+  register_verification_gate: "publishing_analytics for ai_creators shows attempts > 0 AND at least 1 PUBLISHED in a subsequent day"
+  register_owner: operator + dev
+  register_sequencing_before: []
+  register_related_operator_action: 2
+  register_note: "AMENDED at Session-10 gate: pipeline no longer 'failing'; attempts went 4/day → 0/day since 2026-07-28. Either operator-disabled or silent-early-exit."
+
+- id: A-0074
+  title: "Test suite has 77 collection errors on 10,783 tests — pytest unrunnable, coverage measurement BLOCKED"
+  phase_source: 7
+  severity: S1
+  confidence: high
+  category: correctness
+  register_disposition: FIX
+  register_verification_gate: "uv run pytest --collect-only -q shows 0 errors during collection"
+  register_owner: dev
+  register_sequencing_before: [A-0081]
+  register_note: "A-0081 env pinning likely eliminates a subset of the errors (Python 3.14 vs 3.12 drift). Iterative fix expected."
+
+- id: A-0072
+  title: "gitleaks v8.24.3 configured in .pre-commit-config.yaml but hook not enforced — 2026-07-22 commit added 3× PGPASSWORD=genlab_*** anyway (pre-commit install not run OR --no-verify used)"
+  phase_source: 7
+  severity: S1
+  confidence: high
+  category: security
+  register_disposition: FIX
+  register_verification_gate: "CI workflow runs `pre-commit run --all-files` on push; fails PR if any hook triggers. A test PR with a fake secret string is rejected by CI."
+  register_owner: dev
+  register_sequencing_before: []
+  register_note: "Component of A-0083 line-exists-doesn't-fire class-fix. Same root pattern as A-0026/A-0062 prune-not-firing."
+
+# ═══════════════════════════════════════════════════════════════════════════════════
+# TIER 3 — S1 SaaS-blocker (composite)
+# ═══════════════════════════════════════════════════════════════════════════════════
+
+- id: A-0080
+  title: "SaaS multi-tenant layer half-built — DB role architecture ready + tenants/tenant_niches populated (1+5 rows at gate); still open: dashboard RBAC, per-request SET LOCAL, dual config layout, affiliate emission path"
+  phase_source: 8
+  severity: S2
+  confidence: high
+  category: consolidation
+  register_disposition: DEFER
+  register_reversal_condition: null
+  register_trigger: "when external tenant onboarding is approved (not before)"
+  register_target_date: "2026-11-01"
+  register_owner: operator + dev
+  register_note: "DOWNGRADED S1→S2 at Session-10 gate: tenants populated (was empty in Phase 3); calibration active. Composite of A-0028 dual layout + A-0060 dashboard RBAC + A-0066 per-niche quota + A-0032 role switch + A-0073 affiliate path."
+
+# ═══════════════════════════════════════════════════════════════════════════════════
+# TIER 4 — S2 class-fixes (multi-symptom merged root causes)
+# ═══════════════════════════════════════════════════════════════════════════════════
+
+- id: A-0083
+  title: "META: line-exists-doesn't-fire — 3 independent instances (A-0026 pg_backup prune, A-0062 visual-backup prune, A-0072 gitleaks hook). Systemic gap in guardrail-fire verification"
+  phase_source: 8
+  severity: S2
+  confidence: high
+  category: correctness
+  register_disposition: FIX
+  register_verification_gate: "(1) Independent sentinel: `find /opt/genlab/.backups -type f -mtime +14 | wc -l` = 0 after next prune cycle. (2) CI `pre-commit run --all-files` fails on test-PR with fake secret. Both must pass."
+  register_owner: dev
+  register_sequencing_before: [A-0053]
+  register_related_operator_action: null
+  register_note: "One class-fix covers A-0026 + A-0062 + A-0072 instances. Meta-observation: any future guard mechanism ships with paired 'did-it-fire' alert."
+
+- id: A-0082
+  title: "Git-blind in-place config writers (A-0012 + A-0020 + A-0023) — schema-in-git + state-out-of-git for auto_ramp_auto2.py + cuelinks_campaigns.yaml"
+  phase_source: 8
+  severity: S2
+  confidence: high
+  category: consolidation
+  register_disposition: FIX
+  register_verification_gate: "auto_ramp_auto2.py runs, writes to gitignored state file, git status shows no change; boot merges schema + state correctly (verified via test)"
+  register_owner: dev
+  register_sequencing_before: []
+  register_note: "Preserves ladder history that in-place overwrites destroy. Two files affected."
+
+- id: A-0081
+  title: "No dev/prod env pinning (A-0005 Python + A-0006 FFmpeg + A-0007 Postgres) — one root cause, one FIX file"
+  phase_source: 8
+  severity: S2
+  confidence: high
+  category: consolidation
+  register_disposition: FIX
+  register_verification_gate: ".python-version=3.12 pinned; uv run uses 3.12 on Mac; docker-compose Postgres 18 running locally; ffmpeg pin verified on Mac (or containerized)"
+  register_owner: dev
+  register_sequencing_before: []
+  register_related_operator_action: null
+  register_note: "Blocks A-0074 fully — Python drift likely causes subset of collection errors."
+
+# ═══════════════════════════════════════════════════════════════════════════════════
+# TIER 5 — S2 preserving conditionality (A-0027 × A-0029 × A-0028)
+# ═══════════════════════════════════════════════════════════════════════════════════
+
+- id: A-0027-interaction
+  title: "SAFE APART, DANGEROUS TOGETHER: auto-approver ramp is inert TODAY only because A-0027 gate holds AND A-0029 fail-open default doesn't trigger AND A-0028 dual layout stays consistent. If ANY changes, dangerous together"
+  phase_source: 2
+  severity: S2
+  confidence: high
+  category: correctness
+  register_disposition: FIX
+  register_verification_gate: "A-0029 default changed from 1.0 to 0.0 in auto_approver.py:529 + pin test that catches regression"
+  register_owner: dev
+  register_sequencing_before: []
+  register_note: "The 3-finding interaction is one register line to preserve the conditionality. Cheapest fix is A-0029 (change default 1.0 → 0.0) — removes fail-open leg. A-0028 dual-layout consolidation is L effort."
+
+- id: A-0029
+  title: "auto_approver.py:529 defaults rollout_pct=1.0 — silent 100% rollout if YAML omits key (fail-open)"
+  phase_source: 2
+  severity: S2
+  confidence: high
+  category: correctness
+  register_disposition: FIX
+  register_verification_gate: "auto_approver.py:529 shows `rollout_pct: float = 0.0` + pin test in tests/scheduling/ catches regression"
+  register_owner: dev
+  register_sequencing_before: []
+  register_note: "One-line change. Removes the fail-open leg of the A-0027 interaction."
+
+- id: A-0028
+  title: "Dual publishing.yaml layout (niches/<id>/config vs config) — multi-tenancy blocker; 6th channel gets 2 conflicting templates"
+  phase_source: 2
+  severity: S2
+  confidence: high
+  category: consolidation
+  register_disposition: FIX
+  register_verification_gate: "auto_approver.py + publish_all_platforms.py + cross_post_teaser.py all use one canonical path. CriticalRush gaming publishing.yaml migrated. Pin test greps for OLD path pattern under any new channel dir."
+  register_owner: dev
+  register_sequencing_before: []
+  register_note: "L effort — CR gaming path migration. Blocks external tenant onboarding."
+
+# ═══════════════════════════════════════════════════════════════════════════════════
+# TIER 6 — S2 individual fixes
+# ═══════════════════════════════════════════════════════════════════════════════════
+
+- id: A-0011
+  title: "Nested genlab-core/.git on Mac — orphan HEAD not reachable from parent; git commands from inside dir silently target phantom repo. A-0061 confirmed no fresh secret in nested history"
+  phase_source: 1
+  severity: S2
+  confidence: high
+  category: correctness
+  register_disposition: FIX
+  register_verification_gate: "genlab-core/.git absent; pre-commit or CI check fails on any nested .git under a workspace member (regression guard). All nested commits' subject+date cross-referenced against parent; format-patch of any uniques applied to parent."
+  register_owner: dev
+  register_sequencing_before: []
+  register_note: "Sequencing per v1.4 §Phase-9: subject+date cross-ref (NOT SHA), format-patch uniques, archive before delete, add recurrence guard."
+
+- id: A-0026
+  title: "pg_backup.sh 14-day retention prune not firing — 20 files, oldest 15 days old (component of A-0083 class-fix)"
+  phase_source: 2
+  severity: S2
+  confidence: high
+  category: waste
+  register_disposition: FIX
+  register_verification_gate: "24h post-fix: file count matches retention rule (14 max); sentinel alert (part of A-0083) also confirms"
+  register_owner: dev
+  register_sequencing_before: [A-0083]
+
+- id: A-0062
+  title: "backup_visual_assets.sh 14-day prune not firing (421 files >14d, oldest 33d). Timeline: ~113 days at low load, ~48d when BB recovers"
+  phase_source: 6
+  severity: S2
+  confidence: high
+  category: waste
+  register_disposition: FIX
+  register_verification_gate: "find /opt/genlab/.backups/visuals -type f -mtime +14 | wc -l returns 0 after next prune cycle; sentinel (A-0083) confirms"
+  register_owner: dev
+  register_sequencing_before: [A-0083]
+  register_note: "Merged from A-0015 + A-0069. Sequencing: fix before OPERATOR_ACTIONS row #2 (BB recovery), not before next week."
+
+- id: A-0064
+  title: "Redis maxmemory=0B (unlimited) + noeviction — writes fail silently on OOM on shared 4 GB VPS"
+  phase_source: 6
+  severity: S2
+  confidence: high
+  category: performance
+  register_disposition: FIX
+  register_verification_gate: "docker exec genlab-redis redis-cli config get maxmemory returns 268435456 (256 MB); maxmemory-policy = allkeys-lru"
+  register_owner: operator
+  register_sequencing_before: []
+  register_related_operator_action: null
+
+- id: A-0060
+  title: "Dashboard: 173 routes, HTTP Basic Auth (single-shared-secret) + session cookie; no RBAC, no tenant-aware access — matches A-0032 at UI layer"
+  phase_source: 5
+  severity: S2
+  confidence: high
+  category: security
+  register_disposition: DEFER
+  register_trigger: "when external tenant onboarding starts OR when A-0032 role-switch fix lands"
+  register_target_date: "2026-11-01"
+  register_owner: dev
+  register_note: "SaaS-blocker paired with A-0032. Effort L (per-route niche filter + RBAC)."
+
+- id: A-0065
+  title: "Anthropic credit monitor is REACTIVE (post-exhaustion journal scan, 15-min latency); matches CLAUDE.md rule #16 anti-pattern"
+  phase_source: 6
+  severity: S2
+  confidence: high
+  category: ops
+  register_disposition: FIX
+  register_verification_gate: "monitor code has proactive balance-poll (queries Anthropic API /v1/organizations/me/usage or equivalent); alerts when balance < 24h expected burn"
+  register_owner: dev
+  register_sequencing_before: []
+
+- id: A-0052
+  title: "7 of 14 .env.bak.* files (2026-07-23+) are 644 world-readable; older 600 — permission drift"
+  phase_source: 5
+  severity: S2
+  confidence: high
+  category: security
+  register_disposition: FIX
+  register_verification_gate: "find /opt/genlab -name '.env.bak*' -printf '%m %p\\n' shows all lines start with 600, OR files deleted after rotation"
+  register_owner: operator
+  register_sequencing_before: [A-0053]
+
+- id: A-0057
+  title: "4 untracked prod credential files (664 world-readable): .youtube_session.json, .youtube_cookies.txt, .conformal_router_state.json, .version.env"
+  phase_source: 5
+  severity: S2
+  confidence: high
+  category: security
+  register_disposition: FIX
+  register_verification_gate: "stat -c '%a' on each = 600"
+  register_owner: operator
+  register_sequencing_before: []
+
+- id: A-0056
+  title: "FB_APP_SECRET and META_APP_SECRET have identical hashes — same value under two confusable names"
+  phase_source: 5
+  severity: S2
+  confidence: high
+  category: security
+  register_disposition: FIX
+  register_verification_gate: "grep code for FB_APP_SECRET usage → all migrated to META_APP_SECRET; FB_APP_SECRET removed from .env; app boots successfully"
+  register_owner: dev
+  register_sequencing_before: []
+
+- id: A-0058
+  title: "Two Postgres instances — Docker 5432 (used) + native 5433 (unknown purpose)"
+  phase_source: 5
+  severity: S2
+  confidence: high
+  category: waste
+  register_disposition: FIX
+  register_verification_gate: "ss -tlnp shows only 127.0.0.1:5432 (Docker); native postgres@5433 disabled or shut down"
+  register_owner: operator
+  register_sequencing_before: []
+  register_note: "Frees ~40 MB RAM on 4 GB VPS."
+
+- id: A-0046
+  title: "3 of 7 intelligence engine env vars configured on prod; 4 missing (unknown-default behavior)"
+  phase_source: 4
+  severity: S2
+  confidence: high
+  category: correctness
+  register_disposition: FIX
+  register_verification_gate: "All 7 GENLAB_*_ENABLED flags present in .env with explicit values; code default vs env-value verified for each"
+  register_owner: dev
+  register_sequencing_before: []
+
+- id: A-0048
+  title: "BB rollout_pct: 1.0 LIVE on ai_creators publishing.yaml while pipeline dark — throughput-throttle indistinguishable from upstream failure"
+  phase_source: 4
+  severity: S2
+  confidence: high
+  category: correctness
+  register_disposition: FIX
+  register_verification_gate: "auto-approver journal report separates examined_by_pipeline vs examined_by_approver; dashboard shows both"
+  register_owner: dev
+  register_sequencing_before: []
+
+- id: A-0033
+  title: "PARTIAL RETRACTION at Session-10 gate — auto_approval_calibration went from 0 to 305 rows; strategist_reports 0 to 5. Calibration path no longer dark. Systemd-vs-DB inconsistency remains (strategist service failed BUT reports exist)"
+  phase_source: 3
+  severity: S2
+  confidence: high
+  category: correctness
+  register_disposition: DEFER
+  register_trigger: "next successful strategist run (per systemd state OR log) confirms consistency; OR operator confirms if the 5 rows are seed/test data"
+  register_target_date: "2026-08-15"
+  register_owner: dev
+  register_note: "See PHASE_9A_gate.md for state change evidence."
+
+- id: A-0050
+  title: "Journal rotation destroyed diagnostic evidence for failed services — blocks root-cause hunts (A-0034, A-0044, and any future failures)"
+  phase_source: 4
+  severity: S2
+  confidence: high
+  category: ops
+  register_disposition: FIX
+  register_verification_gate: "Per-unit StandardError=append:/var/log/genlab/<unit>.log for pipeline-critical services OR SystemMaxUse bumped in journald.conf; verified by 30-day retention check"
+  register_owner: operator
+  register_sequencing_before: []
+
+- id: A-0049
+  title: "135 except Exception: sites in genlab-core (8 in publish path); 3 sampled = 1 silent-continue. Full classification blocked by A-0074 test-suite fix"
+  phase_source: 4
+  severity: S2
+  confidence: medium
+  category: correctness
+  register_disposition: DEFER
+  register_trigger: "after A-0074 test suite is runnable AND test coverage of exception paths can be measured"
+  register_target_date: "2026-08-30"
+  register_owner: dev
+
+- id: A-0055
+  title: "SUPERSEDED by A-0072 — gitleaks IS in pre-commit config; real gap is enforcement not existence"
+  phase_source: 5
+  severity: S2
+  confidence: high
+  category: security
+  register_disposition: ACCEPT
+  register_reversal_condition: "corrected — see A-0072 for actionable finding"
+  register_note: "SUPERSEDES: kept in register only for supersedes chain traceability; not a live finding."
+
+- id: A-0073
+  title: "AFFILIATE REVENUE TRACKING is WIRED end-to-end (link_tracker.py, dashboard/server/api/{revenue,analytics,links}.py, threads/x_twitter/facebook publish paths). 0 rows = situation 2 (wired but no conversions) OR emission URLs bypass dashboard redirect"
+  phase_source: 7
+  severity: S2
+  confidence: high
+  category: correctness
+  register_disposition: DEFER
+  register_trigger: "operator inspects one posted affiliate URL — if it points to dashboard.host/link/N, redirect fires; if it points direct to amzn.to/cuelinks.com, GenLab never sees the click. A-0071 network-dashboard cross-check is the ground truth."
+  register_target_date: "2026-08-05"
+  register_owner: operator
+  register_related_operator_action: 10
+  register_note: "CORRECTED at Pre-Session-9 (was S1 not-wired; now S2 wired-but-no-conversions). Full Phase 8 evidence in PHASE_8_consolidation.md §11."
+
+# ═══════════════════════════════════════════════════════════════════════════════════
+# TIER 7 — S3 fix/delete/accept
+# ═══════════════════════════════════════════════════════════════════════════════════
+
+- id: A-0008
+  title: "VPS .git has 25 packs (148 MB) — git gc reclaims ~100 MB. GATING REFUTED per A-0059"
+  phase_source: 0
+  severity: S3
+  confidence: high
+  category: waste
+  register_disposition: FIX
+  register_verification_gate: "git count-objects -vH on VPS shows packs ≤ 5 and size-pack < 60 MiB"
+  register_owner: operator
+  register_sequencing_before: [A-0053]
+
+- id: A-0045
+  title: "verify-2026-07-22-fixes.timer still armed 6+ days post-purpose"
+  phase_source: 4
+  severity: S3
+  confidence: high
+  category: waste
+  register_disposition: FIX
+  register_verification_gate: "systemctl list-unit-files 'genlab-verify-2026-07-22-fixes*' returns 0 units"
+  register_owner: operator
+  register_sequencing_before: []
+
+- id: A-0017
+  title: "2 docker-compose*.bak-2026-07-24-* files on VPS"
+  phase_source: 1
+  severity: S3
+  confidence: high
+  category: waste
+  register_disposition: FIX
+  register_verification_gate: "find /opt/genlab -name 'docker-compose*.bak-*' returns 0 files"
+  register_owner: operator
+  register_sequencing_before: []
+
+- id: A-0016
+  title: "13 .env.bak.* files across hosts — retention hygiene post-rotation"
+  phase_source: 1
+  severity: S3
+  confidence: high
+  category: waste
+  register_disposition: FIX
+  register_verification_gate: "find on both hosts returns 0 .env.bak.* files after rotation done"
+  register_owner: operator
+  register_sequencing_before: [A-0053]
+
+- id: A-0004
+  title: "2 dangling systemd unit references + 2 orphaned .pre-2026-07-05 unit files"
+  phase_source: 0
+  severity: S3
+  confidence: high
+  category: ops
+  register_disposition: FIX
+  register_verification_gate: "systemctl list-units --all --plain 'genlab-*' | awk '$2==\"not-found\"' returns empty; no .pre-2026-07-05 files on disk"
+  register_owner: operator
+  register_sequencing_before: []
+
+- id: A-0018
+  title: "BB docs/plans/ + docs/archive/ = 15+ stale md files (Feb-March 2026 features shipped 5+ months ago)"
+  phase_source: 1
+  severity: S2
+  confidence: high
+  category: waste
+  register_disposition: FIX
+  register_verification_gate: "docs/plans + docs/archive consolidated into docs/history/ with one-line index; total md file count reduced by ≥10"
+  register_owner: dev
+  register_sequencing_before: []
+
+- id: A-0020
+  title: "cuelinks_campaigns.yaml regenerated on VPS weekly; git-tracked file says AUTO-GENERATED — VPS-only truth slipping through git blind spot (component of A-0082)"
+  phase_source: 1
+  severity: S3
+  confidence: high
+  category: correctness
+  register_disposition: FIX
+  register_verification_gate: "part of A-0082 class-fix"
+  register_owner: dev
+  register_sequencing_before: [A-0082]
+
+- id: A-0031
+  title: "D19 stale — BB flipped whisper_sync.enabled: true on 2026-07-22 (canary); CLAUDE.md rule text not updated"
+  phase_source: 2
+  severity: S3
+  confidence: high
+  category: correctness
+  register_disposition: FIX
+  register_verification_gate: "CLAUDE.md rule updated to reflect current state; git commit"
+  register_owner: operator
+  register_sequencing_before: []
+
+- id: A-0037
+  title: "D13 DELTA — CLAUDE.md says '55 indexes across all tables', actual is 152 (3× drift)"
+  phase_source: 3
+  severity: S3
+  confidence: high
+  category: correctness
+  register_disposition: FIX
+  register_verification_gate: "CLAUDE.md updated to '152 indexes' OR replaced with 'see pg_indexes' pointer"
+  register_owner: operator
+  register_sequencing_before: []
+
+- id: A-0039
+  title: "D6 CLOSED — SharePoint fallback documentation-only (0 tables, 4 legacy code refs); CLAUDE.md 'kept as fallback' → 'removed'"
+  phase_source: 3
+  severity: S3
+  confidence: high
+  category: waste
+  register_disposition: FIX
+  register_verification_gate: "grep -rln sharepoint /opt/genlab/genlab-core/src/ returns 0; CLAUDE.md updated"
+  register_owner: dev
+  register_sequencing_before: []
+
+- id: A-0040
+  title: "Alembic head n1i2j3k4l5m6 in DB; VPS alembic heads errors on missing script_location"
+  phase_source: 3
+  severity: S2
+  confidence: high
+  category: ops
+  register_disposition: FIX
+  register_verification_gate: "cd /opt/genlab && uv run alembic current returns 'n1i2j3k4l5m6 (head)'"
+  register_owner: operator
+  register_sequencing_before: []
+
+- id: A-0035
+  title: "pg_stat_statements not installed — blocks LLM cost + query cost analysis"
+  phase_source: 3
+  severity: S2
+  confidence: high
+  category: ops
+  register_disposition: FIX
+  register_verification_gate: "CREATE EXTENSION pg_stat_statements + shared_preload_libraries added to postgresql.conf + restart; SELECT calls, total_exec_time FROM pg_stat_statements LIMIT 1 succeeds"
+  register_owner: operator
+  register_sequencing_before: []
+
+- id: A-0075
+  title: "Dead-code: 98 ruff F401/F811/F841/ARG hits on genlab-core/src/ (6 auto-fixable; 92 STATIC_ONLY need per-hit runtime pass)"
+  phase_source: 7
+  severity: S2
+  confidence: medium
+  category: waste
+  register_disposition: DEFER
+  register_trigger: "after A-0074 test suite runnable AND per-hit runtime evidence pass sprint scoped"
+  register_target_date: "2026-09-30"
+  register_owner: dev
+
+- id: A-0038
+  title: "PARTIAL RETRACTION at Session-10 gate — tenants+tenant_niches now populated (1+5 rows). product_embeddings + monetization empties survive as waste candidates"
+  phase_source: 3
+  severity: S3
+  confidence: high
+  category: waste
+  register_disposition: ACCEPT
+  register_reversal_condition: "product_embeddings or monetization tables show sudden growth (would signal writer wired)"
+  register_owner: null
+  register_note: "See PHASE_9A_gate.md."
+
+- id: A-0041
+  title: "compliance_events has 6 platform_policy_block rows — L1 wire works; verify GENLAB_POLICY_BLOCK_RCA_ENABLED for L2/L3 activation"
+  phase_source: 3
+  severity: S3
+  confidence: high
+  category: ops
+  register_disposition: FIX
+  register_verification_gate: "GENLAB_POLICY_BLOCK_RCA_ENABLED=1 in .env AND compliance_events shows L2/L3 event types after 1 week"
+  register_owner: operator
+  register_sequencing_before: []
+
+- id: A-0043
+  title: "A-0024 retraction confirmed — dict_row fix in place, .runtime files stale historical, service ran SUCCESS. Observability class-of-bug: durable-error files don't self-clear"
+  phase_source: 4
+  severity: S3
+  confidence: high
+  category: correctness
+  register_disposition: ACCEPT
+  register_reversal_condition: "any script writing .runtime/*_last_error.txt file also writes .runtime/*_last_success.txt; alert only when error newer than success"
+  register_owner: dev
+
+- id: A-0054
+  title: "POSITIVE — genlab_app has GRANTs on all 45 tables; A-0032 fix is one-line DSN swap"
+  phase_source: 5
+  severity: S3
+  confidence: high
+  category: correctness
+  register_disposition: ACCEPT
+  register_reversal_condition: "new tables added post-audit without corresponding GRANT to genlab_app"
+  register_owner: null
+  register_note: "Consumed by A-0032 runbook."
+
+- id: A-0059
+  title: "A-0008 git gc REFUTED-as-gated — BFG rewrite propagated to VPS; safe from secret-retrieval angle"
+  phase_source: 5
+  severity: S3
+  confidence: high
+  category: correctness
+  register_disposition: ACCEPT
+  register_reversal_condition: "new BFG-style secret purge; then re-gate gc"
+  register_owner: null
+
+- id: A-0061
+  title: "Nested genlab-core/.git has 1 legit PGPASSWORD cleanup commit; no genlab_*** — A-0011 not a fresh secret vector"
+  phase_source: 5
+  severity: S3
+  confidence: high
+  category: security
+  register_disposition: ACCEPT
+  register_reversal_condition: "Phase 5 gitleaks over nested history reveals unrotated purged secret"
+  register_owner: null
+
+- id: A-0063
+  title: "D21 DELTA — PLATFORM_SPECS CRF 18 preset=medium; CLAUDE.md says CRF 20 preset=fast. Bigger output feeds A-0062"
+  phase_source: 6
+  severity: S2
+  confidence: high
+  category: correctness
+  register_disposition: FIX
+  register_verification_gate: "either PLATFORM_SPECS updated to CRF 20 preset=fast OR CLAUDE.md updated to match code; libx265 branch deleted; render output size verified"
+  register_owner: dev
+  register_sequencing_before: []
+
+- id: A-0066
+  title: "YT quota tracker has per_niche schema but all usage lumped under 'all' bucket (SaaS-blocker)"
+  phase_source: 6
+  severity: S2
+  confidence: high
+  category: consolidation
+  register_disposition: DEFER
+  register_trigger: "when A-0080 SaaS work starts OR when per-tenant billing is designed"
+  register_target_date: "2026-11-01"
+  register_owner: dev
+
+# ═══════════════════════════════════════════════════════════════════════════════════
+# TIER 8 — S3 positives + accepted-with-condition
+# ═══════════════════════════════════════════════════════════════════════════════════
+
+- id: A-0087
+  title: "POSITIVE — cross-channel imports 0/5; per-niche prefix architecture holds; 3-layer discipline honored where built"
+  phase_source: 8
+  severity: S3
+  confidence: high
+  category: correctness
+  register_disposition: ACCEPT
+  register_reversal_condition: "any new channel creates cross-channel import (add lint check to prevent)"
+  register_owner: null
+
+- id: A-0077
+  title: "POSITIVE — 49 Python # type: ignore + 1 TS @ts-ignore across ~316K LOC (~0.015%). Healthy typing"
+  phase_source: 7
+  severity: S3
+  confidence: high
+  category: correctness
+  register_disposition: ACCEPT
+  register_reversal_condition: "type-ignore count > 100 in a single member (drift signal)"
+  register_owner: null
+
+- id: A-0079
+  title: "CI exists — 4 workflows (auto-deploy, ci, codeql, test); deeper analysis deferred"
+  phase_source: 7
+  severity: S3
+  confidence: high
+  category: ops
+  register_disposition: DEFER
+  register_trigger: "after A-0074 test suite runnable — CI green vs red becomes measurable"
+  register_target_date: "2026-09-15"
+  register_owner: dev
+
+- id: A-0085
+  title: "POSITIVE — no runtime/library within 6 months of deprecation"
+  phase_source: 8
+  severity: S3
+  confidence: high
+  category: upgrade
+  register_disposition: ACCEPT
+  register_reversal_condition: "quarterly re-check (2026-10-30)"
+  register_owner: null
+
+- id: A-0086
+  title: "Deletion queue ranked — ~2.7 GB disk (blocked by A-0062 prune fix), ~70 LOC no-blockers"
+  phase_source: 8
+  severity: S3
+  confidence: high
+  category: waste
+  register_disposition: FIX
+  register_verification_gate: "post-A-0062 fix: du -sh .backups/visuals returns < 500 MB; 70 LOC deletions committed with test coverage"
+  register_owner: dev
+  register_sequencing_before: [A-0062]
+
+- id: A-0088
+  title: "Class-of-bug taxonomy from this run — 5 named recurring classes with detection heuristics. Inherited by AUDIT_A_METHODOLOGY.md"
+  phase_source: 8
+  severity: S3
+  confidence: high
+  category: correctness
+  register_disposition: ACCEPT
+  register_reversal_condition: "next audit incorporates taxonomy from day 1; if new classes emerge, extend"
+  register_owner: audit-methodology (future runs)
+
+# ═══════════════════════════════════════════════════════════════════════════════════
+# TIER 9 — S3 low-priority (accept-as-noted)
+# ═══════════════════════════════════════════════════════════════════════════════════
+
+- id: A-0010
+  title: "Mac CriticalRush = 9.1 GB local media bloat"
+  phase_source: 0
+  severity: S3
+  confidence: high
+  category: waste
+  register_disposition: DEFER
+  register_trigger: "Mac disk pressure signal (< 20 GB free)"
+  register_target_date: "2026-12-31"
+  register_owner: operator
+
+- id: A-0067
+  title: "VPS shared with aspirehub (~575 MB RSS) + gh-runner (~114 MB); GenLab is 14% of named-process RSS"
+  phase_source: 6
+  severity: S3
+  confidence: high
+  category: cost
+  register_disposition: ACCEPT
+  register_reversal_condition: "OOM kill event OR sustained free RAM < 100 MiB"
+  register_owner: operator
+
+- id: A-0047
+  title: "D18 ACCEPTED — SKIP_APPROVAL_GATE presumed removed per CLAUDE.md"
+  phase_source: 4
+  severity: S3
+  confidence: medium
+  category: correctness
+  register_disposition: ACCEPT
+  register_reversal_condition: "grep finds it re-introduced"
+  register_owner: null
+
+- id: A-0076
+  title: "D8 CLOSED — .pre-commit-config.yaml well-formed"
+  phase_source: 7
+  severity: S3
+  confidence: high
+  category: correctness
+  register_disposition: ACCEPT
+  register_reversal_condition: "pre-commit ruff/gitleaks pins age past major-version drift"
+  register_owner: null
+
+- id: A-0084
+  title: "Consolidation list — FB/META dedup, 5433 Postgres retire, SharePoint refs purge, .env.bak cleanup post-rotation"
+  phase_source: 8
+  severity: S2
+  confidence: high
+  category: consolidation
+  register_disposition: FIX
+  register_verification_gate: "composite of A-0056 + A-0058 + A-0039 + A-0016 verification gates"
+  register_owner: dev
+  register_sequencing_before: [A-0053]
+  register_note: "Umbrella entry — component fixes each have their own register entries."
+
+- id: A-0013
+  title: "genlab user's $HOME = /opt/genlab (repo root == home dir) — home-writing tools pollute the deploy dir"
+  phase_source: 1
+  severity: S2
+  confidence: high
+  category: ops
+  register_disposition: DEFER
+  register_trigger: "when operator plans VPS reprovision OR when new user added to the system"
+  register_target_date: "2026-12-31"
+  register_owner: operator
+  register_note: "L effort. Cleanest during a rebuild, not mid-life."
+
+- id: A-0019
+  title: "v1.1 §0.4 exclusion missed .mypy_cache (in-place corrected)"
+  phase_source: 1
+  severity: S3
+  confidence: high
+  category: ops
+  register_disposition: ACCEPT
+  register_reversal_condition: "next audit uses v1.3+ exclusion set (already added)"
+  register_owner: null
+
+# ═══════════════════════════════════════════════════════════════════════════════════
+# END OF REGISTER
+# Total entries: 47 (of ~64 net findings; remaining are consumed by class-fixes A-0082/0083/0081)
+# ═══════════════════════════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════════════════════════
+# REGISTER AMENDMENT 2026-07-30 (Session 11 Phase 9B)
+# 3 items promoted from DEFERRALS.md per v1.5 §Phase-9B §4:
+# - A-0003: silent-drop from 9A (deployment lag)
+# - A-0036: silent-drop from 9A (unused indexes)
+# - A-0089: dashboard lockfile question (ex-A-0021 semantics; that ID stays burned)
+# See AUDIT_A_DEFERRALS_DISPOSITION.md for full disposition context.
+# ═══════════════════════════════════════════════════════════════════════════════════
+
+- id: A-0003
+  title: "VPS is 2 commits (~13h) behind main HEAD — no automatic deploy trigger post-merge"
+  phase_source: 0
+  severity: S2
+  confidence: high
+  category: drift
+  register_disposition: DEFER
+  register_trigger: "when deploy-automation is designed (post-merge hook OR periodic pull)"
+  register_target_date: "2026-09-30"
+  register_owner: dev
+  register_note: "Promoted 2026-07-30 (9B silent-drop recovery). Original Phase 0 finding. Small in isolation (docs+test commits in the gap) but symptomatic of the 'no auto-deploy trigger' shape."
+
+- id: A-0036
+  title: "71 of 152 indexes have idx_scan=0 (46%) — mixed real waste + stat-reset artifacts"
+  phase_source: 3
+  severity: S2
+  confidence: medium
+  category: waste
+  register_disposition: DEFER
+  register_trigger: "after A-0074 (test suite runnable) AND A-0035 (pg_stat_statements installed so idx_scan=0 has meaningful post-reset window)"
+  register_target_date: "2026-09-30"
+  register_owner: dev
+  register_note: "Promoted 2026-07-30 (9B silent-drop recovery). Some are PKs (stat-reset artifact); some are 0-row-table indexes (real waste). Per-hit runtime evidence pass before deletion."
+
+- id: A-0089
+  title: "Dashboard lockfile question (ex-A-0021 semantics) — npm audit failed with 'no lockfile'; does dashboard use pnpm/yarn (elsewhere) or genuinely lack dependency reproducibility?"
+  phase_source: 1
+  severity: S3
+  confidence: medium
+  category: correctness
+  register_disposition: DEFER
+  register_trigger: "when a security advisory forces a dashboard dependency audit OR when node_modules/ hits an unexplained state"
+  register_target_date: "2026-09-30"
+  register_owner: dev
+  register_note: "Promoted 2026-07-30 (9B). A-0021 was referenced in Phase 1 §2 but never given a real finding entry; that ID stays burned; this fills the semantics with a fresh ID."
+
+# ═══════════════════════════════════════════════════════════════════════════════════
+# REGISTER AMENDMENT 2026-07-30 (post-rotation Wave 0)
+# Operator ran RUNBOOK_credential_rotation.md between 9B and Wave-0.
+# Verified at Wave 0 gate:
+#   - Rotation hash: c7b89bffef3a → 3e1183d82204 (differs = rotated)
+#   - .env mode:     600 genlab (was 644)
+#   - Cred files:    all 4 at 600 (were 664)
+#   - Redis:         maxmemory 268435456, policy allkeys-lru (was 0/noeviction)
+#   - Role attrs:    genlab_app|f|f (was genlab|t|t)
+#   - Step 5b:       RETURNED ROWS (357 ai_creators / 376 anime / 251 gaming / 340 movies / 856 sports)
+#                    → RLS is NOT deny-by-default when app.niche_id unset
+#                    → A-0032 SPLIT into 2 halves (see below)
+#
+# Register status changes:
+#   A-0053  AWAITING_OPERATOR → CLOSED (rotation done, hash verified)
+#   A-0025  AWAITING_OPERATOR → CLOSED-on-VPS-partial → CLOSED (Wave 0 finished Mac scrub;
+#           new sites discovered: scripts/db_maintenance.sh + genlab-core/migrations/env.py
+#           + 5 in docs/superpowers/plans/2026-03-17-postgresql-rls-phase0-1.md)
+#   A-0051  AWAITING_OPERATOR → CLOSED (.env now 600)
+#   A-0057  FIX (not on gate list) → CLOSED (4 cred files 600)
+#   A-0064  FIX → CLOSED (Redis ceiling set)
+#   A-0032  SPLIT:
+#     A-0032a (superuser-bypass) → CLOSED (app runs as genlab_app|f|f)
+#     A-0032b (isolation-fires)  → OPEN as new code finding — see below
+# ═══════════════════════════════════════════════════════════════════════════════════
+
+- id: A-0032b
+  title: "RLS not deny-by-default when app.niche_id is unset — cross-niche read as genlab_app returns all 5 niches (357+376+251+340+856 rows). Runbook Step 5b surfaced this as expected"
+  phase_source: 9A-Wave-0
+  severity: S1
+  confidence: high
+  category: security
+  register_disposition: FIX
+  register_verification_gate: "cross-niche `SELECT niche_id, COUNT(*) FROM blueprints GROUP BY niche_id` as genlab_app returns 0 rows WITHOUT SET LOCAL; and returns only the set niche's rows WITH `SET LOCAL app.niche_id = 'X'`"
+  register_owner: dev (this session, Wave 2)
+  register_sequencing_before: []
+  register_note: |
+    A-0032 split into two halves at Wave-0 per rotation Step 5b result.
+    Half-1 (superuser bypass) CLOSED by DSN swap in runbook.
+    Half-2 (isolation-fires) OPEN: RLS policies exist (24 of them) but they don't deny
+    when the session variable is unset — the predicate probably reads `current_setting(
+    'app.niche_id', true)` and evaluates NULL as "unfiltered". Two-part fix:
+    (a) rewrite each policy so unset → 0 rows (`USING (niche_id = current_setting(
+        'app.niche_id', true) AND current_setting('app.niche_id', true) IS NOT NULL)`
+        or equivalent — depends on how policies are currently structured);
+    (b) audit app code paths for missing `SET LOCAL app.niche_id` before DB access.
+    This is the SaaS-blocking fix Audit A A-0032/A-0054 pointed at.

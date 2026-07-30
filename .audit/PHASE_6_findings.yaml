@@ -1,0 +1,384 @@
+# Phase 6 findings — audit run A (2026-07-29, session 7)
+# Schema: v1.4 §0.7. Next free ID after Phase 5: A-0062.
+# Verbatim outputs; secrets redacted per §0.5.
+
+- id: A-0062
+  phase: 6
+  host: vps
+  title: "Visual-backup + pg_backup.sh prunes wired but NOT firing — 33-day-old files retained, 421 pruneable. Timeline conditional: ~113 days at current load, ~48 days when BB pipeline recovers (Pre-Session-9 merged A-0069 timeline in)"
+  category: waste
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "find /opt/genlab/.backups/visuals -type f -mtime +14 | wc -l"'
+      host: vps
+      output: |
+        421
+    - command: 'ssh genlab-prod "du -sh /opt/genlab/.backups/visuals; find /opt/genlab/.backups/visuals -type f -mtime -1 -printf ''%s\n'' | awk ''{s+=\$1} END{printf \"last 24h: %.1f MB\n\", s/1024/1024}''; df -h /"'
+      host: vps
+      output: |
+        3.5G	/opt/genlab/.backups/visuals
+        last 24h: 12.3 MB
+        /dev/sda1        38G   25G   12G  69% /
+    - command: 'ssh genlab-prod "find /opt/genlab/.backups/visuals -type f -printf ''%T@\n'' | sort -n | head -1"'
+      host: vps
+      output: |
+        1782441263.93 (2026-07-15 → 33 days ago; retention rule = 14 days)
+  claim: >
+    Both `backup_visual_assets.sh:121` and `pg_backup.sh:29` have wired `find … -mtime
+    +N -delete` prune commands that do not execute. Visual-backup: 33-day-old files
+    retained (retention says 14), 421 files pruneable. pg_backup.sh: 20 .sql.gz files
+    retained (retention says 14). Shared root cause (cwd resolution / early-exit /
+    permission) not yet identified — flagged in DEFERRALS for batched Phase-4-revisit.
+  blast_radius: >
+    Merged from A-0069 (Pre-Session-9 correction): the alarming "48-day exhaustion"
+    number was conditional on normal render volume, which isn't presently true — BB
+    has been dark 8 days (A-0034), current accretion is ~106 MB/day, giving ~113 days
+    to 12 GB free (November 2026). Real emergency window opens when OPERATOR_ACTIONS
+    row #2 (BB recovery) lands and accretion returns to ~250 MB/day → then ~48 days.
+    **Sequencing rule: fix this before BB recovery, not before next week.** No OOM/
+    disk emergency at today's volume. Same class-of-bug as A-0026 (pg_backup.sh) and
+    A-0072 (gitleaks hook): "line exists but doesn't fire" — three instances now =
+    named recurring class in Phase 8.
+  effort: M
+  proposed_action: fix
+  supersedes: [A-0015, A-0069]
+
+- id: A-0063
+  phase: 6
+  host: mac
+  title: "D21 DELTA — PLATFORM_SPECS CRF 18 preset=medium in code; CLAUDE.md says CRF 20 preset=fast. Bigger output feeds A-0062 accretion; libx265 branch is dead code"
+  category: correctness
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "grep -nE ''libx264|libx265|crf|preset'' /opt/genlab/genlab-core/src/genlab_core/media/ffmpeg.py | head -10"'
+      host: vps
+      output: |
+        8:  * `PLATFORM_SPECS` — per-platform encoding specs (codec, CRF, preset)
+        16:  has always been libx264 single-pass with no master stage — see
+        64:    codec: str = "libx264"
+        71:    crf: int | None = Field(default=18, ge=0, le=63)  # None for lossless
+        72:    preset: str | None = "medium"
+        89:        if self.crf is not None:
+        90:            args += ["-crf", str(self.crf)]
+        91:            if self.preset:
+        92:                args += ["-preset", self.preset]
+        120:        if self.codec == "libx265":
+    - command: 'grep "libx264/CRF20/preset=fast" CLAUDE.md'
+      host: mac
+      output: |
+        (CLAUDE.md contains "libx264/CRF20/preset=fast" in the "STRICT VIDEO REQUIREMENTS" section)
+  claim: >
+    Actual PLATFORM_SPECS defaults in ffmpeg.py: `crf=18, preset=medium`. CLAUDE.md
+    documents `CRF 20, preset=fast` (used consistently in "STRICT VIDEO REQUIREMENTS"
+    and rule about "libx264/CRF20/preset=fast for all 5 platforms"). Delta:
+    (a) CRF 18 produces 30-50% larger files than CRF 20 (each -1 CRF ~ +15% size);
+    (b) preset "medium" is slower encoding but marginally better compression;
+    (c) libx265 branch at line 120 exists despite CLAUDE.md's explicit "libx264 for all
+    5 platforms because VPS OOMs on libx265."
+  blast_radius: >
+    Direct multiplier on A-0062. Larger files at CRF 18 vs CRF 20 mean ~35% more
+    accretion in `.backups/visuals/` and correspondingly more bandwidth per publish.
+    Also class-of-bug: PLATFORM_SPECS is CLAUDE.md's "source of truth" (ffmpeg.py:182-258
+    per CLAUDE.md) but drifted silently. Fix: bring code+docs into alignment (which
+    should win? probably the code — the operator likely made a quality-vs-size choice
+    and forgot to update docs). Delete the libx265 branch if the "OOMs on libx265"
+    invariant still holds.
+  effort: S
+  proposed_action: consolidate
+  supersedes: []
+
+- id: A-0064
+  phase: 6
+  host: vps
+  title: "Redis has no memory ceiling (maxmemory=0B, policy=noeviction) — writes fail on OOM. On shared 4 GB VPS this is a class-of-bug risk"
+  category: performance
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "docker exec genlab-redis redis-cli info memory | grep -E ''used_memory_human|maxmemory''"'
+      host: vps
+      output: |
+        used_memory_human:1.93M
+        maxmemory_human:0B
+        maxmemory_policy:noeviction
+    - command: 'ssh genlab-prod "docker exec genlab-redis redis-cli info stats | grep -E ''keyspace_hits|keyspace_misses|evicted_keys''"'
+      host: vps
+      output: |
+        evicted_keys:0
+        keyspace_hits:48822
+        keyspace_misses:9354
+  claim: >
+    Redis is configured with no memory ceiling (`maxmemory=0B` means unlimited) and
+    `noeviction` policy (writes will FAIL when Redis exhausts VM memory). On a 4 GB
+    VPS shared with `aspirehub` project (A-0067), a runaway (dramatiq queue backup,
+    aggressive engagement poll) can grow Redis to whatever RAM is available then start
+    failing writes silently. Current usage 1.93 MB (fine), hit rate 83.9% (good), no
+    evictions ever (because no ceiling).
+  blast_radius: >
+    Silent failure when Redis fills. Since GenLab uses Redis for the dramatiq job queue
+    (per systemd unit inventory), a Redis OOM stops task processing without a clean
+    error message. Fix: `maxmemory 256mb` + `maxmemory-policy allkeys-lru` in
+    docker-compose.yml. Cost: 30 seconds config change, one restart.
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0065
+  phase: 6
+  host: vps
+  title: "Anthropic credit monitor is REACTIVE (scans journal after exhaustion) — matches CLAUDE.md rule #16 anti-pattern; should be proactive balance poll"
+  category: ops
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "systemctl status genlab-anthropic-credit-monitor.timer --no-pager | head -5"'
+      host: vps
+      output: |
+        ● genlab-anthropic-credit-monitor.timer - GenLab Anthropic Credit Monitor Timer — scan journalctl for credit-low signal every 15 min
+             Loaded: loaded (/etc/systemd/system/genlab-anthropic-credit-monitor.timer; enabled; preset: enabled)
+             Active: active (waiting) since Wed 2026-07-15 18:10:29 IST; 2 weeks 0 days ago
+            Trigger: Wed 2026-07-29 21:15:00 IST; 8min left
+           Triggers: ● genlab-anthropic-credit-monitor.service
+    - command: 'ssh genlab-prod "grep -n ''balance\\|credit'' /opt/genlab/genlab-core/src/genlab_core/monitoring/anthropic_credit_monitor.py | head -5"'
+      host: vps
+      output: |
+        1:"""Detect Anthropic credit-balance exhaustion and surface as a CRITICAL
+        9:     "message":"Your credit balance is too low to access the Anthropic
+        12:The key was valid; only the credit balance was exhausted. Pipelines
+        19:The next time the credit balance falls low, the operator should learn
+  claim: >
+    Timer description ("scan journalctl for credit-low signal every 15 min") and code
+    comments confirm the monitor is REACTIVE — it detects "Your credit balance is too
+    low" errors AFTER they appear in journal, not by polling Anthropic's balance API
+    proactively. Detection latency: ~15 min (timer interval) once the error message
+    hits the journal. Matches CLAUDE.md rule #16 anti-pattern ("Never treat env var
+    timestamp as evidence of token healthy — always live-probe the API").
+  blast_radius: >
+    A-0034 (BB 32/8/0 outage) would be resolvable in 15 min if credit exhaustion was
+    the cause — but only AFTER the failure. Proactive balance-poll (query Anthropic's
+    `/v1/organizations/me/usage` or equivalent) would surface imminent exhaustion 24-48h
+    ahead, letting the operator top up before pipelines go dark. Fix path: add a
+    proactive check to the same monitor unit; keep the reactive branch as safety net.
+    Complements OPERATOR_ACTIONS by making the "did credit run out?" question answerable
+    without journal grep (which A-0050 shows is unreliable).
+  effort: M
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0066
+  phase: 6
+  host: vps
+  title: "YouTube quota tracker has per_niche schema but all usage lumped under 'all' bucket — SaaS-blocker for per-tenant quota attribution"
+  category: consolidation
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "cat /opt/genlab/.genlab/youtube_quota.json"'
+      host: vps
+      output: |
+        {
+          "used": 217,
+          "upload_count": 0,
+          "reset_date": "2026-07-29",
+          "updated_at": "2026-07-29T05:00:44.588336-07:00",
+          "per_niche": {
+            "all": {
+              "used": 217,
+              "upload_count": 0
+            }
+          }
+        }
+  claim: >
+    Quota tracker file `/opt/genlab/.genlab/youtube_quota.json` has a `per_niche` object
+    at top level — the schema supports per-niche attribution. Actual populated bucket:
+    only `"all"` (217 units used, 0 uploads today). No per-niche breakdown. Total daily
+    quota is 10,000 units; usage is 2.2% (massive headroom).
+  blast_radius: >
+    Not a runtime bug (headroom is huge). SaaS blocker: when tenants pay for their own
+    quota consumption, per-tenant attribution is required for billing/rate-limiting/
+    quota-alerts. Current lumped tracking makes it impossible to answer "which niche
+    consumed the quota that hit the ceiling?" — an inevitable question post-scale. Fix:
+    plumb niche_id through the quota-tracking code path; feeds Phase 8 tenant-observability.
+  effort: L
+  proposed_action: consolidate
+  supersedes: []
+
+- id: A-0067
+  phase: 6
+  host: vps
+  title: "VPS is shared — aspirehub project (~575 MB RSS) + gh-runner (~114 MB) + GenLab (~130 MB). GenLab is not the biggest consumer on its own VPS"
+  category: cost
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "ps aux --sort=-rss | head -11 | awk ''{printf \"%-10s %6s MB %s\n\", \$1, int(\$6/1024), substr(\$11, 1, 50)}''"'
+      host: vps
+      output: |
+        USER          0 MB COMMAND
+        aspireh+    265 MB /opt/aspirehub/venv/bin/python
+        aspireh+    175 MB /opt/aspirehub/venv/bin/python
+        aspireh+    135 MB next-server
+        root        127 MB /bin/warp-svc
+        gh-runn+    114 MB actions-runner
+        genlab       82 MB python3
+        postgres     64 MB postgres:
+        genlab       48 MB python
+        root         47 MB dockerd
+        postgres     40 MB postgres:
+    - command: 'ssh genlab-prod "free -h"'
+      host: vps
+      output: |
+        Mem:  total 3.7Gi  used 1.6Gi  free 345Mi  buff/cache 2.2Gi  available 2.1Gi
+        Swap: total 1.0Gi  used 207Mi  free 816Mi
+  claim: >
+    3 distinct projects share the 4 GB VPS: `aspirehub` (~575 MB across 3 Python
+    processes + next-server), GitHub Actions runner (~114 MB), and GenLab (~130 MB
+    from its main python processes; plus Postgres/Redis/Docker overhead). GenLab is
+    ~14% of named-process RSS; aspirehub is ~55%. Total from named processes: ~950 MB.
+    Add Postgres/Redis/Docker/Caddy/Cloudflared/WARP/Tor overhead: matches the 1.6 GB
+    used baseline.
+  blast_radius: >
+    Right-sizing conversations that assume "GenLab needs a bigger box" mis-attribute
+    the memory pressure. Real fix options: (a) move aspirehub or gh-runner off this
+    VPS (biggest bang for buck), (b) upgrade the VPS (raises whole-tenant costs).
+    A-0064 (Redis unlimited) is more urgent under shared-tenant conditions — a
+    GenLab Redis OOM could easily be triggered by an aspirehub memory spike, not
+    GenLab's own load.
+  effort: L
+  proposed_action: accept
+  supersedes: []
+
+- id: A-0068
+  phase: 6
+  host: vps
+  title: "A-0042 refinement — grep for INSERT INTO affiliate_clicks in genlab-core/src/ returned empty; points at situation 1 (tracking never wired)"
+  category: correctness
+  severity: S2
+  confidence: medium
+  tags: [STATIC_ONLY]
+  evidence:
+    - command: 'ssh genlab-prod "grep -rln ''INSERT INTO affiliate_clicks\\|affiliate_clicks.*INSERT'' /opt/genlab/genlab-core/src/"'
+      host: vps
+      output: |
+        (empty)
+    - command: 'ssh genlab-prod "grep -rn ''def.*record.*affiliate\\|def.*track.*affiliate'' /opt/genlab/genlab-core/src/genlab_core/monetisation/"'
+      host: vps
+      output: |
+        (empty)
+  claim: >
+    A-0042 (Phase 3) documented `affiliate_clicks` = 0 rows and framed three possible
+    situations. This phase's grep for writers to that table returned empty in both
+    the standard genlab-core/src/ tree and the monetisation subpackage. STATIC_ONLY:
+    a fuller ORM-aware trace (e.g. SQLAlchemy `Table('affiliate_clicks').insert()`,
+    dynamic query builders, or writers in another workspace member) could reveal a
+    writer this grep missed.
+  blast_radius: >
+    If confirmed by fuller trace (Phase 7), A-0042 collapses to situation 1: revenue
+    is either occurring and invisible OR never occurring — both are revenue-thesis
+    failures. Refined blast: SaaS go/no-go rests on owned-brand revenue proof; if the
+    revenue tables are 0 rows because tracking was never wired, the entire monetization
+    architecture per CLAUDE.md rule #6 is unbacked by data. Even if the network-
+    dashboard cross-check (A-0071) shows clicks/revenue existing at the network layer,
+    the local pipeline can't attribute them to blueprints (its own primary purpose).
+  effort: M
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0069
+  phase: 6
+  host: vps
+  title: "A-0015 exhaustion date recomputation — 12 GB free / 106 MB actual daily accretion = ~113 days (Nov 2026) under current low-render load"
+  category: cost
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "du -sh /opt/genlab/.backups/visuals; find /opt/genlab/.backups/visuals -type f -mtime -1 -printf ''%s\n'' | awk ''{s+=\$1} END{printf \"last 24h: %.1f MB\n\", s/1024/1024}''; df -h / | tail -1"'
+      host: vps
+      output: |
+        3.5G	/opt/genlab/.backups/visuals
+        last 24h: 12.3 MB
+        /dev/sda1        38G   25G   12G  69% /
+  claim: >
+    v1.4 spec Pre-Session-3 estimated ~230-250 MB/day accretion → early-mid Sept 2026
+    exhaustion. Actual measured: 3.5 GB accumulated over 33 days = ~106 MB/day
+    amortized. Under CURRENT low-render load (12.3 MB in last 24h — BB pipeline dark
+    per A-0034 reduces render volume), exhaustion projects to Nov 2026 (~113 days).
+  blast_radius: >
+    Not the ~6-week emergency the v1.4 estimate posited under normal load. BUT when
+    OPERATOR_ACTIONS Row #2 (BB pipeline recovery) resolves and render volume returns
+    to normal (~250 MB/day for the full 5-channel workload with A-0063's oversized
+    CRF), the timeline collapses back to the v1.4 estimate. A-0062 fix must land
+    before pipeline recovery restores normal accretion, or the exhaustion window
+    reopens under the same physics.
+  effort: S
+  proposed_action: monitor
+  supersedes: []
+
+- id: A-0070
+  phase: 6
+  host: vps
+  title: "Phase 6 §1 BLOCKED — pg_stat_statements not installed (A-0035); no LLM spend or query-cost attribution possible without extension install or code telemetry"
+  category: ops
+  severity: S3
+  confidence: high
+  tags: [BLOCKED]
+  evidence:
+    - command: 'ssh genlab-prod "psql \"$DATABASE_URL\" -tAc \"SELECT calls, total_exec_time FROM pg_stat_statements LIMIT 1\" 2>&1 | head -3"'
+      host: vps
+      output: |
+        ERROR:  relation "pg_stat_statements" does not exist
+  claim: >
+    Phase 3 A-0035 first surfaced this blocker. Phase 6 §1 (LLM spend per stage +
+    top cost centres) is not answerable without either the pg_stat_statements
+    extension (`CREATE EXTENSION` + shared_preload_libraries + restart) or a code-side
+    telemetry pass across the LLM call sites. Both are out of read-only scope for the
+    audit.
+  blast_radius: >
+    Escalates the LLM cost-monitoring question to OPERATOR_ACTIONS (extension install)
+    and Phase 7 (code telemetry). Without either, questions like "how much of the
+    Anthropic bill is BB vs CriticalRush" cannot be answered — which is a Phase 8
+    SaaS conversion prerequisite (per-tenant billing).
+  effort: S
+  proposed_action: defer
+  supersedes: []
+
+- id: A-0071
+  phase: 6
+  host: mac
+  title: "A-0042 network-dashboard cross-check requires operator credentials to Amazon/Cuelinks/Admitad/EarnKaro — out of audit scope; add OPERATOR_ACTIONS Row #10"
+  category: ops
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: '(spec-defined action: cross-check DB 0-rows against 3rd-party dashboards)'
+      host: mac
+      output: |
+        (no VPS or Mac command reaches Amazon Associates / Cuelinks / Admitad / EarnKaro dashboards
+         without operator credentials; requires operator login to each network web UI)
+  claim: >
+    v1.4 Phase 6 §9 asks for a cross-check of A-0042's DB 0-rows against the actual
+    3rd-party affiliate network dashboards (Amazon IN/US, Cuelinks, Admitad, EarnKaro).
+    None of these dashboards are accessible from the audit — they require operator
+    web-UI login with credentials the audit shouldn't have. This is an OPERATOR_ACTIONS
+    item, not an audit-executable check.
+  blast_radius: >
+    The cross-check determines which of A-0042's three situations holds — a
+    load-bearing question for SaaS revenue validation. But it cannot be resolved from
+    within the audit; must escalate to operator. Add as OPERATOR_ACTIONS row #10.
+    Verification: after operator runs the check, they attach one-line evidence per
+    network (e.g. "Amazon IN: 47 clicks / $12.30 in last 30 days" or "Cuelinks: 0
+    clicks last 30 days") and the audit updates A-0068's situation-1 vs situation-2
+    conclusion.
+  effort: S
+  proposed_action: defer
+  supersedes: []

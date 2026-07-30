@@ -1,0 +1,373 @@
+# Phase 0 findings — audit run A (2026-07-29)
+# Schema: see spec §0.7. Prior audit findings (.audit/findings.jsonl, PHASE1-7 md files)
+# are treated as untrusted per §0.8; supersedes-cross-references intentionally empty
+# for this phase because prior audit's ID scheme differs.
+
+- id: A-0001
+  phase: 0
+  host: vps
+  title: "Four systemd services in FAILED state on prod (2 pipelines + post-deploy-verify + strategist)"
+  category: ops
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "systemctl list-units --state=failed --plain --no-legend genlab-*"'
+      host: vps
+      output: |
+        genlab-pipeline-ai.service        loaded failed failed GenLab AI Creators Pipeline (BlackboxBrief)
+        genlab-pipeline-movies.service    loaded failed failed GenLab Movies Pipeline (SpliceReel)
+        genlab-post-deploy-verify.service loaded failed failed GenLab Post-Deploy Verify — sanity-check prod after deploy/restart
+        genlab-strategist.service         loaded failed failed GenLab Strategist — weekly LLM-based meta-cognition per niche
+    - command: 'ssh genlab-prod "systemctl status genlab-pipeline-ai.service --no-pager -l | head -8"'
+      host: vps
+      output: |
+        × genlab-pipeline-ai.service - GenLab AI Creators Pipeline (BlackboxBrief)
+             Active: failed (Result: exit-code) since Wed 2026-07-29 08:02:41 IST; 7h ago
+        TriggeredBy: ● genlab-pipeline-ai.timer
+            Process: 2943244 ExecStartPre=/opt/genlab/deploy/scripts/ensure_yt_dlp_environment.sh (code=exited, status=0/SUCCESS)
+            Process: 2943261 ExecStart=/bin/bash /opt/genlab/BlackboxBrief/runbooks/cron_wrapper.sh (code=exited, status=2)
+            Main PID: 2943261 (code=exited, status=2)
+  claim: >
+    As of 2026-07-29, four genlab-* systemd services are in `failed` state on the production VPS,
+    with their .timer siblings still `active waiting` — meaning each will fire again and fail again
+    on schedule. Two are pipeline runners for BlackboxBrief (ai_creators) and SpliceReel (movies);
+    one is the post-deploy verification runner (failing for 2 days); one is the weekly strategist
+    LLM meta-cognition runner (failing for 3 days).
+  blast_radius: >
+    BlackboxBrief and SpliceReel pipelines are not currently ingesting/writing/rendering — the two
+    channels are frozen at whatever backlog state existed as of 2026-07-29 morning. post-deploy-verify
+    failing silently means real regressions post-deploy are not surfaced. Strategist failing means
+    the weekly meta-cognition loop that feeds the auto-approver calibration ratchet (per CLAUDE.md
+    AUTO #2 section) is idle — matches rule #19 (calibration writes stall the ratchet indefinitely).
+    Acting rashly (mass-restart) risks compounding: if the fix is a config change, restart just
+    reproduces the failure and consumes journal disk.
+  effort: M
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0002
+  phase: 0
+  host: vps
+  title: "CriticalRush auto-publish rollout_pct raised 0.0 → 1.0 on VPS but never committed to git"
+  category: drift
+  severity: S1
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "cd /opt/genlab && git diff CriticalRush/niches/gaming/config/publishing.yaml | tail -8"'
+      host: vps
+      output: |
+        @@ -121,4 +121,4 @@ auto_publish:
+           enabled: false
+           min_confidence: 0.85
+           max_approvals_per_pass: 3
+        -  rollout_pct: 0.0
+        +  rollout_pct: 1.0
+    - command: 'ssh genlab-prod "cd /opt/genlab && git log -1 --format=%H && git status --porcelain CriticalRush/niches/gaming/config/publishing.yaml"'
+      host: vps
+      output: |
+        34140a82183a5d9b9a1648a8b5460697014ddab8
+         M CriticalRush/niches/gaming/config/publishing.yaml
+  claim: >
+    The CriticalRush (gaming) niche's auto_publish.rollout_pct has been increased from 0.0 to 1.0
+    (0% → 100% rollout) as a live edit on the VPS filesystem, and this change is uncommitted.
+    A .lock sidecar exists (`publishing.yaml.lock`) confirming the file has been written to. The
+    change is real prod state that any clean re-deploy or `git checkout -- .` would lose.
+  blast_radius: >
+    If this change was intentional but unwritten (operator forgot to commit), a redeploy silently
+    reverts gaming to 0% auto-publish — worst-of-both because it's non-obvious. If this change was
+    NOT intentional (accidental filesystem edit), 100% rollout of auto-approval on gaming is happening
+    without operator awareness — and per CLAUDE.md rule #22, gaming's real operator-agreement was
+    only 53.4% back in July, well below AUTO #2's 90% gate. The rule-#22 revert lesson explicitly
+    used gaming as its cautionary example.
+  effort: S
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0003
+  phase: 0
+  host: both
+  title: "Prod VPS is 2 commits behind main HEAD (~13h deployment lag)"
+  category: drift
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'git rev-parse HEAD; git log -1 --format=%cI'
+      host: mac
+      output: |
+        1f46f53f9898e611b09d9965ed9a5b6c16c7970a
+        2026-07-28T12:44:04+05:30
+    - command: 'ssh genlab-prod "cd /opt/genlab && git rev-parse HEAD && git log -1 --format=%cI"'
+      host: vps
+      output: |
+        34140a82183a5d9b9a1648a8b5460697014ddab8
+        2026-07-27T23:26:24+05:30
+    - command: 'git log --oneline 34140a82..1f46f53f'
+      host: mac
+      output: |
+        1f46f53f docs(audit): Phase 8.6 post-tripwire fixes (2026-07-28)
+        34140a82 test(quarantine): skip mtime-flaky test (RLS-precondition #3)
+        (VPS HEAD = 34140a82; Mac HEAD = 1f46f53f; 2 commits ahead on Mac)
+  claim: >
+    The VPS runs commit `34140a82` (2026-07-27 23:26 IST); the Mac (and origin/main head) is at
+    `1f46f53f` (2026-07-28 12:44 IST). VPS is ~13 hours and 2 commits behind main. Both commits
+    are docs/test — no functional code drift in the 2-commit gap.
+  blast_radius: >
+    Small in isolation — the diff is docs + a test skip. But this is symptomatic of no automatic
+    deploy trigger post-merge. A latency of ~13h between "commit to main" and "reflected in prod"
+    means the audit tooling and any operator inference from `git log` on the Mac does not describe
+    prod behavior. Combined with A-0002 (uncommitted VPS-local edits going the other way), the
+    two-way drift means neither host can be treated as authoritative for the current running config.
+  effort: S
+  proposed_action: monitor
+  supersedes: []
+
+- id: A-0004
+  phase: 0
+  host: vps
+  title: "Two dangling systemd unit references + orphaned .pre-2026-07-05 unit files"
+  category: ops
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ssh genlab-prod "systemctl list-units --all --plain --no-legend genlab-* | awk \"\\\$2==\\\"not-found\\\"{print \\\$1}\""'
+      host: vps
+      output: |
+        genlab-pipeline-ai-creators.service
+        genlab-postgres-ready.target
+    - command: 'ssh genlab-prod "grep -rln \"genlab-pipeline-ai-creators\\|genlab-postgres-ready\" /etc/systemd/system/"'
+      host: vps
+      output: |
+        /etc/systemd/system/genlab-verify-whisper-canary.service
+        /etc/systemd/system/genlab-auto-approver.timer
+        /etc/systemd/system/genlab-auto-approver.service
+        /etc/systemd/system/genlab-auto-approver.service.pre-2026-07-05
+        /etc/systemd/system/genlab-auto-approver.timer.pre-2026-07-05
+  claim: >
+    Two systemd unit names are referenced by active units but do not exist on disk:
+    (a) `genlab-pipeline-ai-creators.service` — the AI-creators pipeline was renamed at some point
+    to `genlab-pipeline-ai.service`, but `genlab-verify-whisper-canary.service` still references
+    the old name. (b) `genlab-postgres-ready.target` — referenced by the live auto-approver .timer
+    and .service, plus their `.pre-2026-07-05` sibling backup files which are 3.5 weeks old and
+    should have been cleaned up. The dangling `After=` dependencies degrade to no-ops silently.
+  blast_radius: >
+    Silent degradation: `After=genlab-postgres-ready.target` becomes a no-op, so the auto-approver
+    can start before Postgres is fully ready on boot — occasional startup errors that look like
+    transient Postgres unavailability. `genlab-pipeline-ai-creators` in the verify unit means the
+    verification never actually waits for the ai pipeline. Naming-drift class-of-bug the project
+    has documented before (session-2026-07-09 memory).
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0005
+  phase: 0
+  host: both
+  title: "FFmpeg version divergence: mac 8.1 (2026) vs vps 6.1.1-3ubuntu5 (2023) — video pipeline reproducibility risk"
+  category: drift
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'ffmpeg -version | head -1'
+      host: mac
+      output: |
+        ffmpeg version 8.1 Copyright (c) 2000-2026 the FFmpeg developers
+    - command: 'ssh genlab-prod "ffmpeg -version | head -1"'
+      host: vps
+      output: |
+        ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
+  claim: >
+    Mac dev runs FFmpeg 8.1 (2026); VPS prod runs 6.1.1 (Ubuntu 24.04 stock, 2023). Two full major
+    versions apart. Any local reproduction of a rendering issue on Mac uses a different libavcodec
+    build than what actually ran in prod.
+  blast_radius: >
+    Real risk given CLAUDE.md's strict video requirements (bt709 color space, libx264/CRF20/preset=fast
+    across all 5 platforms, 1080×1920 exact). Subtle codec behavior (deblocking, aq-mode defaults,
+    color-primary handling) has changed between 6.1 and 8.1. When operator says "renders look OK on
+    my machine" that testimony is not equivalent to "renders look OK in prod". Fix could be:
+    downgrade Mac to `brew install ffmpeg@6`, or pin ffmpeg-static on VPS to a specific version
+    Mac can also install.
+  effort: M
+  proposed_action: consolidate
+  supersedes: []
+
+- id: A-0006
+  phase: 0
+  host: both
+  title: "Python version divergence: mac 3.14.3 vs vps 3.12.3"
+  category: drift
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'python3 -V'
+      host: mac
+      output: |
+        Python 3.14.3
+    - command: 'ssh genlab-prod "python3 -V"'
+      host: vps
+      output: |
+        Python 3.12.3
+  claim: >
+    Mac dev runs Python 3.14 (bleeding-edge); VPS prod runs Python 3.12 (Ubuntu 24.04 stable). Two
+    minor versions apart, and CLAUDE.md declares "Python 3.12+" so prod is at the floor. Between
+    3.12 and 3.14 there are typing changes (PEP 692, PEP 695 generics), a new interpreter (PEP 703
+    experimental free-threading), asyncio behavior tweaks, and dict ordering guarantees are unchanged
+    but iteration behavior around task groups shifted.
+  blast_radius: >
+    Test-passing-on-Mac does not imply test-passing-in-prod. Any use of 3.13+ syntax on Mac silently
+    passes locally but breaks at prod runtime. Mypy version + strictness matters too (Phase 7).
+    Cheapest fix: install python3.12 on Mac via pyenv/uv, pin `.python-version` at repo root, ensure
+    uv respects it.
+  effort: S
+  proposed_action: consolidate
+  supersedes: []
+
+- id: A-0007
+  phase: 0
+  host: both
+  title: "Postgres version divergence: mac 14.19 vs vps 18.3 — local dev DB unable to validate prod SQL/DDL"
+  category: drift
+  severity: S2
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'psql --version'
+      host: mac
+      output: |
+        psql (PostgreSQL) 14.19 (Homebrew)
+    - command: 'ssh genlab-prod "psql --version"'
+      host: vps
+      output: |
+        psql (PostgreSQL) 18.3 (Ubuntu 18.3-1.pgdg24.04+1)
+  claim: >
+    Local dev Postgres is 14.19 (Homebrew); prod is 18.3 (`pgdg24.04+1`). Four major versions apart.
+    Postgres 15 added MERGE + SQL/JSON path expressions; 16 added logical-replication improvements;
+    17 added incremental backups; 18 (2025 release) added asynchronous I/O, virtual generated
+    columns, larger index prefetch. Multiple DDL and query-plan behaviors differ.
+  blast_radius: >
+    Any Alembic migration or hand-crafted SQL that lints/passes on Mac 14.19 might behave differently
+    or fail outright on 18.3 — and vice versa. Mac dev cannot be a reliable local reproduction
+    environment for the prod DB. Combined with the fact that Mac `psql -d genlab` couldn't connect
+    to any local `genlab` DB anyway (my probe hit port 5433 with no such DB), the Mac Postgres is
+    effectively unused and just misleading. Options: run prod-parity Postgres locally in Docker;
+    or accept dev has no local DB and always test against a staging DB.
+  effort: M
+  proposed_action: consolidate
+  supersedes: []
+
+- id: A-0008
+  phase: 0
+  host: vps
+  title: "VPS .git needs GC: 25 packs, 148 MB — packing to 1-2 packs likely reclaims 60-100 MB"
+  category: waste
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'git count-objects -vH'
+      host: mac
+      output: |
+        count: 8757
+        size: 50.01 MiB
+        in-pack: 16636
+        packs: 2
+        size-pack: 31.85 MiB
+    - command: 'ssh genlab-prod "cd /opt/genlab && git count-objects -vH"'
+      host: vps
+      output: |
+        count: 2075
+        size: 11.20 MiB
+        in-pack: 39802
+        packs: 25
+        size-pack: 133.84 MiB
+        prune-packable: 7
+  claim: >
+    VPS repo has 25 packs vs Mac's 2. Fewer, larger packs almost always mean smaller total disk
+    (better delta chain sharing) and faster operations. VPS `.git/` is 148 MB — the biggest
+    single-directory contributor to prod repo storage that isn't code, venv, or backups.
+  blast_radius: >
+    Low. `git gc --aggressive` (or plain `git gc`) is safe, does not touch working tree, and can
+    be run while services are running. Reclaims disk that's currently 25% of the free space budget's
+    equivalent on `/`. Not urgent but cheap. Do not use during a deploy window.
+  effort: S
+  proposed_action: fix
+  supersedes: []
+
+- id: A-0009
+  phase: 0
+  host: vps
+  title: "VPS .backups/ occupies 3.7 GB — 25% of the entire remaining 12 GB free — with no visible consumer verified"
+  category: waste
+  severity: S2
+  confidence: medium
+  tags: [STATIC_ONLY]
+  evidence:
+    - command: 'ssh genlab-prod "du -sh /opt/genlab/.backups /opt/genlab/.venv /opt/genlab/.cache"'
+      host: vps
+      output: |
+        3.7G	/opt/genlab/.backups
+        2.5G	/opt/genlab/.venv
+        699M	/opt/genlab/.cache
+    - command: 'ssh genlab-prod "df -h /"'
+      host: vps
+      output: |
+        Filesystem      Size  Used Avail Use% Mounted on
+        /dev/sda1        38G   24G   12G  67% /
+  claim: >
+    A .backups/ directory in the repo root on VPS holds 3.7 GB. Its consumer, retention policy, and
+    whether anything actually restores from it have not been verified this phase (static-only —
+    tagged STATIC_ONLY per §0.3, capping at S2).
+  blast_radius: >
+    If .backups/ IS a live prod backup consumed by a restore workflow, deleting it is a data-loss
+    S1 in reverse. If it is stale (e.g., pre-Postgres migration snapshots, ancient SharePoint
+    exports, tempfile spills), it is 30% of currently-free disk sitting idle. Given the 4 GB RAM
+    VPS runs at 151 MiB free memory with 200 MiB swap in use, disk pressure is not academic — a
+    single large render or npm install can push `/` past 90%. Phase 1 needs to identify the
+    consumer (a systemd unit? an operator cron?) before proposing deletion.
+  effort: M
+  proposed_action: investigate
+  supersedes: []
+
+- id: A-0010
+  phase: 0
+  host: mac
+  title: "CriticalRush/ dir is 9.1 GB on mac — media assets stored under channel dir, not deployed"
+  category: waste
+  severity: S3
+  confidence: high
+  tags: []
+  evidence:
+    - command: 'du -sh CriticalRush/ SpliceReel/ FrameDrift/ ClutchWire/ BlackboxBrief/'
+      host: mac
+      output: |
+        9.1G	CriticalRush/
+        7.5M	SpliceReel/
+         76M	FrameDrift/
+         23M	ClutchWire/
+        943M	BlackboxBrief/
+    - command: 'ssh genlab-prod "du -sh /opt/genlab/CriticalRush /opt/genlab/SpliceReel /opt/genlab/FrameDrift /opt/genlab/ClutchWire /opt/genlab/BlackboxBrief"'
+      host: vps
+      output: |
+        110M	/opt/genlab/CriticalRush
+        116M	/opt/genlab/SpliceReel
+        1.8M	/opt/genlab/FrameDrift
+        108M	/opt/genlab/ClutchWire
+        139M	/opt/genlab/BlackboxBrief
+  claim: >
+    Mac's `CriticalRush/` dir is 9.1 GB, dominated by media assets (yt-dlp downloads, render
+    intermediates, MP4/MP3 files) that never leave the dev machine. VPS has only 110 MB in the
+    same dir. FrameDrift is even more extreme in reverse (76 MB Mac vs 1.8 MB VPS — assets on Mac,
+    minimal on VPS). This is bloating the Mac repo checkout without any prod benefit.
+  blast_radius: >
+    Low. These are local ephemera not tracked in git — safe to prune via existing `.tmp/` cleanup
+    conventions (cleanup_safety.md rules allow this). Consolidation opportunity: move all channel
+    media caches under a top-level `.media/` that's already gitignored and excluded from find,
+    rather than under each channel dir. Deferred to Phase 1 for the actual sweep.
+  effort: S
+  proposed_action: defer
+  supersedes: []
