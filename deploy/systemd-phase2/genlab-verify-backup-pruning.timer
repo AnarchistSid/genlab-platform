@@ -1,0 +1,16 @@
+[Unit]
+Description=GenLab backup-pruning sentinel daily — 08:00 UTC (13:30 IST)
+Documentation=file:///opt/genlab/scripts/verify_backup_pruning.sh
+
+[Timer]
+# 08:00 UTC = 13:30 IST. Chosen 1h AFTER visual-backup (07:00 UTC) so both
+# prune schedules have completed. Detects the A-0083 "line-exists-doesn't-fire"
+# class-of-bug: if either prune script silently failed to delete stale files,
+# this sentinel exits 1 and triggers OnFailure alert via the standard
+# genlab-service-failure-alert@%n.service instance.
+OnCalendar=*-*-* 08:00:00 UTC
+Persistent=true
+Unit=genlab-verify-backup-pruning.service
+
+[Install]
+WantedBy=timers.target

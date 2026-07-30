@@ -73,4 +73,75 @@ The runbook explicitly generates these downstream items:
 - **Row #6 (new):** Delete or 600 the 14 `.env.bak.*` files (A-0016/A-0052) — dead keys after rotation but 7 are 644 world-readable.
 - **Row #7 (new):** Dedup FB_APP_SECRET / META_APP_SECRET (A-0056) — same value under two confusable names.
 - **Row #8 (new, if applicable):** Split shared password between `genlab` (admin) and `genlab_app` (app) roles — if runbook Step 2 took the shared-password shortcut.
-- **Row #9 (new, if 5b fails):** Wire `SET LOCAL app.niche_id` per request in application code — A-0032's isolation half.
+- **Row #9 (new, if 5b fails):** Wire `SET LOCAL app.niche_id` per request in application code — A-0032's isolation half. **UPDATE 2026-07-30 Wave-0:** Runbook 5b returned rows → this row is now confirmed OPEN. Wave-2 migration `genlab-core/migrations/versions/a0b0c0d0e0f0_rls_deny_by_default.py` shipped; operator apply pending. If, after applying the migration, app requests start returning 0 rows unexpectedly, that surfaces the missing `SET LOCAL` sites and this row becomes a code-fix (dev task).
+
+## Wave-3 (A-0083) operator additions — 2026-07-30
+
+### Branch protection for main
+The audit's `secret-scan` and `pre-commit-check` CI jobs cannot enforce anything unless they are **REQUIRED status checks** under branch protection. Please:
+1. GitHub repo → Settings → Branches → Branch protection rules → `main`
+2. Require status checks to pass before merging → Add:
+   - `secret-scan` (already exists in ci.yml)
+   - `pre-commit` / `pre-commit-check` (see below — new workflow, needs operator add)
+3. Require branches to be up to date before merging
+4. Disable "Allow force pushes" and "Allow deletions"
+
+Without this, the CI jobs run but a push to main can land with failing jobs (which is exactly what happened with the 2026-07-22 `PGPASSWORD=genlab_***` commit — CI ran, but branch protection didn't block).
+
+### Add `.github/workflows/pre-commit.yml` (blocked by security-reminder hook in this session)
+The pre-commit-check job needed to close A-0072 could not be written from this session — the security-reminder hook (correctly) intervenes on workflow file writes to force human review. Please add this file yourself after reviewing:
+
+```yaml
+name: pre-commit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: pre-commit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pre-commit:
+    runs-on: [self-hosted, genlab-prod]
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pre-commit
+        run: pip install "pre-commit==4.*"
+      - name: Cache pre-commit hooks
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Run pre-commit run --all-files
+        run: pre-commit run --all-files --show-diff-on-failure
+```
+
+Verification gate (A-0083 CI half): open a test PR containing a fake secret (e.g. `test_key = "AIzaSyD_fake_key_for_ci_test_only_1234567890"`); the `secret-scan` job must fail and block merge. Close the PR without merging.
+
+### Investigate the prune root cause (A-0026 + A-0062)
+Session shipped `scripts/verify_backup_pruning.sh` + `deploy/systemd-phase2/genlab-verify-backup-pruning.{service,timer}` — the independent sentinel that A-0083 class-fix requires. But the prune scripts themselves still don't fire; sentinel just makes the failure loud. Root-cause requires:
+1. Run `bash -x /opt/genlab/scripts/pg_backup.sh` interactively — see where it exits before line 29's `find -delete`
+2. Same for `bash -x /opt/genlab/scripts/backup_visual_assets.sh --apply` — check whether `--apply` reaches Phase 3 prune loop (line 121)
+3. Journal grep for the past 24h after the sentinel starts firing alerts — the alert wire is `OnFailure=genlab-service-failure-alert@%n.service`
+
+If the shared root cause is discovered (permission / cwd / early-exit), fix the scripts and disable the sentinel's tolerance to 0 permanently. If not fixable, keep the sentinel as the primary detection.
+
+### Deploy the sentinel
+```bash
+# On VPS:
+sudo cp deploy/systemd-phase2/genlab-verify-backup-pruning.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now genlab-verify-backup-pruning.timer
+# Verify it's armed for tomorrow 08:00 UTC:
+systemctl list-timers genlab-verify-backup-pruning.timer
+```

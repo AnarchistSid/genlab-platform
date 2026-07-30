@@ -1,0 +1,32 @@
+[Unit]
+Description=GenLab backup-pruning sentinel — verifies pg_backup + visual-backup prunes actually fire (A-0083)
+After=network-online.target
+# Runs AFTER both prune schedules complete:
+#   - pg_backup fires at 01:00 UTC (per pg_backup.timer)
+#   - visual-backup fires at 07:00 UTC (per visual-backup.timer)
+# This sentinel fires at 08:00 UTC (see .timer) — 1h after visual-backup, plenty
+# of margin for the 30-min timeout of visual-backup.
+After=genlab-pg-backup.service
+After=genlab-visual-backup.service
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/genlab
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+# Strict by default: STALE_TOLERANCE_DB=0, STALE_TOLERANCE_VISUAL=0.
+# Uncomment + tune ONLY if a legitimate in-flight file causes false-positives.
+# Environment=STALE_TOLERANCE_DB=1
+# Environment=STALE_TOLERANCE_VISUAL=1
+TimeoutStartSec=2min
+ExecStart=/opt/genlab/scripts/verify_backup_pruning.sh
+StandardOutput=journal
+StandardError=journal
+
+MemoryMax=64M
+CPUWeight=10
+
+[Install]
+WantedBy=multi-user.target
