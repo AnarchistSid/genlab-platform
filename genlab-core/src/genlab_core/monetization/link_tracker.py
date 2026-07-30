@@ -141,7 +141,10 @@ def log_click(
         if commission_pct is not None:
             record["commission_pct"] = float(commission_pct)
 
-        pg.create("affiliate_clicks", record)
+        # A-0032b: pass niche_id explicitly so PostgresBackend.create sets
+        # app.niche_id GUC before the INSERT — post-migration deny-by-
+        # default rejects rows with NULL GUC.
+        pg.create("affiliate_clicks", record, niche_id=niche_id)
         logger.info(
             "[LinkTracker] Click logged: %s/%s via %s bp=%s commission=%s",
             niche_id,

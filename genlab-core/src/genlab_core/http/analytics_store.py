@@ -133,7 +133,7 @@ class AnalyticsStore:
                 "Publishing_Analytics",
                 formula=f"{{analytics_id}}='{_esc(analytics_id)}'",
                 max_records=1,
-                niche_id=niche_id or None,
+                niche_id=niche_id or "",
             )
             if existing:
                 self._sp_call(
@@ -142,7 +142,7 @@ class AnalyticsStore:
                     existing[0]["id"],
                     fields,
                     typecast=True,
-                    niche_id=niche_id or None,
+                    niche_id=niche_id or "",
                 )
                 return existing[0]["id"]
             record = self._sp_call(
@@ -150,7 +150,7 @@ class AnalyticsStore:
                 "Publishing_Analytics",
                 fields,
                 typecast=True,
-                niche_id=niche_id or None,
+                niche_id=niche_id or "",
             )
             # 2026-07-14 (backlog audit F1): shared helper.
             from genlab_core.storage.protocol import id_from_create_result
@@ -336,7 +336,7 @@ class AnalyticsStore:
                 "Analytics",
                 formula=f"{{post_id}}='{_esc(composite_id)}'",
                 max_records=1,
-                niche_id=niche_id or None,
+                niche_id=niche_id or "",
             )
             if existing:
                 try:
@@ -345,7 +345,7 @@ class AnalyticsStore:
                         existing[0]["id"],
                         fields,
                         typecast=True,
-                        niche_id=niche_id or None,
+                        niche_id=niche_id or "",
                     )
                 except Exception as e:
                     if "UNKNOWN_FIELD_NAME" in str(e) or "columnNotFound" in str(e):
@@ -356,19 +356,19 @@ class AnalyticsStore:
                             existing[0]["id"],
                             fields,
                             typecast=True,
-                            niche_id=niche_id or None,
+                            niche_id=niche_id or "",
                         )
                     else:
                         raise
                 return existing[0]["id"]
             try:
-                record = be.create("Analytics", fields, typecast=True, niche_id=niche_id or None)
+                record = be.create("Analytics", fields, typecast=True, niche_id=niche_id or "")
             except Exception as e:
                 if "UNKNOWN_FIELD_NAME" in str(e) or "columnNotFound" in str(e):
                     for f_name in _ANALYTICS_OPTIONAL_FIELDS:
                         fields.pop(f_name, None)
                     record = be.create(
-                        "Analytics", fields, typecast=True, niche_id=niche_id or None
+                        "Analytics", fields, typecast=True, niche_id=niche_id or ""
                     )
                 else:
                     raise
