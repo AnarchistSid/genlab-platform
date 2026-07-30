@@ -15,7 +15,15 @@ if [[ -f "$GENLAB_ROOT/.env" ]]; then
     set -a; source "$GENLAB_ROOT/.env"; set +a
 fi
 
-DB_URL="${DATABASE_URL:-postgresql://genlab:genlab_dev@localhost:5432/genlab}"
+# A-0025 fix: no hardcoded fallback DSN. Fail loud if DATABASE_URL is not set — a
+# missing env var used to fall through to a hardcoded prod credential, which is how
+# the literal ended up in this file's history in the first place (Audit A A-0055
+# post-BFG re-introduction pattern; CLAUDE.md rule #30 class-of-bug).
+if [[ -z "${DATABASE_URL:-}" ]]; then
+    echo "[$(date)] ERROR: DATABASE_URL is not set (no fallback — see .env)" >&2
+    exit 1
+fi
+DB_URL="$DATABASE_URL"
 DB_HOST=$(echo "$DB_URL" | sed -n 's|.*@\([^:]*\):.*|\1|p')
 DB_PORT=$(echo "$DB_URL" | sed -n 's|.*:\([0-9]*\)/.*|\1|p')
 DB_NAME=$(echo "$DB_URL" | sed -n 's|.*/\([^?]*\).*|\1|p')

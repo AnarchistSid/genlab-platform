@@ -11,7 +11,6 @@ set -euo pipefail
 
 GENLAB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG="$GENLAB/.logs/db_maintenance.log"
-DB_URL="${DATABASE_URL:-postgresql://genlab:genlab_dev@localhost:5432/genlab}"
 
 mkdir -p "$(dirname "$LOG")"
 
@@ -22,7 +21,13 @@ if [[ -f "$GENLAB/.env" ]]; then
     set +a
 fi
 
-DB_URL="${DATABASE_URL:-postgresql://genlab:genlab_dev@localhost:5432/genlab}"
+# A-0025 fix: no hardcoded fallback DSN. Fail loud if DATABASE_URL is missing —
+# see pg_backup.sh header + Audit A CLAUDE.md rule #30.
+if [[ -z "${DATABASE_URL:-}" ]]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: DATABASE_URL is not set (no fallback — see .env)" | tee -a "$LOG" >&2
+    exit 1
+fi
+DB_URL="$DATABASE_URL"
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting DB maintenance" | tee -a "$LOG"
 

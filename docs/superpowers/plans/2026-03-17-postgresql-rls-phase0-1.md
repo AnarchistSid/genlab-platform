@@ -29,7 +29,7 @@ cd /Users/anarchistsid/GenLab && uv add asyncpg alembic --package genlab-core
 
 ```bash
 createdb genlab 2>/dev/null || echo "DB already exists"
-psql genlab -c "CREATE ROLE genlab WITH LOGIN PASSWORD 'genlab_dev';" 2>/dev/null || echo "Role exists"
+psql genlab -c "CREATE ROLE genlab WITH LOGIN PASSWORD '<dev-password>';" 2>/dev/null || echo "Role exists"
 psql genlab -c "GRANT ALL PRIVILEGES ON DATABASE genlab TO genlab;"
 psql genlab -c "ALTER DATABASE genlab OWNER TO genlab;"
 psql genlab -c "SELECT version();"
@@ -38,7 +38,7 @@ psql genlab -c "SELECT version();"
 - [ ] **Step 3: Add POSTGRES_PASSWORD to .env**
 
 ```bash
-echo 'POSTGRES_PASSWORD=genlab_dev' >> /Users/anarchistsid/GenLab/.env
+echo 'POSTGRES_PASSWORD=<dev-password>' >> /Users/anarchistsid/GenLab/.env
 ```
 
 - [ ] **Step 4: Commit**
@@ -486,7 +486,7 @@ def downgrade():
 - [ ] **Step 4: Run migration**
 
 ```bash
-cd /Users/anarchistsid/GenLab/genlab-core && POSTGRES_PASSWORD=genlab_dev uv run alembic upgrade head
+cd /Users/anarchistsid/GenLab/genlab-core && POSTGRES_PASSWORD=<dev-password> uv run alembic upgrade head
 ```
 
 - [ ] **Step 5: Verify table exists**
@@ -836,7 +836,7 @@ class PostgresBackend:
 - [ ] **Step 5: Run tests**
 
 ```bash
-POSTGRES_PASSWORD=genlab_dev uv run --package genlab-core pytest genlab-core/tests/storage/ -v --tb=short
+POSTGRES_PASSWORD=<dev-password> uv run --package genlab-core pytest genlab-core/tests/storage/ -v --tb=short
 ```
 
 - [ ] **Step 6: Commit**
@@ -859,7 +859,7 @@ Change `blueprints: sharepoint` to `blueprints: postgres`.
 - [ ] **Step 2: Run full test suite to verify no regressions**
 
 ```bash
-POSTGRES_PASSWORD=genlab_dev uv run --package genlab-core pytest genlab-core/tests/ -x -q --tb=short
+POSTGRES_PASSWORD=<dev-password> uv run --package genlab-core pytest genlab-core/tests/ -x -q --tb=short
 ```
 
 - [ ] **Step 3: Commit**
