@@ -468,7 +468,7 @@ class YouTubeClient:
                 )
 
         try:
-            video_id = self._upload_video(
+            video_id, upload_response = self._upload_video(
                 video_path=str(video_path),
                 title=title,
                 description=description,
@@ -484,7 +484,7 @@ class YouTubeClient:
                 error=f"Upload failed: {exc}",
             )
 
-        if video_id is None:
+        if not video_id:
             return PublishResult(
                 platform=self.platform_id,
                 success=False,
@@ -506,7 +506,16 @@ class YouTubeClient:
             success=True,
             post_id=video_id,
             post_url=f"https://youtube.com/shorts/{video_id}",
-            raw_response={"video_id": video_id, "title": title},
+            # `youtube_response` carries the full googleapis videos.insert
+            # response body verbatim (id, kind, etag, snippet, status, ...).
+            # Kept alongside the historical {video_id, title} summary so
+            # existing consumers keep working while API-compliance callers
+            # (compliance/youtube-quota) get the full exchange.
+            raw_response={
+                "video_id": video_id,
+                "title": title,
+                "youtube_response": upload_response,
+            },
         )
 
         # 2026-07-17 (Layer 2 monetization): pin affiliate first-comment.
@@ -551,10 +560,17 @@ class YouTubeClient:
         tags: list[str],
         category_id: str,
         privacy: str,
-    ) -> str | None:
+    ) -> tuple[str, dict[str, Any]]:
         """Perform the resumable upload via YouTube Data API v3.
 
-        Returns the video ID on success, raises on failure.
+        Returns ``(video_id, response)`` where ``response`` is the full
+        googleapis body — full YouTube video resource with id, kind, etag,
+        snippet, status, contentDetails, etc. Raises on failure.
+
+        The full response is returned (in addition to just the id) so
+        callers like the YouTube API compliance recording can display the
+        actual API exchange to a reviewer without having to reissue a
+        follow-up ``videos.list`` call.
         """
         body = {
             "snippet": {
@@ -620,7 +636,7 @@ class YouTubeClient:
             raise RuntimeError(f"YouTube upload response missing 'id': {response}")
 
         self._log.info("YouTube video uploaded: %s", video_id)
-        return video_id
+        return video_id, response
 
     # ------------------------------------------------------------------
     # Engageable protocol
