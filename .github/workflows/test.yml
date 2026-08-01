@@ -65,7 +65,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           version: "0.10.x"
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       # 2026-06-29: pre-step disk hygiene for the test-core matrix. The
@@ -163,7 +163,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           version: "0.10.x"
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - run: uv sync --frozen
@@ -240,7 +240,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           version: "0.10.x"
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       # Channel render tests build FFmpeg command lines (subprocess is mocked,
@@ -332,7 +332,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           version: "0.10.x"
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - run: uv sync --frozen
