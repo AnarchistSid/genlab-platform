@@ -33,7 +33,11 @@ from genlab_core.strategies import (
     WritingStrategy,
 )
 
-from bb_strategies.content_research import BBContentResearchStrategy
+from bb_strategies.content_research import (
+    BBContentResearchStrategy,
+    _is_thin_context,
+    _filter_thin_context_items,
+)
 from bb_strategies.hooks import BBHookStrategy
 from bb_strategies.platform_adaptation import BBPlatformAdaptationStrategy
 from bb_strategies.scoring import BBScoringStrategy
@@ -47,6 +51,132 @@ class TestContentResearch:
     def test_instantiation(self):
         strategy = BBContentResearchStrategy()
         assert strategy is not None
+
+
+# ── Thin-context filter ─────────────────────────────────────
+#
+# Regression tests for the fetcher-side thin-context fix (2026-08-05
+# .audit/GENERATION_CAPABILITY_EVAL.md finding). Before the fix, RSS items
+# with empty or URL-only summaries reached the writer, which then either
+# (a) fell back to title-verbatim hooks via _has_writable_context skip, or
+# (b) ran the LLM on garbage input and produced restated-title output.
+#
+# The filter cuts these items at the fetcher boundary. Story-quality up,
+# blueprint-count-per-day down (which is the correct trade — fewer blueprints
+# that CAN generate real hooks > more blueprints that fall back to titles).
+
+
+class TestIsThinContext:
+    """_is_thin_context(text) — True if the summary field is empty OR
+    consists only of URL-wrapper metadata with no real prose."""
+
+    def test_empty_string_is_thin(self):
+        assert _is_thin_context("") is True
+
+    def test_whitespace_only_is_thin(self):
+        assert _is_thin_context("   \n\t  ") is True
+
+    def test_below_40_char_floor_is_thin(self):
+        # Matches the base_writing._has_writable_context 40-char floor.
+        # Below that, the writer skips the LLM anyway — filter it upstream
+        # so we don't ship a template-fallback hook.
+        assert _is_thin_context("Short summary here.") is True  # 19 chars
+
+    def test_url_only_watch_thumbnail_pattern_is_thin(self):
+        # The observed YouTube-RSS pattern for creators who put minimal
+        # descriptions: "Watch: <url> Thumbnail: <url> ThumbnailBackup: <url>".
+        # Passes the 40-char floor but is useless to the LLM.
+        s = (
+            "Watch: https://www.youtube.com/watch?v=okFdRbx8tT0 "
+            "Thumbnail: https://img.youtube.com/vi/okFdRbx8tT0/maxresdefault.jpg "
+            "ThumbnailBackup: https://img.youtube.com/vi/okFdRbx8tT0/hqdefault.jpg"
+        )
+        assert _is_thin_context(s) is True
+
+    def test_pure_url_content_is_thin(self):
+        # Even a single URL with no other text is thin.
+        s = "https://www.youtube.com/watch?v=abc123def456ghi789jk"
+        assert _is_thin_context(s) is True
+
+    def test_real_description_is_not_thin(self):
+        # Live-probed on a real YouTube channel today (SecondBrain Note).
+        # This is what the LLM CAN write about.
+        s = (
+            "What if your credit card could remember everything for you? "
+            "SecondBrain Note is a credit-card-thin AI recorder that captures "
+            "your meetings, conversations, and ideas."
+        )
+        assert _is_thin_context(s) is False
+
+    def test_description_with_urls_but_prose_is_not_thin(self):
+        # A real description that HAPPENS to include a URL should NOT be
+        # rejected — the prose is the signal.
+        s = (
+            "Anthropic just dropped Claude 4.7 with a new context-caching "
+            "mechanism. Details at https://anthropic.com/news."
+        )
+        assert _is_thin_context(s) is False
+
+    def test_hashtags_only_is_thin(self):
+        # YouTube #shorts entries sometimes have caption-style hashtags only.
+        s = "#ai #shorts #ultimate #trending #viral"
+        assert _is_thin_context(s) is True
+
+
+class TestFilterThinContextItems:
+    """_filter_thin_context_items(items) — returns items with real
+    summary content, preserving order. Pure function, no side effects."""
+
+    def test_empty_list_returns_empty(self):
+        assert _filter_thin_context_items([]) == []
+
+    def test_keeps_items_with_real_summary(self):
+        items = [
+            {"title": "Real story", "summary": "This is a real story with " * 4},
+            {"title": "Also real", "summary": "Anthropic released a new model " * 3},
+        ]
+        result = _filter_thin_context_items(items)
+        assert len(result) == 2
+
+    def test_drops_items_with_empty_summary(self):
+        items = [
+            {"title": "Real story", "summary": "Anthropic released a new model this week."},
+            {"title": "Video-only reddit post", "summary": ""},
+        ]
+        result = _filter_thin_context_items(items)
+        assert len(result) == 1
+        assert result[0]["title"] == "Real story"
+
+    def test_drops_items_with_url_only_summary(self):
+        items = [
+            {"title": "Good story", "summary": "OpenAI announced Codex 2 with new agent APIs."},
+            {"title": "Bad shorts entry", "summary": (
+                "Watch: https://www.youtube.com/watch?v=abc "
+                "Thumbnail: https://img.youtube.com/vi/abc/max.jpg"
+            )},
+        ]
+        result = _filter_thin_context_items(items)
+        assert len(result) == 1
+        assert result[0]["title"] == "Good story"
+
+    def test_preserves_item_order(self):
+        items = [
+            {"title": "First", "summary": "OpenAI just announced Codex 2 with agent APIs and new tools."},
+            {"title": "Dropped", "summary": ""},
+            {"title": "Third", "summary": "Anthropic dropped Claude 4.7 with context-caching improvements."},
+        ]
+        result = _filter_thin_context_items(items)
+        assert [i["title"] for i in result] == ["First", "Third"]
+
+    def test_missing_summary_field_is_dropped(self):
+        # Belt-and-suspenders: items sometimes lack the summary field entirely.
+        items = [
+            {"title": "Has summary", "summary": "Google DeepMind released Gemini 2.5 Flash with faster inference and new agentic capabilities."},
+            {"title": "Missing key"},
+        ]
+        result = _filter_thin_context_items(items)
+        assert len(result) == 1
+        assert result[0]["title"] == "Has summary"
 
     def test_is_subclass(self):
         assert issubclass(BBContentResearchStrategy, ContentResearchStrategy)
