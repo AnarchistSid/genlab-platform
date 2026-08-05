@@ -36,6 +36,16 @@ export default defineConfig({
     httpCredentials: process.env.DASHBOARD_PASSWORD
       ? { username: 'admin', password: process.env.DASHBOARD_PASSWORD }
       : undefined,
+    // Pre-emptive Authorization header. The dashboard returns 401 without
+    // a WWW-Authenticate challenge header (returns JSON `{"error": "..."}`
+    // with just `content-type: application/json`), so Playwright's
+    // httpCredentials never triggers — it only sends creds after a
+    // challenge. This extraHTTPHeaders line sends Basic Auth on EVERY
+    // request pre-emptively, which is what curl -u does. Kept alongside
+    // httpCredentials so either path works depending on the auth response.
+    extraHTTPHeaders: process.env.DASHBOARD_PASSWORD
+      ? { Authorization: 'Basic ' + Buffer.from('admin:' + process.env.DASHBOARD_PASSWORD).toString('base64') }
+      : undefined,
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   outputDir: './recordings',
