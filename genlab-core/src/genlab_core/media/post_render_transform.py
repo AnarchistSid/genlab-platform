@@ -37,11 +37,104 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+# QB-FIX-01 F3a (2026-08-06): default EBU R128 integrated-loudness target.
+# YouTube normalises to -14 LUFS; Spotify/Apple Music align similarly. Overridable
+# per-invocation via the GENLAB_LOUDNESS_TARGET_LUFS env var. A track quieter than
+# this plays visibly softer in the feed on partial-volume mobile — hold-rate
+# hurts (per audit QB-2026-08 F-QB-0301 and amended §1 correction 3).
+_DEFAULT_LOUDNESS_TARGET_LUFS = -14.0
+_DEFAULT_LOUDNESS_RANGE = 7.0  # LRA target — matches EBU R128 broadcast norm
+_DEFAULT_TRUE_PEAK_DBTP = -1.5  # headroom for lossy transcoders
+
+
+def _normalize_loudness_in_place(video_path: Path, *, niche_id: str) -> None:
+    """Apply EBU R128 loudnorm to ``video_path`` in-place. Fail-open.
+
+    Uses ffmpeg `-af loudnorm=I=-14:LRA=7:TP=-1.5`. Runs single-pass (dynamic
+    normalisation) — two-pass would give more accurate targeting but doubles
+    render time and single-pass is within ±1 LU of target for content in the
+    -30 to -14 LUFS range we're correcting from. If either the transcode or
+    the atomic replace fails, the caller's file is untouched.
+
+    Placement matters (see amended QB-FIX-01 §3 for rationale): this must run
+    AFTER transformation_orchestrator's music_mood + audio_ducking stages —
+    otherwise the mix lands on top of normalised VO and undoes the level.
+    Called from ``apply_post_render_transformations``'s outer wrapper for
+    exactly this reason.
+
+    Args:
+        video_path: final rendered reel (mp4). Overwritten in place on success.
+        niche_id: for log context only.
+    """
+    if not video_path.is_file() or video_path.stat().st_size < 1024:
+        logger.debug("[%s] loudnorm skipped: %s missing or too small", niche_id, video_path)
+        return
+
+    target_lufs = float(os.environ.get("GENLAB_LOUDNESS_TARGET_LUFS", _DEFAULT_LOUDNESS_TARGET_LUFS))
+    lra = float(os.environ.get("GENLAB_LOUDNESS_RANGE", _DEFAULT_LOUDNESS_RANGE))
+    tp = float(os.environ.get("GENLAB_TRUE_PEAK_DBTP", _DEFAULT_TRUE_PEAK_DBTP))
+
+    normalized = video_path.with_suffix(video_path.suffix + ".loudnorm.tmp.mp4")
+    filter_spec = f"loudnorm=I={target_lufs}:LRA={lra}:TP={tp}"
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(video_path),
+        # Keep video stream untouched (copy) so we don't burn extra CPU
+        # re-encoding video that already went through PLATFORM_SPECS. Only
+        # audio is re-encoded to apply the loudnorm filter.
+        "-c:v", "copy",
+        "-af", filter_spec,
+        # Preserve the same audio spec the compositor emitted (48kHz stereo
+        # AAC 192-320k depending on platform).
+        "-c:a", "aac",
+        "-ar", "48000",
+        "-ac", "2",
+        "-b:a", "192k",
+        # Faststart for platform upload (moov before mdat).
+        "-movflags", "+faststart",
+        str(normalized),
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+        logger.warning("[%s] loudnorm ffmpeg call failed (%s) — leaving file untouched", niche_id, exc)
+        return
+    if result.returncode != 0:
+        logger.warning(
+            "[%s] loudnorm ffmpeg returncode=%d stderr=%s — leaving file untouched",
+            niche_id,
+            result.returncode,
+            (result.stderr or "")[-300:],
+        )
+        return
+    if not normalized.is_file() or normalized.stat().st_size < 1024:
+        logger.warning("[%s] loudnorm produced empty output — leaving file untouched", niche_id)
+        return
+    try:
+        normalized.replace(video_path)
+    except OSError as exc:
+        logger.warning("[%s] loudnorm rename failed (%s) — leaving file untouched", niche_id, exc)
+        # Clean up the tmp file to avoid disk-quota drift.
+        try:
+            normalized.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return
+    logger.info(
+        "[%s] loudnorm applied: target=%.1f LUFS, LRA=%.1f, TP=%.1f dBTP",
+        niche_id,
+        target_lufs,
+        lra,
+        tp,
+    )
 
 
 def _probe_duration_seconds(video_path: Path) -> float | None:
@@ -76,6 +169,41 @@ def _probe_duration_seconds(video_path: Path) -> float | None:
 
 
 def apply_post_render_transformations(
+    rendered_path: str,
+    *,
+    niche_id: str,
+    niche_root: Path,
+    visuals_yaml_path: str,
+    blueprint_context: dict[str, Any] | None = None,
+    video_duration_s: float = 55.0,
+) -> tuple[str, dict[str, str]]:
+    """Run the intelligent transformation on a rendered reel, then normalise loudness.
+
+    Wrapper — see :func:`_apply_post_render_transformations_impl` for the
+    transformation-orchestrator body. QB-FIX-01 F3a (2026-08-06) added an
+    unconditional loudness-normalisation pass on the final artifact after
+    the impl returns. Placement matters: normalisation MUST run after
+    ``transformation_orchestrator.music_mood`` + ``audio_ducking`` so the
+    mix lands under a stable target level. Running it before those stages
+    would let ducking + music-bed mixing undo the normalisation.
+    """
+    result_path, arms = _apply_post_render_transformations_impl(
+        rendered_path,
+        niche_id=niche_id,
+        niche_root=niche_root,
+        visuals_yaml_path=visuals_yaml_path,
+        blueprint_context=blueprint_context,
+        video_duration_s=video_duration_s,
+    )
+    # QB-FIX-01 F3a: final loudness normalisation on whatever path the impl
+    # returned (base composite OR transformed side-file). Fail-open so a
+    # loudnorm failure never loses the reel — worst case is the un-normalised
+    # artifact still publishes.
+    _normalize_loudness_in_place(Path(result_path), niche_id=niche_id)
+    return result_path, arms
+
+
+def _apply_post_render_transformations_impl(
     rendered_path: str,
     *,
     niche_id: str,
