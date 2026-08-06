@@ -168,9 +168,13 @@ Videos MUST NOT:
 - Be a static image with Ken Burns (banned)
 - Be a placeholder or generic compilation used across multiple blueprints
 - Be rendered without the channel logo overlay
-- Be rendered with whisper word-by-word caption overlay until the `text_optimizer`
-  regression is fixed (`whisper_sync.enabled = false` across all 5 niches as of
-  2026-06-13). See `[[session-2026-06-13-render-audit-findings]]` before flipping.
+- Be rendered with whisper word-by-word caption overlay for niches where
+  `whisper_sync.enabled = false`. Current state (per QB-FIX-01 F3b verification
+  2026-08-06): **ai_creators is the CANARY** with `whisper_sync.enabled = true`
+  since 2026-07-22 (the 2026-06-13 `text_optimizer` regression was fixed inline
+  at `word_animator.py:21-46` and `render_whisper_captions.py:231` now passes
+  `text_type="caption"`). gaming / sports / movies / anime remain disabled.
+  Do not extend to other niches without a canary-vs-baseline retention read.
 
 If no source video exists for a story, the blueprint stays at DRAFTED.
 Gaming (CriticalRush) requires a verified video clip — no exceptions.

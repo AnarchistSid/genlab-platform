@@ -177,9 +177,21 @@ def build_caption_filter_chain(
 
     fontsize = _fontsize_for(style)
     emphasis_hex = _emphasis_color_for(emphasis_color, style)
-    # y position: lower third but above the Instagram username strip.
-    # Using ``h*0.72`` keeps consistent placement across dimensions.
-    y_expr = "h*0.72"
+    # y position — QB-FIX-01 F3b (2026-08-06): lowered from h*0.72 to h*0.62.
+    #
+    # Prior value put caption at y=1382 which is inside the bottom-30%
+    # IG/Reels safe zone (starts at y=1344). Audit F-QB-0402 measured
+    # 46% of ai_creators caption blobs landing in occluded regions.
+    # h*0.62 = y=1190, which with ~68px caption line height ends at
+    # y=1258 — safely above the bottom safe-zone boundary and below
+    # the top-14% status-bar zone at y=269.
+    #
+    # Overridable via env var for platform tuning (e.g. Threads has
+    # smaller bottom UI, could go h*0.68).
+    import os as _os
+
+    _y_pct = float(_os.environ.get("GENLAB_CAPTION_Y_PCT", "0.62"))
+    y_expr = f"h*{_y_pct}"
 
     time_ranges = _segment_time_ranges(len(segments), video_duration_s)
     filters: list[str] = []

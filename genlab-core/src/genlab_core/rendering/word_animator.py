@@ -37,13 +37,33 @@ logger = logging.getLogger(__name__)
 _CANVAS_WIDTH = 1080
 _CANVAS_HEIGHT = 1920
 
-# Safe-zone margins (matches BlackboxBrief/config/instagram_specs.yaml)
-SAFE_TOP = 250
-SAFE_BOTTOM = 320
-SAFE_LEFT = 60
-SAFE_RIGHT = 120
-SAFE_WIDTH = _CANVAS_WIDTH - SAFE_LEFT - SAFE_RIGHT  # 900
-SAFE_BOTTOM_Y = _CANVAS_HEIGHT - SAFE_BOTTOM  # 1600
+# Safe-zone margins.
+#
+# QB-FIX-01 F3b (2026-08-06): widened bottom+right insets to match
+# Instagram Reels + YouTube Shorts UI-occluded regions measured in
+# audit QB-2026-08 F-QB-0402:
+#   * top ~14% = 269px = status bar + username + audio attribution
+#   * bottom ~30% = 576px = caption preview + CTA + progress bar
+#   * right ~15% = 162px = action rail (like/comment/share/save/DM)
+# Prior values (top=250=13%, bottom=320=16.7%, left/right=60/120=5.6%/11.1%)
+# left the whisper-caption zone 250–1600 (72% of canvas usable) which
+# placed 46% of ai_creators caption blobs inside occluded regions per
+# Phase 4 OCR. New values give a 269–1344 usable band (56% of canvas)
+# matching Section 1.1 row 5 benchmark.
+#
+# Overridable per-instance via env vars for platform tuning:
+#   GENLAB_SAFE_TOP_PCT / GENLAB_SAFE_BOTTOM_PCT
+#   GENLAB_SAFE_LEFT_PX / GENLAB_SAFE_RIGHT_PX
+import os as _os
+
+_SAFE_TOP_PCT = float(_os.environ.get("GENLAB_SAFE_TOP_PCT", "0.14"))
+_SAFE_BOTTOM_PCT = float(_os.environ.get("GENLAB_SAFE_BOTTOM_PCT", "0.30"))
+SAFE_TOP = int(_CANVAS_HEIGHT * _SAFE_TOP_PCT)  # 269 at default
+SAFE_BOTTOM = int(_CANVAS_HEIGHT * _SAFE_BOTTOM_PCT)  # 576 at default
+SAFE_LEFT = int(_os.environ.get("GENLAB_SAFE_LEFT_PX", "60"))
+SAFE_RIGHT = int(_os.environ.get("GENLAB_SAFE_RIGHT_PX", "162"))  # 15% right rail
+SAFE_WIDTH = _CANVAS_WIDTH - SAFE_LEFT - SAFE_RIGHT
+SAFE_BOTTOM_Y = _CANVAS_HEIGHT - SAFE_BOTTOM  # 1344 at default
 
 # Per-text-type sizing budgets. The optimizer shrinks the font until the
 # computed line count fits within `max_lines`, never going below `min_size`.
