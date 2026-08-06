@@ -3062,6 +3062,16 @@ class PushToBacklog:
                             )
 
                             _synth = {
+                                # QB-FIX-02 V3: propagate niche_id to the pre-write
+                                # gate check. Without it, gate.evaluate() and its
+                                # LLM judge fall back to "unknown", the gate applies
+                                # ai_creators default thresholds (wrong for movies/
+                                # sports/anime), and the LLM judge reasons about a
+                                # phantom niche. The DB write below correctly stamps
+                                # niche_id, but the pre-write confidence calculation
+                                # was operating without tenant context. Fixed at
+                                # write path per V3 spec — not backfilled.
+                                "niche_id": fields.get("niche_id") or niche_id,
                                 "hook_text": fields.get("hook_text", ""),
                                 "visual_paths": fields.get("visual_paths", ""),
                                 "extra": {
