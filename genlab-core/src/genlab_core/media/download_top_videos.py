@@ -305,6 +305,13 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
         )
         elapsed = time.monotonic() - t0
         if result.returncode == 0:
+            # QB-FIX-01 F2: surface the `[F2] format=... res=...` line yt-dlp
+            # emits via `--print after_move` so the pipeline log records
+            # which format tier fired per download. Without this the print
+            # output is silently discarded on success.
+            for _line in (result.stdout or "").splitlines():
+                if "[F2]" in _line:
+                    logger.info("[download] %s", _line.strip())
             return {"success": True, "duration": elapsed, "error": ""}
         ytdlp_error = (result.stderr or result.stdout or "unknown error").strip()
         if len(ytdlp_error) > 500:
