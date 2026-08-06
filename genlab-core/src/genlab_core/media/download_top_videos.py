@@ -187,10 +187,46 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
         except (OSError, ValueError):
             pass
 
+    # QB-FIX-01 F2 (2026-08-06): tiered format selection that prefers
+    # >=1080p vertical-usable source.
+    #
+    # Prior spec was `bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/…`
+    # which combined two problems: (a) `height<=1080` gave yt-dlp a CEILING
+    # but no floor, (b) `[ext=mp4]` restriction eliminated the DASH-split
+    # webm/VP9 formats where YouTube's 720p+ progressive streams actually
+    # live for the ios/tv/web_safari clients we use. Result: every source
+    # clip landed at 640x360 (single-file baked-audio mp4 fallback), which
+    # then upscaled to 1080x1920 for the reel — losing all high-frequency
+    # detail before the encoder ever ran. Audit QB-2026-08 F-QB-0101 traced
+    # the 0.9-2.4 Mbps output bitrates to this softness (CRF correctly
+    # allocated few bits to an already-blurred frame). Fixing the source
+    # is the actual root cause; forcing `-minrate` on the encoder would
+    # just spend bits on the same soft image.
+    #
+    # Tier order:
+    #   1) >=1080p mp4 video + m4a audio (ideal — plays without transcode)
+    #   2) >=1080p any format (webm/VP9 — will need remux but detail is there)
+    #   3) >=720p mp4 (good fallback)
+    #   4) >=720p any format
+    #   5) any best (last resort — accept low-res)
+    # `--print "after_move:format_id=%(format_id)s res=%(resolution)s ..."`
+    # emits a one-line marker per download so the pipeline log records which
+    # tier fired and at what resolution — enables per-clip resolution audit
+    # without a separate ffprobe pass.
     cmd = [
         "yt-dlp",
         "-f",
-        "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
+        (
+            "bestvideo[height>=1080][ext=mp4]+bestaudio[ext=m4a]/"
+            "bestvideo[height>=1080]+bestaudio/"
+            "bestvideo[height>=720][ext=mp4]+bestaudio[ext=m4a]/"
+            "bestvideo[height>=720]+bestaudio/"
+            "best[height>=720]/"
+            "best"
+        ),
+        "--print",
+        "after_move:[F2] format=%(format_id)s res=%(resolution)s "
+        "vcodec=%(vcodec)s acodec=%(acodec)s vbr=%(vbr)s abr=%(abr)s",
         "-o",
         output_path,
         "--no-playlist",
