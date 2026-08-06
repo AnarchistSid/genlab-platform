@@ -17,10 +17,50 @@ from __future__ import annotations
 import logging
 import os
 import re
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 logger = logging.getLogger(__name__)
+
+
+def is_cta_injection_enabled(niche_id: str) -> bool:
+    """Return True iff the niche's monetization.yaml explicitly opts in.
+
+    Reads ``cta_injection_enabled`` (bool) from the niche's
+    ``monetization.yaml``. Default False when the file, key, or niche is
+    missing — CTA injection is off unless the operator explicitly enables it.
+
+    Path resolution mirrors ``publish_all_platforms.py`` (gaming's nested
+    layout first, then flat) so the helper works uniformly across the 5
+    channels. The check is fail-safe: any I/O or YAML error returns False.
+    """
+    try:
+        import yaml as _yaml
+
+        from genlab_core.pipeline.cli import NICHE_DIR_NAMES, _resolve_genlab_root
+
+        dir_name = NICHE_DIR_NAMES.get(niche_id)
+        if not dir_name:
+            return False
+        niche_root = Path(_resolve_genlab_root()) / dir_name
+        candidates = [
+            niche_root / "niches" / niche_id / "config" / "monetization.yaml",
+            niche_root / "config" / "monetization.yaml",
+        ]
+        for path in candidates:
+            if path.is_file():
+                with path.open("r", encoding="utf-8") as f:
+                    data = _yaml.safe_load(f) or {}
+                return bool(data.get("cta_injection_enabled", False))
+        return False
+    except Exception as exc:
+        logger.debug(
+            "[cta_injection] flag lookup failed for niche=%s (%s) — defaulting off",
+            niche_id,
+            exc,
+        )
+        return False
 
 
 def append_utm_params(

@@ -9,6 +9,11 @@
 # Revenue model: affiliate commissions on AI tool signups + newsletter growth.
 # All links use UTM tracking: ?utm_source=blackbox_brief&utm_medium={platform}&utm_campaign=ai_tools
 
+# QB-FIX-01 F1 (2026-08-06): disabled pending disclosure-position rebuild.
+# When true, push_to_backlog copies affiliate_* fields to the blueprint and
+# calls cta_engine.inject_cta(). When false, both are skipped. Default off.
+cta_injection_enabled: false
+
 version: "2026.03"
 
 affiliate_programs:

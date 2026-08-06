@@ -2687,33 +2687,49 @@ class PushToBacklog:
                     if urgency:
                         fields["urgency_classification"] = json.dumps(urgency)
 
-                    # Affiliate fields (if matched by AffiliateMatch stage)
-                    for af_key in (
-                        "affiliate_product",
-                        "affiliate_url",
-                        "affiliate_network",
-                        "affiliate_commission_pct",
-                        "affiliate_cta",
-                        # L3 PR 2 (2026-07-07): canonical slug for click→
-                        # blueprint attribution JOIN. affiliate_matcher sets
-                        # this via slugify_product_name(product_name).
-                        "product_slug",
-                    ):
-                        if story.get(af_key):
-                            fields[af_key] = story[af_key]
+                    # QB-FIX-01 F1 (2026-08-06): gate the entire affiliate
+                    # field-copy + CTA-injection block behind the niche-level
+                    # `cta_injection_enabled` flag. Prior behavior copied
+                    # `affiliate_url` + `affiliate_cta` unconditionally, then
+                    # inject_cta appended "🔥 {product} — ₹{price} 👇 (link in
+                    # bio)" past the 100-char fold on every affiliate-matched
+                    # blueprint. Audit QB-2026-08 F-QB-0701 measured 17/17
+                    # movies affiliate posts non-compliant on FTC disclosure
+                    # position + $0 realised revenue over 30 days. Disabling
+                    # closes compliance exposure C2 today; re-enable per niche
+                    # after the caption-position rebuild ships.
+                    from genlab_core.monetization.cta_engine import (
+                        is_cta_injection_enabled,
+                    )
 
-                    # L3 PR 2: story key is ``affiliate_price_inr`` (kept for
-                    # cta_engine backward compat) but the DB column is
-                    # ``price_inr`` (per schema migration a8w9x0y1z2a3).
-                    # Map story → column at write time.
-                    if story.get("affiliate_price_inr"):
-                        fields["price_inr"] = story["affiliate_price_inr"]
+                    if is_cta_injection_enabled(niche_id):
+                        # Affiliate fields (if matched by AffiliateMatch stage)
+                        for af_key in (
+                            "affiliate_product",
+                            "affiliate_url",
+                            "affiliate_network",
+                            "affiliate_commission_pct",
+                            "affiliate_cta",
+                            # L3 PR 2 (2026-07-07): canonical slug for click→
+                            # blueprint attribution JOIN. affiliate_matcher sets
+                            # this via slugify_product_name(product_name).
+                            "product_slug",
+                        ):
+                            if story.get(af_key):
+                                fields[af_key] = story[af_key]
 
-                    # Inject platform-specific CTAs into captions
-                    if story.get("affiliate_product"):
-                        from genlab_core.monetization.cta_engine import inject_cta
+                        # L3 PR 2: story key is ``affiliate_price_inr`` (kept for
+                        # cta_engine backward compat) but the DB column is
+                        # ``price_inr`` (per schema migration a8w9x0y1z2a3).
+                        # Map story → column at write time.
+                        if story.get("affiliate_price_inr"):
+                            fields["price_inr"] = story["affiliate_price_inr"]
 
-                        fields = inject_cta(fields, story)
+                        # Inject platform-specific CTAs into captions
+                        if story.get("affiliate_product"):
+                            from genlab_core.monetization.cta_engine import inject_cta
+
+                            fields = inject_cta(fields, story)
 
                     # Layer 3 S2 (2026-07-17): series_part variant detection.
                     # Runs independently of write_video_content's own call so

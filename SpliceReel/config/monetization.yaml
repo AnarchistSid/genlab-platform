@@ -1,5 +1,10 @@
 # SpliceReel monetization config
 
+# QB-FIX-01 F1 (2026-08-06): disabled pending disclosure-position rebuild.
+# When true, push_to_backlog copies affiliate_* fields to the blueprint and
+# calls cta_engine.inject_cta(). When false, both are skipped. Default off.
+cta_injection_enabled: false
+
 affiliate_programs:
   - name: "Amazon Prime Video"
     category: streaming
