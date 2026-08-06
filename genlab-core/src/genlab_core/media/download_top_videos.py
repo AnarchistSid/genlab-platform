@@ -67,6 +67,46 @@ _SOCKS5_ERROR_TOKENS: tuple[str, ...] = (
 )
 
 
+# Download-error patterns that indicate the primary URL is blocked (bot
+# detection, auth wall, geo-restriction, deleted) rather than a transient
+# network/proxy failure. When one of these fires on a ``direct_url`` backend
+# we ask VideoSourcer for an alternative (Reddit → TMDB → YouTube search).
+#
+# Substring match, case-insensitive. Extend when new platform-side blocks
+# surface. All entries are backed by a regression test in
+# tests/media/test_download_fallback_triggers.py.
+#
+# 2026-08-06: added "authentication is required" after Reddit locked down
+# anonymous v.redd.it downloads. All 5 sports blueprints shipped 0-content
+# because ``direct_url`` yt-dlp calls returned "Account authentication is
+# required" and the trigger list didn't recognize it → no fallback fired.
+# Same class of bug as CLAUDE.md rule #17 (silent handler misses a signal
+# that would have unlocked the recovery path).
+_DOWNLOAD_FALLBACK_TRIGGERS: tuple[str, ...] = (
+    "sign in to confirm",
+    "not a bot",
+    "private video",
+    "video unavailable",
+    "not available in your country",
+    "authentication is required",  # Reddit v.redd.it + generic auth walls
+    "403 client error: blocked",   # Reddit JSON API + Cloudflare-style blocks
+)
+
+
+def _should_try_alternative(err: str | None) -> bool:
+    """True if this download error suggests trying an alternative source.
+
+    Pure function, case-insensitive substring match against
+    ``_DOWNLOAD_FALLBACK_TRIGGERS``. Empty / None safely returns False —
+    the caller only invokes the alternative path when the download
+    already failed for SOME reason, so empty-error is a bug elsewhere.
+    """
+    if not err or not isinstance(err, str):
+        return False
+    err_lower = err.lower()
+    return any(pattern in err_lower for pattern in _DOWNLOAD_FALLBACK_TRIGGERS)
+
+
 def _is_socks5_shaped_error(err: str) -> bool:
     """True if the error string looks like a proxy/WARP failure.
 
@@ -533,18 +573,13 @@ def _process_one_story(
 
     dl_result = _download_video(video_url, output_path)
 
-    # FALLBACK: if the primary URL failed (usually YouTube bot detection),
-    # ask VideoSourcer for an alternative backend and retry once.
+    # FALLBACK: if the primary URL failed with a "blocked / auth wall /
+    # geo-restricted / deleted" shape, ask VideoSourcer for an alternative
+    # backend and retry once. Pattern list in _DOWNLOAD_FALLBACK_TRIGGERS —
+    # extend that constant, not this call site, when new block classes appear.
     if not dl_result["success"]:
         err = dl_result.get("error", "")
-        is_bot_or_block = (
-            "Sign in to confirm" in err
-            or "not a bot" in err
-            or "Private video" in err
-            or "Video unavailable" in err
-            or "not available in your country" in err
-        )
-        if is_bot_or_block and backend == "direct_url":
+        if _should_try_alternative(err) and backend == "direct_url":
             logger.info(
                 "  Primary URL failed (%s) — trying alternative source",
                 err[:50],
