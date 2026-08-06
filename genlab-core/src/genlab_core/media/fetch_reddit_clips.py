@@ -206,6 +206,43 @@ def _parse_atom_feed(xml_text: str) -> list[dict[str, Any]]:
     return entries
 
 
+# base_writing._MIN_WRITABLE_CONTEXT_CHARS. Kept in sync so Reddit
+# summaries always clear the writer floor with real natural language
+# (not a URL).
+_WRITER_MIN_CONTEXT_CHARS = 40
+
+
+def _build_reddit_summary(
+    title: str,
+    subreddit: str,
+    *,
+    flair: str | None = None,
+    selftext: str = "",
+) -> str:
+    """Assemble a writer-usable summary from Reddit post metadata.
+
+    Preference order:
+      1. Selftext (real natural-language content) if it clears the floor
+      2. Synthesized string from title + subreddit + optional flair
+
+    Guarantees no URL is emitted as the summary — the writer's
+    ``_has_writable_context`` shape gate rejects URL-dominant strings
+    even if they clear the length floor. QB-FIX-02 V4.
+    """
+    st = (selftext or "").strip()
+    if len(st) >= _WRITER_MIN_CONTEXT_CHARS:
+        return st[:500]
+    title_clean = (title or "").strip()
+    sub_clean = (subreddit or "").strip()
+    parts: list[str] = []
+    if title_clean:
+        parts.append(f'Reddit clip from r/{sub_clean}: {title_clean}' if sub_clean else title_clean)
+    if flair:
+        parts.append(f"Flair: {flair}")
+    synthesized = ". ".join(parts).strip()
+    return synthesized[:500]
+
+
 def _normalise_rss_entry(
     entry: dict, niche_id: str, subreddit: str, total_entries: int
 ) -> dict[str, Any] | None:
@@ -251,7 +288,12 @@ def _normalise_rss_entry(
         "published_date": published_at.isoformat(),
         "published_at": published_at.isoformat(),
         "fetched_at": now.isoformat(),
-        "summary": entry.get("permalink", ""),
+        # QB-FIX-02 V4: synthesize a writer-usable summary. RSS doesn't
+        # expose selftext or flair, so we build from title + subreddit
+        # context. Previously stored the raw permalink URL — passed the
+        # 40-char length gate but was semantically empty, producing
+        # bare-title hooks downstream (F-QB-0606).
+        "summary": _build_reddit_summary(entry["title"], subreddit, flair=None, selftext=""),
         "channel_name": f"r/{subreddit}",
         "view_count": int(synth_score * _UPVOTE_VIEW_EQUIVALENCE),
         "view_velocity": round(view_velocity, 1),
@@ -506,10 +548,20 @@ def _normalise_post(post: dict, niche_id: str, subreddit: str) -> dict[str, Any]
         "published_date": published_at.isoformat(),
         "published_at": published_at.isoformat(),
         "fetched_at": now.isoformat(),
-        # Reddit doesn't expose a rich description; the title is the
-        # only natural-language hook signal. Carry the permalink as
-        # the summary so downstream attribution still works.
-        "summary": permalink,
+        # QB-FIX-02 V4: synthesize a writer-usable summary from
+        # title + subreddit + flair + optional selftext. Previously
+        # stored the raw permalink URL — passed the 40-char length
+        # gate but was semantically empty, producing bare-title
+        # hooks downstream (F-QB-0606 "Fortnite", "League of
+        # Legends" x5, "Marvel's Spider-Man 2"). Permalink kept in
+        # `reddit_permalink` for attribution reads.
+        "summary": _build_reddit_summary(
+            title,
+            subreddit,
+            flair=(data.get("link_flair_text") or "").strip() or None,
+            selftext=(data.get("selftext") or "").strip(),
+        ),
+        "reddit_permalink": permalink,
         "channel_name": f"r/{subreddit}",
         "view_count": int(score * _UPVOTE_VIEW_EQUIVALENCE),  # synth proxy, calibrated
         "view_velocity": round(view_velocity, 1),

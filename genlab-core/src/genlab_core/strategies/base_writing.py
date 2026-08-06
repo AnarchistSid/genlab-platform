@@ -92,6 +92,25 @@ def _build_extra_instructions(writing_cfg: dict) -> str:
 _MIN_WRITABLE_CONTEXT_CHARS = 40
 
 
+def _is_url_dominant(text: str) -> bool:
+    """True if `text` is predominantly a URL.
+
+    QB-FIX-02 V4: fetch_reddit_clips historically wrote the Reddit
+    permalink as `story["summary"]`. It passed this function's
+    length floor (permalinks are >40 chars) but carried zero natural-
+    language context — writer produced bare-title hooks like
+    "Fortnite", "League of Legends" x5, "Marvel's Spider-Man 2".
+
+    Generalisable check: strip all http(s) URLs; if <40 chars of
+    non-URL text remain, treat as URL-dominant and reject even
+    though the raw string is long.
+    """
+    import re as _re
+
+    stripped = _re.sub(r"https?://\S+", "", text).strip()
+    return len(stripped) < _MIN_WRITABLE_CONTEXT_CHARS
+
+
 def _has_writable_context(story: dict) -> bool:
     """True if the story dict has enough content for the LLM to write about.
 
@@ -103,9 +122,16 @@ def _has_writable_context(story: dict) -> bool:
         alternative name for the summary.
       * ``description`` — Reddit / niche-specific fetchers.
 
-    Returns False if ALL relevant fields are empty or below the
-    minimum-context floor. The writer is then instructed to skip the
-    story rather than call the LLM (which reliably refuses).
+    A field passes IF (a) it clears ``_MIN_WRITABLE_CONTEXT_CHARS``
+    AND (b) it is not URL-dominant (see ``_is_url_dominant``). The
+    URL check catches the historical Reddit-permalink-as-summary
+    class of bug where the shape passed but semantic content was
+    zero.
+
+    Returns False if ALL relevant fields are empty, below the
+    minimum-context floor, or URL-dominant. The writer is then
+    instructed to skip the story rather than call the LLM (which
+    reliably refuses or produces bare-title hooks).
     """
     if not isinstance(story, dict):
         return False
@@ -114,8 +140,14 @@ def _has_writable_context(story: dict) -> bool:
     # are fallbacks the fetcher layer sometimes uses.
     for field in ("summary", "description_snippet", "description"):
         value = story.get(field, "") or ""
-        if isinstance(value, str) and len(value.strip()) >= _MIN_WRITABLE_CONTEXT_CHARS:
-            return True
+        if not isinstance(value, str):
+            continue
+        cleaned = value.strip()
+        if len(cleaned) < _MIN_WRITABLE_CONTEXT_CHARS:
+            continue
+        if _is_url_dominant(cleaned):
+            continue
+        return True
     return False
 
 
