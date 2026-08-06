@@ -69,8 +69,11 @@ intelligent_transform:
       enabled: true
       moods: [epic, victorious, driving, uplifting, cinematic_sport, hype]
       source: pixabay
-      source_audio_duck_db: -12
-      music_bed_db: -6
+      # QB-FIX-01 F3a-2 (2026-08-06): flipped bed vs source to make source
+      # (sports commentary) the primary aural signal 14dB above bed.
+      # See BlackboxBrief/config/visuals.yaml for full rationale.
+      source_audio_duck_db: -6
+      music_bed_db: -20
     caption_style:
       enabled: true
       styles: [word_by_word, hormozi_yellow, karaoke, minimal, meme]
@@ -112,7 +115,8 @@ intelligent_transform:
       window_seconds: 16
     audio_ducking:
       enabled: true
-      levels_db: [-9, -12, -15]
+      # QB-FIX-01 F3a-2 (2026-08-06): recentered around new -6 source centre.
+      levels_db: [-3, -6, -9]
     music_visual_sync:
       enabled: true
       modes: [beat_cut, ambient, none]

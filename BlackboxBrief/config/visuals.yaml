@@ -78,8 +78,13 @@ intelligent_transform:
       enabled: true
       moods: [electronic, ambient_tech, focused, upbeat, cinematic, contemplative, tech_hype]
       source: pixabay
-      source_audio_duck_db: -12
-      music_bed_db: -6
+      # QB-FIX-01 F3a-2 (2026-08-06): flipped from source=-12 / bed=-6
+      # (bed 6dB louder than source, buried source dialog) to
+      # source=-6 / bed=-20 (source now 14dB above bed). Source video's
+      # own audio is the primary aural signal per operator design intent;
+      # TTS is captions-only, no code path mixes _audio.mp3 into the reel.
+      source_audio_duck_db: -6
+      music_bed_db: -20
     caption_style:
       enabled: true
       styles: [word_by_word, hormozi_yellow, karaoke, minimal, meme]
@@ -124,7 +129,12 @@ intelligent_transform:
       window_seconds: 16
     audio_ducking:
       enabled: true
-      levels_db: [-9, -12, -15]
+      # QB-FIX-01 F3a-2 (2026-08-06): recentered from [-9,-12,-15] (around
+      # old -12 source centre) to [-3,-6,-9] (around new -6 source centre).
+      # Bandit posteriors on old arm labels are effectively cold-started
+      # since old rewards were on the wrong mix ratio (bed louder than
+      # source) — those posteriors were noise-attribution.
+      levels_db: [-3, -6, -9]
     music_visual_sync:
       enabled: true
       modes: [beat_cut, ambient, none]

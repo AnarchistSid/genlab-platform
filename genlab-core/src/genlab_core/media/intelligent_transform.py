@@ -54,12 +54,24 @@ class MusicMoodConfig(BaseModel):
     """Music source: 'pixabay' (free API, ~30K tracks) or 'musicgen'
     (local generation, Tier 3). MusicGen is a future enhancement — for
     v1 always 'pixabay'."""
-    source_audio_duck_db: int = -12
-    """dB to duck original clip audio (default -12dB — audible but
-    secondary). Independent from the audio_ducking bandit dimension
-    which selects the specific level."""
-    music_bed_db: int = -6
-    """dB for royalty-free music bed (default -6dB — primary audio)."""
+    source_audio_duck_db: int = -6
+    """dB level applied to source-video's own audio track. QB-FIX-01 F3a-2
+    (2026-08-06) flipped from -12 (secondary) to -6 (primary). Design
+    intent per operator: the source video's own audio (movie trailer
+    dialog, sports commentary, anime theme + speech, tech creator voice)
+    IS the primary aural signal. TTS is captions-only in the current
+    pipeline — no code path mixes _audio.mp3 into the reel; audio_path
+    is used only by WhisperX for word-level caption timing. Formerly
+    the source sat 6 dB BELOW the music bed which buried source dialog.
+    Independent from the audio_ducking bandit dimension which selects
+    the specific level around this centre."""
+    music_bed_db: int = -20
+    """dB for royalty-free music bed. QB-FIX-01 F3a-2 (2026-08-06)
+    flipped from -6 (primary) to -20 (behind source). Gives ~14 dB
+    source-over-bed margin at the default source level of -6 dB —
+    well above the 10 dB gate for aural intelligibility. Bandit
+    audio_ducking arms bracket source-side; bed stays fixed at -20
+    unless a per-niche override says otherwise."""
 
 
 class CaptionStyleConfig(BaseModel):
