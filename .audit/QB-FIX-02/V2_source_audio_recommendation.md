@@ -3,6 +3,8 @@
 **Date:** 2026-08-06 21:45 IST
 **Deliverable:** written recommendation only. **No value changed in this pass** (per V2 measure-only scope + §1's pre-authorization).
 
+> **SUPERSEDED 2026-08-06 22:30 IST by QB-FIX-03 W0.** The V2 recommendation to attenuate source_audio_duck_db from -6 to -9 dB on sports/movies/anime is withdrawn. Rationale: audio fingerprinting (Content ID, AudibleMagic, Meta Rights Manager) matches on signal CONTENT, not signal LEVEL — a 3 dB attenuation does not reduce match probability, only makes the reel quieter. Section 1.3 explicitly notes 2026 fingerprinting detects low-volume beds (same mechanism catches music mixed under speech). Combined with V1's finding that source audio is now the ONLY aural content a reel has (no TTS narration to compete with, no reason to duck), the correct decision is **keep -6 uniformly across all five niches on audio-quality grounds**. Copyright exposure has to be addressed where it actually lives: clip length as a fraction of source, how much of source is used, whether anything original sits on top. None of those are volume knobs. W3 (QB-FIX-03) addresses the real levers for SpliceReel specifically. Original recommendation preserved below for audit traceability; **do not adopt**. See methodology_errors.md ME-13 for the class-of-bug analysis.
+
 ## V2 Step 1 — override surface confirmed
 
 `source_audio_duck_db` and `music_bed_db` are set in each niche's `<Niche>/config/visuals.yaml` under `intelligent_transform.dimensions.music_mood`. All 5 niches currently hold identical values as of F3a-2:
