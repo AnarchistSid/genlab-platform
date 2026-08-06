@@ -46,21 +46,28 @@ test('operator approve → publish_all_platforms → YouTube upload → verify o
   // TODO: the actual link text/route may differ — verify by opening the
   // dashboard once and adjusting. Common candidates:
   //   /focus-review    /publishing-queue    /queue    /review
-  const focusReviewLink = page
-    .locator('a')
-    .filter({ hasText: /focus review|review|queue/i })
-    .first();
-  if (await focusReviewLink.isVisible().catch(() => false)) {
-    await focusReviewLink.click();
-    await page.waitForLoadState('networkidle');
+  // When TEST_BLUEPRINT_ID is provided we skip the queue navigation entirely
+  // (§2 below goto's the blueprint directly). Attempting the queue click
+  // sometimes hangs on `networkidle` for React SPAs with active websockets.
+  if (!process.env.TEST_BLUEPRINT_ID) {
+    const focusReviewLink = page
+      .locator('a')
+      .filter({ hasText: /focus review|review|queue/i })
+      .first();
+    if (await focusReviewLink.isVisible().catch(() => false)) {
+      await focusReviewLink.click();
+      await page.waitForLoadState('domcontentloaded');
+    }
   }
 
   // ── 2. Open a specific known VISUAL_READY blueprint ────────────────────
   const testBlueprintId = process.env.TEST_BLUEPRINT_ID;
   if (testBlueprintId) {
     await step(page, `Opening test blueprint: ${testBlueprintId}`, {});
-    await page.goto(`/focus-review/${testBlueprintId}`);
-    await page.waitForLoadState('networkidle');
+    // Real SPA route per dashboard/frontend/src/App.tsx is /blueprints/:id
+    // (there's a /focus-review route but no /:id param on it).
+    await page.goto(`/blueprints/${testBlueprintId}`);
+    await page.waitForLoadState('domcontentloaded');
     // Re-pin header (navigation cleared it)
     await pinHeader(page, [
       'GenLab — YouTube Data API v3 compliance recording (segment 1 of 2)',
@@ -74,7 +81,7 @@ test('operator approve → publish_all_platforms → YouTube upload → verify o
       .locator('[data-testid="blueprint-row"], .blueprint-card, article')
       .first()
       .click();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   }
 
   await step(
@@ -132,7 +139,7 @@ test('operator approve → publish_all_platforms → YouTube upload → verify o
   let youtubeUrl = '';
   const pollDeadline = Date.now() + 3 * 60_000;
   while (Date.now() < pollDeadline) {
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
     // TODO: adjust selector — actual status might be in a badge, a table cell, etc.
     const publishedBadge = page.locator('text=/PUBLISHED/i').first();
     if (await publishedBadge.isVisible().catch(() => false)) {

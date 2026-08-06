@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,6 +14,72 @@ from genlab_core.strategies import ContentResearchStrategy
 
 BB_ROOT = Path(__file__).resolve().parent.parent
 logger = logging.getLogger(__name__)
+
+
+# ── Thin-context filter (fetcher-side quality gate) ──────────────
+#
+# 2026-08-05: fetcher-side fix for the "flat ai_creators hooks" pattern
+# found in .audit/GENERATION_CAPABILITY_EVAL.md. RSS items reach the
+# parsed_items stage with summaries in three shapes:
+#
+#   1. Empty (Reddit v.redd.it video posts — image tags stripped to nothing)
+#   2. URL-wrapper only: "Watch: https://... Thumbnail: https://..."
+#      (YouTube creators who put minimal descriptions on their videos)
+#   3. Real prose descriptions
+#
+# Shapes 1 + 2 pass into the writer, which then EITHER (a) triggers the
+# _has_writable_context skip → template-fallback → hook=title verbatim,
+# or (b) runs the LLM on garbage input which produces flat title-restated
+# output. Neither shape can generate a real hook. Filtering them at the
+# fetcher boundary means fewer blueprints per day, but the ones that DO
+# reach the writer have real context to work with.
+#
+# The floor matches base_writing._MIN_WRITABLE_CONTEXT_CHARS = 40 so this
+# filter and the writer's own skip use the same threshold. Difference:
+# writer's skip checks raw length; this filter checks length AFTER
+# stripping URLs, hashtags, and RSS-wrapper prefixes so YouTube's
+# "Watch: URL Thumbnail: URL" pattern is correctly identified as thin.
+
+_URL_PATTERN = re.compile(r"https?://\S+")
+_HASHTAG_PATTERN = re.compile(r"#\w+")
+_WRAPPER_PREFIXES = re.compile(
+    r"\b(Watch|Thumbnail|ThumbnailBackup|Source|Link|via|Video|Media):\s*",
+    re.IGNORECASE,
+)
+_MIN_MEANINGFUL_CHARS = 40
+
+
+def _is_thin_context(text: str | None) -> bool:
+    """True if the summary field has no meaningful prose for the LLM to write about.
+
+    Detects three failure shapes seen in production RSS output:
+      * empty / whitespace-only
+      * shorter than the writer's 40-char floor (identical to
+        ``base_writing._MIN_WRITABLE_CONTEXT_CHARS``)
+      * URL-wrapper only — the YouTube "Watch: URL Thumbnail: URL" case
+        where the raw text is above the floor but strips to nothing
+        meaningful once URLs + hashtags + wrapper prefixes are removed
+    """
+    if not text or not isinstance(text, str):
+        return True
+    stripped = text.strip()
+    if len(stripped) < _MIN_MEANINGFUL_CHARS:
+        return True
+    residual = _URL_PATTERN.sub("", stripped)
+    residual = _HASHTAG_PATTERN.sub("", residual)
+    residual = _WRAPPER_PREFIXES.sub("", residual)
+    residual = residual.strip()
+    return len(residual) < _MIN_MEANINGFUL_CHARS
+
+
+def _filter_thin_context_items(items: list[dict]) -> list[dict]:
+    """Drop items whose summary is thin context. Preserves order.
+
+    Pure function; safe to test without mocks. Called after
+    ``parse_fetch_log`` so items reaching ``context["stories"]``
+    already have real prose for the LLM to react to.
+    """
+    return [item for item in items if not _is_thin_context(item.get("summary", ""))]
 
 
 class BBContentResearchStrategy(ContentResearchStrategy):
@@ -74,11 +141,23 @@ class BBContentResearchStrategy(ContentResearchStrategy):
         items = parse_fetch_log(fetch_log)
         flagged = [i for i in items if i.get("injection_flags")]
 
+        # --- Thin-context filter (2026-08-05) ---
+        # Drop items whose summary is empty or URL-wrapper only. Both shapes
+        # would otherwise reach the writer, trigger either _has_writable_context
+        # skip → template-fallback hook=title OR a Haiku call on garbage
+        # input → flat title-restated hook. Filtering at the fetcher boundary
+        # cuts fewer-but-higher-signal blueprints. See
+        # .audit/GENERATION_CAPABILITY_EVAL.md for the trace.
+        pre_filter = len(items)
+        items = _filter_thin_context_items(items)
+        dropped_thin = pre_filter - len(items)
+
         output = {
             "run_id": run_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "item_count": len(items),
             "flagged_count": len(flagged),
+            "dropped_thin_context": dropped_thin,
             "items": items,
         }
 
@@ -86,7 +165,10 @@ class BBContentResearchStrategy(ContentResearchStrategy):
         with open(parsed_path, "w") as f:
             json.dump(output, f, indent=2)
 
-        logger.info("[ai_creators] Parsed %d items (%d flagged)", len(items), len(flagged))
+        logger.info(
+            "[ai_creators] Parsed %d items (%d flagged, %d thin-context dropped)",
+            len(items), len(flagged), dropped_thin,
+        )
 
         # Bridge: populate context["stories"] so shared genlab-core stages
         # (DownloadTopVideos, VideoGate, PushToBacklog, RunReport) can process them
@@ -114,5 +196,6 @@ class BBContentResearchStrategy(ContentResearchStrategy):
             "cache_hits": cache_hits,
             "parsed_items": len(items),
             "rss_count": len(items),
+            "dropped_thin_context": dropped_thin,
         }
         return context
