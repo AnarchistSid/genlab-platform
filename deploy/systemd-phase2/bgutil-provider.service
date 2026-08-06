@@ -1,0 +1,25 @@
+[Unit]
+Description=BgUtil YT-DLP PO Token Provider (F2 dependency)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/bgutil-provider/server
+ExecStart=/usr/bin/node /opt/bgutil-provider/server/build/main.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+# Sane resource limits
+LimitNOFILE=8192
+# Restrict to bind port 4416
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/bgutil-provider/server
+
+[Install]
+WantedBy=multi-user.target
