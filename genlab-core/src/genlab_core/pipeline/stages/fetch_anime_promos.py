@@ -11,6 +11,7 @@ Sources:
 from __future__ import annotations
 
 import logging
+import re
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -35,6 +36,9 @@ query ($season: MediaSeason, $seasonYear: Int) {
       trailer { id site }
       popularity
       trending
+      description(asHtml: false)
+      genres
+      studios(isMain: true) { nodes { name } }
     }
   }
 }
@@ -63,6 +67,38 @@ def _get_current_anime_season() -> tuple[str, int]:
     if now.month == 12:
         year += 1  # December Winter belongs to next year's season
     return season, year
+
+
+# base_writing._MIN_WRITABLE_CONTEXT_CHARS. Kept in sync so anime promos
+# always give the writer LLM enough context to skip the thin-context guard.
+_WRITER_MIN_CONTEXT_CHARS = 40
+
+
+def _build_promo_summary(p: dict) -> str:
+    """Assemble a writer-usable summary from AniList/Jikan promo metadata.
+
+    AniList's Media has a rich `description` (200-2000 chars). Jikan's
+    watch/promos endpoint has no synopsis field — fall back to a
+    synthesized "trending anime PV: {title}" string. In both cases
+    guarantee the writer's ≥40 char thin-context floor is cleared.
+    """
+    desc = (p.get("description") or "").strip()
+    if len(desc) >= _WRITER_MIN_CONTEXT_CHARS:
+        return desc[:500]
+    title = (p.get("title") or "").strip()
+    source = (p.get("source") or "").strip()
+    genres = [str(g).strip() for g in (p.get("genres") or []) if str(g).strip()]
+    studios = [str(s).strip() for s in (p.get("studios") or []) if str(s).strip()]
+    parts: list[str] = []
+    if title:
+        source_label = "trending anime PV" if source == "jikan_promos" else "seasonal anime trailer"
+        parts.append(f"{source_label}: {title}")
+    if studios:
+        parts.append(f"Studio: {', '.join(studios[:2])}")
+    if genres:
+        parts.append(f"Genres: {', '.join(genres[:5])}")
+    synthesized = ". ".join(parts).strip()
+    return (synthesized or desc)[:500]
 
 
 def _fetch_jikan_promos(max_promos: int = 20) -> list[dict]:
@@ -122,6 +158,16 @@ def _fetch_anilist_trailers(max_results: int = 20) -> list[dict]:
                 continue
             title_obj = media.get("title") or {}
             title = title_obj.get("english") or title_obj.get("romaji", "")
+            # AniList descriptions embed HTML-like tags (<br>, <i>) even when
+            # asHtml=false — strip them so writer sees clean prose.
+            raw_desc = (media.get("description") or "").strip()
+            clean_desc = re.sub(r"<[^>]+>", " ", raw_desc)
+            clean_desc = re.sub(r"\s+", " ", clean_desc).strip()
+            studios = [
+                s.get("name", "")
+                for s in (media.get("studios") or {}).get("nodes", [])
+                if s.get("name")
+            ]
             results.append(
                 {
                     "title": title,
@@ -132,6 +178,9 @@ def _fetch_anilist_trailers(max_results: int = 20) -> list[dict]:
                     "trending": media.get("trending", 0),
                     "source": "anilist",
                     "_trending_video": True,
+                    "description": clean_desc,
+                    "genres": media.get("genres") or [],
+                    "studios": studios,
                 }
             )
         return sorted(results, key=lambda x: x.get("trending", 0), reverse=True)
@@ -207,7 +256,7 @@ class FetchAnimePromos(FetcherStage):
                         "canonical_url": p["url"],
                         "published_at": now_iso,
                         "fetched_at": now_iso,
-                        "summary": "",
+                        "summary": _build_promo_summary(p),
                         "video_id": p["video_id"],
                         "video_source": p["source"],
                         "niche_id": niche_id,
