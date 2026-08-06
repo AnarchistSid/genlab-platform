@@ -318,8 +318,15 @@ def fetch_subreddit_via_rss(
     # Reddit's per-IP RSS rate limit is aggressive (verified: even 8-10s
     # between calls returns 429). One 30s-wait retry rescues ~50% of
     # rate-limited requests based on token-bucket replenish rate.
-    _RATE_LIMITED_SENTINEL_ATTR = "_reddit_rss_rate_limited"
+    #
+    # Rate-limited sentinel: plain `list` doesn't accept arbitrary
+    # attributes (AttributeError on setattr), so use a lightweight
+    # subclass. The caller checks `.rate_limited` to distinguish
+    # "empty because rate-limited" from "empty because no posts today".
     import time as _time_local
+
+    class _RateLimitedList(list):
+        rate_limited = False
 
     def _do_request() -> Any:
         return requests.get(
@@ -346,17 +353,17 @@ def fetch_subreddit_via_rss(
                 )
                 _time_local.sleep(_RSS_429_RETRY_SLEEP_SEC)
         if resp.status_code == 429:
-            # All retries exhausted — signal caller (via list attr) so it
-            # SKIPS the JSON fallback (which will also fail and just
-            # burns more rate-limit budget).
+            # All retries exhausted — signal caller (via list subclass
+            # attribute) so it SKIPS the JSON fallback (which will also
+            # fail and just burns more rate-limit budget).
             logger.warning(
                 "[reddit-rss] r/%s rate-limited (429) after %d retries — "
                 "signalling caller to skip JSON fallback",
                 subreddit,
                 _RSS_429_MAX_RETRIES + 1,
             )
-            empty: list = []
-            setattr(empty, _RATE_LIMITED_SENTINEL_ATTR, True)  # noqa: B010
+            empty = _RateLimitedList()
+            empty.rate_limited = True
             return empty
         if resp.status_code != 200:
             logger.warning(
@@ -575,12 +582,12 @@ def fetch_subreddit(
         if rss_stories:
             return rss_stories
         # QB-FIX-01 Reddit-auth (2026-08-06): distinguish rate-limited
-        # from genuinely-empty. RSS sets the sentinel attribute when it
-        # exhausted its 429 retries — falling through to JSON in that
-        # case burns more rate-limit budget for a request Reddit will
-        # also 403 (verified: JSON path returns text/html 403 for
-        # data-center IPs). Skip fallback + return empty.
-        if getattr(rss_stories, "_reddit_rss_rate_limited", False):
+        # from genuinely-empty. RSS returns a _RateLimitedList subclass
+        # with rate_limited=True when it exhausted its 429 retries —
+        # falling through to JSON in that case burns more rate-limit
+        # budget for a request Reddit will also 403 (verified: JSON
+        # path returns text/html 403 for data-center IPs). Skip fallback.
+        if getattr(rss_stories, "rate_limited", False):
             logger.info(
                 "[reddit] r/%s RSS rate-limited, JSON fallback skipped "
                 "(would also 403 from datacenter IP)",
