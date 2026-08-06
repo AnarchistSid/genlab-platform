@@ -73,6 +73,30 @@ def test_is_blocking_flat_row_shape_supported() -> None:
     assert is_blocking({"status": "ARCHIVED"}) is False
 
 
+def test_is_blocking_archived_short_circuits_over_rule_2() -> None:
+    """QB-FIX-05 Y0: ARCHIVED row with approved+scheduled_for must NOT block.
+
+    Prior behavior (fixed in QB-FIX-05 Y0): rule 2 fired regardless of
+    status, so archived-approved-scheduled rows kept blocking URL
+    re-fetch even though no publisher would ever pick them. X0-a
+    surfaced 99 such phantom-blocker rows in prod across 5 niches.
+
+    Regression pin: this shape must return False.
+    """
+    row = {
+        "fields": {
+            "status": "ARCHIVED",
+            "action_taken": "approved",
+            "scheduled_for": "2026-07-30T10:00:00Z",
+        }
+    }
+    assert is_blocking(row) is False
+
+    # Also verify flat shape.
+    flat = {"status": "ARCHIVED", "action_taken": "approved", "scheduled_for": "2026-08-01T06:00:00Z"}
+    assert is_blocking(flat) is False
+
+
 # ── VideoIdDedupGate: happy paths + edge cases ──────────────────────────────
 
 

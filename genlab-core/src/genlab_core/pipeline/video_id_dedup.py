@@ -73,6 +73,15 @@ def is_blocking(row: dict) -> bool:
        way, reviving the row would silently drop the approval AND
        the schedule slot).
 
+    ARCHIVED short-circuit (QB-FIX-05 Y0): a blueprint that has
+    been archived cannot publish under any code path. Rule 2's
+    check runs regardless of status, which historically kept
+    archived-approved-scheduled rows exerting phantom dedup
+    pressure even though no publisher would ever pick them. X0-a
+    surfaced 99 such rows still blocking URL re-fetch across all
+    five niches. Terminal-state short-circuit removes that class
+    of phantom block; archived rows are inactive by definition.
+
     Rule 2 was added 2026-07-06 after a live-fire watch caught the
     07:00 IST ai_creators pipeline demoting a Mon 12:05 IST
     publisher-fire commitment from SCHEDULED → VISUAL_READY,
@@ -82,7 +91,13 @@ def is_blocking(row: dict) -> bool:
     Sacred".
     """
     fields = row.get("fields", row)
-    if fields.get("status", "") in _BLOCKING_STATUSES:
+    status = fields.get("status", "")
+    # QB-FIX-05 Y0: ARCHIVED is terminal — no publisher path will ever
+    # pick an archived row. Short-circuit before rule 2 to prevent
+    # phantom dedup pressure from stale approved-scheduled state.
+    if status == "ARCHIVED":
+        return False
+    if status in _BLOCKING_STATUSES:
         return True
     # Committed-to-publish gate: an operator (or the auto-approver
     # in enforce mode) has already promised this blueprint a publish
