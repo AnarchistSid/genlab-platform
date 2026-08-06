@@ -303,6 +303,37 @@ class TrendingVideo:
             "description_snippet": self.description_snippet,
         }
 
+    # base_writing._has_writable_context floor (see genlab_core/strategies/base_writing.py:95).
+    # Kept in sync with that constant so writer LLM always sees ≥ this many chars.
+    _WRITER_MIN_CONTEXT_CHARS = 40
+
+    def _writable_summary(self) -> str:
+        """Return description_snippet if it clears the writer floor;
+        otherwise synthesize from metadata so the writer's thin-context
+        gate never silently skips this story.
+
+        YouTube trending videos (esp. licensed anime channels like VIZ,
+        Crunchyroll) frequently have empty descriptions. Without a
+        fallback, ``summary`` is empty → base_writing skips LLM →
+        push_to_backlog rejects with "ALL platform bodies empty" → 0
+        blueprints from N stories. See QB-FIX-01 F4 anime blocker.
+        """
+        raw = (self.description_snippet or "").strip()
+        if len(raw) >= self._WRITER_MIN_CONTEXT_CHARS:
+            return raw
+        parts: list[str] = []
+        title = (self.title or "").strip()
+        channel = (self.channel_name or "").strip()
+        if title:
+            parts.append(f'"{title}"')
+        if channel:
+            parts.append(f"trending on {channel}")
+        tag_list = [str(t).strip() for t in (self.tags or []) if str(t).strip()]
+        if tag_list:
+            parts.append("Topics: " + ", ".join(tag_list[:5]))
+        synthesized = ". ".join(parts).strip()
+        return (synthesized or raw)[:200]
+
     def to_story(self) -> dict[str, Any]:
         """Convert to a story dict compatible with the pipeline context.
 
@@ -330,7 +361,7 @@ class TrendingVideo:
             "published_date": self.published_at.isoformat(),
             "published_at": self.published_at.isoformat(),
             "fetched_at": now_iso,
-            "summary": self.description_snippet,
+            "summary": self._writable_summary(),
             "channel_name": self.channel_name,
             "channel_id": self.channel_id,
             "view_count": self.view_count,

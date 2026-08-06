@@ -231,6 +231,99 @@ class TestTrendingVideoToStory:
         assert d["video_id"] == "xyz"
         assert d["view_velocity"] == 100.0
 
+    def test_writable_summary_uses_snippet_when_long_enough(self):
+        video = TrendingVideo(
+            video_id="v1",
+            title="Some Title",
+            channel_name="Ch",
+            channel_id="UC",
+            published_at=datetime.now(UTC),
+            view_count=1,
+            like_count=1,
+            duration_seconds=30,
+            thumbnail_url="",
+            niche_id="anime",
+            search_query="",
+            view_velocity=1.0,
+            download_url="https://y.com/watch?v=v1",
+            is_official_channel=False,
+            license="youtube",
+            description_snippet="A genuine 45-character description of the trending clip xx",
+        )
+        assert video._writable_summary().startswith("A genuine 45-character")
+        assert video.to_story()["summary"].startswith("A genuine 45-character")
+
+    def test_writable_summary_synthesizes_when_snippet_empty(self):
+        video = TrendingVideo(
+            video_id="v2",
+            title="A Bankai So Dangerous It Almost Killed Him | BLEACH: TYBW",
+            channel_name="VIZ Media",
+            channel_id="UCVIZ",
+            published_at=datetime.now(UTC),
+            view_count=1,
+            like_count=1,
+            duration_seconds=30,
+            thumbnail_url="",
+            niche_id="anime",
+            search_query="",
+            view_velocity=1.0,
+            download_url="https://y.com/watch?v=v2",
+            is_official_channel=True,
+            license="youtube",
+            tags=["Bleach", "anime", "shonen"],
+            description_snippet="",
+        )
+        summary = video.to_story()["summary"]
+        assert len(summary) >= 40, f"synthesized summary must clear writer floor: {summary!r}"
+        assert "BLEACH" in summary
+        assert "VIZ Media" in summary
+        assert "Topics: Bleach" in summary
+
+    def test_writable_summary_synthesizes_when_snippet_below_floor(self):
+        video = TrendingVideo(
+            video_id="v3",
+            title="Full episode preview",
+            channel_name="AnimeCentral",
+            channel_id="UCAC",
+            published_at=datetime.now(UTC),
+            view_count=1,
+            like_count=1,
+            duration_seconds=30,
+            thumbnail_url="",
+            niche_id="anime",
+            search_query="",
+            view_velocity=1.0,
+            download_url="https://y.com/watch?v=v3",
+            is_official_channel=False,
+            license="youtube",
+            description_snippet="watch now",
+        )
+        summary = video.to_story()["summary"]
+        assert summary != "watch now"
+        assert len(summary) >= 40
+        assert "AnimeCentral" in summary
+
+    def test_writable_summary_still_empty_when_all_metadata_missing(self):
+        video = TrendingVideo(
+            video_id="v4",
+            title="",
+            channel_name="",
+            channel_id="",
+            published_at=datetime.now(UTC),
+            view_count=1,
+            like_count=1,
+            duration_seconds=30,
+            thumbnail_url="",
+            niche_id="anime",
+            search_query="",
+            view_velocity=1.0,
+            download_url="https://y.com/watch?v=v4",
+            is_official_channel=False,
+            license="youtube",
+            description_snippet="",
+        )
+        assert video.to_story()["summary"] == ""
+
 
 class TestFetchTrendingVideosStage:
     def test_no_api_key_returns_context_unchanged(self):
