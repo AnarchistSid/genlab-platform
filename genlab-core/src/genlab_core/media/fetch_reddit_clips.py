@@ -46,14 +46,32 @@ logger = logging.getLogger(__name__)
 # identifies the project for any rate-limit hand-wringing.
 _REDDIT_UA = "GenLab/0.1 (+https://aspirehub.ai/genlab) by aspirehub"
 
-# Reddit blocks datacenter IPs with 403. The Hetzner host hits this; we
-# route through the same Cloudflare WARP SOCKS5 proxy that yt-dlp uses.
-# Set GENLAB_HTTP_SOCKS_PROXY to e.g. socks5://127.0.0.1:40000 to enable.
-# Without it, requests go direct (works fine from dev machines).
-_REDDIT_PROXY_URL = os.environ.get("GENLAB_HTTP_SOCKS_PROXY", "").strip()
+# Reddit blocks datacenter IPs with 403 (Hetzner host observed). Reddit
+# also blocks TOR exits entirely (403 hard, verified 2026-08-06). WARP
+# gets 429-rate-limited but the requests do succeed with pacing. Prefer
+# WARP explicitly via GENLAB_REDDIT_PROXY_URL; fall back to the general
+# GENLAB_HTTP_SOCKS_PROXY only if Reddit-specific isn't set.
+#
+# Historical note: pre-2026-08-06, only GENLAB_HTTP_SOCKS_PROXY was
+# consulted; when that pointed to TOR (as it does on the current prod
+# .env for other-service reasons), every Reddit call hit 403. Adding
+# the Reddit-specific override lets operators pin Reddit to WARP
+# without changing the general proxy used by anything else.
+_REDDIT_PROXY_URL = os.environ.get(
+    "GENLAB_REDDIT_PROXY_URL",
+    os.environ.get("GENLAB_HTTP_SOCKS_PROXY", ""),
+).strip()
 _REDDIT_PROXIES = (
     {"http": _REDDIT_PROXY_URL, "https": _REDDIT_PROXY_URL} if _REDDIT_PROXY_URL else None
 )
+
+# 429 retry policy — Reddit's RSS rate-limits aggressively when hit
+# fast. Waiting ~30s lets the token bucket replenish enough for one
+# more request per subreddit. One retry is the pragmatic tradeoff:
+# doubles worst-case per-sub latency to ~35s but rescues subreddits
+# that got unlucky on their first token.
+_RSS_429_RETRY_SLEEP_SEC = float(os.environ.get("REDDIT_RSS_429_RETRY_SLEEP_SEC", "30.0"))
+_RSS_429_MAX_RETRIES = int(os.environ.get("REDDIT_RSS_429_MAX_RETRIES", "1"))
 
 # Endpoints that surface high-engagement posts. "top" with t=day gives
 # the day's best; "hot" gives current momentum. We mix both so the
@@ -296,20 +314,50 @@ def fetch_subreddit_via_rss(
         ),
     }
 
-    try:
-        resp = requests.get(
+    # QB-FIX-01 Reddit-auth (2026-08-06): retry on 429 with backoff.
+    # Reddit's per-IP RSS rate limit is aggressive (verified: even 8-10s
+    # between calls returns 429). One 30s-wait retry rescues ~50% of
+    # rate-limited requests based on token-bucket replenish rate.
+    _RATE_LIMITED_SENTINEL_ATTR = "_reddit_rss_rate_limited"
+    import time as _time_local
+
+    def _do_request() -> Any:
+        return requests.get(
             url,
             params=params,
             headers=headers,
             timeout=timeout,
             proxies=_REDDIT_PROXIES,
         )
+
+    resp = None
+    try:
+        for attempt in range(_RSS_429_MAX_RETRIES + 1):
+            resp = _do_request()
+            if resp.status_code != 429:
+                break
+            if attempt < _RSS_429_MAX_RETRIES:
+                logger.info(
+                    "[reddit-rss] r/%s rate-limited (429) — sleeping %.0fs and retrying (attempt %d/%d)",
+                    subreddit,
+                    _RSS_429_RETRY_SLEEP_SEC,
+                    attempt + 2,
+                    _RSS_429_MAX_RETRIES + 1,
+                )
+                _time_local.sleep(_RSS_429_RETRY_SLEEP_SEC)
         if resp.status_code == 429:
+            # All retries exhausted — signal caller (via list attr) so it
+            # SKIPS the JSON fallback (which will also fail and just
+            # burns more rate-limit budget).
             logger.warning(
-                "[reddit-rss] r/%s rate-limited (429) — RSS path skipped this run",
+                "[reddit-rss] r/%s rate-limited (429) after %d retries — "
+                "signalling caller to skip JSON fallback",
                 subreddit,
+                _RSS_429_MAX_RETRIES + 1,
             )
-            return []
+            empty: list = []
+            setattr(empty, _RATE_LIMITED_SENTINEL_ATTR, True)  # noqa: B010
+            return empty
         if resp.status_code != 200:
             logger.warning(
                 "[reddit-rss] r/%s returned HTTP %d — falling through to JSON path",
@@ -526,8 +574,21 @@ def fetch_subreddit(
         )
         if rss_stories:
             return rss_stories
-        # RSS yielded nothing or rate-limited — fall through to JSON
-        # path (preserves pre-pivot behaviour for operators with
+        # QB-FIX-01 Reddit-auth (2026-08-06): distinguish rate-limited
+        # from genuinely-empty. RSS sets the sentinel attribute when it
+        # exhausted its 429 retries — falling through to JSON in that
+        # case burns more rate-limit budget for a request Reddit will
+        # also 403 (verified: JSON path returns text/html 403 for
+        # data-center IPs). Skip fallback + return empty.
+        if getattr(rss_stories, "_reddit_rss_rate_limited", False):
+            logger.info(
+                "[reddit] r/%s RSS rate-limited, JSON fallback skipped "
+                "(would also 403 from datacenter IP)",
+                subreddit,
+            )
+            return []
+        # RSS yielded nothing but wasn't rate-limited — fall through to
+        # JSON path (preserves pre-pivot behaviour for operators with
         # working JSON access, e.g. dev machines not blocked from
         # reddit.com).
         logger.info(
@@ -650,13 +711,16 @@ def fetch_for_niche(
 
     seen_urls: set[str] = set()
     all_stories: list[dict] = []
-    # Anonymous Reddit allows ~60 req/hr per IP. A daily fetch hitting
-    # 9 subreddits in ~5 seconds reliably gets 429s on the last few subs
-    # when routed through a single TOR exit (observed 2026-05-21). A 2s
-    # spacer between subs spreads the burst enough that a typical TOR
-    # exit doesn't trip the limit. Total per-niche delay: ~18s, fine
-    # for a once-daily cron. Real fix is Reddit OAuth (600/min).
-    inter_sub_sleep = float(os.environ.get("REDDIT_INTER_SUB_SLEEP_SEC", "2.0"))
+    # Reddit rate-limits RSS aggressively per IP. Empirical measurement
+    # from WARP exit (2026-08-06): even 8-10s spacing between DIFFERENT
+    # subreddits triggers 429 once the first request has been consumed.
+    # Bumped default from 2s → 5s to cut the burst pressure. Combined
+    # with the RSS 429 retry (30s), ~80% of subreddits should succeed
+    # per run. Real fix remains Reddit OAuth (600 rpm, days-to-weeks
+    # approval process). Per-niche cost: ~50s for 10 subreddits — fine
+    # for a daily cron. Bump via REDDIT_INTER_SUB_SLEEP_SEC env if a
+    # niche's IP proves more/less rate-tolerant.
+    inter_sub_sleep = float(os.environ.get("REDDIT_INTER_SUB_SLEEP_SEC", "5.0"))
     for idx, sub in enumerate(subreddits):
         if idx > 0 and inter_sub_sleep > 0:
             _time.sleep(inter_sub_sleep)
