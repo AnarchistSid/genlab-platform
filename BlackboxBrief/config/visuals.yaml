@@ -89,8 +89,15 @@ intelligent_transform:
       framings: [question_open, statistic_shock, contrarian_take, curiosity_gap, jump_cut_visual, story_open, pov_frame, pattern_break]
     intro_animation:
       enabled: true
-      templates: [logo_zoom, logo_tagline_reveal, pattern_break_intro]
+      # QB-FIX-01 F3d-1 (2026-08-06): 'none' registered as a bandit arm; the
+      # orchestrator special-cases it as skip-intro. force_none defaults true
+      # so the bandit's pick is overridden and every render skips the intro
+      # (audit F3c: 2.5s intro was consuming the first 12% of a 21s reel,
+      # entirely inside the swipe-decision window per Section 1.1 row 4).
+      # Set force_none: false to A/B test intros again — real assets remain.
+      templates: [logo_zoom, logo_tagline_reveal, pattern_break_intro, none]
       asset_dir: assets/motion/intros
+      force_none: true
     outro_cta:
       enabled: true
       styles: [follow, comment, save, share, question]

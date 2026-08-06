@@ -536,6 +536,35 @@ def apply_transformations(
         intro_choice = choices.choices.get("intro_animation")
         outro_choice = choices.choices.get("outro_cta")
         used_intro_fallback = False
+
+        # QB-FIX-01 F3d-1 (2026-08-06): default intro to skip.
+        # F3c measured every ai_creators / movies / gaming reel
+        # opening with a 2.5s branded intro — 12% of a 21s reel's
+        # runtime, entirely inside the first-3s swipe-decision window.
+        # Per Section 1.1 row 4 (MEDIUM confidence) time-to-first-
+        # content should be ≈0s and branded intros are a documented
+        # retention liability in short-form. Two override paths:
+        #   1. ``force_none: true`` in visuals.yaml intro_animation
+        #      block (this is the default) — skip regardless of bandit
+        #   2. The bandit picks the synthetic ``'none'`` template
+        #      (only relevant when force_none is false)
+        # Either way, ``intro_choice`` is nulled here so downstream
+        # motion_compositor logic never gets the intro path. The
+        # bandit-picked arm is marked SKIPPED (not applied) so it
+        # doesn't accumulate reward for something that didn't render.
+        _force_none = bool(getattr(config.dimensions.intro_animation, "force_none", False))
+        if intro_choice and (
+            _force_none or intro_choice.dimension_value == "none"
+        ):
+            logger.info(
+                "[transformation_orchestrator] intro skipped for niche=%s "
+                "(force_none=%s, bandit_pick=%r)",
+                niche_id,
+                _force_none,
+                intro_choice.dimension_value,
+            )
+            result.stages_skipped.append("intro_animation")
+            intro_choice = None
         if intro_choice or outro_choice:
             next_path = temp_dir / "04_motion.mp4"
             try:

@@ -104,9 +104,23 @@ class IntroAnimationConfig(BaseModel):
     enabled: bool = True
     templates: list[str] = Field(default_factory=list)
     """Template names matching assets in ``asset_dir``. E.g.
-    ['logo_zoom', 'logo_tagline_reveal', 'pattern_break_intro']."""
+    ['logo_zoom', 'logo_tagline_reveal', 'pattern_break_intro', 'none'].
+    The magic string ``'none'`` is a synthetic arm that
+    ``transformation_orchestrator`` special-cases as skip-intro. See
+    ``force_none`` for the default override."""
     asset_dir: str = "assets/motion/intros"
     """Relative path from niche root to intro asset MP4 files."""
+    force_none: bool = True
+    """QB-FIX-01 F3d-1 (2026-08-06): when True (default), the
+    orchestrator overrides whatever intro arm the bandit picked and
+    skips the intro composite. Audit F3c measured every ai_creators /
+    movies / gaming reel opening with a 2.5s branded intro — a Tier-1
+    retention cost per Section 1.1 row 4 (target time-to-first-content
+    ≈0s). Set to ``false`` per niche's ``visuals.yaml`` to re-enable
+    bandit-driven intro selection. The three real intro templates
+    stay registered so the bandit posterior is preserved; the ``'none'``
+    template also stays registered so if the bandit picks it under
+    ``force_none: false`` the orchestrator skips the intro cleanly."""
 
 
 class OutroCTAConfig(BaseModel):

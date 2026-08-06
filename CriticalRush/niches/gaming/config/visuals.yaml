@@ -126,8 +126,12 @@ intelligent_transform:
       framings: [question_open, statistic_shock, contrarian_take, curiosity_gap, jump_cut_visual, story_open, pov_frame, pattern_break]
     intro_animation:
       enabled: true
-      templates: [logo_zoom, logo_tagline_reveal, pattern_break_intro]
+      # QB-FIX-01 F3d-1 (2026-08-06): force_none defaults true — orchestrator
+      # overrides bandit pick and skips intro. See BlackboxBrief/config/visuals.yaml
+      # for full rationale (audit F3c 2.5s intro finding).
+      templates: [logo_zoom, logo_tagline_reveal, pattern_break_intro, none]
       asset_dir: assets/motion/intros
+      force_none: true
     outro_cta:
       enabled: true
       styles: [follow, comment, save, share, question]
