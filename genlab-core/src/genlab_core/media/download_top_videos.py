@@ -166,13 +166,28 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
 
     # Build extractor_args — combine player_client list with visitor_data if
     # we have it from a real browser session (bypasses bot detection).
-    # Client order tuned 2026-05-21 after YouTube enabled the "SABR-only
-    # streaming" experiment which strips https URLs from the android
-    # client formats. Every sports clip on 2026-05-21 failed with
-    # "Some android client https formats have been skipped... SABR-only
-    # streaming experiment". Putting ios + tv + web_safari first sidesteps
-    # the experiment until yt-dlp's stable channel catches up.
-    extractor_args = "youtube:player_client=ios,tv,web_safari,android,web"
+    #
+    # QB-FIX-01 F2 supplement (2026-08-06): mweb added FIRST to unblock
+    # SABR-only streaming. Discovery: with the prior stack (ios,tv,
+    # web_safari,android,web), `yt-dlp --list-formats` returned ONLY
+    # format 18 (mp4 640x360 240p progressive) for every YouTube URL,
+    # regardless of cookie state — even 1590 valid Chrome session cookies
+    # + WARP SOCKS proxy could not unlock higher-res formats. This is
+    # YouTube's SABR-only + poToken enforcement rolled out mid-2024:
+    # web/android/ios clients now REQUIRE a poToken proof-of-origin to
+    # serve DASH streams. Progressive format 18 remains as unauthed
+    # fallback.
+    #
+    # `mweb` (mobile web) client uses HLS m3u8 streams that Google still
+    # serves without poToken as of 2026-08. A live test on Ramayana
+    # trailer (1zip1rNaNYs) with mweb+web_safari returned formats:
+    #   91: 256x144, 92: 426x240, 93: 640x360, 94: 854x480,
+    #   95: 1280x720, 96: 1920x1080  ← up to 1080p available
+    # vs the prior stack which returned only format 18 (640x360).
+    # Putting mweb first + keeping the older clients as fallback preserves
+    # the SABR-workaround the 2026-05 comment was chasing without
+    # regressing on videos where mweb has no formats.
+    extractor_args = "youtube:player_client=mweb,web_safari,ios,tv,android,web"
     session_path = os.path.join(project_root, ".youtube_session.json")
     if os.path.exists(session_path):
         try:
@@ -192,36 +207,38 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
     #
     # Prior spec was `bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/…`
     # which combined two problems: (a) `height<=1080` gave yt-dlp a CEILING
-    # but no floor, (b) `[ext=mp4]` restriction eliminated the DASH-split
-    # webm/VP9 formats where YouTube's 720p+ progressive streams actually
-    # live for the ios/tv/web_safari clients we use. Result: every source
-    # clip landed at 640x360 (single-file baked-audio mp4 fallback), which
-    # then upscaled to 1080x1920 for the reel — losing all high-frequency
-    # detail before the encoder ever ran. Audit QB-2026-08 F-QB-0101 traced
-    # the 0.9-2.4 Mbps output bitrates to this softness (CRF correctly
-    # allocated few bits to an already-blurred frame). Fixing the source
-    # is the actual root cause; forcing `-minrate` on the encoder would
-    # just spend bits on the same soft image.
+    # but no floor, (b) it assumed DASH-split streams available, which
+    # SABR+poToken enforcement has removed from most YouTube URLs. Every
+    # measured source clip landed at 640x360 (single-file baked-audio mp4
+    # fallback = legacy format 18), upscaled to 1080x1920 for the reel —
+    # losing all high-frequency detail before the encoder ran. Audit
+    # F-QB-0101 traced the 0.9-2.4 Mbps output bitrates to this softness.
+    #
+    # F2 supplement: with the `mweb` client added to player_client (above),
+    # YouTube serves HLS m3u8 single-file streams up to 1080p (formats 91-
+    # 96). These are muxed video+audio, so `best[height>=X]` matches them
+    # rather than `bestvideo+bestaudio` (which wants split streams). Tier
+    # order below prefers highest single-file first, then falls through
+    # to split streams (which may still be served by web_safari with valid
+    # cookies), then to best-available as last resort.
     #
     # Tier order:
-    #   1) >=1080p mp4 video + m4a audio (ideal — plays without transcode)
-    #   2) >=1080p any format (webm/VP9 — will need remux but detail is there)
-    #   3) >=720p mp4 (good fallback)
-    #   4) >=720p any format
-    #   5) any best (last resort — accept low-res)
-    # `--print "after_move:format_id=%(format_id)s res=%(resolution)s ..."`
-    # emits a one-line marker per download so the pipeline log records which
-    # tier fired and at what resolution — enables per-clip resolution audit
-    # without a separate ffprobe pass.
+    #   1) single-file best >=1080p (mweb HLS m3u8 — the SABR-friendly path)
+    #   2) split-stream best >=1080p mp4+m4a (DASH — needs valid poToken)
+    #   3) single-file best >=720p (mweb HLS)
+    #   4) split-stream best >=720p mp4+m4a
+    #   5) single-file best >=480p (progressive/HLS)
+    #   6) any best (last resort — accept low-res 240p+ fallback)
+    # `--print after_move:[F2] ...` logs which format tier fired per clip.
     cmd = [
         "yt-dlp",
         "-f",
         (
+            "best[height>=1080]/"
             "bestvideo[height>=1080][ext=mp4]+bestaudio[ext=m4a]/"
-            "bestvideo[height>=1080]+bestaudio/"
-            "bestvideo[height>=720][ext=mp4]+bestaudio[ext=m4a]/"
-            "bestvideo[height>=720]+bestaudio/"
             "best[height>=720]/"
+            "bestvideo[height>=720][ext=mp4]+bestaudio[ext=m4a]/"
+            "best[height>=480]/"
             "best"
         ),
         "--print",
