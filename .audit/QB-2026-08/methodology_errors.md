@@ -76,6 +76,24 @@ Filed as part of QB-FIX-02 V0-c. Recurring shape observed twice:
 
 **Pattern:** when a gate measures an aggregate of a multi-input composition, defects in the input ratios are silently smoothed away. **Detection heuristic:** for any gate that measures a composition output (audio mix, encode chain, layered visual), require an ADDITIONAL gate on each independent input tier, not just the final aggregate. This pattern applies to any downstream capability that could hide upstream defects behind a passing aggregate check.
 
+### ME-16 — Execution-pattern error — A gate on an aggregate cannot localise a defect to a segment (third instance)
+
+Filed as part of QB-FIX-10 D1. Third documented instance of the class-of-bug first named in ME-11.
+
+**Three instances in this audit alone:**
+
+1. **R-Encode-1** measured output bitrate; defect was source clip resolution (640x360 upscaled to 1080x1920 by compositor while output bitrate looked fine).
+2. **F3a** measured aggregate integrated loudness at -14 LUFS; defect was internal mix ratio (music bed 6dB louder than source-video audio — voice buried but sum was correctly normalised).
+3. **F-QB-0602** measured total event-to-publish lag (111-281h); attributed it to "fetcher cadence." QB-FIX-09 C1 decomposed into fetch / approver / slot segments and found the approver segment dominates 92-100% of the total. The fetchers were never the constraint — the gate could have been satisfied by making fetchers faster (which they already were) without moving the actual metric of concern (freshness at publish).
+
+**Class-of-bug (canonical statement):** any verification gate that measures an end-to-end quantity is structurally unable to localise the defect to a specific segment. A gate can go green while the responsible segment gets worse, if a different segment compensates. Conversely, a gate can go red on a segment that is not the actual constraint.
+
+**Detection heuristic:** for any proposed verification gate on a metric that has recognisable input → transformation → output segments (rendering pipeline stages, publishing pipeline stages, learning-loop stages), the gate MUST decompose the metric into per-segment measurements and target the segment where causal responsibility actually lives. "Total X" gates are structurally incomplete without a segment attribution.
+
+**Applies retroactively:** any Phase 9 verification gate on an end-to-end metric needs review for segment-level decomposition. D1 Step 4 audit for this pass returned zero additional confirmed instances (see D1 report), but the pattern is likely to recur — mark it as a review criterion for future audit design.
+
+**Reversal for F-QB-0602:** verification gate rewritten to target the approver segment only. Original gate (median lag ≤ 24/48/72h) is retired; new gate is `median(scheduled_for - created_at) ≤ 24h` per niche. Fetcher-latency and slot-contention segments are orthogonal and can be measured separately if needed.
+
 ### ME-14 — Execution error — Threads timeout size-correlation hypothesis wrong (measurement killed it)
 
 Filed as part of QB-FIX-06 Z1 Step 3, formalized in QB-FIX-07 §5.
