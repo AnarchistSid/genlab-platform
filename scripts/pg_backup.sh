@@ -10,12 +10,20 @@ mkdir -p "$BACKUP_DIR"
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 BACKUP_FILE="$BACKUP_DIR/genlab_${TIMESTAMP}.sql.gz"
 
-# Source .env for DATABASE_URL
+# Source .env for DATABASE_URL / BACKUP_DATABASE_URL
 if [[ -f "$GENLAB_ROOT/.env" ]]; then
     set -a; source "$GENLAB_ROOT/.env"; set +a
 fi
 
-DB_URL="${DATABASE_URL:-postgresql://genlab:genlab_dev@localhost:5432/genlab}"
+# BACKUP_DATABASE_URL takes precedence over DATABASE_URL. The app role
+# (genlab_app) has NO BYPASSRLS attribute — running pg_dump under it
+# fails on any table with an active RLS policy ("query would be affected
+# by row-level security policy for table X"). Backups MUST use a role
+# that either owns all tables or has BYPASSRLS — the superuser `genlab`
+# has both. Set BACKUP_DATABASE_URL in .env to point at the superuser;
+# DATABASE_URL is kept as a fallback for dev environments where only
+# one role exists.
+DB_URL="${BACKUP_DATABASE_URL:-${DATABASE_URL:?BACKUP_DATABASE_URL or DATABASE_URL must be set}}"
 DB_HOST=$(echo "$DB_URL" | sed -n 's|.*@\([^:]*\):.*|\1|p')
 DB_PORT=$(echo "$DB_URL" | sed -n 's|.*:\([0-9]*\)/.*|\1|p')
 DB_NAME=$(echo "$DB_URL" | sed -n 's|.*/\([^?]*\).*|\1|p')
