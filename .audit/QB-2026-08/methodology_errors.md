@@ -76,6 +76,30 @@ Filed as part of QB-FIX-02 V0-c. Recurring shape observed twice:
 
 **Pattern:** when a gate measures an aggregate of a multi-input composition, defects in the input ratios are silently smoothed away. **Detection heuristic:** for any gate that measures a composition output (audio mix, encode chain, layered visual), require an ADDITIONAL gate on each independent input tier, not just the final aggregate. This pattern applies to any downstream capability that could hide upstream defects behind a passing aggregate check.
 
+### ME-14 — Execution error — Threads timeout size-correlation hypothesis wrong (measurement killed it)
+
+Filed as part of QB-FIX-06 Z1 Step 3, formalized in QB-FIX-07 §5.
+
+**Hypothesis:** sports' `Threads container processing timeout (180s)` on 2026-08-07 correlated with file size — a "large reel = long ingestion = timeout" story.
+
+**Measurement:** sports Sainz reel was 2.22 MB / 18.6s / 0.78 Mbps — **smallest of the three published in that fire window**. Anime Saga of Tanya at 4.97 MB (2× larger) succeeded. Movies INHERIT at 3.98 MB also succeeded.
+
+**Reversal:** timeout is uncorrelated with size. Correct read: legitimately transient Meta infrastructure at that moment. Filed as ME-14 for the record — the hypothesis was plausible and the measurement disproved it, which is the process working.
+
+**Detection heuristic:** for any "timeout" hypothesis, verify size / duration / bitrate correlation before filing a fix. Timeouts have many causes (auth, ingestion queue, downstream service health, adjacent-request contention). Size is the first suspect but not the only one.
+
+### ME-15 — Execution-pattern error — `render_error` persistence gap invalidates F-QB-0606's verification gate
+
+Filed as part of QB-FIX-06 Z1 Step 1, formalized in QB-FIX-07 §5.
+
+**Discovery:** all 4 sports DRAFTED rows had `extra->>'render_error'` = NULL, but the pipeline journal for the Aug 6 Pete Crow-Armstrong row (from QB-FIX-05 Y2) showed the pre-render quality gate rejected it with `hook_title_truncation`. The rejection reason exists at runtime and is discarded before persistence.
+
+**Impact:** F-QB-0606's verification instruction — "check `extra->>'render_error'` on DRAFTED rows to determine whether pre_render_quality rejected them" — is structurally unanswerable. The column is uniformly NULL whether the gate ran, the gate rejected, or the gate is buggy. Any future audit finding that relies on `render_error` persistence for verification hits the same dead end.
+
+**Class-of-bug:** verification gates that rely on runtime signals being persisted. If the persistence path is silently missing, the gate becomes structurally unanswerable regardless of what the runtime does. Detection heuristic: for any "check field X on the row" verification, verify that the write path for X exists AND fires on the branch being verified.
+
+**Reversal:** reclassify from "observability follow-up" (my prior label in QB-FIX-06 Z1) to "invalidates a verification gate." Findings depending on `render_error` need re-verification via journal grep (fragile) or via adding write-side persistence (proper fix, not in this pass's scope).
+
 ### ME-13 — Execution error — Mitigation proposed against a mechanism it does not act on
 
 Filed as part of QB-FIX-03 W0. QB-FIX-02 V2 recommended attenuating `source_audio_duck_db` from -6 to -9 dB on sports/movies/anime to "hedge fingerprint exposure on higher-risk niches." **The mechanism does not respond to the intervention.** Audio fingerprinting (YouTube Content ID, AudibleMagic, Meta Rights Manager) matches on signal *content* (spectral features, chroma vectors, MFCC hashes), not signal *level*. A 3 dB attenuation shifts amplitude, not the fingerprint. Section 1.3 of the audit prompt explicitly notes 2026 fingerprinting detects low-volume music beds — the same detector mechanism catches music mixed under speech at any level. What the -9 dB recommendation actually buys: a quieter reel. Zero hedge on the risk it named.
