@@ -76,10 +76,10 @@ Format: `{dimension} | {channel} | {measured} | {benchmark} | {gap} | {severity}
 | 6 Affiliate disc. | movies | 0/17 have #ad in first 100 chars | #ad in first 80-100 chars | WORSE 100% miss | HIGH | 1 (legal) | H | F-QB-0701 | 17 |
 | 6 Affiliate disc. | others | 0 affiliate posts in 30 days | N/A | N/A | — | — | H | F-QB-0702 | 0 |
 | 6 Affiliate CTR | all | 3 clicks / $0 revenue in 30 days | 0.5-2.5% CTR | WORSE (functionally 0) | HIGH | 1 (business + tracking?) | M | F-QB-0702 | 3 |
-| 7 Video quality | ai_creators | median 0.92 Mbps | 6-12 Mbps | WORSE 8× | HIGH | 2 | H | F-QB-0101 | 5 |
-| 7 Video quality | movies | median 1.02 Mbps | 6-12 Mbps | WORSE 8× | HIGH | 2 | H | F-QB-0101 | 5 |
-| 7 Video quality | anime | median 1.51 Mbps | 6-12 Mbps | WORSE 5× | HIGH | 2 | H | F-QB-0101 | 5 |
-| 7 Video quality | sports | median 2.39 Mbps | 6-12 Mbps | WORSE 3× | HIGH | 2 | H | F-QB-0101 | 5 |
+| 7 Encode segment | ai_creators | segment gate — see F-QB-0101 rewrite | see F-QB-0101 rewrite | (aggregate gate retired) | HIGH | 2 | H | F-QB-0101 (rewritten QB-FIX-11 E1) | 5 |
+| 7 Encode segment | movies | segment gate — see F-QB-0101 rewrite | see F-QB-0101 rewrite | (aggregate gate retired) | HIGH | 2 | H | F-QB-0101 (rewritten QB-FIX-11 E1) | 5 |
+| 7 Encode segment | anime | segment gate — see F-QB-0101 rewrite | see F-QB-0101 rewrite | (aggregate gate retired) | HIGH | 2 | H | F-QB-0101 (rewritten QB-FIX-11 E1) | 5 |
+| 7 Encode segment | sports | segment gate — see F-QB-0101 rewrite | see F-QB-0101 rewrite | (aggregate gate retired) | HIGH | 2 | H | F-QB-0101 (rewritten QB-FIX-11 E1) | 5 |
 | 7 Video quality | all | color transfer/primaries missing 15/20 | bt709/bt709/bt709 | WORSE (partial) | MED | 2 | H | F-QB-0102 | 20 |
 | 8 Publish throughput | anime | approver seg 151.9h (C1) | ≤24h | WORSE 6× | HIGH | 1 | H | F-QB-0602 (reattr QB-FIX-10 D1) | 2 |
 | 8 Publish throughput | sports | approver seg 169.1h (C1) | ≤24h | WORSE 7× | HIGH | 1 | H | F-QB-0602 (reattr QB-FIX-10 D1) | 5 |

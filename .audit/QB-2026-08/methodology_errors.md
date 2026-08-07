@@ -76,6 +76,29 @@ Filed as part of QB-FIX-02 V0-c. Recurring shape observed twice:
 
 **Pattern:** when a gate measures an aggregate of a multi-input composition, defects in the input ratios are silently smoothed away. **Detection heuristic:** for any gate that measures a composition output (audio mix, encode chain, layered visual), require an ADDITIONAL gate on each independent input tier, not just the final aggregate. This pattern applies to any downstream capability that could hide upstream defects behind a passing aggregate check.
 
+### STANDING AUDIT RULE (QB-FIX-11 E1) — Decompose before assigning cause
+
+**Class closed prospectively.** Four documented instances in this audit alone (R-Encode-1, F3a, F-QB-0602, F-QB-0101). Codifying as a standing methodology rule for any future audit design:
+
+> **Any verification gate on an end-to-end or aggregate quantity MUST decompose the metric into per-segment measurements before a cause is assigned. Aggregate-only gates are structurally incomplete — they can go green while the responsible segment gets worse (if a compensating segment covers), and they can go red on a segment that is not the actual constraint.**
+
+**Application:** for any metric with recognisable input → transformation → output segments (rendering pipelines, publishing pipelines, learning-loop chains, network requests, DB operations), the audit finding MUST:
+
+1. Identify each segment explicitly
+2. Provide a per-segment measurement OR explicitly note segments deferred and why
+3. Assign a target to each segment independently
+4. State how per-segment measurements combine into the aggregate (i.e., which segment dominates under which conditions)
+
+**Anti-pattern to reject:** "gate on total X" where X is composed of multiple segments and the finding does not say which segment causally produces the failure. Reject in review.
+
+**Applied in this audit:**
+- R-Encode-1 — retro-decomposed (source vs encoder) when it was superseded by F2
+- F3a → F3a-2 — decomposed the mix into source/bed once F3a's aggregate loudness gate was passing but audio was still wrong
+- F-QB-0602 → decomposed into fetch/approver/slot segments in QB-FIX-09 C1
+- F-QB-0101 → decomposed into source/content/encode segments in QB-FIX-11 E1
+
+Any future finding that adds a gate on an aggregate without decomposition is a methodology-rule violation. Log as a fifth-instance ME entry when it occurs.
+
 ### ME-16 — Execution-pattern error — A gate on an aggregate cannot localise a defect to a segment (third instance)
 
 Filed as part of QB-FIX-10 D1. Third documented instance of the class-of-bug first named in ME-11.
