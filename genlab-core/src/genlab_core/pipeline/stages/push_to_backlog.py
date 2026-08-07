@@ -394,6 +394,38 @@ _ARM_KEYWORDS: dict[str, list[tuple[str, list[str]]]] = {
 # working without a test-file edit.
 
 
+# Source-tag prefix for archives written by deliberate staleness sweeps
+# (X0-a, Z0, Z1_sports_drafted, and future sweeps). Rows carrying this
+# prefix in ``action_taken_source`` were archived because they are
+# pre-fix / stale, and reviving them would re-introduce the exact
+# defect the sweep removed. QB-FIX-07 A1.
+_TERMINAL_ARCHIVE_TAG_PREFIX = "auto_archived_qb_fix"
+
+
+def _is_terminally_archived(row: dict) -> bool:
+    """True if the blueprint row was archived by a staleness sweep
+    (X0-a / Z0 / future sweeps carrying the ``auto_archived_qb_fix_*``
+    source tag). Such rows must not be revived by ``push_to_backlog``
+    even when a new pipeline run produces a fresh render for the same
+    candidate_id — reviving them re-introduces the defect the sweep
+    fixed.
+
+    Ordinary lifecycle archives (auto_archived_render_never_completed,
+    rejected, archived_by_ops_*, etc.) return False here and remain
+    revivable — they were archived for reasons the fresh pipeline
+    DOES address.
+
+    QB-FIX-07 A1. Mirror of Y0's is_blocking() ARCHIVED short-circuit —
+    together they make ARCHIVED terminal for staleness-swept rows on
+    both the dedup path (Y0) and the revive path (A1).
+    """
+    fields = row.get("fields", row)
+    if fields.get("status") != "ARCHIVED":
+        return False
+    src = fields.get("action_taken_source") or ""
+    return src.startswith(_TERMINAL_ARCHIVE_TAG_PREFIX)
+
+
 _TOPIC_MAP = {
     # Normalize raw source names to clean categories
     "anilist": "anilist",
@@ -2452,7 +2484,12 @@ class PushToBacklog:
                     None,
                 )
                 non_blocking_match = next(
-                    (bp for bp in existing_bp_raw if not _is_blocking(bp)),
+                    (
+                        bp
+                        for bp in existing_bp_raw
+                        if not _is_blocking(bp)
+                        and not _is_terminally_archived(bp)
+                    ),
                     None,
                 )
                 if blocking_match:
