@@ -1,14 +1,20 @@
 """Tests for scripts/refresh_cuelinks_campaigns.py.
 
 Key invariants pinned:
-  * Empty API result → exit 1 + WARNING log + NO file write (silent-write
-    bug prevention, 2026-07-16 audit lesson)
+  * Empty API result → **exit 0** + WARNING log + NO file write
+    (silent-write bug prevention, 2026-07-16 audit lesson; exit code
+    changed from 1 to 0 per QB-FIX-12 rule #26 sweep 2026-08-07 —
+    empty API response is data-side, not infra failure)
+  * Missing CUELINKS_V3_API_KEY → **exit 0** + WARNING log (config-gap
+    is data-side; prior exit=1 fired systemd_unit_failed every week
+    on the missing-key case)
   * Atomic write via ``os.replace`` so a crash mid-write can't corrupt
     the existing YAML
   * Post-write assertion: reload + confirm ``campaigns`` list is
     non-empty, defense against serialisation drift
   * Sort by EPC descending, top-N slice
   * --dry-run doesn't write anything
+  * Only genuine write failures (I/O error, permission denied) return 1
 """
 
 from __future__ import annotations
@@ -142,19 +148,23 @@ class TestPostWriteAssertion:
 
 
 class TestRefresh:
-    def test_returns_1_when_key_unset(self, refresh_module, monkeypatch):
+    def test_returns_0_when_key_unset(self, refresh_module, monkeypatch):
+        """Rule #26 (QB-FIX-12 2026-08-07): config-gap is data-side,
+        not infra failure. Prior contract exit=1 fired systemd_unit_failed
+        every week on the missing-key case. WARN log still fires."""
         monkeypatch.delenv("CUELINKS_V3_API_KEY", raising=False)
-        assert refresh_module.refresh() == 1
+        assert refresh_module.refresh() == 0
 
-    def test_returns_1_when_api_returns_empty(self, refresh_module, monkeypatch):
-        """Silent-write prevention: empty API result must NOT write
-        an empty shortlist to disk. Exit 1 + WARNING log."""
+    def test_returns_0_when_api_returns_empty(self, refresh_module, monkeypatch):
+        """Silent-write prevention preserved: empty API result must NOT
+        write an empty shortlist to disk. Exit 0 (data-side per rule #26,
+        was 1 pre-QB-FIX-12) + WARNING log + no file write."""
         monkeypatch.setenv("CUELINKS_V3_API_KEY", "test-key")
         monkeypatch.setattr(
             "genlab_core.monetization.cuelinks_client.list_campaigns",
             lambda **kw: [],
         )
-        assert refresh_module.refresh() == 1
+        assert refresh_module.refresh() == 0
 
     def test_dry_run_does_not_write(self, refresh_module, monkeypatch, tmp_path):
         monkeypatch.setenv("CUELINKS_V3_API_KEY", "test-key")
@@ -201,3 +211,48 @@ class TestPlaceholderYaml:
         assert isinstance(loaded["campaigns"], list)
         # Empty list is expected pre-first-fire; consumers must handle it
         assert loaded["campaigns"] == []
+
+
+class TestRefreshExitCodeRule26:
+    """QB-FIX-12 2026-08-07: rule #26 sweep of scripts that exit non-zero
+    on data-side outcomes. refresh() had 2 such paths — API-key-unset
+    and empty-campaigns — both now return 0 with WARN log.
+
+    Real infra failures (write error, invalid API response format) still
+    return 1 to keep the systemd alert cascade for genuine issues.
+    """
+
+    def test_api_key_unset_returns_0(self, refresh_module, monkeypatch, caplog):
+        """Config-gap (unset API key) is data-side; must exit 0."""
+        import logging
+
+        monkeypatch.delenv("CUELINKS_V3_API_KEY", raising=False)
+        with caplog.at_level(logging.WARNING):
+            rc = refresh_module.refresh(dry_run=True)
+        assert rc == 0, (
+            "Missing CUELINKS_V3_API_KEY is a config-gap (data-side per "
+            "rule #26); must not fire systemd_unit_failed. Was exit=1 "
+            "pre-QB-FIX-12, causing weekly false CRITICAL alerts."
+        )
+        assert any(
+            "CUELINKS_V3_API_KEY unset" in r.message for r in caplog.records
+        ), "WARN must still fire so operator sees the config-gap"
+
+    def test_empty_campaigns_returns_0(self, refresh_module, monkeypatch, caplog):
+        """Empty API response is data-side (upstream had nothing to return);
+        must exit 0 with warning. Existing shortlist stays untouched."""
+        import logging
+
+        monkeypatch.setenv("CUELINKS_V3_API_KEY", "test-key")
+        import genlab_core.monetization.cuelinks_client as cuelinks_client
+
+        monkeypatch.setattr(cuelinks_client, "list_campaigns", lambda **_: [])
+        with caplog.at_level(logging.WARNING):
+            rc = refresh_module.refresh(dry_run=True)
+        assert rc == 0, (
+            "Empty campaign list is data-side (upstream API returned nothing); "
+            "must not fire systemd_unit_failed. Existing shortlist YAML stays."
+        )
+        assert any(
+            "EMPTY campaign list" in r.message for r in caplog.records
+        ), "WARN must still fire so operator sees the empty upstream response"

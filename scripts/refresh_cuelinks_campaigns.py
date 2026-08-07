@@ -195,10 +195,24 @@ def _post_write_assertion(path: Path) -> None:
 
 
 def refresh(*, dry_run: bool = False) -> int:
-    """Fetch → sort → write. Returns exit code (0 success, 1 failure)."""
+    """Fetch → sort → write. Returns exit code (0 success or data-side
+    no-op, 1 genuine write failure).
+
+    Exit convention updated 2026-08-07 (QB-FIX-12 rule #26 sweep):
+    data-side outcomes (no API key provisioned, empty API response)
+    return 0 with WARN log. Only genuine infra failures (write error,
+    invalid API response format) return 1. The prior contract fired
+    systemd_unit_failed every week on the missing-API-key case,
+    contributing to alarm-cascade noise. Operator sees the warning
+    in journalctl + logs; the cascade shouldn't fire on config gaps
+    or empty upstream responses.
+    """
     if not os.environ.get("CUELINKS_V3_API_KEY", "").strip():
-        logger.warning("[cuelinks-refresh] CUELINKS_V3_API_KEY unset — nothing to do")
-        return 1
+        logger.warning(
+            "[cuelinks-refresh] CUELINKS_V3_API_KEY unset — nothing to do. "
+            "Rule #26: config-gap is data-side, not infra failure; exit 0."
+        )
+        return 0
 
     # Late import so a missing V3 key doesn't drag the client module in
     from genlab_core.monetization import cuelinks_client
@@ -217,9 +231,10 @@ def refresh(*, dry_run: bool = False) -> int:
             "[cuelinks-refresh] EMPTY campaign list returned — either the "
             "API is down, the key is invalid, or Cuelinks has no matching "
             "campaigns for our filters. NOT writing the shortlist "
-            "(silent-write bug prevention). Exit 1."
+            "(silent-write bug prevention). Rule #26: data-side "
+            "outcome — exit 0 with warning; existing shortlist stays."
         )
-        return 1
+        return 0
 
     shortlist = _shortlist_from_campaigns(campaigns, top_n=_TOP_BY_EPC)
     payload = {
