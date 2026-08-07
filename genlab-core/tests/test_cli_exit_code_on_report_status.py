@@ -1,16 +1,27 @@
-"""Pin the pipeline CLI exit-code contract (session-2026-07-17, sports video_gate silent-fail).
+"""Pin the pipeline CLI exit-code contract.
 
-Prior behaviour: `cli.py:440` returned `1 if ctx.is_aborted else 0`, so a
-pipeline that completed all stages with `status=failed` in the run_report
-(e.g. sports's 2-day video_gate silent-fail) exited 0. systemd saw a
-successful run; no OnFailure alert fired; operator learned about the
-outage from the Mission Control dashboard hours later.
+Two-generation history:
 
-Fix: `_exit_code_for_ctx(ctx)` inspects `ctx.run_stats["report"]["status"]`
-and returns 2 (distinct from is_aborted's 1) when it reads "failed".
+Gen 1 (2026-07-17): `_exit_code_for_ctx` returned 2 when the run report
+status was "failed" — designed to escalate the sports 2-day video_gate
+silent-fail via systemd OnFailure alerts.
 
-This is a sibling of CLAUDE.md rules #16/17/19 — silent-fail elevation
-at a system boundary.
+Gen 2 (2026-08-07 QB-FIX-12): rule #26 supersedes. `status="failed"` in
+run_report is EXCLUSIVELY set on zero-blueprints outcomes (data-side —
+fetchers had nothing, VideoGate dropped all clips, push rejected all
+thin-context stories). Per CLAUDE.md rule #26, data-side signals must
+NOT fire systemd_unit_failed CRITICAL because that alarm cascade drowns
+real infra signals.
+
+The operator learns about zero-blueprints via:
+* run_report's SLO VIOLATION log line (WARNING level, visible in journal)
+* Mission Control's `bottleneck_stage` badge (dashboard, per PR #504)
+* NOT via a systemd exit-code alarm
+
+Only `ctx.is_aborted=True` (a stage raised an exception → real code
+failure) returns non-zero now. This is a sibling of CLAUDE.md rule #26
+— exit non-zero only on genuine infrastructure failure, never on
+data-side outcomes.
 """
 
 from __future__ import annotations
@@ -34,19 +45,28 @@ def test_aborted_returns_1() -> None:
     assert _exit_code_for_ctx(ctx) == 1
 
 
-def test_report_failed_returns_2() -> None:
-    """The new signal: status=failed → non-zero exit → systemd OnFailure fires.
+def test_report_failed_returns_0_per_rule_26() -> None:
+    """QB-FIX-12 (2026-08-07): status=failed is DATA-side (zero blueprints —
+    no fetchable clips, empty sourcing pool). Per CLAUDE.md rule #26, this
+    must NOT trigger systemd OnFailure. Operator sees the signal via
+    run_report SLO VIOLATION warning + Mission Control bottleneck_stage
+    badge, not via a systemd exit-code alarm.
 
-    Regression scenario: someone re-simplifies the CLI to `return 1 if
-    ctx.is_aborted else 0` and the sports-style silent-fail returns.
+    Regression scenario: someone re-adds `return 2` on status=failed
+    thinking it's silent-fail elevation. It isn't — the signal IS surfaced,
+    just not via systemd cascade. Adding exit=2 back would resurrect the
+    movies-pipeline daily CRITICAL that this fix silenced.
+
+    If a future refactor adds a NEW status value (e.g. "failed_infra")
+    for genuine code failures, that status should return non-zero.
     """
     from genlab_core.pipeline.cli import _exit_code_for_ctx
 
     ctx = _make_ctx(is_aborted=False, report_status="failed")
-    assert _exit_code_for_ctx(ctx) == 2, (
-        "status=failed must escape as non-zero exit so systemd OnFailure "
-        "handlers can fire an alert. Was silent 2+ days on sports pipeline "
-        "before the 2026-07-17 fix."
+    assert _exit_code_for_ctx(ctx) == 0, (
+        "status=failed is data-side (zero blueprints from empty sourcing). "
+        "Rule #26 says exit 0 unless a genuine incident. Operator sees "
+        "SLO VIOLATION warning + bottleneck badge, not systemd alarm."
     )
 
 

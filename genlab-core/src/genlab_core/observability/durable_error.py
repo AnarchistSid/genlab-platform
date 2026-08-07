@@ -107,3 +107,61 @@ def write_durable_error(
             )
         except Exception:  # noqa: BLE001
             pass
+
+
+def clear_durable_error(
+    script_name: str,
+    *,
+    runtime_root: Path | None = None,
+) -> None:
+    """Delete the durable error file for ``script_name`` if it exists.
+
+    Called by scripts on successful exit to signal "this script is
+    healthy now — clear any stale error record." Companion to
+    ``write_durable_error()``.
+
+    Motivating incident (QB-FIX-12, 2026-08-07): scripts
+    ``parse_testable_predictions`` and ``auto_accept_strategist_
+    proposals`` were fixed by commit ``dd376829`` on 2026-07-23 but
+    their pre-fix durable error files sat at
+    ``/opt/genlab/.runtime/*_last_error.txt`` for 14 more days,
+    causing daily ``stale_durable_error`` warnings until manually
+    cleaned. If those scripts had called ``clear_durable_error()``
+    on their next successful run after the fix landed, the alerts
+    would have self-resolved.
+
+    Recommended usage pattern in a script's ``_main_with_durable_error``
+    wrapper:
+
+        def _main_with_durable_error() -> int:
+            try:
+                rc = main()
+            except Exception as exc:
+                write_durable_error("my_script", exc)
+                return 1
+            if rc == 0:
+                clear_durable_error("my_script")
+            return rc
+
+    Never raises. If deletion fails (missing file, permissions), the
+    error is logged as WARNING but the caller's success is not
+    reported as a failure.
+
+    Args:
+        script_name: Same slug used with ``write_durable_error()``.
+        runtime_root: Override the durable-file directory. Default
+            ``/opt/genlab/.runtime``. Test-only knob.
+    """
+    root = runtime_root or _RUNTIME_ROOT
+    error_path = root / f"{script_name}_last_error.txt"
+    try:
+        error_path.unlink(missing_ok=True)
+    except Exception as exc:  # noqa: BLE001
+        try:
+            logger.warning(
+                "[durable_error] Failed to clear %s: %s",
+                error_path,
+                exc,
+            )
+        except Exception:  # noqa: BLE001
+            pass

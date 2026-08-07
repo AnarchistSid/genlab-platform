@@ -60,6 +60,20 @@ _RUNTIME_ROOT = Path("/opt/genlab/.runtime")
 # likely still being triaged by an active operator.
 _STALE_HOURS = 24
 
+# Files older than this are treated as bug-outlived-file cases:
+# either the script has been failing continuously for a week (in
+# which case journalctl or the dashboard would have surfaced it
+# many times over) OR the script was fixed but never called
+# clear_durable_error() on subsequent success. Auto-clean rather
+# than perpetually alert. If the script IS still failing, its next
+# invocation writes a fresh error file with fresh mtime → alert
+# re-fires within a scan cycle.
+#
+# Added QB-FIX-12 (2026-08-07) after 2 alerts sat 14 days on files
+# whose bugs were fixed on 2026-07-23. The alerts became noise
+# indistinguishable from real signals.
+_AUTOCLEAN_HOURS = 168  # 7 days
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -88,9 +102,11 @@ def main() -> int:
 
     now = datetime.now(timezone.utc)
     stale_threshold_seconds = args.stale_hours * 3600
+    autoclean_threshold_seconds = _AUTOCLEAN_HOURS * 3600
 
     fresh: list[dict] = []
     stale: list[dict] = []
+    autoclean: list[dict] = []
 
     for path in sorted(root.glob("*_last_error.txt")):
         try:
@@ -112,7 +128,16 @@ def main() -> int:
                 "age_hours": round(age_seconds / 3600, 1),
                 "first_line": first_line,
             }
-            if age_seconds >= stale_threshold_seconds:
+            if age_seconds >= autoclean_threshold_seconds:
+                # QB-FIX-12: file outlived any plausible ongoing failure
+                # window. Either the bug was fixed and the file wasn't
+                # cleared, or the script has been failing so long that
+                # journalctl + dashboard have surfaced it many times over.
+                # Auto-clean rather than alert forever. If the script IS
+                # still failing, next fire re-creates the file and the
+                # alert re-fires within a scan cycle.
+                autoclean.append(entry)
+            elif age_seconds >= stale_threshold_seconds:
                 stale.append(entry)
             else:
                 fresh.append(entry)
@@ -120,13 +145,26 @@ def main() -> int:
             logger.warning("[scan] failed to inspect %s: %s", path, exc)
 
     logger.info(
-        "[scan] found %d durable-error files: %d fresh (<%dh), %d stale (>=%dh)",
-        len(fresh) + len(stale),
+        "[scan] found %d durable-error files: %d fresh (<%dh), %d stale (%d-%dh), %d autoclean (>=%dh)",
+        len(fresh) + len(stale) + len(autoclean),
         len(fresh),
         args.stale_hours,
         len(stale),
         args.stale_hours,
+        _AUTOCLEAN_HOURS,
+        len(autoclean),
+        _AUTOCLEAN_HOURS,
     )
+    for e in autoclean:
+        logger.warning(
+            "  AUTOCLEAN script=%s age=%sh mtime=%s first=%s "
+            "(bug-outlived-file — auto-removing; if script still failing, "
+            "next fire re-creates)",
+            e["script"],
+            e["age_hours"],
+            e["mtime"],
+            e["first_line"],
+        )
     for e in stale:
         logger.info(
             "  STALE script=%s age=%sh mtime=%s first=%s",
@@ -144,15 +182,58 @@ def main() -> int:
         )
 
     if not args.apply:
-        logger.info("DRY-RUN. Re-run with --apply to write pipeline_alerts.")
+        logger.info("DRY-RUN. Re-run with --apply to write pipeline_alerts + auto-clean.")
         return 0
 
-    if not stale:
+    # Auto-clean files older than the outlive-threshold + also mark any
+    # existing stale_durable_error alerts for those scripts as resolved.
+    if autoclean:
+        _autoclean_and_resolve(autoclean)
+
+    if stale:
+        _emit_alerts(stale)
+    else:
         logger.info("[scan] no stale files — nothing to alert on")
-        return 0
 
-    _emit_alerts(stale)
     return 0
+
+
+def _autoclean_and_resolve(autoclean: list[dict]) -> None:
+    """Delete the durable error file for each auto-clean-eligible entry
+    and mark any open stale_durable_error alert for that script resolved.
+
+    Idempotent: if the file is already gone or no open alert exists, the
+    operation is a no-op.
+    """
+    for e in autoclean:
+        try:
+            Path(e["path"]).unlink(missing_ok=True)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[scan] failed to auto-clean %s: %s", e["path"], exc)
+
+    dsn = os.environ.get("DATABASE_URL", "").strip()
+    if not dsn:
+        return
+    try:
+        import psycopg
+    except ImportError:
+        return
+    try:
+        with psycopg.connect(dsn) as conn:
+            for e in autoclean:
+                conn.execute(
+                    """
+                    UPDATE pipeline_alerts
+                    SET resolved_at = NOW()
+                    WHERE check_name = 'stale_durable_error'
+                      AND details->>'script' = %s
+                      AND resolved_at IS NULL
+                    """,
+                    (e["script"],),
+                )
+            conn.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[scan] failed to auto-resolve alerts: %s", exc)
 
 
 def _emit_alerts(stale: list[dict]) -> None:

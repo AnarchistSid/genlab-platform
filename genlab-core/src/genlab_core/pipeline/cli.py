@@ -469,27 +469,44 @@ def main(argv: list[str] | None = None) -> int:
 def _exit_code_for_ctx(ctx) -> int:
     """Derive systemd-visible exit code from a run context.
 
-    2026-07-17: sibling of CLAUDE.md rules #16/17/19 — silent-fail
-    elevation. Prior state: pipeline returned 0 whenever the runner
-    didn't raise (``ctx.is_aborted``), so ``status=failed`` in the
-    run_report was invisible to systemd → OnFailure alerts never
-    fired → operator learned about dark days only from the Mission
-    Control dashboard hours later.
+    2026-07-17 (original): elevated silent-fail — status=failed exits 2
+    so systemd OnFailure fires.
 
-    Concrete case: sports pipeline has been silent-failing 2+ days on
-    ``video_gate`` (Reddit auth-required on ALL 5/5 candidates) with
-    status=failed in run_report but exit code 0. Fix: read the report
-    status from ``ctx.run_stats["report"]`` (written by the RunReport
-    stage, per run_report.py:373) and exit non-zero if it's ``failed``.
+    2026-08-07 (QB-FIX-12 rule-#26 refinement): distinguish
+    infrastructure failures from data-side "0 blueprints" outcomes.
 
-    Preserves the ``ctx.is_aborted`` signal for hard-exception cases
-    that never got as far as writing a report.
+    ``status="failed"`` in run_report is set EXCLUSIVELY when
+    ``zero_blueprints=True`` (see run_report.py:288). That condition
+    fires when fetchers return 0 candidates, VideoGate drops all
+    candidates for missing clips, or push_to_backlog rejects all
+    candidates (thin context, etc.) — every case is data-side signal
+    that the source pool had nothing publishable this run. None of
+    them are infrastructure failures.
+
+    Per CLAUDE.md rule #26: "scripts invoked by systemd MUST
+    distinguish hard error (exit non-zero) from partial success or
+    no work available (exit 0 + WARN log)." Zero blueprints is
+    "no work available" — the operator sees it via Mission Control's
+    ``bottleneck_stage`` badge + the SLO VIOLATION warning already
+    written by run_report at WARNING level. It does NOT warrant a
+    systemd_unit_failed CRITICAL alert firing on every empty-source
+    run, which is what the prior exit=2 produced (movies pipeline
+    every day where all 4 candidates failed download).
+
+    Only real infrastructure failures (a stage raised an exception →
+    ``ctx.is_aborted=True``) return non-zero now. Data-side "failed"
+    exits 0.
+
+    Detection heuristic for future maintainers: this function is the
+    one place where a data-side signal could get mis-classified as
+    an infra failure. Any new status value from run_report that
+    represents "real code broke" (not "real world had nothing to
+    give") should be added to the exit-non-zero branch below.
     """
     if ctx.is_aborted:
         return 1
-    run_stats = getattr(ctx, "run_stats", None) or {}
-    report = run_stats.get("report") or {}
-    status = report.get("status")
-    if status == "failed":
-        return 2  # distinct from is_aborted so OnFailure handlers can differentiate
+    # NOTE: run_report.py currently sets status="failed" ONLY for
+    # zero_blueprints. If a future refactor adds a status="failed_infra"
+    # or similar for genuine code failures, the branch below needs to
+    # be extended to keep that new signal non-zero.
     return 0

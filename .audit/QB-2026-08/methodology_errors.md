@@ -129,17 +129,33 @@ Filed as part of QB-FIX-06 Z1 Step 3, formalized in QB-FIX-07 §5.
 
 **Detection heuristic:** for any "timeout" hypothesis, verify size / duration / bitrate correlation before filing a fix. Timeouts have many causes (auth, ingestion queue, downstream service health, adjacent-request contention). Size is the first suspect but not the only one.
 
-### ME-15 — Execution-pattern error — `render_error` persistence gap invalidates F-QB-0606's verification gate
+### ME-15 — Execution error — Checked the wrong column, filed a false "observability gap" (RETRACTED 2026-08-07)
 
-Filed as part of QB-FIX-06 Z1 Step 1, formalized in QB-FIX-07 §5.
+Filed as part of QB-FIX-06 Z1 Step 1, formalized in QB-FIX-07 §5. **RETRACTED in QB-FIX-12 (2026-08-07).**
 
-**Discovery:** all 4 sports DRAFTED rows had `extra->>'render_error'` = NULL, but the pipeline journal for the Aug 6 Pete Crow-Armstrong row (from QB-FIX-05 Y2) showed the pre-render quality gate rejected it with `hook_title_truncation`. The rejection reason exists at runtime and is discarded before persistence.
+**Original claim:** all 4 sports DRAFTED rows had `extra->>'render_error'` = NULL despite the pipeline journal showing pre-render quality gate rejections. Concluded the rejection reason was "discarded before persistence" and filed as a structural observability gap invalidating F-QB-0606's verification gate.
 
-**Impact:** F-QB-0606's verification instruction — "check `extra->>'render_error'` on DRAFTED rows to determine whether pre_render_quality rejected them" — is structurally unanswerable. The column is uniformly NULL whether the gate ran, the gate rejected, or the gate is buggy. Any future audit finding that relies on `render_error` persistence for verification hits the same dead end.
+**Actual state (verified 2026-08-07):**
 
-**Class-of-bug:** verification gates that rely on runtime signals being persisted. If the persistence path is silently missing, the gate becomes structurally unanswerable regardless of what the runtime does. Detection heuristic: for any "check field X on the row" verification, verify that the write path for X exists AND fires on the branch being verified.
+```sql
+SELECT LEFT(title, 40), error_message FROM blueprints WHERE niche_id='sports' AND status='ARCHIVED';
+```
 
-**Reversal:** reclassify from "observability follow-up" (my prior label in QB-FIX-06 Z1) to "invalidates a verification gate." Findings depending on `render_error` need re-verification via journal grep (fragile) or via adding write-side persistence (proper fix, not in this pass's scope).
+Returns:
+```
+render:compositor_failed:pre_render_quality:hook_title_truncation
+render:compositor_failed:pre_render_quality:hook_title_truncation
+render:compositor_failed:pre_render_quality:hook_title_truncation
+render:compositor_failed:pre_render_quality:hook_title_truncation
+```
+
+**The rejection reason IS persisted — in the `blueprints.error_message` top-level column, not in `extra->>'render_error'`.** `push_to_backlog.py:2612` writes `error_message` via `_derive_render_failure_reason()` which reads `media.get("render_error")` from the story dict and prefixes with `render:compositor_failed:` before persisting. The `extra->>'render_error'` JSONB path was never the storage location — `extra->>` on that key returned NULL because the value isn't stored under that path.
+
+**Reversal:** my Z1 query used the wrong column. Observability is fine. F-QB-0606's verification gate is answerable via `SELECT error_message FROM blueprints WHERE status IN ('DRAFTED', 'ARCHIVED') AND error_message LIKE 'render:%'`. QB-FIX-07 §5 filing was based on this same wrong-column mistake; that reclassification is also retracted.
+
+**Class-of-bug (real one):** verifying a persistence path by querying the wrong column is a specific instance of the general "read-side and write-side must be aligned" pattern. Detection heuristic: before concluding "field X isn't persisted," check ALL columns AND all JSONB paths for the value, or grep the write-side code for the actual storage location. `push_to_backlog.py` writes render errors to a top-level column, not to `extra` — this is standard schema design (indexable), and any observability review that missed the column missed the whole write path.
+
+**No code fix needed.** Observability works as designed.
 
 ### ME-13 — Execution error — Mitigation proposed against a mechanism it does not act on
 

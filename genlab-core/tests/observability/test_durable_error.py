@@ -132,3 +132,47 @@ def test_helper_exposes_stable_filename_shape(tmp_runtime: Path):
         write_durable_error("check_affiliate_links", exc, runtime_root=tmp_runtime)
 
     assert (tmp_runtime / "check_affiliate_links_last_error.txt").exists()
+
+
+class TestClearDurableError:
+    """QB-FIX-12: clear_durable_error companion helper.
+
+    Motivating incident: parse_testable_predictions + auto_accept_strategist_
+    proposals were fixed by dd376829 on 2026-07-23 but the pre-fix durable
+    error files sat for 14 days causing daily stale_durable_error warnings.
+    If those scripts had called clear_durable_error() on their next successful
+    run after the fix landed, the alerts would have self-resolved.
+    """
+
+    def test_clear_removes_existing_file(self, tmp_runtime: Path):
+        from genlab_core.observability.durable_error import (
+            clear_durable_error,
+            write_durable_error,
+        )
+
+        try:
+            raise ValueError("simulated failure")
+        except Exception as exc:
+            write_durable_error("myscript", exc, runtime_root=tmp_runtime)
+
+        assert (tmp_runtime / "myscript_last_error.txt").exists()
+        clear_durable_error("myscript", runtime_root=tmp_runtime)
+        assert not (tmp_runtime / "myscript_last_error.txt").exists()
+
+    def test_clear_noop_when_file_missing(self, tmp_runtime: Path):
+        """clear on nonexistent file must not raise (missing_ok=True)."""
+        from genlab_core.observability.durable_error import clear_durable_error
+
+        tmp_runtime.mkdir(exist_ok=True)
+        # No pre-write; ensure no crash.
+        clear_durable_error("never_ran", runtime_root=tmp_runtime)
+        assert not (tmp_runtime / "never_ran_last_error.txt").exists()
+
+    def test_clear_survives_missing_runtime_dir(self, tmp_runtime: Path):
+        """Runtime root may not exist yet — clear must not error."""
+        from genlab_core.observability.durable_error import clear_durable_error
+
+        # tmp_runtime intentionally not created
+        clear_durable_error("script", runtime_root=tmp_runtime)
+        # Assertion: reached this line without exception
+        assert True
