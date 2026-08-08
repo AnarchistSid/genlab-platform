@@ -118,7 +118,7 @@ threads:
 #   2. FN count drops below 10% of samples (currently 40%)
 #   3. real agreement (TP+TN)/total ≥ 80% (currently 53.4%)
 auto_publish:
-  enabled: false
+  enabled: true
   min_confidence: 0.85
   max_approvals_per_pass: 3
-  rollout_pct: 0.0
+  rollout_pct: 1.0

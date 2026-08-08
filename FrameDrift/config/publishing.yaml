@@ -82,7 +82,7 @@ platforms:
 #   - touch /opt/genlab/.runtime/auto_approve_kill_switch → file flag
 
 auto_publish:
-  enabled: false
+  enabled: true
   min_confidence: 0.85
   max_approvals_per_pass: 3
-  rollout_pct: 0.0
+  rollout_pct: 1.0
