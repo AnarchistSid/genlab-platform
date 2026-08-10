@@ -59,7 +59,7 @@ if [[ -z "${YT_COMPLIANCE_NICHE:-}" ]]; then
 fi
 [[ $_missing -eq 1 ]] && exit 2
 PACE="${PACE:-2}"
-PYTHON="${PYTHON:-python3}"
+PYTHON="${PYTHON:-/opt/genlab/.venv/bin/python}"
 TITLE="${YT_COMPLIANCE_TITLE:-GenLab API compliance test}"
 
 # Case-validate the niche so the error surface is bash-side, not a stack trace

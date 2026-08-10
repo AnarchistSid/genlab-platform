@@ -12,7 +12,7 @@ config = context.config
 
 # Inject POSTGRES_PASSWORD from environment into the config
 # so %(POSTGRES_PASSWORD)s in alembic.ini resolves correctly.
-pg_password = os.environ.get("POSTGRES_PASSWORD", "genlab_dev")
+pg_password = os.environ["POSTGRES_PASSWORD"]
 config.set_section_option(config.config_ini_section, "POSTGRES_PASSWORD", pg_password)
 
 # 2026-06-29: allow DATABASE_URL to fully override the sqlalchemy.url ini

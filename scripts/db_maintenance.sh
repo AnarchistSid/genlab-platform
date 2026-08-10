@@ -11,7 +11,7 @@ set -euo pipefail
 
 GENLAB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG="$GENLAB/.logs/db_maintenance.log"
-DB_URL="${DATABASE_URL:-postgresql://genlab:genlab_dev@localhost:5432/genlab}"
+DB_URL="${DATABASE_URL:?DATABASE_URL must be set}"
 
 mkdir -p "$(dirname "$LOG")"
 
@@ -22,7 +22,7 @@ if [[ -f "$GENLAB/.env" ]]; then
     set +a
 fi
 
-DB_URL="${DATABASE_URL:-postgresql://genlab:genlab_dev@localhost:5432/genlab}"
+DB_URL="${DATABASE_URL:?DATABASE_URL must be set}"
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting DB maintenance" | tee -a "$LOG"
 
