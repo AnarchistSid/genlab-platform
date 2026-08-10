@@ -430,17 +430,26 @@ else
         genlab-webhook.service
     )
     RESTARTED=()
+    # 2026-08-10 (Bug 4 — TWO ATTEMPTS): pre-fetch the installed-unit list
+    # ONCE before the loop. Prior attempts:
+    #   v1: `systemctl list-unit-files --plain | grep -q "^$unit "` — false
+    #       negatives during heavy load (list-unit-files intermittently
+    #       returned incomplete output).
+    #   v2: `systemctl cat "$unit"` — same false-negative pattern. Root
+    #       cause was NOT the grep parsing; it was per-iteration systemctl
+    #       calls saturating D-Bus during rapid restart-loop execution.
+    #       systemctl was silently returning non-zero for units that DID
+    #       exist (verified: same command run manually 100ms later worked
+    #       fine, 30ms latency).
+    # v3 (this): one `list-unit-files` call up-front, cache the sorted set,
+    # then use `grep -qxF` (exact-line, fixed-string) for membership. No
+    # per-iteration systemctl calls except the restart itself. If the list
+    # is intermittently incomplete during heavy load, at least it's ONE
+    # snapshot at a single moment before restarts begin — not a moving
+    # target during the loop.
+    INSTALLED_SERVICES=$(systemctl list-unit-files --type=service --no-legend --plain 2>/dev/null | awk '{print $1}' | sort -u)
     for unit in "${LONG_RUNNING_SERVICES[@]}"; do
-        # 2026-08-10: use `systemctl cat` instead of grepping list-unit-files
-        # output. The previous check `systemctl list-unit-files --plain |
-        # grep -q "^$unit "` false-negatived intermittently during heavy
-        # systemd load (e.g., mid-loop after a slow dashboard restart) —
-        # 3 of 5 services skipped as "not installed" during the 2026-08-10
-        # 18:28 deploy despite being installed + running. `systemctl cat`
-        # exits 0 iff the unit file exists; no output parsing, no
-        # format-brittleness. Silence stdout since we only care about
-        # exit code.
-        if systemctl cat "$unit" >/dev/null 2>&1; then
+        if grep -qxF "$unit" <<<"$INSTALLED_SERVICES"; then
             log "  restart: $unit"
             if systemctl restart "$unit" 2>&1 | tee -a "$LOG"; then
                 RESTARTED+=("$unit")

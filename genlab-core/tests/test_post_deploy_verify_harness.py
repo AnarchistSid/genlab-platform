@@ -231,22 +231,33 @@ class TestDeployShForceFlag:
         dashboard restart (13s) put systemctl into a state where
         list-unit-files output was momentarily incomplete."""
         content = self._DEPLOY_SH.read_text()
-        # The install check must use `systemctl cat` (exit-code based)
-        assert 'if systemctl cat "$unit" >/dev/null 2>&1' in content, (
-            "Phase 7's unit-installed check must be "
-            "`if systemctl cat \"$unit\" >/dev/null 2>&1`. The old "
-            "grep-based check on list-unit-files output was fragile "
-            "under load; new check is exit-code based, no parsing."
+        # v3: pre-fetch cached list + grep -qxF exact-line membership.
+        # v1 (list-unit-files inline grep) and v2 (per-iter systemctl cat)
+        # both false-negatived during heavy load — one snapshot before
+        # the loop starts avoids D-Bus rate-limiting entirely.
+        assert 'INSTALLED_SERVICES=$(systemctl list-unit-files' in content, (
+            "Phase 7 must pre-fetch installed services ONCE before the "
+            "restart loop (avoids per-iteration D-Bus rate limits). "
+            "Assign to INSTALLED_SERVICES then use `grep -qxF` for "
+            "membership. Regression: reverting to per-iteration systemctl "
+            "calls reintroduces the 2026-08-10 false-negative pattern."
         )
-        # Old fragile check line must be gone — check that the ACTIVE
-        # code line (not comments/docs) doesn't do the grep. Detect via
-        # the specific `if systemctl list-unit-files ... grep -q "^$unit "`
-        # pattern that WAS the check.
-        assert "if systemctl list-unit-files" not in content, (
-            "Old grep-based unit-installed check must be removed from "
-            "the active code path. Regression: reverting to grep-based "
-            "parsing produces intermittent 'not installed' false-negatives "
-            "during multi-service restart loops."
+        assert 'grep -qxF "$unit" <<<"$INSTALLED_SERVICES"' in content, (
+            "Membership check must be `grep -qxF \"$unit\" <<<\"$INSTALLED_SERVICES\"` "
+            "— exact-line (`-x`), fixed-string (`-F`), no format brittleness."
+        )
+        # Old fragile check lines must be gone from active code.
+        # NOTE: the pre-fetch line itself contains `systemctl list-unit-files`
+        # once (in the assignment), but no inline `if systemctl ...` check
+        # inside the loop.
+        assert 'if systemctl list-unit-files' not in content, (
+            "Old per-iteration `if systemctl list-unit-files` check must "
+            "be removed from active code. Pre-fetch cache is the only "
+            "systemctl list call now."
+        )
+        assert 'if systemctl cat "$unit"' not in content, (
+            "v2's `if systemctl cat` per-iteration check must be removed. "
+            "It had the same D-Bus rate-limiting problem as v1."
         )
 
 
