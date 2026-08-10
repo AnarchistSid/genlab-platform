@@ -59,7 +59,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: false
       - uses: astral-sh/setup-uv@v7
@@ -157,7 +157,7 @@ jobs:
     # not a shell substitution — no injection risk. Same-repo PRs run.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: false
       - uses: astral-sh/setup-uv@v7
@@ -234,7 +234,7 @@ jobs:
           - package: criticalrush
             test_path: CriticalRush/tests/
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: false
       - uses: astral-sh/setup-uv@v7
@@ -289,7 +289,7 @@ jobs:
     env:
       NODE_OPTIONS: "--max-old-space-size=1024"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: false
       - uses: actions/setup-node@v6
@@ -326,7 +326,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: false
       - uses: astral-sh/setup-uv@v7
