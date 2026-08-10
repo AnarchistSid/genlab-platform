@@ -431,7 +431,16 @@ else
     )
     RESTARTED=()
     for unit in "${LONG_RUNNING_SERVICES[@]}"; do
-        if systemctl list-unit-files --type=service --no-legend --plain 2>/dev/null | grep -q "^$unit "; then
+        # 2026-08-10: use `systemctl cat` instead of grepping list-unit-files
+        # output. The previous check `systemctl list-unit-files --plain |
+        # grep -q "^$unit "` false-negatived intermittently during heavy
+        # systemd load (e.g., mid-loop after a slow dashboard restart) —
+        # 3 of 5 services skipped as "not installed" during the 2026-08-10
+        # 18:28 deploy despite being installed + running. `systemctl cat`
+        # exits 0 iff the unit file exists; no output parsing, no
+        # format-brittleness. Silence stdout since we only care about
+        # exit code.
+        if systemctl cat "$unit" >/dev/null 2>&1; then
             log "  restart: $unit"
             if systemctl restart "$unit" 2>&1 | tee -a "$LOG"; then
                 RESTARTED+=("$unit")

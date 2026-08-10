@@ -221,6 +221,34 @@ class TestDeployShForceFlag:
             "when HEAD is already up-to-date."
         )
 
+    def test_phase_7_unit_installed_check_uses_systemctl_cat(self):
+        """2026-08-10 (Bug 4): Phase 7's 'is unit installed?' check must
+        use `systemctl cat <unit>` (exit-code based) rather than parsing
+        `systemctl list-unit-files --plain | grep`. The grep approach
+        false-negatived under heavy systemd load — during the 18:28
+        deploy, 3 of 5 services were skipped as 'not installed' even
+        though they were installed + running, because the intermediate
+        dashboard restart (13s) put systemctl into a state where
+        list-unit-files output was momentarily incomplete."""
+        content = self._DEPLOY_SH.read_text()
+        # The install check must use `systemctl cat` (exit-code based)
+        assert 'if systemctl cat "$unit" >/dev/null 2>&1' in content, (
+            "Phase 7's unit-installed check must be "
+            "`if systemctl cat \"$unit\" >/dev/null 2>&1`. The old "
+            "grep-based check on list-unit-files output was fragile "
+            "under load; new check is exit-code based, no parsing."
+        )
+        # Old fragile check line must be gone — check that the ACTIVE
+        # code line (not comments/docs) doesn't do the grep. Detect via
+        # the specific `if systemctl list-unit-files ... grep -q "^$unit "`
+        # pattern that WAS the check.
+        assert "if systemctl list-unit-files" not in content, (
+            "Old grep-based unit-installed check must be removed from "
+            "the active code path. Regression: reverting to grep-based "
+            "parsing produces intermittent 'not installed' false-negatives "
+            "during multi-service restart loops."
+        )
+
 
 class TestEngagementWorkerSuccessExitStatus:
     """2026-08-10 regression pin: genlab-engagement-worker.service must
