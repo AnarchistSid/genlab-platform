@@ -31,6 +31,20 @@ ExecStart=/opt/genlab/.venv/bin/python -m dramatiq \
     --processes 1 --threads 2
 Restart=always
 RestartSec=15
+# 2026-08-10: Dramatiq's main process exits with status 1 (not 0, and not
+# via signal-delivery) when it receives SIGTERM from `systemctl restart`,
+# after sending SIGTERM to its worker subprocesses. Prior to this line,
+# every `systemctl restart genlab-engagement-worker.service` fired
+# OnFailure → genlab-service-failure-alert@%n.service → a spurious
+# systemd_unit_failed CRITICAL row in pipeline_alerts, even though
+# Restart=always immediately relaunched the service cleanly. Treat
+# exit-1-on-SIGTERM as success so OnFailure only fires on real crashes.
+# Trade-off: masks Python-level uncaught exceptions that also exit 1 —
+# acceptable because Dramatiq catches actor-level exceptions at the
+# @actor decorator boundary, so main-process exit-1 is almost always
+# graceful-shutdown. Bootstrap failures (ImportError, missing env) still
+# show up in journalctl even if they don't fire the alert.
+SuccessExitStatus=1 SIGTERM
 
 [Install]
 WantedBy=multi-user.target

@@ -14,6 +14,10 @@
 #   ./scripts/deploy.sh --apply        # full deploy: pull + migrate + restart
 #   ./scripts/deploy.sh --apply --skip-migrate    # deploy without DDL changes
 #   ./scripts/deploy.sh --apply --skip-restart    # leave services on old code
+#   ./scripts/deploy.sh --apply --force           # run Phases 6.5 + 7 even
+#                                                 # when HEAD is up-to-date
+#                                                 # (auto-inferred if
+#                                                 # .version.env is stale)
 #
 # What it does (in --apply mode):
 #   1. Sanity-check working tree (clean? on main?) — refuse if dirty
@@ -52,13 +56,15 @@ mkdir -p "$LOG_DIR"
 APPLY=0
 SKIP_MIGRATE=0
 SKIP_RESTART=0
+FORCE=0
 for arg in "$@"; do
     case "$arg" in
         --apply)        APPLY=1 ;;
         --skip-migrate) SKIP_MIGRATE=1 ;;
         --skip-restart) SKIP_RESTART=1 ;;
+        --force)        FORCE=1 ;;
         --help|-h)
-            head -36 "$0" | tail -34
+            head -40 "$0" | tail -38
             exit 0
             ;;
         *) echo "ERROR: unknown arg '$arg' (try --help)"; exit 1 ;;
@@ -207,9 +213,47 @@ if [[ "$APPLY" -ne 1 ]]; then
     exit 0
 fi
 
-if [[ "$BEHIND_COUNT" -eq 0 ]]; then
-    log "Nothing to deploy. (Use --apply --skip-migrate --skip-restart to force-restart anyway.)"
+# 2026-08-10: gate the "nothing to deploy" short-circuit on drift detection.
+# Old behavior exited 0 whenever HEAD == origin/main, even if `.version.env`
+# was stale from a prior manual `git pull` (which is exactly what happens
+# when an operator pulls without running deploy.sh). Post-deploy-verify
+# then fired systemd_unit_failed weekly because the pin didn't match HEAD.
+# New behavior: bypass short-circuit when the on-disk `.version.env` doesn't
+# reflect the current HEAD, OR when --force is passed. Down-stream phases
+# (Phase 5's `git pull --ff-only`, Phase 5.5 chmod, Phase 5.6 uv sync) are
+# all idempotent when already up-to-date, so falling through is safe.
+STALE_VERSION_ENV=0
+STALE_REASON=""
+VERSION_ENV_PROBE="/opt/genlab/.version.env"
+if [[ -f "$VERSION_ENV_PROBE" ]]; then
+    DEPLOYED_SHA=$(grep '^GENLAB_GIT_COMMIT=' "$VERSION_ENV_PROBE" | cut -d= -f2- | tr -d '"' | tr -d "'")
+    CURRENT_SHORT=$(git rev-parse --short HEAD)
+    if [[ -z "$DEPLOYED_SHA" ]]; then
+        STALE_VERSION_ENV=1
+        STALE_REASON="GENLAB_GIT_COMMIT empty in $VERSION_ENV_PROBE"
+    elif [[ "$DEPLOYED_SHA" != "$CURRENT_SHORT"* && "$CURRENT_SHORT" != "$DEPLOYED_SHA"* ]]; then
+        # Prefix-match either direction so short (deploy.sh convention) or
+        # full 40-char SHA both count as fresh when the leading bytes align.
+        STALE_VERSION_ENV=1
+        STALE_REASON="$VERSION_ENV_PROBE has $DEPLOYED_SHA but HEAD is $CURRENT_SHORT"
+    fi
+else
+    STALE_VERSION_ENV=1
+    STALE_REASON="$VERSION_ENV_PROBE missing"
+fi
+
+if [[ "$BEHIND_COUNT" -eq 0 && "$FORCE" -ne 1 && "$STALE_VERSION_ENV" -ne 1 ]]; then
+    log "Nothing to deploy. HEAD, .version.env, and origin/main are all in sync."
+    log "Pass --force to run Phases 5.5+ (dep sync + .version.env write + service restart) anyway."
     exit 0
+fi
+
+if [[ "$BEHIND_COUNT" -eq 0 ]]; then
+    if [[ "$STALE_VERSION_ENV" -eq 1 ]]; then
+        log "HEAD already at origin/main but .version.env is stale ($STALE_REASON) — running post-pull phases to restore consistency."
+    else
+        log "HEAD already at origin/main. --force set: running post-pull phases anyway."
+    fi
 fi
 
 # ----------------------------------------------------------------------------

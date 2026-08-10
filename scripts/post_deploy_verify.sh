@@ -117,12 +117,26 @@ elif [ -f /etc/genlab/version.env ]; then
     VERSION_ENV_PATH="/etc/genlab/version.env"
 fi
 if [ -n "$VERSION_ENV_PATH" ]; then
-    deployed_sha=$(grep ^GENLAB_GIT_COMMIT= "$VERSION_ENV_PATH" | cut -d= -f2-)
-    git_head_sha=$(sudo -u genlab git -C $GENLAB rev-parse --short HEAD)
-    if [ "$deployed_sha" = "$git_head_sha" ]; then
+    deployed_sha=$(grep ^GENLAB_GIT_COMMIT= "$VERSION_ENV_PATH" | cut -d= -f2- | tr -d "'\"")
+    # 2026-08-10: use both short AND full SHA from HEAD, then prefix-match
+    # either direction so `.version.env` written with either the short SHA
+    # (deploy.sh's `git rev-parse --short HEAD` convention) or the full
+    # 40-char SHA (any manual/scripted write) both pass equivalently. Old
+    # code did strict `=` and false-fired when the file held a full SHA
+    # but HEAD probe returned the short one — surfaced 2026-08-10 during
+    # a drift-recovery deploy that hand-wrote .version.env with `git
+    # rev-parse HEAD` (no --short).
+    git_head_short=$(sudo -u genlab git -C $GENLAB rev-parse --short HEAD)
+    git_head_full=$(sudo -u genlab git -C $GENLAB rev-parse HEAD)
+    if [ -z "$deployed_sha" ]; then
+        fail "$VERSION_ENV_PATH has empty GENLAB_GIT_COMMIT (re-run deploy.sh)"
+    elif [ "$deployed_sha" = "$git_head_short" ] \
+      || [ "$deployed_sha" = "$git_head_full" ] \
+      || [ "${git_head_full#$deployed_sha}" != "$git_head_full" ] \
+      || [ "${deployed_sha#$git_head_short}" != "$deployed_sha" ]; then
         pass "$VERSION_ENV_PATH matches git HEAD ($deployed_sha)"
     else
-        fail "$VERSION_ENV_PATH=$deployed_sha but git HEAD=$git_head_sha (re-run deploy.sh)"
+        fail "$VERSION_ENV_PATH=$deployed_sha but git HEAD=$git_head_short (re-run deploy.sh)"
     fi
 else
     fail "/opt/genlab/.version.env MISSING (and legacy /etc/genlab/version.env also absent)"
