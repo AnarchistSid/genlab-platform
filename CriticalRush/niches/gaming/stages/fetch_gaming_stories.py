@@ -154,6 +154,15 @@ class SteamSpikeFetcher:
                         "igdb_game_id": None,
                         "developer": None,
                         "thumbnail_url": f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg",
+                        # 2026-08-10 Option C: Steam spike is a signal
+                        # ("this game is trending") not a video candidate.
+                        # A downstream stage (ExtractGamingMedia's YouTube
+                        # search) may find a clip; if not, the story stays
+                        # DRAFTED. Declaring the bypass makes this
+                        # architectural fact explicit + auditable in logs
+                        # via the [merge_stories] bypass INFO trail.
+                        "bypass_video_id_dedup": True,
+                        "bypass_reason": "steam_spike:signal_not_video",
                     }
                 )
 
@@ -370,6 +379,17 @@ class TwitchTrendingFetcher:
                         "igdb_game_id": game.get("igdb_id") or game.get("id"),
                         "developer": None,
                         "thumbnail_url": box_art or None,
+                        # 2026-08-10 Option C: Twitch top-games returns a
+                        # LIVE CHANNEL URL (or category directory URL),
+                        # not a stable clip. video_id can't exist because
+                        # the "video" behind twitch.tv/{streamer} changes
+                        # every stream session. Downstream clip sourcing
+                        # in ExtractGamingMedia may substitute a real
+                        # clip; without that, the story stays DRAFTED.
+                        # Bypass declared so [merge_stories] logs an INFO
+                        # trail rather than dropping the story.
+                        "bypass_video_id_dedup": True,
+                        "bypass_reason": "twitch_trending:live_channel_not_clip",
                     }
                 )
 
@@ -478,6 +498,16 @@ class RSSFeedAggregator:
                             "steam_app_id": None,
                             "igdb_game_id": None,
                             "developer": None,
+                            # 2026-08-10 Option C: RSS entries are text
+                            # articles (IGN, Kotaku, PC Gamer). No
+                            # video_id can exist. ExtractGamingMedia may
+                            # find a companion clip via YouTube search
+                            # on the article title; otherwise the story
+                            # stays DRAFTED. Bypass declared so the
+                            # video-invariant contract at merge_stories
+                            # logs an INFO trail instead of dropping.
+                            "bypass_video_id_dedup": True,
+                            "bypass_reason": "rss:text_only_no_video",
                         }
                     )
 

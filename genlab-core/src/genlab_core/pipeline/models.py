@@ -46,9 +46,36 @@ opt in incrementally, one fetcher per PR.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_validation_reason(exc: ValidationError) -> str:
+    """Extract the human-relevant line from a pydantic ValidationError.
+
+    pydantic v2 formats errors as multi-line output with a URL footer;
+    ``splitlines()[-1]`` grabs the URL instead of the useful message.
+    Prefer the line starting with 'Value error,' when present; fall back
+    to a compact stringification.
+    """
+    text = str(exc)
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("Value error,"):
+            # Trim the pydantic [type=value_error, ...] suffix for brevity
+            trimmed = stripped[len("Value error,") :].strip()
+            bracket = trimmed.find(" [type=")
+            return trimmed[:bracket].strip() if bracket >= 0 else trimmed
+    # Fall back to the first non-empty line that isn't the header
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith(("For further information", "1 validation")):
+            return stripped[:200]
+    return "validation_error"
 
 
 class StoryCandidate(BaseModel):
@@ -63,6 +90,30 @@ class StoryCandidate(BaseModel):
     Schema validation happens at ``StoryCandidate.from_raw(dict)`` — call it at
     the fetcher's output boundary and divergence becomes a clear error, not a
     KeyError three stages later.
+
+    Video-invariant contract (2026-08-10, Option C — Phase 1)
+    ---------------------------------------------------------
+    A story is one of two shapes:
+
+    1. **Video-bearing story** — the fetcher found a specific video clip.
+       MUST populate ``video_id`` (non-empty string) so downstream dedup
+       works. This is what ``FetchTrendingVideos`` / ``FetchTwitchClips`` /
+       ``FetchAnimePromos`` emit for the 4 healthy niches. ``channel_id``
+       is strongly encouraged (drives attribution layers L1-L6) but
+       intentionally NOT required in Phase 1 — sports has 36/40 rows with
+       NULL source_channel_id today, so enforcement would drop working
+       content. Phase 2 will tighten this after per-fetcher retrofits.
+
+    2. **Signal story (bypass)** — the fetcher emits a trending signal
+       (e.g. "LoL is spiking on Steam today") that isn't itself a playable
+       clip; a downstream enrichment stage may find a clip for it. MUST
+       set ``bypass_video_id_dedup=True`` AND ``bypass_reason=<slug>`` so
+       the pipeline knows this story is intentionally without video_id.
+
+    Enforced via ``model_validator``. Prevents the ``fetcher-schema-drift-
+    from-downstream-contract`` class-of-bug that produced the 30-day
+    gaming repeat pattern (42 blueprints / 19 titles / 1 distinct video_id;
+    every dedup key silently no-op'd because video_id was empty).
     """
 
     model_config = ConfigDict(extra="allow")
@@ -92,11 +143,70 @@ class StoryCandidate(BaseModel):
     channel_id: str | None = None
     channel_name: str | None = None
 
+    # Video-invariant bypass (2026-08-10 Option C — see class docstring).
+    # A fetcher that legitimately can't populate video_id + channel_id at
+    # emit time (Steam spike, Twitch top-games, RSS text stories) MUST set
+    # both fields together. ``bypass_reason`` is a slug of the form
+    # ``<source>:<why>`` — e.g. ``steam_spike:signal_not_video`` — that
+    # shows up in structured logs + metrics, so operators can see WHICH
+    # bypass path is active. A missing reason with the flag set is a
+    # validation error (bypass without justification is worse than no
+    # bypass).
+    bypass_video_id_dedup: bool = False
+    bypass_reason: str = ""
+
     # Gaming-specific enrichment (set by EnrichWithIGDB / SteamSpikeFetcher).
     # Optional everywhere; non-gaming pipelines simply leave them None.
     steam_app_id: int | None = None
     igdb_game_id: int | None = None
     developer: str | None = None
+
+    @model_validator(mode="after")
+    def _enforce_video_invariant(self) -> StoryCandidate:
+        """Enforce the video-invariant contract described in the class docstring.
+
+        Two legal shapes:
+          A. video_id populated (video-bearing story)
+          B. bypass_video_id_dedup=True + bypass_reason non-empty (signal story)
+
+        Anything else raises ValueError — caught + logged by ``merge_stories``.
+
+        channel_id is not enforced in Phase 1 (see class docstring) — sports
+        currently ships 36/40 blueprints with NULL source_channel_id, and
+        forcing that field would drop working content. Attribution-layer
+        strictness is Phase 2 scope.
+        """
+        has_video_id = bool(self.video_id)
+        declares_bypass = bool(self.bypass_video_id_dedup)
+
+        if has_video_id:
+            # Shape A — video-bearing. Bypass flag ignored (a fetcher that
+            # populated video_id doesn't need bypass; we tolerate the flag
+            # being set defensively rather than making the two shapes
+            # mutually exclusive).
+            return self
+
+        if declares_bypass:
+            if not self.bypass_reason.strip():
+                raise ValueError(
+                    f"story from source={self.source!r} declared "
+                    f"bypass_video_id_dedup=True but bypass_reason is empty; "
+                    f"bypass requires an explicit reason slug (e.g. "
+                    f"'steam_spike:signal_not_video')"
+                )
+            return self
+
+        # No video_id AND no bypass — this is the shape that produced the
+        # gaming repeat pattern. Fail loudly so merge_stories drops the
+        # story with a diagnostic log.
+        raise ValueError(
+            f"story from source={self.source!r} title={self.title!r} lacks "
+            f"video_id AND does not declare bypass_video_id_dedup=True with "
+            f"a reason. Video-bearing fetchers must populate video_id; "
+            f"signal-only fetchers must set bypass_video_id_dedup=True + "
+            f"bypass_reason=<source>:<why>. "
+            f"See genlab_core.pipeline.models.StoryCandidate docstring."
+        )
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> StoryCandidate:
@@ -141,11 +251,80 @@ def merge_stories(
     Stories are stored as dicts (existing consumers read with ``.get(...)``).
     Typed access via ``StoryCandidate.from_raw(item)`` is a 1-line opt-in at
     the consumer's discretion.
+
+    Video-invariant enforcement (2026-08-10 Option C)
+    -------------------------------------------------
+    Each story is validated against ``StoryCandidate``'s video invariant
+    (see class docstring). Two failure modes:
+
+    * **Contract violation (no video_id + no bypass declared)** — the story
+      is DROPPED from the merge with a WARNING log carrying source, title,
+      and the exception message. The rest of the batch continues.
+    * **Legitimate bypass (bypass_video_id_dedup=True + reason)** — the
+      story is kept, an INFO log fires with the reason slug so operators
+      can audit which fetcher paths are non-video.
+
+    This is fail-open-with-visible-signal (rule #19): the merge never
+    raises, but every skipped story leaves a diagnostic. Enforcement mode
+    can be tightened later (e.g. raise ``ValidationError`` if drop rate
+    exceeds a threshold) without changing the caller contract.
     """
     existing = context.get("stories", [])
-    validated = [
-        s if isinstance(s, StoryCandidate) else StoryCandidate.from_raw(s) for s in new_stories
-    ]
+    # Materialize once so len() + iteration don't double-consume a generator.
+    incoming = list(new_stories)
+    validated: list[StoryCandidate] = []
+    dropped_count = 0
+    niche_id = context.get("niche_id", "unknown")
+
+    for item in incoming:
+        try:
+            candidate = (
+                item if isinstance(item, StoryCandidate) else StoryCandidate.from_raw(item)
+            )
+        except ValidationError as exc:
+            # Contract violation — drop the story, log the diagnostic. Rest
+            # of the batch continues. If this fires repeatedly for a specific
+            # fetcher, that fetcher needs either video_id population OR an
+            # explicit bypass declaration (see StoryCandidate docstring).
+            source = (
+                item.get("source", "?") if isinstance(item, dict) else getattr(item, "source", "?")
+            )
+            title = (
+                item.get("title", "?") if isinstance(item, dict) else getattr(item, "title", "?")
+            )
+            logger.warning(
+                "[merge_stories] DROPPED story from fetcher; niche=%s source=%s "
+                "title=%r reason=%s",
+                niche_id,
+                source,
+                title[:80] if isinstance(title, str) else title,
+                _extract_validation_reason(exc),
+            )
+            dropped_count += 1
+            continue
+
+        # Bypass audit trail — INFO log per bypassed story so operators can
+        # see WHICH source is signal-only. Aggregate via journalctl or a
+        # future Postgres counter.
+        if candidate.bypass_video_id_dedup:
+            logger.info(
+                "[merge_stories] bypass niche=%s source=%s reason=%s title=%r",
+                niche_id,
+                candidate.source,
+                candidate.bypass_reason,
+                candidate.title[:60],
+            )
+        validated.append(candidate)
+
+    if dropped_count:
+        logger.warning(
+            "[merge_stories] niche=%s dropped %d of %d incoming stories on "
+            "video-invariant contract; see prior WARN lines for per-story detail",
+            niche_id,
+            dropped_count,
+            len(incoming),
+        )
+
     new_dicts = [s.model_dump() for s in validated]
     if prepend:
         context["stories"] = new_dicts + list(existing)
@@ -163,10 +342,51 @@ def replace_stories(
     ``pre_download_dedup``, ``video_gate``, ``filter_gaming_stories``,
     ``score_gaming_clips`` top-N selection, etc.
 
-    Validates each kept item against ``StoryCandidate`` so a filter can't
-    accidentally introduce malformed entries while narrowing.
+    Validates each kept item against ``StoryCandidate`` including the
+    video-invariant contract (Option C, 2026-08-10). A filter that
+    accidentally strips ``video_id`` / ``channel_id`` from a valid story
+    gets that story dropped with a WARN log — same fail-open pattern as
+    ``merge_stories``. Filters are usually working on already-validated
+    dicts, so this is a defense-in-depth pin.
     """
-    validated = [s if isinstance(s, StoryCandidate) else StoryCandidate.from_raw(s) for s in kept]
+    incoming = list(kept)
+    validated: list[StoryCandidate] = []
+    dropped_count = 0
+    niche_id = context.get("niche_id", "unknown")
+
+    for item in incoming:
+        try:
+            candidate = (
+                item if isinstance(item, StoryCandidate) else StoryCandidate.from_raw(item)
+            )
+        except ValidationError as exc:
+            source = (
+                item.get("source", "?") if isinstance(item, dict) else getattr(item, "source", "?")
+            )
+            title = (
+                item.get("title", "?") if isinstance(item, dict) else getattr(item, "title", "?")
+            )
+            logger.warning(
+                "[replace_stories] DROPPED story from filter; niche=%s source=%s "
+                "title=%r reason=%s",
+                niche_id,
+                source,
+                title[:80] if isinstance(title, str) else title,
+                _extract_validation_reason(exc),
+            )
+            dropped_count += 1
+            continue
+        validated.append(candidate)
+
+    if dropped_count:
+        logger.warning(
+            "[replace_stories] niche=%s filter dropped %d of %d kept stories on "
+            "video-invariant contract",
+            niche_id,
+            dropped_count,
+            len(incoming),
+        )
+
     context["stories"] = [s.model_dump() for s in validated]
 
 

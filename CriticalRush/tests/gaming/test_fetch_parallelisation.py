@@ -27,6 +27,8 @@ class TestConcurrentFetch:
                 "source": "steam_spike",
                 "source_url": "http://s",
                 "score": 0.8,
+                "bypass_video_id_dedup": True,
+                "bypass_reason": "steam_spike:signal_not_video",
             },
         ]
         MockTwitch.return_value.fetch.return_value = [
@@ -35,10 +37,12 @@ class TestConcurrentFetch:
                 "source": "twitch_trending",
                 "source_url": "http://t",
                 "score": 0.7,
+                "bypass_video_id_dedup": True,
+                "bypass_reason": "twitch_trending:live_channel_not_clip",
             },
         ]
         MockRSS.return_value.fetch.return_value = [
-            {"title": "RSS Story", "source": "rss", "source_url": "http://r", "score": 0.5},
+            {"title": "RSS Story", "source": "rss", "source_url": "http://r", "score": 0.5, "bypass_video_id_dedup": True, "bypass_reason": "rss:text_only_no_video"},
         ]
 
         # DedupEngine pass-through.
@@ -51,14 +55,18 @@ class TestConcurrentFetch:
                 "source": "steam_spike",
                 "source_url": "http://s",
                 "score": 0.8,
+                "bypass_video_id_dedup": True,
+                "bypass_reason": "steam_spike:signal_not_video",
             },
             {
                 "title": "Twitch Game",
                 "source": "twitch_trending",
                 "source_url": "http://t",
                 "score": 0.7,
+                "bypass_video_id_dedup": True,
+                "bypass_reason": "twitch_trending:live_channel_not_clip",
             },
-            {"title": "RSS Story", "source": "rss", "source_url": "http://r", "score": 0.5},
+            {"title": "RSS Story", "source": "rss", "source_url": "http://r", "score": 0.5, "bypass_video_id_dedup": True, "bypass_reason": "rss:text_only_no_video"},
         ]
         dedup_result.pass1_removed = 0
         dedup_result.pass2_removed = 0
@@ -94,10 +102,12 @@ class TestConcurrentFetch:
                 "source": "twitch_trending",
                 "source_url": "http://t",
                 "score": 0.7,
+                "bypass_video_id_dedup": True,
+                "bypass_reason": "twitch_trending:live_channel_not_clip",
             },
         ]
         MockRSS.return_value.fetch.return_value = [
-            {"title": "RSS Story", "source": "rss", "source_url": "http://r", "score": 0.5},
+            {"title": "RSS Story", "source": "rss", "source_url": "http://r", "score": 0.5, "bypass_video_id_dedup": True, "bypass_reason": "rss:text_only_no_video"},
         ]
 
         dedup_result = MagicMock()
@@ -107,8 +117,10 @@ class TestConcurrentFetch:
                 "source": "twitch_trending",
                 "source_url": "http://t",
                 "score": 0.7,
+                "bypass_video_id_dedup": True,
+                "bypass_reason": "twitch_trending:live_channel_not_clip",
             },
-            {"title": "RSS Story", "source": "rss", "source_url": "http://r", "score": 0.5},
+            {"title": "RSS Story", "source": "rss", "source_url": "http://r", "score": 0.5, "bypass_video_id_dedup": True, "bypass_reason": "rss:text_only_no_video"},
         ]
         dedup_result.pass1_removed = 0
         dedup_result.pass2_removed = 0
@@ -139,14 +151,14 @@ class TestConcurrentFetch:
             call_times["steam_start"] = time.monotonic()
             time.sleep(0.3)
             call_times["steam_end"] = time.monotonic()
-            return [{"title": "S", "source": "steam_spike", "source_url": "http://s", "score": 0.5}]
+            return [{"title": "S", "source": "steam_spike", "source_url": "http://s", "score": 0.5, "bypass_video_id_dedup": True, "bypass_reason": "steam_spike:signal_not_video"}]
 
         def slow_twitch():
             call_times["twitch_start"] = time.monotonic()
             time.sleep(0.3)
             call_times["twitch_end"] = time.monotonic()
             return [
-                {"title": "T", "source": "twitch_trending", "source_url": "http://t", "score": 0.5}
+                {"title": "T", "source": "twitch_trending", "source_url": "http://t", "score": 0.5, "bypass_video_id_dedup": True, "bypass_reason": "twitch_trending:live_channel_not_clip"}
             ]
 
         MockSteam.return_value.fetch.side_effect = slow_steam
@@ -159,8 +171,8 @@ class TestConcurrentFetch:
         # must too (was previously a partial shape that hid schema gaps).
         dedup_result = MagicMock()
         dedup_result.unique = [
-            {"title": "S", "source": "steam_spike", "source_url": "http://s", "score": 0.5},
-            {"title": "T", "source": "twitch_trending", "source_url": "http://t", "score": 0.5},
+            {"title": "S", "source": "steam_spike", "source_url": "http://s", "score": 0.5, "bypass_video_id_dedup": True, "bypass_reason": "steam_spike:signal_not_video"},
+            {"title": "T", "source": "twitch_trending", "source_url": "http://t", "score": 0.5, "bypass_video_id_dedup": True, "bypass_reason": "twitch_trending:live_channel_not_clip"},
         ]
         dedup_result.pass1_removed = 0
         dedup_result.pass2_removed = 0

@@ -149,6 +149,9 @@ class TestDeduplication:
         """Two stories with same title from different sources — highest wins."""
         from niches.gaming.stages.fetch_gaming_stories import FetchGamingStories
 
+        # 2026-08-10 Option C: signal-only fetchers must declare bypass
+        # (see StoryCandidate docstring). Steam spike + RSS never carry a
+        # stable video_id at emit time — a downstream stage looks up clips.
         steam_stories = [
             {
                 "title": "Elden Ring",
@@ -160,6 +163,8 @@ class TestDeduplication:
                 "steam_app_id": "1245620",
                 "igdb_game_id": None,
                 "developer": None,
+                "bypass_video_id_dedup": True,
+                "bypass_reason": "steam_spike:signal_not_video",
             }
         ]
         rss_stories = [
@@ -173,6 +178,8 @@ class TestDeduplication:
                 "steam_app_id": None,
                 "igdb_game_id": None,
                 "developer": None,
+                "bypass_video_id_dedup": True,
+                "bypass_reason": "rss:text_only_no_video",
             }
         ]
 
@@ -481,11 +488,14 @@ class TestFetchGamingStoriesMergesUpstream:
             "Palworld",
             "Baldur's Gate 3",
         ]
+        # 2026-08-10 Option C: content_pool stories mirror FetchTrendingVideos
+        # output which populates video_id from the YouTube v= parameter.
         upstream_stories = [
             {
                 "title": f"{title} viral moment",
                 "source": "content_pool",
                 "source_url": f"https://youtube.com/watch?v=clip{i:02d}",
+                "video_id": f"clip{i:02d}",
                 "score": 0.5 + (i * 0.01),
                 "published_at": _now_utc().isoformat(),
                 "summary": "Real content",
@@ -496,7 +506,9 @@ class TestFetchGamingStoriesMergesUpstream:
             for i, title in enumerate(distinct_game_titles)
         ]
 
-        # FetchGamingStories' own Twitch fetcher returns 1 chart story
+        # FetchGamingStories' own Twitch fetcher returns 1 chart story;
+        # declares bypass per Option C since Twitch trending games have
+        # no stable clip video_id.
         twitch_stories = [
             {
                 "title": "Overwatch",
@@ -508,6 +520,8 @@ class TestFetchGamingStoriesMergesUpstream:
                 "steam_app_id": None,
                 "igdb_game_id": "115",
                 "developer": None,
+                "bypass_video_id_dedup": True,
+                "bypass_reason": "twitch_trending:live_channel_not_clip",
             }
         ]
 
@@ -561,6 +575,8 @@ class TestFetchGamingStoriesMergesUpstream:
                 "steam_app_id": "1245620",
                 "igdb_game_id": None,
                 "developer": None,
+                "bypass_video_id_dedup": True,
+                "bypass_reason": "steam_spike:signal_not_video",
             }
         ]
 
@@ -593,6 +609,7 @@ class TestFetchGamingStoriesMergesUpstream:
                 "title": "Overwatch (from content_pool)",
                 "source": "content_pool",
                 "source_url": same_url,
+                "video_id": "overwatch_upstream",
                 "score": 0.4,
                 "published_at": _now_utc().isoformat(),
                 "summary": "Upstream",
@@ -612,6 +629,8 @@ class TestFetchGamingStoriesMergesUpstream:
                 "steam_app_id": None,
                 "igdb_game_id": "115",
                 "developer": None,
+                "bypass_video_id_dedup": True,
+                "bypass_reason": "twitch_trending:live_channel_not_clip",
             }
         ]
 
@@ -707,6 +726,7 @@ class TestFetchGamingStoriesUpstreamSchemaTolerance:
                 "title": "Hollow Knight speedrun WR",
                 "source": "content_pool",
                 "source_url": "https://youtube.com/watch?v=def456",
+                "video_id": "def456",
             }
         ]
         scored_twitch = [
@@ -720,6 +740,8 @@ class TestFetchGamingStoriesUpstreamSchemaTolerance:
                 "steam_app_id": None,
                 "igdb_game_id": "200",
                 "developer": None,
+                "bypass_video_id_dedup": True,
+                "bypass_reason": "twitch_trending:live_channel_not_clip",
             }
         ]
 

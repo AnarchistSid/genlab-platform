@@ -59,10 +59,13 @@ def test_story_candidate_channel_fields_survive_round_trip():
     """model_validate → model_dump preserves both channel fields."""
     from genlab_core.pipeline.models import StoryCandidate
 
+    # 2026-08-10: video_id added to satisfy Option C video-invariant
+    # (Markanimation shape IS a YouTube video, so video_id is natural).
     raw = {
         "title": "Some title",
         "source": "youtube_trending",
         "source_url": "https://www.youtube.com/watch?v=abc",
+        "video_id": "abc",
         "channel_id": "UC12qezbIDmro0C5qBEIdFWg",
         "channel_name": "Markanimation",
     }
@@ -74,7 +77,9 @@ def test_story_candidate_channel_fields_survive_round_trip():
 
 def test_story_candidate_channel_fields_default_to_none():
     """Non-YouTube fetchers can omit channel fields — validation must
-    accept the omission and default both to None."""
+    accept the omission and default both to None. video_id still
+    required (Option C invariant) — a Reddit story linking to a video
+    populates video_id from the linked post's ID."""
     from genlab_core.pipeline.models import StoryCandidate
 
     sc = StoryCandidate.from_raw(
@@ -82,6 +87,7 @@ def test_story_candidate_channel_fields_default_to_none():
             "title": "Reddit story",
             "source": "reddit_top",
             "source_url": "https://reddit.com/r/x/comments/y/",
+            "video_id": "reddit_post_id_xyz",  # 2026-08-10 invariant
         }
     )
     dumped = sc.model_dump()
