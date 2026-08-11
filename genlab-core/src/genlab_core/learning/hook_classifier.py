@@ -12,7 +12,10 @@ Model is persisted as JSON at:
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +23,61 @@ from genlab_core.learning.hook_features import build_feature_vector
 from genlab_core.learning.hook_training_data import MIN_EXAMPLES
 
 logger = logging.getLogger(__name__)
+
+# 2026-08-11 Session 1: LLM-based scorer as an alternative to the
+# XGBoost classifier. Motivated by strategist diagnostic showing
+# XGBoost Spearman=0.0 (near-random) — the 8 lexical features
+# (word_count, has_question, etc.) can't distinguish curiosity-gap
+# hooks from generic ones. LLM scoring uses semantic judgment via
+# Claude Haiku (~$0.0001 per hook). Flag-gated to preserve backward
+# compat; operator flips after verifying signal quality on staging.
+_LLM_ENABLED_ENV_VAR = "GENLAB_HOOK_CLASSIFIER_LLM_ENABLED"
+_HAIKU_MODEL = "claude-haiku-4-5-20251001"
+
+# In-process cache — same hook scored multiple times within a run
+# (across gates, ensemble votes, calibration writes) returns from
+# cache. Keyed by (niche_id, sha256(hook_text)). Small memory
+# footprint at 5 niches × ~50 unique hooks/day.
+_LLM_SCORE_CACHE: dict[tuple[str, str], float] = {}
+
+_LLM_HOOK_SCORER_PROMPT = """\
+Rate this {niche} short-form video hook on a 0.0 to 1.0 scale.
+
+Hook: "{hook_text}"
+
+Consider:
+* Curiosity gap: does it create a compelling reason to watch?
+* Specificity: concrete details vs generic templates?
+* Platform fit: appropriate for TikTok / Reels / YouTube Shorts?
+* Truthfulness: honest without over-promising?
+
+Score guidelines:
+* 0.9-1.0: viral-worthy — strong curiosity, specific, honest promise
+* 0.7-0.8: solid — would perform above niche average
+* 0.5-0.6: average — nothing wrong but nothing standout
+* 0.3-0.4: weak — generic template energy, low curiosity
+* 0.0-0.2: broken — placeholder text, LLM refusal, bare title, or
+  hook contradicting itself
+
+Respond with ONLY a decimal number 0.0-1.0. Nothing else.
+"""
+
+# Negative lookaround with BOTH digits AND `.` in the exclusion
+# class — otherwise "2.0" would match the trailing "0" (preceded by
+# ".", not a digit) and score 0.0. Accepts standalone 0, 1, 0.x,
+# 1.x, .x — nothing that's part of a larger number.
+_DECIMAL_RE = re.compile(r"(?<![\d.])([01](?:\.\d+)?|\.\d+)(?![\d.])")
+
+
+def _is_llm_enabled() -> bool:
+    """Env-flag gate for the LLM-based scorer. Default OFF so shipping
+    this code causes zero behavior change until operator opts in."""
+    return os.environ.get(_LLM_ENABLED_ENV_VAR, "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
 # Resolve model directory relative to genlab-core package root
 _PACKAGE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -53,6 +111,130 @@ try:
 except ImportError:
     np = None  # type: ignore[assignment]
     _HAS_NUMPY = False
+
+
+def _cache_key(niche_id: str, hook_text: str) -> tuple[str, str]:
+    digest = hashlib.sha256(hook_text.strip().encode("utf-8")).hexdigest()
+    return (niche_id, digest)
+
+
+def _parse_llm_score(raw: str) -> float | None:
+    """Extract a 0-1 decimal from the LLM response. Returns None on
+    unparseable output — caller falls back to the XGBoost path."""
+    if not raw:
+        return None
+    match = _DECIMAL_RE.search(raw.strip())
+    if not match:
+        return None
+    try:
+        value = float(match.group(1))
+    except (TypeError, ValueError):
+        return None
+    if value < 0.0 or value > 1.0:
+        return None
+    return value
+
+
+def _llm_score_hook_impl(hook_text: str, niche_id: str) -> float | None:
+    """Score a hook via Claude Haiku. Returns 0-1 on success, None on
+    any failure (unavailable client, network error, unparseable output).
+    Caller falls back to XGBoost on None.
+
+    Uses the same Anthropic → OpenAI fallback pattern as post_rca.py
+    so a transient Anthropic outage doesn't blackhole every gate call.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key and not openai_key:
+        return None
+
+    try:
+        import anthropic  # type: ignore[import-not-found]
+    except ImportError:
+        logger.debug("[hook_clf_llm] anthropic package not installed")
+        return None
+
+    try:
+        from genlab_core.llm.cache import with_prompt_cache
+    except ImportError:
+        def with_prompt_cache(x: str) -> str:  # type: ignore[misc]
+            return x
+
+    try:
+        from genlab_core.llm.fallback import (
+            call_openai_fallback as _call_openai_fallback,
+            cb_is_open as _cb_is_open,
+            cb_record_exhaustion as _cb_record_exhaustion,
+            cb_record_success as _cb_record_success,
+            fallback_enabled as _fallback_enabled,
+            should_fallback as _should_fallback,
+        )
+    except ImportError:
+        _call_openai_fallback = None  # type: ignore[assignment]
+        _cb_is_open = lambda: False  # noqa: E731
+        _cb_record_exhaustion = lambda: None  # noqa: E731
+        _cb_record_success = lambda: None  # noqa: E731
+        _fallback_enabled = lambda: False  # noqa: E731
+        _should_fallback = lambda _e: False  # noqa: E731
+
+    system_prompt = _LLM_HOOK_SCORER_PROMPT.format(
+        niche=niche_id.replace("_", " "),
+        hook_text=hook_text.strip().replace('"', "'"),
+    )
+    raw = ""
+
+    if _fallback_enabled() and _cb_is_open() and openai_key and _call_openai_fallback:
+        raw = _call_openai_fallback(system_prompt, "", 8, 0.0, openai_key)
+    else:
+        try:
+            client = anthropic.Anthropic(api_key=api_key)
+            response = client.messages.create(
+                model=_HAIKU_MODEL,
+                max_tokens=8,
+                temperature=0.0,
+                system=with_prompt_cache(system_prompt),
+                messages=[{"role": "user", "content": "Score:"}],
+            )
+        except Exception as anthropic_exc:
+            if (
+                _fallback_enabled()
+                and _should_fallback(anthropic_exc)
+                and openai_key
+                and _call_openai_fallback
+            ):
+                _cb_record_exhaustion()
+                try:
+                    from genlab_core.llm.errors import classify_llm_error
+
+                    logger.warning(
+                        "[hook_clf_llm] Anthropic failed (reason=%s) -> OpenAI fallback",
+                        classify_llm_error(anthropic_exc),
+                    )
+                except Exception:
+                    logger.warning(
+                        "[hook_clf_llm] Anthropic failed: %s -> OpenAI fallback",
+                        anthropic_exc,
+                    )
+                raw = _call_openai_fallback(system_prompt, "", 8, 0.0, openai_key)
+            else:
+                logger.warning(
+                    "[hook_clf_llm] Anthropic call failed no-fallback: %s",
+                    anthropic_exc,
+                )
+                return None
+        else:
+            _cb_record_success()
+            try:
+                from genlab_core.intelligence.cost_accumulator import (
+                    record_anthropic_usage,
+                )
+
+                record_anthropic_usage(_HAIKU_MODEL, response)
+            except Exception:
+                pass
+            raw = response.content[0].text.strip() if response.content else ""
+
+    return _parse_llm_score(raw)
 
 
 class HookClassifier:
@@ -138,7 +320,15 @@ class HookClassifier:
     def score_hook(self, hook_text: str) -> float:
         """Score a single hook text.
 
-        Convenience wrapper that extracts features and predicts.
+        When `GENLAB_HOOK_CLASSIFIER_LLM_ENABLED=1`, routes through the
+        Claude Haiku LLM scorer (semantic judgment on curiosity gap +
+        specificity + platform fit). Falls back to the XGBoost lexical
+        classifier if the LLM path returns None (unparseable, network
+        error, missing key).
+
+        The flag is OFF by default so shipping this code causes zero
+        behavior change; operator flips per-niche after verifying
+        signal quality on staging.
 
         Args:
             hook_text: The hook text to score.
@@ -148,6 +338,27 @@ class HookClassifier:
         """
         if not hook_text or not hook_text.strip():
             return 0.5
+
+        # LLM path (flag-gated). In-process cache keyed by
+        # (niche_id, sha256(hook)) — the same hook is scored many
+        # times per pipeline (gate, ensemble, calibration).
+        if _is_llm_enabled():
+            key = _cache_key(self.niche_id, hook_text)
+            cached = _LLM_SCORE_CACHE.get(key)
+            if cached is not None:
+                return cached
+            try:
+                llm_score = _llm_score_hook_impl(hook_text, self.niche_id)
+            except Exception as exc:
+                logger.warning(
+                    "[hook_clf] LLM path raised (%s) — falling back to XGBoost",
+                    exc,
+                )
+                llm_score = None
+            if llm_score is not None:
+                _LLM_SCORE_CACHE[key] = llm_score
+                return llm_score
+            # Fall through to XGBoost below on LLM failure.
 
         try:
             features = build_feature_vector(hook_text)
