@@ -264,23 +264,16 @@ def main() -> None:
     dsn = os.environ.get("DATABASE_URL", "postgresql://localhost/genlab")
     conn = psycopg.connect(dsn, row_factory=dict_row)
 
-    # Add unique constraint if missing (for upsert)
-    try:
-        conn.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_audience_snap_unique
-            ON audience_snapshots (niche_id, platform, metric_name, snapshot_date)
-        """)
-        conn.execute("""
-            DO $$ BEGIN
-                ALTER TABLE monetisationprogress
-                    ADD CONSTRAINT uq_monetisation_niche_plat_metric
-                    UNIQUE (niche_id, platform, metric_name);
-            EXCEPTION WHEN duplicate_table THEN NULL;
-            END $$;
-        """)
-        conn.commit()
-    except Exception:
-        conn.rollback()
+    # 2026-08-11 (DDL audit): removed runtime CREATE INDEX + ALTER TABLE.
+    # Both silent-failed on the genlab_app role (Audit A hardening).
+    # The DDLs also matched EXCEPTION-only for duplicate_table, so an
+    # insufficient_privilege error (SQLSTATE 42501) would propagate to
+    # the outer except Exception: conn.rollback() — silently rolling
+    # back the entire connection state without operator visibility.
+    #
+    # Both objects (idx_audience_snap_unique + uq_monetisation_niche_
+    # plat_metric) already exist in prod (verified 2026-08-11). Fresh
+    # installs must create them via alembic migration.
 
     total_metrics = 0
 

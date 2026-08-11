@@ -64,32 +64,23 @@ def _flag_enabled() -> bool:
     )
 
 
-def _ensure_history_table(cur) -> None:
-    """Create outbound_reply_history table if missing. Deliberately
-    kept as a raw CREATE TABLE IF NOT EXISTS in this script rather than
-    an alembic migration — this is greenfield and self-contained; the
-    schema is one flat table with 5 columns. If we ever need cross-
-    process queries, migrate then."""
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS outbound_reply_history (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            niche_id TEXT NOT NULL,
-            platform TEXT NOT NULL,
-            comment_id TEXT NOT NULL,
-            creator_channel_id TEXT NOT NULL,
-            reply_id TEXT,
-            replied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            extra JSONB DEFAULT '{}'
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_outbound_reply_comment
-            ON outbound_reply_history (platform, comment_id)
-        """
-    )
+def _ensure_history_table(cur) -> None:  # noqa: ARG001 — kept for backward compat
+    """No-op. Historically ran CREATE TABLE IF NOT EXISTS
+    outbound_reply_history, which crashed every fire since the Audit A
+    credential rotation (2026-07-30) — genlab_app role lacks CREATE
+    privilege on schema public. Discovered 2026-08-11 via DDL audit;
+    prior to fix, every outbound-reply-engine timer fire hard-crashed
+    with 'permission denied for schema public'.
+
+    Table + unique index already exist in prod. Fresh installs must
+    create them via alembic migration (or run the DDL manually as
+    the 'genlab' superuser role).
+
+    Function signature preserved for backward compat with call site
+    at line ~180 — safer than removing the call + risking a lint
+    tool flagging the removal as a refactor.
+    """
+    return
 
 
 def _already_replied_set(cur, niche_id: str, platform: str) -> set[str]:
