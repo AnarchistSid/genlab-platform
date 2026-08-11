@@ -385,11 +385,65 @@ else
 fi
 
 # ----------------------------------------------------------------------------
+# Phase 6.8 — Sync systemd unit files from source of truth
+# ----------------------------------------------------------------------------
+# 2026-08-11: unit files in deploy/systemd-phase2/ are the source of
+# truth, but nothing was copying them to /etc/systemd/system/ where
+# systemd actually reads. Discovered when the yesterday-shipped
+# SuccessExitStatus=1 SIGTERM fix on genlab-engagement-worker.service
+# never took effect — the CODE was in the repo but the DEPLOYED unit
+# was still the Jul 14 version. Verified drift across 3 units at
+# discovery time.
+#
+# This phase copies any drifted unit file (source ≠ deployed) and
+# triggers a daemon-reload if ANY were updated — even when
+# --skip-restart is set, because a daemon-reload alone doesn't
+# restart running services but ensures the next fire uses the fresh
+# unit definition.
+#
+# ONLY updates units that are ALREADY installed. Adding a new unit
+# still requires an operator to `systemctl enable` it — we don't
+# auto-install because new units carry ordering + dependency intent
+# that should be explicit.
+UNITS_UPDATED=()
+UNITS_SRC_DIR="$GENLAB/deploy/systemd-phase2"
+if [[ -d "$UNITS_SRC_DIR" ]]; then
+    for src in "$UNITS_SRC_DIR"/*.service "$UNITS_SRC_DIR"/*.timer; do
+        [[ -f "$src" ]] || continue
+        bn=$(basename "$src")
+        deployed="/etc/systemd/system/$bn"
+        # Only sync units that are already installed (don't
+        # auto-install new units — those need explicit enable).
+        [[ -f "$deployed" ]] || continue
+        if ! diff -q "$src" "$deployed" >/dev/null 2>&1; then
+            if cp "$src" "$deployed" 2>&1 | tee -a "$LOG"; then
+                UNITS_UPDATED+=("$bn")
+                log "  synced systemd unit: $bn"
+            else
+                log "WARN: failed to copy $bn — skipping"
+            fi
+        fi
+    done
+fi
+if [[ "${#UNITS_UPDATED[@]}" -gt 0 ]]; then
+    log "Systemd unit files updated: ${#UNITS_UPDATED[@]}"
+    # daemon-reload MUST fire when unit files change — even with
+    # --skip-restart, otherwise systemd's in-memory unit definitions
+    # stay stale and the next fire (whenever it happens naturally)
+    # uses the OLD definition.
+    systemctl daemon-reload 2>&1 | tee -a "$LOG"
+    log "  daemon-reload done (unit-file changes now visible to systemd)"
+fi
+
+# ----------------------------------------------------------------------------
 # Phase 7 — Restart services (unless --skip-restart)
 # ----------------------------------------------------------------------------
 if [[ "$SKIP_RESTART" -eq 1 ]]; then
     log "Skipping service restart (--skip-restart set). New code will activate on next timer fire."
 else
+    # Phase 6.8 above may have already run daemon-reload if unit files
+    # changed. Redundant reload is a no-op — always fire it here to
+    # keep the "restart phase includes daemon-reload" invariant clear.
     log "systemctl daemon-reload..."
     systemctl daemon-reload 2>&1 | tee -a "$LOG"
     # ------------------------------------------------------------------

@@ -302,3 +302,70 @@ class TestEngagementWorkerSuccessExitStatus:
             "suppresses alerts on graceful-SIGTERM exits (exit 1). Real "
             "crashes (other exit codes) still fire the alert as expected."
         )
+
+
+class TestDeployShSyncsUnitFiles:
+    """2026-08-11: Phase 6.8 syncs unit files from deploy/systemd-phase2/
+    to /etc/systemd/system/. Prior to this phase, unit file changes
+    committed to the repo NEVER TOOK EFFECT — deploy.sh copied nothing.
+    Discovered when yesterday's SuccessExitStatus=1 SIGTERM fix on
+    genlab-engagement-worker.service didn't suppress the OnFailure
+    alerts on every restart. Verified drift across 3 units at
+    discovery time.
+
+    This is the SYSTEMIC fix for the class-of-bug 'config source in
+    repo but deployment vector broken.'"""
+
+    _DEPLOY_SH = _ROOT / "scripts" / "deploy.sh"
+
+    def test_phase_6_8_present(self):
+        content = self._DEPLOY_SH.read_text()
+        assert "Phase 6.8" in content, (
+            "Phase 6.8 (sync systemd unit files) must exist. Regression: "
+            "reverting to no-sync leaves unit file changes silently "
+            "un-deployed forever."
+        )
+
+    def test_phase_6_8_uses_installed_only_gate(self):
+        """Only sync units that are ALREADY installed — don't
+        auto-install new units. New units carry ordering + dependency
+        intent that requires explicit `systemctl enable`."""
+        content = self._DEPLOY_SH.read_text()
+        assert 'Only sync units that are already installed' in content, (
+            "Phase 6.8 must document why it skips uninstalled units "
+            "(they need explicit enable). Removing the gate would "
+            "surprise the operator with auto-installed units."
+        )
+        assert '[[ -f "$deployed" ]] || continue' in content, (
+            "Phase 6.8 must skip units not already in /etc/systemd/system/. "
+            "Grep pin: '[[ -f \"$deployed\" ]] || continue'."
+        )
+
+    def test_phase_6_8_diff_before_copy(self):
+        """Only copy if source differs from deployed — avoids
+        unnecessary daemon-reloads on every deploy."""
+        content = self._DEPLOY_SH.read_text()
+        assert 'diff -q "$src" "$deployed"' in content, (
+            "Phase 6.8 must diff source vs deployed before copying. "
+            "Copying identical files wastes I/O and triggers spurious "
+            "daemon-reloads."
+        )
+
+    def test_phase_6_8_triggers_daemon_reload_on_change(self):
+        """If ANY unit file changed, daemon-reload MUST fire — even
+        with --skip-restart. Otherwise systemd's in-memory unit
+        definitions stay stale and the next fire uses the OLD unit."""
+        content = self._DEPLOY_SH.read_text()
+        # Find the block that fires daemon-reload after unit updates
+        assert 'UNITS_UPDATED[@]}" -gt 0' in content, (
+            "Phase 6.8 must check if any units were updated before "
+            "firing daemon-reload. Bare unconditional reload would be "
+            "wasteful when nothing changed."
+        )
+        # Verify the daemon-reload IS fired inside the conditional
+        assert content.count("systemctl daemon-reload") >= 2, (
+            "systemctl daemon-reload must appear twice: once in "
+            "Phase 6.8 (fires only on unit change) and once in Phase 7 "
+            "(fires before restart loop, idempotent no-op if already "
+            "reloaded)."
+        )
