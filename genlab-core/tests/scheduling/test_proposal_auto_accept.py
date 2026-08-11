@@ -44,6 +44,103 @@ class TestConfidenceGate:
         assert d.should_auto_accept is False
 
 
+class TestRiskFieldFallback:
+    """2026-08-11 Bug 3: real strategist proposals emit ``risk``
+    (low/medium/high), NOT ``confidence``. Original code required
+    proposal_confidence='high' kwarg — but the caller (auto_accept
+    script) doesn't have anywhere to pull that from because
+    strategist doesn't emit a confidence field per-proposal.
+
+    Prod discovery: 0/25 proposals in 30 days had a `confidence`
+    field, so the field-name mismatch was silently blocking every
+    auto-accept for months. Fix: fall back to proposal.risk when
+    proposal_confidence is empty. risk='low' → treat as high
+    confidence (safe to auto-accept)."""
+
+    def test_risk_low_treated_as_high_confidence(self):
+        """The load-bearing fix: a proposal with risk='low' and no
+        explicit proposal_confidence kwarg auto-accepts."""
+        from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+        d = classify_arm_add(
+            {
+                "type": "arm_add",
+                "risk": "low",  # THE fix — was ignored, now unlocks auto-accept
+                "proposed": {"arm_id": "style:anime:tier_list_reaction"},
+            },
+            existing_arm_ids=frozenset({"style:anime:bold_claim"}),
+            proposal_confidence="",  # empty — no explicit confidence
+        )
+        assert d.should_auto_accept is True, (
+            f"risk='low' proposal must auto-accept when style dimension "
+            f"already exists. Regression: reverting the fix re-introduces "
+            f"the 0/25-auto-accepts-in-30-days silent-dead state. Got: {d}"
+        )
+        assert "auto_accept" in d.reason
+
+    def test_risk_medium_stays_gated(self):
+        """risk='medium' proposals still need operator review — no
+        fallback to high confidence."""
+        from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+        d = classify_arm_add(
+            {
+                "type": "arm_add",
+                "risk": "medium",
+                "proposed": {"arm_id": "style:anime:character_debate"},
+            },
+            existing_arm_ids=frozenset({"style:anime:bold_claim"}),
+            proposal_confidence="",
+        )
+        assert d.should_auto_accept is False
+
+    def test_risk_high_stays_gated(self):
+        """risk='high' definitively rejects — never gets auto-accepted."""
+        from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+        d = classify_arm_add(
+            {
+                "type": "arm_add",
+                "risk": "high",
+                "proposed": {"arm_id": "style:gaming:weird_experiment"},
+            },
+            existing_arm_ids=frozenset({"style:gaming:comparison"}),
+            proposal_confidence="",
+        )
+        assert d.should_auto_accept is False
+
+    def test_explicit_confidence_overrides_risk_field(self):
+        """If caller passes proposal_confidence explicitly (e.g. from
+        causal_hypotheses lookup), that takes precedence over risk field.
+        Backward compat: existing callers that pass confidence='high'
+        with no risk in proposal still work."""
+        from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+        # Explicit high confidence + high risk → still auto-accept
+        # (explicit confidence signal is more trusted than risk heuristic)
+        d = classify_arm_add(
+            {
+                "type": "arm_add",
+                "risk": "high",  # would normally block
+                "proposed": {"arm_id": "style:sports:reversal"},
+            },
+            existing_arm_ids=frozenset({"style:sports:comparison"}),
+            proposal_confidence="high",  # explicit — wins
+        )
+        assert d.should_auto_accept is True
+
+    def test_no_risk_no_confidence_stays_gated(self):
+        """Defensive: proposal with neither field stays gated."""
+        from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+        d = classify_arm_add(
+            {"type": "arm_add", "proposed": {"arm_id": "style:x:y"}},
+            existing_arm_ids=frozenset({"style:x:a"}),
+            proposal_confidence="",
+        )
+        assert d.should_auto_accept is False
+
+
 class TestStyleVariantAutoAccept:
     def test_extending_existing_style_dimension_auto_accepts(self):
         from genlab_core.scheduling.proposal_auto_accept import classify_arm_add

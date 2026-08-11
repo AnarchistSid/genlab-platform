@@ -132,12 +132,28 @@ def classify_arm_add(
     if not arm_id:
         return AcceptDecision(False, "skip:missing_arm_id")
 
-    # Confidence filter — proposals with low/medium confidence stay
-    # gated regardless of shape. See auto_promote_hypotheses for the
-    # sibling filter on causal_hypotheses.
-    if proposal_confidence.strip().lower() not in _HIGH_CONFIDENCE_VALUES:
+    # Confidence/risk filter — proposals with low/medium confidence
+    # stay gated regardless of shape.
+    #
+    # 2026-08-11 Bug 3: real strategist proposals emit `risk` (low/
+    # medium/high), NOT `confidence`. Prod discovery: 0/25 proposals
+    # in 30 days had `confidence` field, so the field-name mismatch
+    # was silently blocking every auto-accept for months. Historical
+    # `proposal_confidence` kwarg is now the union of `confidence`
+    # (if caller passes it — from causal_hypotheses lookup) OR
+    # inverted `risk` field on the proposal itself: risk=low →
+    # treat as confidence=high (safe to auto-accept).
+    risk_value = str(proposal.get("risk", "")).strip().lower()
+    confidence_from_risk = "high" if risk_value == "low" else ""
+    effective_confidence = (
+        proposal_confidence.strip().lower() or confidence_from_risk
+    )
+    if effective_confidence not in _HIGH_CONFIDENCE_VALUES:
         return AcceptDecision(
-            False, f"operator_gate:confidence={proposal_confidence!r} not in _HIGH"
+            False,
+            f"operator_gate:effective_confidence={effective_confidence!r} "
+            f"(proposal_confidence={proposal_confidence!r}, risk={risk_value!r}) "
+            f"not in _HIGH",
         )
 
     # Shape-based classification.
