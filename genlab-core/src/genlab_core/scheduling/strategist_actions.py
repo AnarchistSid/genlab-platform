@@ -127,15 +127,28 @@ def apply_pending_actions(niche_id: str | None = None) -> dict[str, int]:
 
 
 def _fetch_reports_to_apply(conn, niche_id: str | None) -> list[dict[str, Any]]:
-    """Reports that have been reviewed with proposals_accepted set."""
+    """Reports whose proposals need materialising into bandit_arms.
+
+    2026-08-11 Bug 3d: was requiring reviewed_at IS NOT NULL, but the
+    proposal_auto_accept path (scripts/auto_accept_strategist_proposals.py)
+    writes proposals_accepted WITHOUT touching reviewed_at (reviewed_at
+    is operator-review-timestamp semantics). Auto-accepted reports were
+    invisible to this fetcher — apply script scanned 0 reports every
+    fire despite proposals_accepted being populated. Silent-dead again.
+
+    Fix: accept EITHER operator-reviewed OR auto-accepted reports.
+    ``extra ? 'auto_accepted_indices'`` (JSONB has-key) identifies the
+    auto-accept path.
+    """
     if niche_id:
         return conn.execute(
             """
             SELECT id, niche_id, proposals, proposals_accepted, extra
             FROM strategist_reports
             WHERE niche_id = %s
-              AND reviewed_at IS NOT NULL
               AND proposals_accepted IS NOT NULL
+              AND (reviewed_at IS NOT NULL
+                   OR extra ? 'auto_accepted_indices')
             ORDER BY run_at DESC LIMIT 50
             """,
             (niche_id,),
@@ -144,8 +157,9 @@ def _fetch_reports_to_apply(conn, niche_id: str | None) -> list[dict[str, Any]]:
         """
         SELECT id, niche_id, proposals, proposals_accepted, extra
         FROM strategist_reports
-        WHERE reviewed_at IS NOT NULL
-          AND proposals_accepted IS NOT NULL
+        WHERE proposals_accepted IS NOT NULL
+          AND (reviewed_at IS NOT NULL
+               OR extra ? 'auto_accepted_indices')
         ORDER BY run_at DESC LIMIT 200
         """,
     ).fetchall()
