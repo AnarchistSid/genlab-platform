@@ -16,6 +16,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from genlab_core.monitoring.checks.bandit_engagement import (
+    _check_artifact_freshness,
     _check_ig_view_metric_regression,
     _check_late_reward_dead,
     _check_outcome_calibration_dead,
@@ -203,6 +204,124 @@ class TestIgMetricRegressionDetection:
         assert alerts == []
 
 
+class TestArtifactFreshness:
+    """2026-08-11 addendum to Phase 6: artifact-freshness check for
+    file-based signals (counterfactual-replay writes JSON files,
+    cross-niche-transfer writes JSON files). Original Phase 6 checks
+    were DB-only — this closes the file-based blind spot that let
+    counterfactual-replay go stale 29 days before manual discovery."""
+
+    def test_stale_file_produces_alert(self, tmp_path, monkeypatch):
+        """A file older than max_age_hours → warning alert."""
+        stale_file = tmp_path / "priors.json"
+        stale_file.write_text("{}")
+        # Force mtime 10 days into the past
+        import os
+        import time
+
+        past = time.time() - 10 * 86400
+        os.utime(stale_file, (past, past))
+
+        from genlab_core.monitoring.checks import bandit_engagement
+
+        monkeypatch.setattr(
+            bandit_engagement,
+            "_ARTIFACT_FRESHNESS_MANIFEST",
+            ((str(stale_file), 24, "genlab-test-service"),),
+        )
+        alerts = _check_artifact_freshness()
+        assert len(alerts) == 1
+        assert alerts[0].check == "silent_fail_artifact_stale"
+        assert "genlab-test-service" in alerts[0].message
+        assert alerts[0].details["age_hours"] > 24
+
+    def test_fresh_file_stays_quiet(self, tmp_path, monkeypatch):
+        """A file within max_age_hours → no alert."""
+        fresh_file = tmp_path / "priors.json"
+        fresh_file.write_text("{}")
+
+        from genlab_core.monitoring.checks import bandit_engagement
+
+        monkeypatch.setattr(
+            bandit_engagement,
+            "_ARTIFACT_FRESHNESS_MANIFEST",
+            ((str(fresh_file), 168, "genlab-test-service"),),
+        )
+        assert _check_artifact_freshness() == []
+
+    def test_missing_file_with_parent_dir_alerts(self, tmp_path, monkeypatch):
+        """If the expected file is absent BUT its parent directory
+        exists (service should have written there), alert."""
+        expected = tmp_path / "priors.json"  # parent exists, file doesn't
+
+        from genlab_core.monitoring.checks import bandit_engagement
+
+        monkeypatch.setattr(
+            bandit_engagement,
+            "_ARTIFACT_FRESHNESS_MANIFEST",
+            ((str(expected), 168, "genlab-test-service"),),
+        )
+        alerts = _check_artifact_freshness()
+        assert len(alerts) == 1
+        assert alerts[0].check == "silent_fail_artifact_missing"
+
+    def test_missing_file_no_parent_dir_stays_quiet(self, tmp_path, monkeypatch):
+        """Fresh install / wrong environment case: whole path missing
+        (parent dir doesn't exist) → skip (don't alarm on test
+        environments that legitimately have no artifacts)."""
+        never_created = tmp_path / "nonexistent" / "sub" / "priors.json"
+
+        from genlab_core.monitoring.checks import bandit_engagement
+
+        monkeypatch.setattr(
+            bandit_engagement,
+            "_ARTIFACT_FRESHNESS_MANIFEST",
+            ((str(never_created), 168, "genlab-test-service"),),
+        )
+        assert _check_artifact_freshness() == []
+
+    def test_glob_pattern_uses_latest_match(self, tmp_path, monkeypatch):
+        """Glob pattern (e.g. replay-*.json) picks the MOST RECENT
+        matching file's mtime — matches counterfactual-replay's
+        timestamp-suffixed file pattern."""
+        import os
+        import time
+
+        (tmp_path / "replay-oldest.json").write_text("{}")
+        os.utime(tmp_path / "replay-oldest.json", (time.time() - 40 * 86400, time.time() - 40 * 86400))
+        (tmp_path / "replay-newer.json").write_text("{}")
+        # newer file at current time — should count as latest
+
+        pattern = str(tmp_path / "replay-*.json")
+
+        from genlab_core.monitoring.checks import bandit_engagement
+
+        monkeypatch.setattr(
+            bandit_engagement,
+            "_ARTIFACT_FRESHNESS_MANIFEST",
+            ((pattern, 24, "genlab-test-service"),),
+        )
+        # Latest file is fresh — should NOT alert despite older files present
+        assert _check_artifact_freshness() == []
+
+    def test_actual_manifest_covers_known_file_writers(self):
+        """Regression pin: the manifest MUST include cross-niche-transfer
+        and counterfactual-replay. Removing either re-introduces the
+        file-based silent-fail blind spot."""
+        from genlab_core.monitoring.checks.bandit_engagement import (
+            _ARTIFACT_FRESHNESS_MANIFEST,
+        )
+        service_names = [entry[2] for entry in _ARTIFACT_FRESHNESS_MANIFEST]
+        assert "genlab-cross-niche-transfer" in service_names, (
+            "Manifest must include cross-niche-transfer — writes weekly "
+            "priors.json used by learning/cross_niche_transfer.py."
+        )
+        assert "genlab-counterfactual-replay" in service_names, (
+            "Manifest must include counterfactual-replay — writes monthly "
+            "replay-*.json used by dashboard CounterfactualReplayCard."
+        )
+
+
 class TestOrchestrator:
     def test_no_dsn_returns_empty_gracefully(self, monkeypatch):
         """When DATABASE_URL isn't set, return [] instead of crashing.
@@ -212,10 +331,11 @@ class TestOrchestrator:
         alerts = check_learning_loops_silent_fail()
         assert alerts == []
 
-    def test_orchestrator_wires_all_five_sub_checks(self, monkeypatch):
+    def test_orchestrator_wires_all_six_sub_checks(self, monkeypatch):
         """Regression pin: if a sub-check gets accidentally removed
         from the tuple, coverage silently drops. This test names each
-        sub-check explicitly."""
+        sub-check explicitly. 6 sub-checks after 2026-08-11 artifact-
+        freshness addendum (was 5)."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://mock")
 
         import inspect
@@ -224,6 +344,7 @@ class TestOrchestrator:
 
         source = inspect.getsource(bandit_engagement.check_learning_loops_silent_fail)
         for expected_check in (
+            "_check_artifact_freshness",
             "_check_late_reward_dead",
             "_check_outcome_calibration_dead",
             "_check_strategist_apply_dead",

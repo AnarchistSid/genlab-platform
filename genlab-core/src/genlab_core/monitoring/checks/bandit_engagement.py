@@ -483,6 +483,16 @@ def check_learning_loops_silent_fail() -> list[Alert]:
     no downstream work. Each sub-check runs independently — one failing
     check doesn't mask the others."""
     alerts: list[Alert] = []
+
+    # Artifact-freshness check doesn't need DB — runs first so it fires
+    # even in test/local envs without DATABASE_URL set. Covers the
+    # file-based signal blind spot in the original Phase 6 checks
+    # (counterfactual-replay was stale 29 days before manual discovery).
+    try:
+        alerts.extend(_check_artifact_freshness())
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("[learning_loop_health] artifact-freshness failed: %s", exc)
+
     dsn = os.environ.get("DATABASE_URL", "")
     if not dsn:
         return alerts
@@ -499,6 +509,113 @@ def check_learning_loops_silent_fail() -> list[Alert]:
         except Exception as exc:  # noqa: BLE001
             logger.debug("[learning_loop_health] sub-check %s failed: %s",
                          check_fn.__name__, exc)
+    return alerts
+
+
+# ─── 2026-08-11 addendum: artifact-freshness check ───────────────────────────
+#
+# The original Phase 6 checks were DB-only. Manual sweep found 2 services
+# that write JSON files instead of DB rows and had gone silent for weeks:
+#
+#   * counterfactual-replay: file mtime Jul 14, 29 days stale despite
+#     Aug 1 timer fire (fire produced no file — root cause undiagnosable
+#     from rotated journal)
+#   * cross-niche-transfer: file mtime Aug 10 — legitimately fresh at
+#     scan time, included as a manifest entry for future protection
+#
+# Manifest: (path_or_glob, max_age_hours, service_name). max_age_hours
+# should be 1.5-2× the natural timer cadence so a single missed fire
+# doesn't alarm but 2 consecutive misses does.
+_ARTIFACT_FRESHNESS_MANIFEST: tuple[tuple[str, int, str], ...] = (
+    # Cross-niche Bayesian priors — weekly timer, 168h + 24h slack.
+    (
+        "/mnt/genlab-media/.tmp/cross-niche-transfer/priors.json",
+        192,  # 8 days
+        "genlab-cross-niche-transfer",
+    ),
+    # Counterfactual replay reports — monthly timer, 30d + 5d slack.
+    (
+        "/mnt/genlab-media/.tmp/counterfactual-replay/replay-*.json",
+        840,  # 35 days
+        "genlab-counterfactual-replay",
+    ),
+)
+
+
+def _check_artifact_freshness() -> list[Alert]:
+    """Alert when file-based signals from periodic services age past
+    their allowed staleness. Complements the DB-based silent-fail
+    checks — Phase 6 initially missed this class."""
+    import glob
+    import time
+    from pathlib import Path
+
+    alerts: list[Alert] = []
+    now = time.time()
+
+    for path_pattern, max_age_hours, service in _ARTIFACT_FRESHNESS_MANIFEST:
+        try:
+            matches = glob.glob(path_pattern)
+            if not matches:
+                # No file exists at all — service has never successfully
+                # produced output OR the file was GC'd. Alarm if the
+                # containing directory exists (indicates the service is
+                # supposed to write there). Skip if the whole path is
+                # missing (fresh install, wrong environment).
+                parent = Path(path_pattern).parent
+                # Handle glob patterns: strip the glob suffix to get the
+                # container dir.
+                if "*" in str(parent):
+                    parent = Path(str(parent).split("*")[0]).parent
+                if not parent.exists():
+                    continue
+                alerts.append(
+                    Alert(
+                        check="silent_fail_artifact_missing",
+                        severity="warning",
+                        message=(
+                            f"{service} should have written to "
+                            f"{path_pattern} but no matching file exists. "
+                            f"Service has been silent since deploy OR files "
+                            f"got GC'd. Trigger manually to test."
+                        ),
+                        details={"path_pattern": path_pattern, "service": service},
+                        auto_fix=f"sudo systemctl start {service}.service",
+                    )
+                )
+                continue
+
+            latest_mtime = max(Path(p).stat().st_mtime for p in matches)
+            age_hours = (now - latest_mtime) / 3600.0
+
+            if age_hours > max_age_hours:
+                alerts.append(
+                    Alert(
+                        check="silent_fail_artifact_stale",
+                        severity="warning",
+                        message=(
+                            f"{service} artifact stale: latest file matching "
+                            f"{path_pattern} is {int(age_hours)}h old "
+                            f"(threshold: {max_age_hours}h). Timer likely "
+                            f"ran but produced no output. Diagnosable "
+                            f"pattern: counterfactual-replay's Aug 1 fire "
+                            f"wrote nothing — journal rotation lost the "
+                            f"why. Trigger manually + inspect journal."
+                        ),
+                        details={
+                            "path_pattern": path_pattern,
+                            "service": service,
+                            "age_hours": round(age_hours, 1),
+                            "threshold_hours": max_age_hours,
+                        },
+                        auto_fix=f"sudo systemctl start {service}.service; "
+                                f"journalctl -u {service}.service --since '5 min ago'",
+                    )
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "[artifact_freshness] failed for %s: %s", path_pattern, exc
+            )
     return alerts
 
 
