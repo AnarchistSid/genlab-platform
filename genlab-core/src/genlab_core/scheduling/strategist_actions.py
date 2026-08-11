@@ -202,6 +202,21 @@ def _apply_arm_add(conn, niche_id: str, proposal: dict[str, Any]) -> bool:
     already or the proposal was malformed.
     """
     proposed = proposal.get("proposed") or {}
+    # 2026-08-11 Bug 3e: strategist writes `proposed` as a JSON-encoded
+    # STRING, not a nested dict. Same shape as proposal_auto_accept.py
+    # discovered 2026-07-24 (see classify_arm_add lines 113-127). Prior
+    # to this line, every apply attempt returned False silently because
+    # isinstance(str, dict) is False -> arm_add=0, learning loop dead.
+    # Defensive JSON parse when it looks like an object literal.
+    if isinstance(proposed, str):
+        s = proposed.strip()
+        if s.startswith("{") and s.endswith("}"):
+            try:
+                proposed = json.loads(s)
+            except (json.JSONDecodeError, ValueError):
+                return False
+        else:
+            return False
     if not isinstance(proposed, dict):
         return False
     arm_id = proposed.get("arm_id", "")
