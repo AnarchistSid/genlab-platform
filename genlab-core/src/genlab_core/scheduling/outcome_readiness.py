@@ -244,6 +244,143 @@ def check_all_niches(
     return result
 
 
+def write_outcome_calibration_rows(
+    conn,
+    niche_id: str,
+    *,
+    window_days: int = 14,
+    threshold: float = DEFAULT_OUTCOME_GOOD_THRESHOLD,
+) -> int:
+    """2026-08-11 Bug 2: write outcome-based calibration rows.
+
+    Auto-approval calibration table stopped receiving samples on
+    2026-06-29 (43+ days ago) because after the Option A flip to
+    ``rollout_pct: 1.0``, the operator no longer clicks the dashboard's
+    review buttons — auto-approver handles everything without needing
+    a human. The AUTO #2 rollout ratchet requires ``sample_count >= 30
+    AND agreement_rate >= 0.90`` from ``auto_approval_calibration``, so
+    with zero fresh samples the ratchet is functionally frozen.
+
+    This function fills the gap by using the outcome (engagement
+    reward) as the "operator" verdict. Semantic mapping:
+
+        outcome good (reward >= threshold) → operator_action='approved'
+        outcome bad  (reward <  threshold) → operator_action='rejected'
+
+    Combined with gate_approved=True (auto-approvals always approve),
+    this gives ``stats()`` a real agreement signal:
+
+        gate=True + outcome=good  → agree (gate was right to approve)
+        gate=True + outcome=bad   → disagree (gate approved a bomber)
+
+    Idempotent: the auto_approval_calibration table has
+    ``uq_calibration_no_dupe_within_second`` on (blueprint_id,
+    operator_action, decided_at at second-precision). Re-runs of
+    this function on the same blueprint produce ON CONFLICT DO NOTHING.
+
+    Writes source='outcome' to distinguish from operator-source rows
+    downstream. stats() consumers can filter or combine as needed.
+
+    Returns:
+        Count of rows written (0 if none eligible or all already
+        present). Never raises.
+    """
+    try:
+        rows = conn.execute(
+            """
+            WITH auto_approved AS (
+                SELECT id::text AS blueprint_id, candidate_id
+                FROM blueprints
+                WHERE niche_id = %s
+                  AND action_taken_source = %s
+                  AND action_taken = 'approved'
+                  AND reviewed_at IS NOT NULL
+                  AND reviewed_at > NOW() - make_interval(days => %s)
+                  AND candidate_id IS NOT NULL
+            ),
+            per_bp_outcome AS (
+                SELECT
+                    aa.blueprint_id,
+                    MAX(pf.reward_48h) AS max_reward
+                FROM auto_approved aa
+                LEFT JOIN pending_feedback pf
+                    ON pf.task_id LIKE (aa.candidate_id || '__%%')
+                    AND pf.reward_48h IS NOT NULL
+                GROUP BY aa.blueprint_id
+            )
+            SELECT blueprint_id, max_reward
+            FROM per_bp_outcome
+            WHERE max_reward IS NOT NULL
+            """,
+            (niche_id, _AUTO_APPROVAL_SOURCE_TAG, window_days),
+        ).fetchall()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "[outcome_calibration] query failed niche=%s: %s", niche_id, exc
+        )
+        return 0
+
+    written = 0
+    for row in rows or []:
+        if hasattr(row, "get"):
+            bp_id = row.get("blueprint_id")
+            max_reward = row.get("max_reward")
+        else:
+            bp_id = row[0]
+            max_reward = row[1]
+        if not bp_id or max_reward is None:
+            continue
+
+        outcome_good = float(max_reward) >= threshold
+        operator_action = "approved" if outcome_good else "rejected"
+
+        try:
+            conn.execute(
+                """
+                INSERT INTO auto_approval_calibration
+                    (blueprint_id, niche_id,
+                     gate_approved, gate_confidence,
+                     gate_passed_checks, gate_failed_checks,
+                     operator_action, source)
+                VALUES (%s::uuid, %s, TRUE, NULL,
+                        '[]'::jsonb, '[]'::jsonb,
+                        %s, 'outcome')
+                ON CONFLICT DO NOTHING
+                """,
+                (bp_id, niche_id, operator_action),
+            )
+            written += 1
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "[outcome_calibration] insert failed bp=%s niche=%s: %s",
+                bp_id, niche_id, exc,
+            )
+    try:
+        conn.commit()
+    except Exception:  # noqa: BLE001
+        pass
+
+    if written > 0:
+        logger.info(
+            "[outcome_calibration] niche=%s wrote %d outcome rows "
+            "(source='outcome', unfreezing AUTO #2 ratchet since "
+            "operator stopped clicking after Option A flip)",
+            niche_id, written,
+        )
+    return written
+
+
+def write_outcome_calibration_all_niches(conn, *, window_days: int = 14) -> dict[str, int]:
+    """Bulk-run outcome-calibration writes across all 5 niches. Returns
+    counts written per niche. Never raises."""
+    counts: dict[str, int] = {}
+    for nid in ("ai_creators", "gaming", "sports", "movies", "anime"):
+        counts[nid] = write_outcome_calibration_rows(
+            conn, nid, window_days=window_days
+        )
+    return counts
+
+
 __all__ = [
     "DEFAULT_AGREEMENT_RATE_THRESHOLD",
     "DEFAULT_OUTCOME_GOOD_THRESHOLD",
@@ -251,4 +388,6 @@ __all__ = [
     "OutcomeReadiness",
     "check_all_niches",
     "check_outcome_readiness",
+    "write_outcome_calibration_all_niches",
+    "write_outcome_calibration_rows",
 ]

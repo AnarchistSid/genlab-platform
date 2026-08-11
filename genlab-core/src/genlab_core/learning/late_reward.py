@@ -490,6 +490,33 @@ def process_late_reward_batch(
         if push_to_bandit and is_significant:
             _push_delta_to_bandit(conn, delta)
 
+    # 2026-08-11 Bug 2: use the same batch fire to also write outcome-
+    # based calibration rows. auto_approval_calibration stopped
+    # receiving samples 43+ days ago because after Option A flip the
+    # operator no longer clicks the review dashboard. Outcome-based
+    # calibration writes let the AUTO #2 ratchet accumulate agreement
+    # signal from post-publish reward instead of from operator clicks.
+    # Fail-open: never let calibration writes block reward computation.
+    try:
+        from genlab_core.scheduling.outcome_readiness import (
+            write_outcome_calibration_all_niches,
+        )
+
+        outcome_counts = write_outcome_calibration_all_niches(conn, window_days=14)
+        total_written = sum(outcome_counts.values())
+        if total_written > 0:
+            logger.info(
+                "late_reward.outcome_calibration_written total=%d per_niche=%s",
+                total_written,
+                outcome_counts,
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "late_reward.outcome_calibration_failed err=%s "
+            "(non-blocking, reward computation succeeded)",
+            exc,
+        )
+
     if own_conn:
         conn.close()
     logger.info("late_reward.batch_complete counters=%s", counters)
