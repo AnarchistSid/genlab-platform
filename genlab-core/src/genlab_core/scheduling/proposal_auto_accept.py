@@ -402,6 +402,156 @@ def classify_reward_weight(
     )
 
 
+# -----------------------------------------------------------------
+# 2026-08-11 Session 3: gate_threshold + novelty_rate classifiers
+# -----------------------------------------------------------------
+#
+# Same class-of-bug as reward_weight (Session 2): consumers exist,
+# producer emits proposals, but auto-accept has no classifier ->
+# every proposal sits in the report unaccepted indefinitely.
+#
+# Consumers:
+#   * gate_threshold -> strategy_phase.py:220-228, applied at
+#     auto_approval_gate.py:167. Default 0.3, clamped [0.05, 0.85]
+#     at consumer.
+#   * novelty_rate -> strategy_phase.py:229-236, applied by
+#     push_to_backlog force-explore rate. Default 0.25, clamped
+#     [0.0, 0.50] at consumer.
+#
+# Blast radius sizing:
+#   The classifier's delta-from-baseline bound (±0.15) is
+#   deliberately narrower than the consumer's absolute clamp so a
+#   runaway strategist can't ratchet the value across the whole
+#   allowed range via successive weekly accepts. Compare-to-BASELINE
+#   (not compare-to-current) keeps drift bounded even after N
+#   accepts.
+
+# Consumer defaults — see auto_approval_gate.py:66 and the
+# strategy_phase.py docstring at line 83.
+_GATE_THRESHOLD_BASELINE: Final[float] = 0.3
+_NOVELTY_RATE_BASELINE: Final[float] = 0.25
+
+# Max delta from baseline for auto-accept. Anything beyond this
+# is a large enough policy shift to warrant explicit operator eyes.
+_SCALAR_MAX_DELTA_FROM_BASELINE: Final[float] = 0.15
+
+
+def _classify_scalar_override(
+    proposal: dict[str, Any],
+    *,
+    expected_type: str,
+    baseline: float,
+    absolute_min: float,
+    absolute_max: float,
+    max_delta_from_baseline: float,
+    proposal_confidence: str,
+) -> AcceptDecision:
+    """Shared implementation for gate_threshold + novelty_rate.
+
+    Both are single-scalar overrides with the same shape:
+      * `proposed` is a numeric value
+      * `type` is the proposal-type string
+      * Absolute range clamp matches the consumer's clamp
+      * Delta from baseline is bounded to prevent runaway ratchets
+      * Same confidence/risk gate as arm_add + reward_weight
+    """
+    if proposal.get("type") != expected_type:
+        return AcceptDecision(False, f"skip:not_{expected_type}")
+
+    proposed = proposal.get("proposed")
+    try:
+        proposed_val = float(proposed)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return AcceptDecision(
+            False, f"skip:non_numeric_proposed ({proposed!r})"
+        )
+
+    if not absolute_min <= proposed_val <= absolute_max:
+        return AcceptDecision(
+            False,
+            f"operator_gate:proposed_out_of_range "
+            f"(proposed={proposed_val:.3f} not in "
+            f"[{absolute_min:.2f}, {absolute_max:.2f}])",
+        )
+
+    # 1e-9 epsilon so IEEE-754 rounding (e.g. 0.45 - 0.30 =
+    # 0.15000000000000002) doesn't spuriously reject boundary values.
+    delta = proposed_val - baseline
+    if abs(delta) - max_delta_from_baseline > 1e-9:
+        return AcceptDecision(
+            False,
+            f"operator_gate:delta_exceeds_baseline_bound "
+            f"(baseline={baseline:.3f} proposed={proposed_val:.3f} "
+            f"delta={delta:+.3f} max_abs={max_delta_from_baseline:.2f})",
+        )
+
+    risk_value = str(proposal.get("risk", "")).strip().lower()
+    confidence_from_risk = "high" if risk_value == "low" else ""
+    effective_confidence = (
+        proposal_confidence.strip().lower() or confidence_from_risk
+    )
+    if effective_confidence not in _HIGH_CONFIDENCE_VALUES:
+        return AcceptDecision(
+            False,
+            f"operator_gate:effective_confidence={effective_confidence!r} "
+            f"(proposal_confidence={proposal_confidence!r}, "
+            f"risk={risk_value!r}) not in _HIGH",
+        )
+
+    return AcceptDecision(
+        True,
+        f"auto_accept:{expected_type} "
+        f"(baseline={baseline:.3f} -> proposed={proposed_val:.3f})",
+    )
+
+
+def classify_gate_threshold(
+    proposal: dict[str, Any],
+    *,
+    proposal_confidence: str = "",
+) -> AcceptDecision:
+    """Classify a single gate_threshold proposal.
+
+    Consumer: auto_approval_gate at auto_approval_gate.py:167 uses
+    the override in place of `composite_score >= 0.3`. Clamps to
+    `[0.05, 0.85]`. Default baseline is 0.3.
+
+    Auto-accept range: baseline ±0.15 -> [0.15, 0.45].
+    """
+    return _classify_scalar_override(
+        proposal,
+        expected_type="gate_threshold",
+        baseline=_GATE_THRESHOLD_BASELINE,
+        absolute_min=0.05,
+        absolute_max=0.85,
+        max_delta_from_baseline=_SCALAR_MAX_DELTA_FROM_BASELINE,
+        proposal_confidence=proposal_confidence,
+    )
+
+
+def classify_novelty_rate(
+    proposal: dict[str, Any],
+    *,
+    proposal_confidence: str = "",
+) -> AcceptDecision:
+    """Classify a single novelty_rate proposal.
+
+    Consumer: push_to_backlog force-explore rate. Clamps to
+    `[0.0, 0.50]`. Default baseline is 0.25.
+
+    Auto-accept range: baseline ±0.15 -> [0.10, 0.40].
+    """
+    return _classify_scalar_override(
+        proposal,
+        expected_type="novelty_rate",
+        baseline=_NOVELTY_RATE_BASELINE,
+        absolute_min=0.0,
+        absolute_max=0.50,
+        max_delta_from_baseline=_SCALAR_MAX_DELTA_FROM_BASELINE,
+        proposal_confidence=proposal_confidence,
+    )
+
+
 def is_enabled() -> bool:
     """Public flag check. Called by the CLI runner before any
     classification loops."""
@@ -412,6 +562,8 @@ __all__ = [
     "MAX_AUTO_ACCEPTS_PER_WEEK",
     "AcceptDecision",
     "classify_arm_add",
+    "classify_gate_threshold",
+    "classify_novelty_rate",
     "classify_reward_weight",
     "is_enabled",
 ]

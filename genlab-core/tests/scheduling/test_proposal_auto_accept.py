@@ -546,3 +546,224 @@ class TestClassifyRewardWeight:
             proposal_confidence="high",
         )
         assert d.should_auto_accept is True
+
+
+class TestClassifyGateThreshold:
+    """2026-08-11 Session 3: gate_threshold classifier pins.
+
+    Consumer: auto_approval_gate.py:167 uses the override in place of
+    `composite_score >= 0.3`. Clamps to [0.05, 0.85] at
+    strategy_phase.py:225. Baseline = 0.3.
+
+    Auto-accept range: baseline ±0.15 -> [0.15, 0.45]. Wider swings
+    operator-gate.
+    """
+
+    def test_wrong_type_skips(self):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_gate_threshold,
+        )
+
+        d = classify_gate_threshold({"type": "arm_add", "proposed": 0.4})
+        assert d.should_auto_accept is False
+        assert d.reason == "skip:not_gate_threshold"
+
+    def test_within_baseline_delta_accepts(self):
+        """0.30 -> 0.40 is +0.10 delta, within ±0.15 bound. Accept."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_gate_threshold,
+        )
+
+        d = classify_gate_threshold(
+            {"type": "gate_threshold", "proposed": 0.4, "risk": "low"}
+        )
+        assert d.should_auto_accept is True
+        assert d.reason.startswith("auto_accept:gate_threshold")
+
+    def test_at_boundary_of_baseline_delta_accepts(self):
+        """0.30 -> 0.45 is +0.15 delta (exactly the max). Accept."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_gate_threshold,
+        )
+
+        d = classify_gate_threshold(
+            {"type": "gate_threshold", "proposed": 0.45, "risk": "low"}
+        )
+        assert d.should_auto_accept is True
+
+    def test_beyond_baseline_delta_gates(self):
+        """0.30 -> 0.60 is +0.30 delta, beyond bound. Operator-gate.
+
+        Note: this is well within the consumer's absolute clamp
+        [0.05, 0.85] — the classifier's tighter bound is deliberate
+        blast-radius sizing (rule #22 sibling: one accept shouldn't
+        move the gate 2x from baseline)."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_gate_threshold,
+        )
+
+        d = classify_gate_threshold(
+            {"type": "gate_threshold", "proposed": 0.60, "risk": "low"}
+        )
+        assert d.should_auto_accept is False
+        assert "delta_exceeds_baseline_bound" in d.reason
+
+    def test_out_of_consumer_range_gates(self):
+        """0.99 would silently no-op at consumer (clamped out). Better
+        to operator-gate than to accept a dead proposal."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_gate_threshold,
+        )
+
+        d = classify_gate_threshold(
+            {"type": "gate_threshold", "proposed": 0.99, "risk": "low"}
+        )
+        assert d.should_auto_accept is False
+        assert "proposed_out_of_range" in d.reason
+
+    def test_non_numeric_proposed_skips(self):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_gate_threshold,
+        )
+
+        d = classify_gate_threshold(
+            {"type": "gate_threshold", "proposed": "high", "risk": "low"}
+        )
+        assert d.should_auto_accept is False
+        assert "non_numeric_proposed" in d.reason
+
+    def test_low_confidence_gates(self):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_gate_threshold,
+        )
+
+        d = classify_gate_threshold(
+            {"type": "gate_threshold", "proposed": 0.4}  # no risk / conf
+        )
+        assert d.should_auto_accept is False
+        assert "operator_gate:effective_confidence" in d.reason
+
+
+class TestClassifyNoveltyRate:
+    """2026-08-11 Session 3: novelty_rate classifier pins.
+
+    Consumer: push_to_backlog force-explore rate. Clamps to
+    [0.0, 0.50] at strategy_phase.py:233. Baseline = 0.25.
+
+    Auto-accept range: baseline ±0.15 -> [0.10, 0.40].
+    """
+
+    def test_wrong_type_skips(self):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_novelty_rate,
+        )
+
+        d = classify_novelty_rate({"type": "arm_add", "proposed": 0.3})
+        assert d.should_auto_accept is False
+        assert d.reason == "skip:not_novelty_rate"
+
+    def test_within_baseline_delta_accepts(self):
+        """0.25 -> 0.35 is +0.10 delta. Accept."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_novelty_rate,
+        )
+
+        d = classify_novelty_rate(
+            {"type": "novelty_rate", "proposed": 0.35, "risk": "low"}
+        )
+        assert d.should_auto_accept is True
+        assert d.reason.startswith("auto_accept:novelty_rate")
+
+    def test_beyond_baseline_delta_gates(self):
+        """0.25 -> 0.50 is +0.25 delta. Operator-gate even though
+        it's exactly at the consumer's absolute max."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_novelty_rate,
+        )
+
+        d = classify_novelty_rate(
+            {"type": "novelty_rate", "proposed": 0.50, "risk": "low"}
+        )
+        assert d.should_auto_accept is False
+        assert "delta_exceeds_baseline_bound" in d.reason
+
+    def test_out_of_consumer_range_gates(self):
+        """0.75 would silently no-op at consumer. Operator-gate."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_novelty_rate,
+        )
+
+        d = classify_novelty_rate(
+            {"type": "novelty_rate", "proposed": 0.75, "risk": "low"}
+        )
+        assert d.should_auto_accept is False
+        assert "proposed_out_of_range" in d.reason
+
+    def test_zero_is_valid_range_but_beyond_delta_gates(self):
+        """0.25 -> 0.0 is -0.25 delta. Within consumer range [0.0, 0.5]
+        but beyond ±0.15 bound. Operator-gate."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_novelty_rate,
+        )
+
+        d = classify_novelty_rate(
+            {"type": "novelty_rate", "proposed": 0.0, "risk": "low"}
+        )
+        assert d.should_auto_accept is False
+        assert "delta_exceeds_baseline_bound" in d.reason
+
+    def test_baseline_delta_downward_accepts(self):
+        """0.25 -> 0.10 is -0.15 delta (exactly the max). Accept."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_novelty_rate,
+        )
+
+        d = classify_novelty_rate(
+            {"type": "novelty_rate", "proposed": 0.10, "risk": "low"}
+        )
+        assert d.should_auto_accept is True
+
+    def test_low_confidence_gates(self):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_novelty_rate,
+        )
+
+        d = classify_novelty_rate(
+            {"type": "novelty_rate", "proposed": 0.3}
+        )
+        assert d.should_auto_accept is False
+
+
+class TestScalarOverrideSharedContract:
+    """The two scalar classifiers share `_classify_scalar_override` —
+    this class pins the shared contract in one place so a refactor
+    of the shared impl catches regressions across both types."""
+
+    def test_both_reject_wrong_type(self):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_gate_threshold,
+            classify_novelty_rate,
+        )
+
+        payload = {"type": "reward_weight", "proposed": 0.3, "risk": "low"}
+        assert classify_gate_threshold(payload).should_auto_accept is False
+        assert classify_novelty_rate(payload).should_auto_accept is False
+
+    def test_both_share_the_confidence_gate(self):
+        """proposal_confidence='high' kwarg unlocks both when
+        risk/confidence fields are absent on the proposal itself."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_gate_threshold,
+            classify_novelty_rate,
+        )
+
+        gate_d = classify_gate_threshold(
+            {"type": "gate_threshold", "proposed": 0.4},
+            proposal_confidence="high",
+        )
+        novelty_d = classify_novelty_rate(
+            {"type": "novelty_rate", "proposed": 0.3},
+            proposal_confidence="high",
+        )
+        assert gate_d.should_auto_accept is True
+        assert novelty_d.should_auto_accept is True

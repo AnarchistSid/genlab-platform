@@ -161,6 +161,8 @@ def main() -> int:
         MAX_AUTO_ACCEPTS_PER_WEEK,
         AcceptDecision,
         classify_arm_add,
+        classify_gate_threshold,
+        classify_novelty_rate,
         classify_reward_weight,
         is_enabled,
     )
@@ -212,11 +214,11 @@ def main() -> int:
                 if not isinstance(proposal, dict):
                     continue
 
-                # 2026-08-11 Session 2: route on proposal type so
-                # reward_weight proposals also flow through auto-accept.
-                # arm_add still uses the existing classifier; other
-                # types (gate_threshold, novelty_rate, manual_action)
-                # remain operator-gated for now.
+                # 2026-08-11 Session 2 + 3: route on proposal type. All
+                # 4 programmatic proposal types now flow through auto-
+                # accept. Only `manual_action` remains operator-gated
+                # by design (that type is definitionally not machine-
+                # applicable — it's advice text for the operator).
                 proposal_type = proposal.get("type")
                 if proposal_type == "arm_add":
                     decision = classify_arm_add(
@@ -228,6 +230,16 @@ def main() -> int:
                     decision = classify_reward_weight(
                         proposal,
                         niche_id=niche_id,
+                        proposal_confidence=_proposal_confidence(proposal),
+                    )
+                elif proposal_type == "gate_threshold":
+                    decision = classify_gate_threshold(
+                        proposal,
+                        proposal_confidence=_proposal_confidence(proposal),
+                    )
+                elif proposal_type == "novelty_rate":
+                    decision = classify_novelty_rate(
+                        proposal,
                         proposal_confidence=_proposal_confidence(proposal),
                     )
                 else:
