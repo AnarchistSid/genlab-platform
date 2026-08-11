@@ -71,11 +71,21 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
     # ``total_interactions - (likes + comments + saves)`` = residual
     # weight ≈ shares + follows + profile visits. Falls back cleanly to
     # the legacy metric sets when total_interactions isn't accepted.
+    # 2026-08-11: Meta deprecated `plays` in Graph API v22 for IG media
+    # (returns 400 Bad Request on the primary sets that include it).
+    # `views` is the v22+ replacement — semantically the same for Reels
+    # (total view count). Order sets by likelihood of success on the
+    # majority of accounts: `views` first, then `plays` fallback for
+    # legacy accounts / older post_ids that haven't transitioned.
     for metric_set in [
+        "views,reach,likes,comments,shares,saved,total_interactions",
+        "views,reach,likes,comments,shares,saved",
         "plays,reach,likes,comments,shares,saved,total_interactions",
         "plays,reach,likes,comments,shares,saved",
-        "reach,saved,comments,shares,likes",  # without 'plays' (some posts reject it)
-        "impressions,reach",  # minimal fallback
+        "reach,saved,comments,shares,likes",  # neither plays nor views
+        "impressions,reach",  # minimal fallback (impressions itself
+                              # also deprecated per meta_metric_deprecation
+                              # but still returns for some post types)
     ]:
         warn_if_deprecated(metric_set, context="ig_basic")
         try:
@@ -96,8 +106,15 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
                 # value so a slow zero-out across many posts surfaces
                 # as a loud ERROR after `_ZERO_OUT_THRESHOLD` hits.
                 record_observation(name, val, scope="ig_basic")
-                if name == "plays":
+                if name == "views":
+                    # v22+ canonical view count for both Reels + static.
                     metrics["views"] = val
+                elif name == "plays":
+                    # Legacy field — kept as fallback for accounts that
+                    # haven't transitioned. Use setdefault so `views`
+                    # (which we prefer per Meta's deprecation notice)
+                    # wins if both are returned.
+                    metrics.setdefault("views", val)
                 elif name == "impressions":
                     metrics.setdefault("views", val)
                 elif name == "saved":
@@ -144,30 +161,57 @@ def _fetch_instagram_reels_6h(post_id: str, niche_id: str = "") -> dict:
         warn_if_deprecated,
     )
 
-    metric_set = "ig_reels_avg_watch_time,ig_reels_video_view_total_time,plays"
-    warn_if_deprecated(metric_set, context="ig_reels_6h")
-    resp = _META_SESSION.get(
-        f"{META_GRAPH_BASE_URL}/{post_id}/insights",
-        params={
-            "metric": metric_set,
-            "access_token": token,
-        },
-        timeout=15,
-    )
-    resp.raise_for_status()
-    metrics: dict[str, Any] = {}
-    for item in resp.json().get("data", []):
-        name = item.get("name", "")
-        vals = item.get("values", [{}])
-        val = vals[0].get("value", 0) if vals else 0
-        record_observation(name, val, scope="ig_reels_6h")
-        if name == "ig_reels_avg_watch_time":
-            metrics["avg_watch_time"] = val
-        elif name == "ig_reels_video_view_total_time":
-            metrics["total_watch_time"] = val
-        elif name == "plays":
-            metrics["views"] = val
-    return metrics
+    # 2026-08-11: `plays` deprecated in v22 — was causing every IG
+    # reels 6h fetch to 400 (verified via journal grep, several dozen
+    # WARN entries per hour). Cascade sets analogous to _fetch_instagram
+    # so a single API version rev doesn't kill the whole path.
+    for metric_set in [
+        "ig_reels_avg_watch_time,ig_reels_video_view_total_time,views",
+        "ig_reels_avg_watch_time,ig_reels_video_view_total_time,plays",
+        # Minimal fallback when Reels metrics + views/plays both fail
+        # (e.g. non-Reels post or unavailable measurement).
+        "ig_reels_avg_watch_time,ig_reels_video_view_total_time",
+    ]:
+        warn_if_deprecated(metric_set, context="ig_reels_6h")
+        try:
+            resp = _META_SESSION.get(
+                f"{META_GRAPH_BASE_URL}/{post_id}/insights",
+                params={
+                    "metric": metric_set,
+                    "access_token": token,
+                },
+                timeout=15,
+            )
+            if resp.status_code == 400:
+                continue  # try next set
+            resp.raise_for_status()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "[metric_collector] IG reels 6h metric-set %r failed for %s: %s",
+                metric_set, post_id, exc,
+            )
+            continue
+
+        metrics: dict[str, Any] = {}
+        for item in resp.json().get("data", []):
+            name = item.get("name", "")
+            vals = item.get("values", [{}])
+            val = vals[0].get("value", 0) if vals else 0
+            record_observation(name, val, scope="ig_reels_6h")
+            if name == "ig_reels_avg_watch_time":
+                metrics["avg_watch_time"] = val
+            elif name == "ig_reels_video_view_total_time":
+                metrics["total_watch_time"] = val
+            elif name == "views":
+                # v22+ canonical view count (post-deprecation of `plays`).
+                metrics["views"] = val
+            elif name == "plays":
+                # Legacy fallback — `views` wins via setdefault.
+                metrics.setdefault("views", val)
+        return metrics
+
+    logger.warning("[metric_collector] All IG reels 6h metric sets failed for %s", post_id)
+    return {}
 
 
 __all__ = ["_fetch_instagram", "_fetch_instagram_reels_6h"]
