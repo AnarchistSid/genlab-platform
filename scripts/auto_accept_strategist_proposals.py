@@ -52,10 +52,19 @@ def _fetch_unreviewed_reports(conn, niche_id):
     where_niche = "AND niche_id = %s" if niche_id else ""
     params = (niche_id,) if niche_id else ()
     return conn.execute(
+        # 2026-08-11 Bug 3c: proposals_accepted MUST be in SELECT list.
+        # Previously omitted -> report.get("proposals_accepted") returns
+        # None -> already_accepted = set(None or []) = set() -> every
+        # run re-accepts the same indices -> proposals_accepted grows
+        # to [1, 1, 1, ...] over time. Silent-fail: writes appear to
+        # work; dedup logic structurally broken since the fetch never
+        # provides the state needed to dedup against. Discovery
+        # 2026-08-11 during honest audit of "learning is fixed" claim.
         f"""
         SELECT id::text AS id,
                niche_id,
                proposals,
+               proposals_accepted,
                causal_hypotheses,
                extra
         FROM strategist_reports
