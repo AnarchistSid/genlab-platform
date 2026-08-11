@@ -500,28 +500,18 @@ def _persist_delta_row(conn: Any, delta: LateRewardDelta) -> None:
     """Best-effort insert into a lightweight audit table.
 
     Uses INSERT ... ON CONFLICT DO NOTHING so re-running the batch is safe.
-    Table created lazily via CREATE IF NOT EXISTS on first call — no
-    migration required. This is telemetry, not schema-critical data.
+
+    2026-08-11 (Bug 1b): removed the eager CREATE TABLE IF NOT EXISTS.
+    Prod runs as ``genlab_app`` (BYPASSRLS=false per Audit A credential-
+    rotation), which lacks CREATE privilege on schema public. Every
+    late_reward fire since the role split has thrown `permission denied
+    for schema public` on this DDL, which then poisoned the transaction
+    so the subsequent INSERT also failed — the WHOLE persist path was
+    silent-dead. Table already exists in prod (72 all-time rows); the
+    IF NOT EXISTS was defensive against fresh installs, not needed at
+    runtime. Fresh installs should create the table via a migration.
     """
     try:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS late_reward_deltas (
-              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-              blueprint_id UUID NOT NULL,
-              niche_id TEXT NOT NULL,
-              arm_id TEXT,
-              platform TEXT NOT NULL,
-              reward_48h DOUBLE PRECISION NOT NULL,
-              reward_late DOUBLE PRECISION NOT NULL,
-              window_days INTEGER NOT NULL DEFAULT 7,
-              delta DOUBLE PRECISION NOT NULL,
-              delta_pct DOUBLE PRECISION NOT NULL,
-              measured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-              CONSTRAINT unique_bp_window UNIQUE (blueprint_id, platform, window_days)
-            )
-            """
-        )
         conn.execute(
             """
             INSERT INTO late_reward_deltas (
