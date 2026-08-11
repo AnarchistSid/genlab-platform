@@ -159,7 +159,9 @@ def main() -> int:
 
     from genlab_core.scheduling.proposal_auto_accept import (
         MAX_AUTO_ACCEPTS_PER_WEEK,
+        AcceptDecision,
         classify_arm_add,
+        classify_reward_weight,
         is_enabled,
     )
 
@@ -210,11 +212,29 @@ def main() -> int:
                 if not isinstance(proposal, dict):
                     continue
 
-                decision = classify_arm_add(
-                    proposal,
-                    existing_arm_ids=existing_arms,
-                    proposal_confidence=_proposal_confidence(proposal),
-                )
+                # 2026-08-11 Session 2: route on proposal type so
+                # reward_weight proposals also flow through auto-accept.
+                # arm_add still uses the existing classifier; other
+                # types (gate_threshold, novelty_rate, manual_action)
+                # remain operator-gated for now.
+                proposal_type = proposal.get("type")
+                if proposal_type == "arm_add":
+                    decision = classify_arm_add(
+                        proposal,
+                        existing_arm_ids=existing_arms,
+                        proposal_confidence=_proposal_confidence(proposal),
+                    )
+                elif proposal_type == "reward_weight":
+                    decision = classify_reward_weight(
+                        proposal,
+                        niche_id=niche_id,
+                        proposal_confidence=_proposal_confidence(proposal),
+                    )
+                else:
+                    decision = AcceptDecision(
+                        False,
+                        f"skip:unhandled_type ({proposal_type!r})",
+                    )
                 if decision.should_auto_accept:
                     classified["auto_accept"].append(
                         (niche_id, idx, decision.reason)

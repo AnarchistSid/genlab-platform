@@ -326,3 +326,223 @@ class TestRateLimitConstant:
         )
 
         assert MAX_AUTO_ACCEPTS_PER_WEEK == 2
+
+
+class TestClassifyRewardWeight:
+    """2026-08-11 Session 2: reward_weight classifier pins.
+
+    Consumer (reward_shaper.py:295) REPLACES the weight and clamps to
+    [0.0, 5.0]. Classifier adds a relative-change gate on top so
+    auto-accept can't swing a metric wildly in one step. Same
+    confidence/risk gate as classify_arm_add.
+    """
+
+    def _high_conf(self, **kwargs) -> dict:
+        base = {"type": "reward_weight", "risk": "low"}
+        base.update(kwargs)
+        return base
+
+    def test_wrong_type_skips(self):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_reward_weight,
+        )
+
+        d = classify_reward_weight(
+            {"type": "arm_add", "target": "x", "proposed": 0.2}
+        )
+        assert d.should_auto_accept is False
+        assert d.reason == "skip:not_reward_weight"
+
+    def test_valid_retune_accepts(self):
+        """gaming/youtube/views base 0.3 -> proposed 0.4 is a 1.33x
+        retune within [0.5x, 2.0x] AND within ±0.1 delta. Should
+        auto-accept when risk=low."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_reward_weight,
+        )
+
+        d = classify_reward_weight(
+            self._high_conf(
+                target="gaming.reward_weight.youtube.views",
+                proposed=0.4,
+            ),
+            niche_id="gaming",
+        )
+        assert d.should_auto_accept is True
+        assert d.reason.startswith("auto_accept:reward_weight_retune")
+
+    def test_missing_target_skips(self):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_reward_weight,
+        )
+
+        d = classify_reward_weight(self._high_conf(proposed=0.3))
+        assert d.should_auto_accept is False
+        assert d.reason == "skip:missing_target"
+
+    def test_malformed_target_skips(self):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_reward_weight,
+        )
+
+        d = classify_reward_weight(
+            self._high_conf(target="not_a_valid_target", proposed=0.3)
+        )
+        assert d.should_auto_accept is False
+        assert d.reason.startswith("skip:malformed_target")
+
+    def test_target_niche_mismatch_skips(self):
+        """Belt-and-suspenders — if a proposal ends up in the wrong
+        niche's report, the target's niche prefix should force a
+        skip rather than mutate the wrong niche's weights."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_reward_weight,
+        )
+
+        d = classify_reward_weight(
+            self._high_conf(
+                target="gaming.reward_weight.youtube.views",
+                proposed=0.4,
+            ),
+            niche_id="sports",  # runner's niche differs from target's
+        )
+        assert d.should_auto_accept is False
+        assert "target_niche_mismatch" in d.reason
+
+    def test_unknown_platform_gates_to_operator(self):
+        """Better to operator-gate than to accept an override the
+        consumer will silently drop (unknown platform → no BASE_WEIGHTS
+        entry → the metric key check at reward_shaper.py:293 fails)."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_reward_weight,
+        )
+
+        d = classify_reward_weight(
+            self._high_conf(
+                target="gaming.reward_weight.myspace.views",
+                proposed=0.4,
+            ),
+            niche_id="gaming",
+        )
+        assert d.should_auto_accept is False
+        assert "unknown_platform" in d.reason
+
+    def test_unknown_metric_gates_to_operator(self):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_reward_weight,
+        )
+
+        d = classify_reward_weight(
+            self._high_conf(
+                target="gaming.reward_weight.youtube.does_not_exist",
+                proposed=0.4,
+            ),
+            niche_id="gaming",
+        )
+        assert d.should_auto_accept is False
+        assert "unknown_metric" in d.reason
+        assert "silently no-op" in d.reason  # actionable guidance
+
+    def test_out_of_range_proposed_gates(self):
+        """Consumer clamps to [0.0, 5.0]. Proposal at 6.0 would
+        silently no-op; better to operator-gate."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_reward_weight,
+        )
+
+        d = classify_reward_weight(
+            self._high_conf(
+                target="gaming.reward_weight.youtube.views",
+                proposed=6.0,
+            ),
+            niche_id="gaming",
+        )
+        assert d.should_auto_accept is False
+        assert "proposed_out_of_range" in d.reason
+
+    def test_wild_swing_gates(self):
+        """views base 0.3 -> proposed 4.9 is within [0.0, 5.0] but a
+        16x jump. Must operator-gate."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_reward_weight,
+        )
+
+        d = classify_reward_weight(
+            self._high_conf(
+                target="gaming.reward_weight.youtube.views",
+                proposed=4.9,
+            ),
+            niche_id="gaming",
+        )
+        assert d.should_auto_accept is False
+        assert "wild_swing" in d.reason
+
+    def test_negative_base_uses_abs_delta_floor(self):
+        """instagram.skip_rate has base=-0.05. Ratios flip sign, so
+        relative-change gate can't apply. Proposal at 0.05 is a
+        +0.10 abs delta — should accept via the abs floor."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_reward_weight,
+        )
+
+        d = classify_reward_weight(
+            self._high_conf(
+                target="ai_creators.reward_weight.instagram.skip_rate",
+                proposed=0.05,
+            ),
+            niche_id="ai_creators",
+        )
+        # ±0.10 abs delta unlocks — base -0.05 to 0.05 is 0.10 delta
+        assert d.should_auto_accept is True
+
+    def test_non_numeric_proposed_skips(self):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_reward_weight,
+        )
+
+        d = classify_reward_weight(
+            self._high_conf(
+                target="gaming.reward_weight.youtube.views",
+                proposed="not_a_number",
+            ),
+            niche_id="gaming",
+        )
+        assert d.should_auto_accept is False
+        assert "non_numeric_proposed" in d.reason
+
+    def test_low_confidence_gates_even_when_safe(self):
+        """Same rule as arm_add: without high confidence OR risk=low,
+        even a well-formed proposal is operator-gated."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_reward_weight,
+        )
+
+        d = classify_reward_weight(
+            {
+                "type": "reward_weight",
+                "target": "gaming.reward_weight.youtube.views",
+                "proposed": 0.4,
+                # no risk=low, no confidence=high
+            },
+            niche_id="gaming",
+        )
+        assert d.should_auto_accept is False
+        assert "operator_gate:effective_confidence" in d.reason
+
+    def test_explicit_high_confidence_accepts(self):
+        """proposal_confidence kwarg from causal_hypotheses lookup
+        also unlocks even without risk=low on the proposal itself."""
+        from genlab_core.scheduling.proposal_auto_accept import (
+            classify_reward_weight,
+        )
+
+        d = classify_reward_weight(
+            {
+                "type": "reward_weight",
+                "target": "gaming.reward_weight.youtube.views",
+                "proposed": 0.4,
+            },
+            niche_id="gaming",
+            proposal_confidence="high",
+        )
+        assert d.should_auto_accept is True

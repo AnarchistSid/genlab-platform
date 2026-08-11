@@ -219,6 +219,189 @@ def classify_arm_add(
     )
 
 
+# -----------------------------------------------------------------
+# 2026-08-11 Session 2: reward_weight classifier
+# -----------------------------------------------------------------
+#
+# Motivation: strategy_phase.py already consumes reward_weight
+# overrides from `strategist_reports.proposals[idx]` when idx is in
+# `proposals_accepted`. But auto-accept only classifies arm_add, so
+# reward_weight proposals sit forever unless the operator reviews
+# them (which they haven't since 2026-06-29). Result: strategist
+# emits reward_weight proposals weekly, none ever apply.
+#
+# Blast radius: reward_shaper.py:295 REPLACES the weight (not
+# multiplies) and clamps 0.0 <= value <= 5.0 at consumer time.
+# A malicious/broken value silently no-ops rather than crashing.
+# Extra safety here: bound the RELATIVE change against BASE_WEIGHTS
+# so auto-accept can't swing dm_send_rate from 0.25 -> 4.9 in one
+# click. Operator-gate the wild-swing cases.
+#
+# Target format (matches strategy_phase.py:213):
+#   "{niche_id}.reward_weight.{platform}.{metric}"
+#
+# Guards:
+#   1. type == "reward_weight"
+#   2. target parses AND platform+metric are known
+#   3. proposed value in [0.0, 5.0] absolute
+#   4. proposed value within [0.5*base, 2.0*base] relative
+#   5. same confidence/risk gate as arm_add
+
+# Max relative change from BASE weight for auto-accept. Change
+# within [0.5x, 2.0x] of base is a re-tune; outside → operator scope.
+_REWARD_WEIGHT_MAX_RELATIVE_CHANGE: Final[float] = 2.0
+_REWARD_WEIGHT_MIN_RELATIVE_CHANGE: Final[float] = 0.5
+
+# Absolute delta floor: if the base is very small (e.g. 0.05 skip_rate),
+# 0.5x-2.0x is a tiny band. Allow an absolute ±0.1 delta as a floor
+# so small-magnitude weights aren't stuck at their base value.
+_REWARD_WEIGHT_ABS_DELTA_FLOOR: Final[float] = 0.10
+
+
+def _load_base_weights() -> dict[str, dict[str, float]]:
+    """Import BASE_WEIGHTS at call time (not module load) to avoid a
+    circular import via genlab_core.learning.reward_shaper. Returns
+    an empty dict on any error — fail-closed to skip:import_failed."""
+    try:
+        from genlab_core.learning.reward_shaper import BASE_WEIGHTS
+
+        return BASE_WEIGHTS
+    except Exception:
+        return {}
+
+
+def classify_reward_weight(
+    proposal: dict[str, Any],
+    *,
+    niche_id: str = "",
+    proposal_confidence: str = "",
+) -> AcceptDecision:
+    """Classify a single reward_weight proposal.
+
+    Args:
+        proposal: Raw strategist proposal dict. Must have
+            ``type == "reward_weight"``, ``target``, and ``proposed``.
+        niche_id: The niche this proposal was emitted for. Used to
+            validate the target string's niche prefix.
+        proposal_confidence: Strategist-tagged confidence. Only
+            "high" (or risk="low" via inversion) unlocks auto-accept.
+
+    Returns:
+        AcceptDecision. Never raises.
+    """
+    if proposal.get("type") != "reward_weight":
+        return AcceptDecision(False, "skip:not_reward_weight")
+
+    target = str(proposal.get("target", "")).strip()
+    if not target:
+        return AcceptDecision(False, "skip:missing_target")
+
+    # Target format: "{niche_id}.reward_weight.{platform}.{metric}"
+    parts = target.split(".")
+    if len(parts) != 4 or parts[1] != "reward_weight":
+        return AcceptDecision(
+            False, f"skip:malformed_target ({target!r})"
+        )
+    proposal_niche, _, platform, metric = parts
+
+    if niche_id and proposal_niche != niche_id:
+        return AcceptDecision(
+            False,
+            f"skip:target_niche_mismatch "
+            f"(target_niche={proposal_niche!r} runner_niche={niche_id!r})",
+        )
+
+    # Validate platform + metric exist in BASE_WEIGHTS — otherwise
+    # the consumer at reward_shaper.py:293 silently no-ops the
+    # override. Better to operator-gate an unknown metric than to
+    # accept an override that will never take effect.
+    base_weights = _load_base_weights()
+    if not base_weights:
+        return AcceptDecision(
+            False, "skip:base_weights_unavailable"
+        )
+    platform_weights = base_weights.get(platform)
+    if not platform_weights:
+        return AcceptDecision(
+            False, f"operator_gate:unknown_platform ({platform!r})"
+        )
+    if metric not in platform_weights:
+        return AcceptDecision(
+            False,
+            f"operator_gate:unknown_metric "
+            f"(platform={platform!r} metric={metric!r}) — "
+            "override would silently no-op at consumer",
+        )
+    base = float(platform_weights[metric])
+
+    # Proposed value must be a number.
+    proposed = proposal.get("proposed")
+    try:
+        proposed_val = float(proposed)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return AcceptDecision(
+            False, f"skip:non_numeric_proposed ({proposed!r})"
+        )
+
+    # Absolute range check — matches the consumer clamp so we don't
+    # auto-accept something the consumer would silently drop.
+    if not 0.0 <= proposed_val <= 5.0:
+        return AcceptDecision(
+            False,
+            f"operator_gate:proposed_out_of_range "
+            f"(proposed={proposed_val:.3f} not in [0.0, 5.0])",
+        )
+
+    # Relative-change check — auto-accept only for re-tunes within
+    # [0.5x, 2.0x] of base, OR within ±0.10 absolute delta (floor
+    # for small-magnitude weights like skip_rate=-0.05).
+    delta = proposed_val - base
+    within_abs_floor = abs(delta) <= _REWARD_WEIGHT_ABS_DELTA_FLOOR
+    if base > 0:
+        ratio = proposed_val / base
+        within_relative = (
+            _REWARD_WEIGHT_MIN_RELATIVE_CHANGE
+            <= ratio
+            <= _REWARD_WEIGHT_MAX_RELATIVE_CHANGE
+        )
+    elif base == 0:
+        # Base is zero — any nonzero proposal is a qualitative shift.
+        # Only allow within the abs floor.
+        within_relative = False
+    else:
+        # Base is negative (skip_rate=-0.05). Ratios flip sign; use
+        # absolute delta only.
+        within_relative = False
+
+    if not (within_relative or within_abs_floor):
+        return AcceptDecision(
+            False,
+            f"operator_gate:wild_swing "
+            f"(base={base:.3f} proposed={proposed_val:.3f} "
+            f"delta={delta:+.3f})",
+        )
+
+    # Confidence/risk gate — same rule as classify_arm_add.
+    risk_value = str(proposal.get("risk", "")).strip().lower()
+    confidence_from_risk = "high" if risk_value == "low" else ""
+    effective_confidence = (
+        proposal_confidence.strip().lower() or confidence_from_risk
+    )
+    if effective_confidence not in _HIGH_CONFIDENCE_VALUES:
+        return AcceptDecision(
+            False,
+            f"operator_gate:effective_confidence={effective_confidence!r} "
+            f"(proposal_confidence={proposal_confidence!r}, risk={risk_value!r}) "
+            "not in _HIGH",
+        )
+
+    return AcceptDecision(
+        True,
+        f"auto_accept:reward_weight_retune "
+        f"(target={target}, base={base:.3f} -> proposed={proposed_val:.3f})",
+    )
+
+
 def is_enabled() -> bool:
     """Public flag check. Called by the CLI runner before any
     classification loops."""
@@ -229,5 +412,6 @@ __all__ = [
     "MAX_AUTO_ACCEPTS_PER_WEEK",
     "AcceptDecision",
     "classify_arm_add",
+    "classify_reward_weight",
     "is_enabled",
 ]
