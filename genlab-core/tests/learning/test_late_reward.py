@@ -208,6 +208,46 @@ class TestRecomputeLateReward:
             "re-introduces the sports-IG 0/16 positive-reward pathology."
         )
 
+    def test_sql_status_filter_includes_insights_windows(self):
+        """2026-08-11 Bug 1 regression pin: the SQL WHERE clause must
+        NOT filter status='SUCCESS' alone. That filter was silently
+        killing late_reward for 20 days (Jul 22 → Aug 11) because
+        posts transition SUCCESS → INSIGHTS_6H/24H/48H/168H within
+        48h of publish. By the 6-8-days-ago window that late_reward
+        scans, no row has status='SUCCESS' anymore — zero matches
+        → zero processing → the entire late-tail correction system
+        was dead.
+
+        Fix: include INSIGHTS_* variants (any status representing a
+        successfully-published post progressing through its metric-
+        collection lifecycle). Explicitly EXCLUDE REMOVED_BY_META /
+        FAILED / PARTIAL.
+
+        Regression: reverting to status='SUCCESS' alone re-introduces
+        the 20-day silent-death pattern."""
+        import inspect
+
+        source = inspect.getsource(late_reward.process_late_reward_batch)
+        # New contract: uses IN () with multiple statuses
+        assert "status IN" in source or "status in" in source, (
+            "process_late_reward_batch SQL must use `status IN (...)` "
+            "with multiple lifecycle statuses. The old `status = 'SUCCESS'` "
+            "single-value filter was the load-bearing bug that killed "
+            "late_reward for 20 days."
+        )
+        # Include INSIGHTS_168H specifically — that's what most 6-8d
+        # posts are in by the time late_reward scans them
+        assert "INSIGHTS_168H" in source or "INSIGHTS_48H" in source, (
+            "SQL must include INSIGHTS_* variants — that's where "
+            "6-8-day-old posts have transitioned to."
+        )
+
+        source_recompute = inspect.getsource(late_reward.recompute_late_reward)
+        assert "status IN" in source_recompute or "status in" in source_recompute, (
+            "recompute_late_reward SQL must use the same expanded status "
+            "filter as process_late_reward_batch. Both had the same bug."
+        )
+
     def test_no_backfill_when_baseline_exists(self):
         """Regression pin: when reward_48h has a value already, DON'T
         backfill — normal delta measurement path is authoritative."""

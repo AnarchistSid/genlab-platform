@@ -178,7 +178,14 @@ def recompute_late_reward(
             LEFT JOIN pending_feedback p
                    ON p.platform = pa.platform
                   AND p.post_id = pa.post_id
-            WHERE b.id = %s::uuid AND pa.status = 'SUCCESS'{_platform_filter_sql}
+            WHERE b.id = %s::uuid
+              AND pa.status IN (
+                  'SUCCESS',
+                  'INSIGHTS_6H',
+                  'INSIGHTS_24H',
+                  'INSIGHTS_48H',
+                  'INSIGHTS_168H'
+              ){_platform_filter_sql}
             LIMIT 1
             -- 2026-07-14 (learning-wire audit F3): switched from
             -- `LIKE '%%' || pa.post_id` to strict equality. The LIKE
@@ -429,7 +436,22 @@ def process_late_reward_batch(
             SELECT DISTINCT pa.blueprint_id::text AS blueprint_id, pa.platform
             FROM publishing_analytics pa
             WHERE pa.published_at BETWEEN %s AND %s
-              AND pa.status = 'SUCCESS'
+              -- 2026-08-11 Bug 1 fix: was `status = 'SUCCESS'` alone,
+              -- but posts transition through INSIGHTS_6H/24H/48H/168H
+              -- within 48h of publish. By the 6-8-days-ago window this
+              -- batch scans, NO row has status='SUCCESS' anymore. The
+              -- old filter matched 0 rows → late_reward silently dead
+              -- since 2026-07-22 (20-day regression, invisible because
+              -- systemd exit was 0 with no output). Excluding
+              -- REMOVED_BY_META / FAILED / PARTIAL keeps the "was
+              -- successfully published" invariant.
+              AND pa.status IN (
+                  'SUCCESS',
+                  'INSIGHTS_6H',
+                  'INSIGHTS_24H',
+                  'INSIGHTS_48H',
+                  'INSIGHTS_168H'
+              )
             """,
             (cutoff_min, cutoff_max),
         ).fetchall()
