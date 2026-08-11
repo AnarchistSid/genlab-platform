@@ -124,7 +124,7 @@ COUNTERFACTUAL REPLAY (top DR arms — offline policy eval)
 Generate your weekly report as JSON conforming to this schema (schema_version={schema_version}):
 
 {_SCHEMA_HINT}
-
+{_PROPOSED_FIELD_RULES}
 Respond with JSON only. No preamble, no markdown.
 """
 
@@ -234,6 +234,17 @@ def _format_counterfactual_replay(replay: dict[str, Any] | None) -> str:
 # Hint shown to the LLM so it knows the expected JSON shape. Kept aligned
 # with proposal_schema.py — when adding fields to Pydantic models update
 # this hint in the same commit. Pin tests verify the alignment.
+#
+# 2026-08-11: `proposed` was documented as free-text, so the LLM emitted
+# prose ("Set novelty_rate to 0.30 during BOOTSTRAP") for numeric types.
+# Downstream auto-accept classifiers (proposal_auto_accept.py) require
+# structured values (numbers for reward_weight / gate_threshold /
+# novelty_rate; dict for arm_add). Prose broke every auto-accept for
+# these 3 types — proposals sat unreviewed forever. Now the hint
+# includes TYPE-SPECIFIC examples for each proposal type + explicit
+# PROPOSED_FIELD_RULES section clarifying WHAT `proposed` must contain
+# per type + WHERE to put the justification prose (in `reasoning` and
+# `expected_impact`, NOT in `proposed`).
 _SCHEMA_HINT = json.dumps(
     {
         "detected_phase": "BOOTSTRAP | GROWTH | OPTIMIZE | MONETIZE | DEFEND",
@@ -241,15 +252,70 @@ _SCHEMA_HINT = json.dumps(
         "weekly_summary": "50+ char human-readable summary",
         "proposals": [
             {
-                "type": "phase_shift | arm_add | gate_threshold | reward_weight | novelty_rate | playbook_update | manual_action",
-                "target": "ai_creators.phase",
-                "current": "current value, or null",
-                "proposed": "proposed value, or arm definition",
-                "reasoning": "20+ chars",
-                "expected_impact": "20+ chars",
-                "risk": "low | medium | high",
-                "urgency": "ship_now | this_week | next_sprint",
-            }
+                "_comment": "See PROPOSED_FIELD_RULES below for the exact shape of `proposed` per type. The examples below show ONE proposal per type.",
+                "type": "arm_add",
+                "target": "gaming.arms",
+                "current": None,
+                "proposed": {
+                    "arm_id": "style:gaming:tier_list_reaction",
+                    "prior_alpha": 1.0,
+                    "prior_beta": 1.0,
+                },
+                "reasoning": "20+ char explanation citing evidence",
+                "expected_impact": "20+ char observable outcome",
+                "risk": "low",
+                "urgency": "this_week",
+            },
+            {
+                "type": "reward_weight",
+                "target": "ai_creators.reward_weight.instagram.saves",
+                "current": 0.25,
+                "proposed": 0.35,
+                "reasoning": "Saves correlate 0.42 with follower growth in ai_creators. Current weight underweights this signal.",
+                "expected_impact": "Bandit shifts allocation toward save-generating hooks; 168h reward increases ~10%.",
+                "risk": "low",
+                "urgency": "this_week",
+            },
+            {
+                "type": "gate_threshold",
+                "target": "sports.auto_approval",
+                "current": 0.30,
+                "proposed": 0.35,
+                "reasoning": "20+ char rationale",
+                "expected_impact": "20+ char observable outcome",
+                "risk": "low",
+                "urgency": "next_sprint",
+            },
+            {
+                "type": "novelty_rate",
+                "target": "anime.bandit.novelty_rate",
+                "current": 0.25,
+                "proposed": 0.30,
+                "reasoning": "20+ char rationale",
+                "expected_impact": "20+ char observable outcome",
+                "risk": "low",
+                "urgency": "this_week",
+            },
+            {
+                "type": "phase_shift",
+                "target": "movies.phase",
+                "current": "BOOTSTRAP",
+                "proposed": "GROWTH",
+                "reasoning": "20+ char rationale",
+                "expected_impact": "20+ char observable outcome",
+                "risk": "medium",
+                "urgency": "next_sprint",
+            },
+            {
+                "type": "manual_action",
+                "target": "operator.attention",
+                "current": None,
+                "proposed": "Free-form description of the manual action the operator must take.",
+                "reasoning": "20+ char rationale",
+                "expected_impact": "20+ char observable outcome",
+                "risk": "medium",
+                "urgency": "ship_now",
+            },
         ],
         "causal_hypotheses": [
             {
@@ -270,6 +336,36 @@ _SCHEMA_HINT = json.dumps(
     },
     indent=2,
 )
+
+# Additional guidance printed AFTER the schema hint so the LLM sees the
+# structural rules explicitly. Adding this as a separate string (rather
+# than folding it into _SCHEMA_HINT above) means the LLM sees natural-
+# language rules in addition to concrete examples.
+_PROPOSED_FIELD_RULES = """
+PROPOSED_FIELD_RULES — the `proposed` field is TYPE-SPECIFIC:
+
+* arm_add       -> object: {"arm_id": "<dim>:<niche>:<variant>", "prior_alpha": 1.0, "prior_beta": 1.0}
+                   Example arm_id shapes: "style:gaming:tier_list_reaction",
+                   "transform__hook_framing__tactical_breakdown",
+                   "hook_type:sports:comparison"
+* reward_weight -> NUMBER (float) in [0.0, 5.0]. NO prose in this field.
+                   Target format REQUIRED: "{niche}.reward_weight.{platform}.{metric}"
+                   Example: target="ai_creators.reward_weight.instagram.saves", proposed=0.35
+                   Anything else is silently ignored by the reward shaper.
+* gate_threshold -> NUMBER (float) in [0.05, 0.85]. Default 0.30. Auto-accept
+                    only for changes within 0.15 of default (i.e. [0.15, 0.45]).
+* novelty_rate  -> NUMBER (float) in [0.0, 0.50]. Default 0.25. Auto-accept
+                   only for changes within 0.15 of default (i.e. [0.10, 0.40]).
+* phase_shift   -> STRING enum: "BOOTSTRAP" | "GROWTH" | "OPTIMIZE" | "MONETIZE" | "DEFEND"
+* playbook_update -> STRING (prose describing the playbook change)
+* manual_action -> STRING (prose describing what the operator must do)
+
+CRITICAL: Put justification prose in `reasoning` and `expected_impact`,
+NEVER in `proposed`. If a numeric type gets a string `proposed`, the
+downstream classifier will reject the proposal as malformed and it
+will sit unapplied indefinitely. The `reasoning` field has no length
+cap — put all the "why" there.
+"""
 
 
 def render_messages(state: dict[str, Any]) -> list[dict[str, str]]:
