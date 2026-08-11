@@ -1112,3 +1112,157 @@ class TestDiceValue:
             "the same blueprint MUST produce the same dice decision on every pass — "
             "this is the operator's mental model of graduated rollout"
         )
+
+
+# ─── Rule #26 exit-code semantics for _cli (2026-08-11 Phase 1) ─────────────
+
+
+class TestCliExitCodeRule26:
+    """Pin: auto-approver _cli exits 0 unless the process itself crashes
+    (unhandled exception). Data-side signals (per-blueprint gate errors,
+    slot lookup failures, backlog update errors) surface via WARN log +
+    the per-niche print summary — NOT via non-zero exit that fires
+    systemd OnFailure -> spurious critical alert.
+
+    Origin: 2026-08-11 15:30 fire — anime had errors=1 (one blueprint's
+    gate evaluation raised), auto-approver exited 1, systemd fired
+    OnFailure -> pipeline_alerts critical row -> Mission Control noise.
+    Everything the auto-approver was supposed to do it DID; the exit
+    code was the noise. Same class as engagement-worker fix shipped
+    2026-08-10."""
+
+    def _stub_run_pass_result(self, errors: list[str] | None = None) -> MagicMock:
+        """Build a fake RunResult with the fields _cli reads."""
+        result = MagicMock()
+        result.candidates_examined = 2
+        result.auto_approved = []
+        result.skipped_low_confidence = []
+        result.skipped_gate_rejected = []
+        result.skipped_idempotent = []
+        result.skipped_rollout = []
+        result.skipped_compliance_block = []
+        result.errors = list(errors or [])
+        result.dry_run = False
+        result.policy_disabled = False
+        result.kill_switch_active = False
+        result.niche_paused = False
+        result.cap_reached = False
+        return result
+
+    def test_zero_errors_returns_0(self, monkeypatch, capsys):
+        """Happy path: clean run exits 0."""
+        from genlab_core.scheduling import auto_approver as m
+
+        # NICHE_DIR_NAMES is lazy-imported inside _cli — patch at the
+        # source module (pattern from tests/pipeline test suite)
+        import sys
+
+        from genlab_core.pipeline import cli as pipeline_cli
+
+        monkeypatch.setattr(pipeline_cli, "NICHE_DIR_NAMES", {"gaming": "CriticalRush"})
+        monkeypatch.setattr(sys, "argv", ["auto_approver", "--niche", "gaming"])
+        monkeypatch.setattr(
+            m, "run_pass", lambda nid, dry_run=False: self._stub_run_pass_result()
+        )
+        assert m._cli() == 0
+
+    def test_per_blueprint_errors_still_returns_0(self, monkeypatch, capsys, caplog):
+        """Rule #26: a per-blueprint gate/slot/update error is DATA-side.
+        The auto-approver ran to completion, some individual work items
+        had issues. This is NOT an infrastructure failure. Must exit 0
+        so systemd doesn't fire OnFailure. WARN log carries the signal
+        for operator visibility."""
+        import logging
+
+        from genlab_core.scheduling import auto_approver as m
+
+        import sys
+
+        from genlab_core.pipeline import cli as pipeline_cli
+
+        monkeypatch.setattr(pipeline_cli, "NICHE_DIR_NAMES", {"anime": "FrameDrift"})
+        monkeypatch.setattr(sys, "argv", ["auto_approver", "--niche", "anime"])
+        monkeypatch.setattr(
+            m,
+            "run_pass",
+            lambda nid, dry_run=False: self._stub_run_pass_result(
+                errors=["gate evaluation failed for bp-abc: KeyError('x')"]
+            ),
+        )
+        with caplog.at_level(logging.WARNING):
+            rc = m._cli()
+        assert rc == 0, (
+            "Rule #26: per-blueprint errors are data-side signals. "
+            "exit 1 fires systemd_unit_failed CRITICAL every timer fire "
+            "even when the auto-approver did its job (2026-08-11 anime "
+            "regression). Pre-fix contract was exit 1 on any errors; new "
+            "contract exits 0 with a WARN log."
+        )
+        # The signal must still surface — not silent-swallow
+        warn_records = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert warn_records, (
+            "WARN log must fire when errors > 0 so operator sees the "
+            "signal via journalctl even though the exit code is 0."
+        )
+        assert any(
+            "anime" in r.message and "error" in r.message.lower() for r in warn_records
+        ), "WARN log must name the niche + error count"
+
+    def test_multiple_niches_with_mixed_errors_still_returns_0(self, monkeypatch, caplog):
+        """Rule #26 multi-niche: even if ALL niches have errors, exit 0.
+        WARN log per niche + summary at end."""
+        import logging
+
+        from genlab_core.scheduling import auto_approver as m
+
+        import sys
+
+        from genlab_core.pipeline import cli as pipeline_cli
+
+        monkeypatch.setattr(
+            pipeline_cli,
+            "NICHE_DIR_NAMES",
+            {"anime": "FrameDrift", "gaming": "CriticalRush", "movies": "SpliceReel"},
+        )
+        monkeypatch.setattr(sys, "argv", ["auto_approver", "--niche", "all"])
+        error_counts = {"anime": 1, "gaming": 0, "movies": 2}
+        monkeypatch.setattr(
+            m,
+            "run_pass",
+            lambda nid, dry_run=False: self._stub_run_pass_result(
+                errors=[f"error {i} in {nid}" for i in range(error_counts.get(nid, 0))]
+            ),
+        )
+        with caplog.at_level(logging.WARNING):
+            rc = m._cli()
+        assert rc == 0
+        # Both niches with errors emit WARN
+        warn_msgs = " ".join(r.message for r in caplog.records if r.levelno >= logging.WARNING)
+        assert "anime" in warn_msgs
+        assert "movies" in warn_msgs
+        # gaming has 0 errors so shouldn't produce a WARN
+        # (any WARN mentioning gaming would be misleading noise)
+
+    def test_run_pass_unhandled_exception_propagates(self, monkeypatch):
+        """The exceptions to rule #26: if run_pass itself raises an
+        unhandled exception (infrastructure failure), the exception
+        should propagate so Python's default handler exits non-zero.
+        This IS a real infra failure and SHOULD alert."""
+        from genlab_core.scheduling import auto_approver as m
+
+        # NICHE_DIR_NAMES is lazy-imported inside _cli — patch at the
+        # source module (pattern from tests/pipeline test suite)
+        import sys
+
+        from genlab_core.pipeline import cli as pipeline_cli
+
+        monkeypatch.setattr(pipeline_cli, "NICHE_DIR_NAMES", {"gaming": "CriticalRush"})
+        monkeypatch.setattr(sys, "argv", ["auto_approver", "--niche", "gaming"])
+
+        def _raising(nid, dry_run=False):
+            raise RuntimeError("DB unreachable — real infra failure")
+
+        monkeypatch.setattr(m, "run_pass", _raising)
+        # Should NOT be caught + swallowed. Let it propagate.
+        with pytest.raises(RuntimeError, match="DB unreachable"):
+            m._cli()

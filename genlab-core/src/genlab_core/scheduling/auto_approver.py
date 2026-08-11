@@ -1172,7 +1172,18 @@ def _cli() -> int:
 
     niches = list(NICHE_DIR_NAMES.keys()) if args.niche == "all" else [args.niche]
 
-    exit_code = 0
+    # 2026-08-11 Phase 1 (rule #26): exit code is 0 unless the process
+    # itself crashes with an unhandled exception (which Python's default
+    # handler turns into non-zero). Per-blueprint errors (gate evaluation
+    # KeyError, slot lookup failure, backlog update timeout, etc.) are
+    # DATA-side signals — the auto-approver ran to completion and did its
+    # job for the other blueprints; the specific-blueprint errors are
+    # surfaced via the per-niche print + a WARN log. Pre-fix (exit 1 on
+    # any errors) fired systemd_unit_failed CRITICAL every fire where any
+    # niche had any error, drowning real signals in noise (2026-08-11
+    # 15:30 anime regression was the last observed hit).
+    total_errors = 0
+    niches_with_errors: list[tuple[str, int]] = []
     for niche_id in niches:
         result = run_pass(niche_id, dry_run=args.dry_run)
         # 2026-07-14: added rollout + compliance counters. Without them
@@ -1193,9 +1204,34 @@ def _cli() -> int:
             f"kill={result.kill_switch_active} paused={result.niche_paused} "
             f"cap={result.cap_reached}"
         )
-        if result.errors:
-            exit_code = 1
-    return exit_code
+        n_errs = len(result.errors)
+        if n_errs > 0:
+            total_errors += n_errs
+            niches_with_errors.append((niche_id, n_errs))
+            # WARN log makes the signal survive journal rotation via
+            # structlog + gets picked up by dashboards that filter WARN+.
+            # Rule #19: never silent-fail, always log.
+            logger.warning(
+                "[auto_approver] niche=%s had %d per-blueprint error(s) "
+                "during this run. Details in result.errors: %s. Exit code "
+                "stays 0 (rule #26: data-side signals don't fire systemd "
+                "OnFailure). Fix the underlying blueprints or the specific "
+                "gate/slot/backlog operation that raised.",
+                niche_id,
+                n_errs,
+                result.errors[:3],  # first 3 to avoid log flood
+            )
+
+    if total_errors > 0:
+        logger.warning(
+            "[auto_approver] run finished with %d total per-blueprint "
+            "errors across niches: %s. Exit 0 per rule #26; see per-niche "
+            "WARN lines above for details.",
+            total_errors,
+            ", ".join(f"{n}={c}" for n, c in niches_with_errors),
+        )
+
+    return 0
 
 
 if __name__ == "__main__":
