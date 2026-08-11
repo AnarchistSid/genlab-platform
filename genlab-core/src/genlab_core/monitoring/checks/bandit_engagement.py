@@ -456,3 +456,252 @@ def check_engagement_health() -> list[Alert]:
         # surface the broader DB issue via other checks.
         logger.debug("[engagement_health] probe failed: %s", exc)
     return alerts
+
+
+# ─── 2026-08-11 Phase 6: silent-fail detection for learning loops ────────────
+#
+# Motivating class-of-bug: services that exit successfully via systemd but
+# produce 0 downstream rows for days. Discovered manually via row-count
+# queries in this session (5 hits):
+#   * late_reward dead 20 days (status filter bug)
+#   * outcome_calibration frozen 43 days (op stopped clicking after Option A)
+#   * strategist auto-accept never wrote (5-layer chain of silent-fails)
+#   * IG plays deprecated → reels 6h fetch 400s
+#   * Bug 3d — reviewed_at gate excluding auto-accepted rows
+#
+# Each was "systemd exit 0 + zero downstream work" — invisible without
+# manual investigation. Automating these row-count assertions turns each
+# into a pipeline_alerts row the operator sees on Mission Control.
+#
+# Detection heuristic pattern: "table X should have ≥N rows in last Y
+# hours given healthy operation." Every check is DB-only (no journalctl
+# grep — that's fragile). Fail-open at outer try/except.
+
+
+def check_learning_loops_silent_fail() -> list[Alert]:
+    """Detect learning-loop services that ran successfully but produced
+    no downstream work. Each sub-check runs independently — one failing
+    check doesn't mask the others."""
+    alerts: list[Alert] = []
+    dsn = os.environ.get("DATABASE_URL", "")
+    if not dsn:
+        return alerts
+
+    for check_fn in (
+        _check_late_reward_dead,
+        _check_outcome_calibration_dead,
+        _check_strategist_apply_dead,
+        _check_reward_pipeline_flow,
+        _check_ig_view_metric_regression,
+    ):
+        try:
+            alerts.extend(check_fn(dsn))
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[learning_loop_health] sub-check %s failed: %s",
+                         check_fn.__name__, exc)
+    return alerts
+
+
+def _check_late_reward_dead(dsn: str) -> list[Alert]:
+    """late_reward should populate late_reward_deltas daily (timer at
+    09:30 UTC). Zero rows in 48h means the whole late-tail correction
+    system is silent-dead. Load-bearing for Task B backfill + bandit
+    posterior corrections."""
+    with pg_connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n, MAX(measured_at) AS latest "
+            "FROM late_reward_deltas "
+            "WHERE measured_at >= NOW() - INTERVAL '48 hours'"
+        ).fetchone()
+        n = int((row.get("n") if hasattr(row, "get") else row[0]) or 0)
+        latest = row.get("latest") if hasattr(row, "get") else row[1]
+    if n == 0:
+        return [
+            Alert(
+                check="silent_fail_late_reward",
+                severity="warning",
+                message=(
+                    f"late_reward has produced 0 late_reward_deltas rows in "
+                    f"48h (last row: {latest}). Timer likely runs OK but the "
+                    f"batch scan matches 0 blueprints — probably a status "
+                    f"filter regression like the 20-day silent-dead in Aug 2026."
+                ),
+                details={"rows_48h": n, "last_row": str(latest) if latest else None},
+                auto_fix="Investigate late_reward.process_late_reward_batch SQL; "
+                        "confirm status filter matches actual publishing_analytics "
+                        "status values (SUCCESS + INSIGHTS_* variants).",
+            )
+        ]
+    return []
+
+
+def _check_outcome_calibration_dead(dsn: str) -> list[Alert]:
+    """After Option A operator stopped clicking review, source='outcome'
+    rows should flow via write_outcome_calibration_all_niches. Zero in
+    48h means the wire is broken → AUTO #2 ratchet frozen again."""
+    with pg_connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM auto_approval_calibration "
+            "WHERE decided_at >= NOW() - INTERVAL '48 hours' "
+            "AND source = 'outcome'"
+        ).fetchone()
+        n = int((row.get("n") if hasattr(row, "get") else row[0]) or 0)
+    if n == 0:
+        return [
+            Alert(
+                check="silent_fail_outcome_calibration",
+                severity="warning",
+                message=(
+                    "auto_approval_calibration has 0 outcome-source rows in "
+                    "48h. write_outcome_calibration_all_niches is wired to "
+                    "late_reward.process_late_reward_batch — if late_reward "
+                    "is also dead, that's the root cause. Otherwise the "
+                    "outcome-write path itself regressed."
+                ),
+                details={"rows_48h": n},
+                auto_fix="Trigger late_reward manually + grep journal for "
+                        "'[outcome_calibration]' log lines to see if the "
+                        "wire fires.",
+            )
+        ]
+    return []
+
+
+def _check_strategist_apply_dead(dsn: str) -> list[Alert]:
+    """apply_strategist_actions should materialise proposals_accepted
+    entries into bandit_arms. If reports have accepted proposals but
+    no matching arm was created in 48h, the applier chain is silent-
+    dead (the Bug 3d / 3e class of bugs)."""
+    with pg_connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM strategist_reports "
+            "WHERE proposals_accepted IS NOT NULL "
+            "AND jsonb_array_length(proposals_accepted) > 0 "
+            "AND (extra->'applied_indices' IS NULL "
+            "     OR jsonb_array_length(extra->'applied_indices') < "
+            "        jsonb_array_length(proposals_accepted))"
+        ).fetchone()
+        n = int((row.get("n") if hasattr(row, "get") else row[0]) or 0)
+    if n > 0:
+        # There are unfulfilled accepted-but-not-applied proposals.
+        # Only alarm if the applier hasn't run recently — otherwise the
+        # gap will close on its own within a timer cycle.
+        return [
+            Alert(
+                check="silent_fail_strategist_apply",
+                severity="warning",
+                message=(
+                    f"{n} strategist_reports have proposals_accepted entries "
+                    f"that never got applied to bandit_arms. Chain typically "
+                    f"breaks at: (a) apply's WHERE excludes auto-accepted "
+                    f"rows, (b) _apply_arm_add can't parse 'proposed' when "
+                    f"it's a JSON string. Both were Aug 2026 discoveries."
+                ),
+                details={"unapplied_report_count": n},
+                auto_fix="sudo systemctl start genlab-strategist-apply.service; "
+                        "journalctl -u it --since '5 min ago' | grep counters",
+            )
+        ]
+    return []
+
+
+def _check_reward_pipeline_flow(dsn: str) -> list[Alert]:
+    """If publishes have happened in last 3 days but pending_feedback
+    has 0 rows with reward_48h computed in last 24h, the reward
+    pipeline is stuck (48h windows not closing, or metric_collector
+    silent-dead). Cross-check that both signals exist to avoid
+    false-alarming when publishing legitimately paused."""
+    with pg_connect(dsn) as conn:
+        recent_publishes = conn.execute(
+            "SELECT COUNT(*) AS n FROM publishing_analytics "
+            "WHERE published_at >= NOW() - INTERVAL '3 days' "
+            "AND status = 'SUCCESS'"
+        ).fetchone()
+        pub_n = int((recent_publishes.get("n") if hasattr(recent_publishes, "get")
+                     else recent_publishes[0]) or 0)
+
+        recent_rewards = conn.execute(
+            "SELECT COUNT(*) AS n FROM pending_feedback "
+            "WHERE updated_at >= NOW() - INTERVAL '24 hours' "
+            "AND reward_48h IS NOT NULL"
+        ).fetchone()
+        rwd_n = int((recent_rewards.get("n") if hasattr(recent_rewards, "get")
+                     else recent_rewards[0]) or 0)
+
+    if pub_n >= 20 and rwd_n == 0:
+        # Enough publishes to expect at least some 48h windows to close
+        # (publishes cross platforms multiply the row count).
+        return [
+            Alert(
+                check="silent_fail_reward_pipeline",
+                severity="warning",
+                message=(
+                    f"{pub_n} publishes in last 3d but 0 pending_feedback "
+                    f"rows had reward_48h computed in last 24h. Either "
+                    f"metric_collector's 48h window isn't firing OR every "
+                    f"post is early-stopped at 6h OR compute_reward is "
+                    f"returning None on all-zero metrics without backfill."
+                ),
+                details={"publishes_3d": pub_n, "rewards_computed_24h": rwd_n},
+                auto_fix="Check metric_collector journal for 48h reward "
+                        "logs; verify early_stop 6h floors aren't set too "
+                        "high per niche in metric_collector.py:875.",
+            )
+        ]
+    return []
+
+
+def _check_ig_view_metric_regression(dsn: str) -> list[Alert]:
+    """Detect the class-of-bug where Meta API deprecates a metric field
+    we depend on. Symptom: IG posts consistently return zero views
+    via the fetcher pipeline. Cross-check: publishing_analytics shows
+    the post got engagement (any-platform views > 0) but pending_feedback
+    for IG reward computed to 0. If this happens across many posts,
+    the fetcher's metric_set is broken."""
+    with pg_connect(dsn) as conn:
+        row = conn.execute(
+            """
+            WITH recent_ig AS (
+                SELECT pa.post_id, MAX(pa.views) AS ig_views
+                FROM publishing_analytics pa
+                WHERE pa.platform = 'instagram'
+                  AND pa.published_at >= NOW() - INTERVAL '10 days'
+                  AND pa.published_at <= NOW() - INTERVAL '3 days'
+                GROUP BY pa.post_id
+            )
+            SELECT COUNT(*) FILTER (WHERE ig_views = 0) AS zero_view,
+                   COUNT(*) AS total
+            FROM recent_ig
+            """
+        ).fetchone()
+        zero_view = int((row.get("zero_view") if hasattr(row, "get") else row[0]) or 0)
+        total = int((row.get("total") if hasattr(row, "get") else row[1]) or 0)
+
+    if total >= 10 and zero_view / total >= 0.5:
+        # >50% of last-week's IG posts (past their 48h+ measurement
+        # window) show views=0. That's not a natural distribution —
+        # it means the fetcher is systemically returning zeros. Likely
+        # a Meta API deprecation like `plays` in Graph v22.
+        return [
+            Alert(
+                check="silent_fail_ig_metric_regression",
+                severity="warning",
+                message=(
+                    f"{zero_view}/{total} IG posts published 3-10d ago show "
+                    f"views=0 in publishing_analytics. Distribution is "
+                    f"unnaturally skewed — likely a Meta API field "
+                    f"deprecation (e.g. `plays` in v22 → `views`) breaking "
+                    f"the metric_set cascade in _fetch_instagram."
+                ),
+                details={
+                    "zero_view_posts": zero_view,
+                    "total_posts": total,
+                    "zero_view_pct": round(100 * zero_view / total, 1),
+                },
+                auto_fix="grep journal for 'reels 6h fetch failed' + "
+                        "'[meta-metric-deprecation]'; audit metric_set list "
+                        "in genlab_core/learning/metrics/instagram.py against "
+                        "meta_metric_deprecation._DEPRECATED_METRICS.",
+            )
+        ]
+    return []

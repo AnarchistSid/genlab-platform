@@ -48,6 +48,7 @@ from genlab_core.monitoring.checks.bandit_engagement import (
     check_bandit_posterior_drift,
     check_bandit_staleness,
     check_engagement_health,
+    check_learning_loops_silent_fail,
     detect_dead_pollers,
 )
 from genlab_core.monitoring.checks.infrastructure import (
@@ -141,6 +142,12 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         # PR #516 (2026-06-24): infrastructure-half-wired audit probes
         all_alerts.extend(check_engagement_health())
         all_alerts.extend(check_content_pool_health())
+        # 2026-08-11 Phase 6: silent-fail detection for learning loops.
+        # Automates the "successful service + 0 downstream rows" pattern
+        # I've been finding manually via row-count queries this session
+        # (5 hits: late_reward, outcome_calibration, strategist_apply,
+        # IG plays deprecation, reward pipeline flow).
+        all_alerts.extend(check_learning_loops_silent_fail())
 
     return all_alerts
 
@@ -418,6 +425,7 @@ __all__ = [
     "check_foreign_host_writes",
     "check_git_drift",
     "check_git_ownership_drift",
+    "check_learning_loops_silent_fail",
     "check_llm_cost",
     "check_missing_media",
     "check_publish_failures",
