@@ -13,6 +13,7 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import logging
+import os
 import re
 import time
 from datetime import UTC, datetime, timedelta
@@ -277,6 +278,27 @@ class TwitchTrendingFetcher:
             return None
 
     def fetch(self) -> list[dict[str, Any]]:
+        # 2026-08-11 Phase 2 (Option B): env-flag gate for graduated
+        # deprecation. This fetcher emits signal-only stories (game
+        # names, no video_id, live-channel URLs) that produce the LoL
+        # x10 / Fortnite x7 / Rust x3 repeat pathology documented in
+        # class-of-bug-fetcher-schema-drift-from-downstream-contract.md.
+        # Default = enabled (behavior preserved on ship). Operator flips
+        # GENLAB_TWITCH_TRENDING_ENABLED=0 in prod after FetchTwitchClips
+        # (now video-invariant compliant post-Phase-2) proves it can
+        # sustain gaming's daily throughput floor. Once verified, this
+        # fetcher can be removed entirely.
+        _env = os.environ.get("GENLAB_TWITCH_TRENDING_ENABLED", "1").strip().lower()
+        if _env in ("0", "false", "no", "off", "n"):
+            logger.info(
+                "[Twitch] TwitchTrendingFetcher disabled via "
+                "GENLAB_TWITCH_TRENDING_ENABLED=%s — Phase 2 deprecation "
+                "path. Gaming should be relying on FetchTwitchClips + "
+                "FetchTrendingVideos + FetchRedditClips instead.",
+                _env,
+            )
+            return []
+
         if not self._client_id or not self._client_secret:
             logger.warning("[Twitch] TWITCH_CLIENT_ID not set, skipping trending fetch")
             return []

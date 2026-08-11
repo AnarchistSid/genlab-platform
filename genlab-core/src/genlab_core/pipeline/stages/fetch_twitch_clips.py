@@ -210,6 +210,14 @@ def _fetch_clips_for_game(
                     "duration": clip.get("duration", 0),
                     "source": "twitch_clips",
                     "created_at": clip.get("created_at", ""),
+                    # 2026-08-11 Phase 2: preserve API identifiers so the
+                    # emitting stage can populate video_id + channel_id
+                    # to satisfy Option C's video-invariant contract. Twitch
+                    # clip ``id`` (e.g. "AwkwardHelplessSalamander...") is
+                    # the canonical stable clip identifier; ``broadcaster_id``
+                    # is the streamer's channel ID for attribution.
+                    "id": clip.get("id", ""),
+                    "broadcaster_id": clip.get("broadcaster_id", ""),
                 }
             )
         return results
@@ -360,6 +368,17 @@ class FetchTwitchClips(FetcherStage):
                         "_trending_video": True,
                         "_clip_url": clip_url,
                         "source_mention_count": 2,
+                        # 2026-08-11 Phase 2: satisfy Option C video-invariant.
+                        # Twitch clip id (from Helix API) is the canonical
+                        # stable video identifier; broadcaster_id is the
+                        # streamer's channel id for the L1-L6 attribution
+                        # defense stack. Before this line, twitch_clips
+                        # stories were silently dropped by merge_stories'
+                        # contract check because video_id was empty +
+                        # no bypass was declared.
+                        "video_id": clip.get("id", ""),
+                        "channel_id": clip.get("broadcaster_id", ""),
+                        "channel_name": broadcaster,
                     }
                 )
 
