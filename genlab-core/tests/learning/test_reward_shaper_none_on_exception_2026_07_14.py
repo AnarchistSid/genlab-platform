@@ -77,10 +77,19 @@ class TestRewardShaperReturnsNoneOnException:
 
 
 class TestZeroEngagementStillReturnsZero:
-    """A real 0-view post SHOULD produce reward=0.0. Distinguishing
-    that from 'fetch failed' is the whole point of the fix."""
+    """A real 0-view post on a FAST-distribution platform (YT, FB, X,
+    TikTok) SHOULD produce reward=0.0. Distinguishing that from 'fetch
+    failed' is the whole point of the 2026-07-14 fix.
 
-    def test_zero_metrics_produce_zero_reward_not_none(self):
+    2026-08-11 refinement: slow-distribution platforms (Instagram,
+    Threads) get None instead — see TestSlowDistributionPlatforms
+    below. Their algorithms delay view accumulation past the 48h fetch
+    window, so 48h zero is ambiguous rather than authoritative."""
+
+    def test_zero_metrics_produce_zero_reward_not_none_on_youtube(self):
+        """Pin: YouTube (fast-distribution) still returns 0.0 for real
+        zero engagement. YT algo distributes quickly — 48h zero is
+        ground truth."""
         shaper = RewardShaper()
         result = shaper.compute_reward(
             platform="youtube",
@@ -94,9 +103,122 @@ class TestZeroEngagementStillReturnsZero:
                 "engagement_rate": 0.0,
             },
         )
-        # 0-engagement is REAL signal, not error → return 0.0 (not None)
+        # 0-engagement is REAL signal on YT → return 0.0 (not None)
         assert result is not None
-        assert result == 0.0 or 0.0 <= result < 0.01  # allow tiny epsilon from float math
+        assert result == 0.0 or 0.0 <= result < 0.01
+
+    def test_zero_metrics_produce_zero_reward_on_facebook(self):
+        """FB (fast-distribution) mirrors YT — 0.0 not None for real zero."""
+        shaper = RewardShaper()
+        result = shaper.compute_reward(
+            platform="facebook",
+            metrics={
+                "minutes_viewed": 0,
+                "shares": 0,
+                "completion_rate": 0.0,
+                "follower_gained": 0,
+                "reach": 0,
+            },
+        )
+        assert result is not None
+        assert result == 0.0 or 0.0 <= result < 0.01
+
+
+class TestSlowDistributionPlatforms:
+    """2026-08-11 (task A): Instagram + Threads have algorithms that
+    often delay view accumulation past 48h. A 48h fetch that returns
+    all-zero metrics is ambiguous — could be 'bad content' OR 'algo
+    hasn't distributed yet.' To avoid polluting bandit posteriors with
+    synthetic zeros from premature fetches, return None on all-zero
+    for these platforms (late_reward's 168h recompute is authoritative).
+
+    Origin: sports IG had 0/16 positive rewards over 30 days despite
+    some posts eventually accumulating 100+ views by 168h. The 48h
+    zero was locking the reward permanently."""
+
+    def test_instagram_all_zero_returns_none(self, caplog):
+        """IG post with all-zero metrics → None (premature fetch signal)."""
+        import logging
+
+        shaper = RewardShaper()
+        with caplog.at_level(logging.WARNING):
+            result = shaper.compute_reward(
+                platform="instagram",
+                metrics={
+                    "views": 0,
+                    "saves": 0,
+                    "shares": 0,
+                    "follower_gained": 0,
+                },
+            )
+        assert result is None, (
+            "IG with all-zero weighted metrics must return None to signal "
+            "premature-fetch. Prior behavior (0.0) polluted bandit posteriors "
+            "with synthetic zeros from algorithm-delayed distribution."
+        )
+        # WARN log must fire so operators can see the pattern
+        assert any(
+            "premature-fetch" in r.message.lower()
+            for r in caplog.records
+            if r.levelno >= logging.WARNING
+        )
+
+    def test_threads_all_zero_returns_none(self):
+        """Threads mirrors IG (both are slow-distribution platforms)."""
+        shaper = RewardShaper()
+        result = shaper.compute_reward(
+            platform="threads",
+            metrics={"views": 0, "replies": 0, "reposts": 0, "follower_gained": 0},
+        )
+        assert result is None
+
+    def test_instagram_with_any_positive_metric_returns_float(self):
+        """IG with ANY weighted metric > 0 → normal reward (not None).
+        Only ALL-zero triggers the premature-fetch semantic."""
+        shaper = RewardShaper()
+        result = shaper.compute_reward(
+            platform="instagram",
+            metrics={
+                "views": 50,  # positive!
+                "saves": 0,
+                "shares": 0,
+                "follower_gained": 0,
+            },
+        )
+        assert result is not None
+        assert isinstance(result, float)
+        assert result > 0.0
+
+    def test_instagram_empty_metrics_returns_none_via_no_weighted_positive(self):
+        """Empty metrics dict is a degenerate case — no positive weighted
+        values → None (defensively).
+
+        Note: metric_collector's `if window == "48h" and metrics:` gate
+        typically prevents compute_reward from being called with empty
+        metrics, but this test pins the defensive behavior at the shaper
+        boundary."""
+        shaper = RewardShaper()
+        result = shaper.compute_reward(platform="instagram", metrics={})
+        assert result is None
+
+    def test_youtube_all_zero_does_NOT_return_none(self):
+        """Explicit regression pin: fast-distribution platforms
+        (YT/FB/X/TikTok) preserve the 2026-07-14 policy — zero engagement
+        is REAL signal, not premature fetch."""
+        shaper = RewardShaper()
+        yt_result = shaper.compute_reward(
+            platform="youtube",
+            metrics={"views": 0, "likes": 0, "comments": 0},
+        )
+        assert yt_result is not None
+        assert yt_result == 0.0 or 0.0 <= yt_result < 0.01
+
+        fb_result = shaper.compute_reward(
+            platform="facebook",
+            metrics={"minutes_viewed": 0, "shares": 0, "reach": 0},
+        )
+        assert fb_result is not None
+        assert fb_result == 0.0 or 0.0 <= fb_result < 0.01
 
 
 class TestSourceHasNewSemantics:

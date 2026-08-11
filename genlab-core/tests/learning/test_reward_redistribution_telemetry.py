@@ -104,16 +104,21 @@ class TestBoundedness:
     Adding logging must NOT alter the reward value the bandit sees."""
 
     def test_reward_still_bounded_0_1(self, shaper):
-        # Small metrics, missing dm_send/skip
+        # Small metrics with SOME positive values, missing dm_send/skip
         r_partial = shaper.compute_reward(
             platform="instagram",
             metrics={"views": 100, "saves": 5, "shares": 2},
         )
+        # Any positive weighted metric → float reward (not None)
+        assert r_partial is not None
         assert 0.0 <= r_partial <= 1.0
 
-        # Empty metrics — reward should be 0
+        # 2026-08-11 (task A): IG is a slow-distribution platform. Empty
+        # metrics (or all-zero weighted values) → None (premature-fetch
+        # signal) rather than 0.0, so bandit posterior isn't polluted by
+        # algorithm-delayed distribution. Pre-fix contract was `== 0.0`.
         r_empty = shaper.compute_reward(platform="instagram", metrics={})
-        assert r_empty == 0.0
+        assert r_empty is None
 
 
 class TestSourcePinRegression:

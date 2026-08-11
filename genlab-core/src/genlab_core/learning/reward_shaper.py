@@ -439,6 +439,7 @@ class RewardShaper:
                 )
 
         raw_reward = 0.0
+        any_positive_weighted_value = False
         for metric, weight in weights.items():
             value = metrics.get(metric, 0.0)
             # Fix #6 of the autonomy roadmap: try percentile-relative target
@@ -446,6 +447,11 @@ class RewardShaper:
             # start (n < 20 observations) or when no fn was injected.
             normalised = self._normalise_with_percentile(metric, value, platform)
             raw_reward += weight * normalised
+            # Track whether any WEIGHTED metric had a positive value.
+            # Used below to distinguish "post really bombed" from "algo
+            # hasn't distributed yet" on slow-distribution platforms.
+            if metric in metrics and value > 0:
+                any_positive_weighted_value = True
 
         # Monetization bonus: affiliate clicks boost reward (Break 13 fix)
         affiliate_clicks = float(metrics.get("affiliate_clicks", 0))
@@ -453,11 +459,48 @@ class RewardShaper:
             # Each click is worth a 0.05 reward bonus, capped at 0.3
             monetization_bonus = min(0.3, affiliate_clicks * 0.05)
             raw_reward += monetization_bonus
+            any_positive_weighted_value = True
             logger.debug(
                 "[REWARD] Monetization bonus: %d clicks → +%.2f",
                 int(affiliate_clicks),
                 monetization_bonus,
             )
+
+        # 2026-08-11 Phase 1 (task A): slow-distribution platforms.
+        # Instagram and Threads distribute reels via algorithm that often
+        # delays view accumulation past 48h. A metric fetch at 48h that
+        # returns {views:0, likes:0, saves:0, ...} is ambiguous — could
+        # be "real bad content" OR "algo hasn't pushed yet." For sports
+        # IG specifically, 100% of 48h fetches (16 samples over 30 days)
+        # produced reward=0 despite eventual 168h views up to 110.
+        #
+        # Fix: on IG and Threads, if the fetch returned metrics BUT no
+        # weighted metric had a positive value, return None (same as
+        # exception path per 2026-07-14). Downstream skips bandit update,
+        # late_reward's 168h recompute is authoritative. Fast-distribution
+        # platforms (FB, YT, X, TikTok) retain the 0.0-is-real-signal
+        # semantic — for those, 48h zero IS the ground truth per the
+        # 2026-07-14 pin test.
+        _SLOW_DISTRIBUTION_PLATFORMS = frozenset({"instagram", "threads"})
+        # Also treat empty-metrics as premature-fetch on these platforms
+        # (same as all-zero — no evidence to compute from). Fast-distribution
+        # platforms hit this via the upstream `if metrics:` gate at
+        # metric_collector.py:966 which prevents compute_reward from being
+        # called with an empty dict at all — so the empty-metrics branch
+        # only fires from test paths or unusual call sites.
+        if (
+            platform in _SLOW_DISTRIBUTION_PLATFORMS
+            and not any_positive_weighted_value
+        ):
+            logger.warning(
+                "[REWARD] %s premature-fetch signal: metrics returned but "
+                "no weighted-metric value > 0. Returning None instead of "
+                "0.0 to avoid polluting bandit posterior with synthetic "
+                "zeros from algorithm-delayed distribution. Late_reward "
+                "168h path is authoritative for this post.",
+                platform,
+            )
+            return None
 
         return max(0.0, min(1.0, raw_reward))
 
