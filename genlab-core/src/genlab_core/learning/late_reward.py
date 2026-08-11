@@ -211,12 +211,14 @@ def recompute_late_reward(
     niche_id = row.get("niche_id") if hasattr(row, "get") else row[1]
     arm_id = row.get("arm_id") if hasattr(row, "get") else row[2]
     reward_48h = row.get("reward_48h") if hasattr(row, "get") else row[6]
-    if reward_48h is None:
-        # No baseline to compare against — this blueprint never got
-        # a 48h reward window processed. Nothing meaningful to measure.
-        if own_conn:
-            conn.close()
-        return None
+    # 2026-08-11 Task B: reward_48h may be NULL because Task A returned
+    # None (premature-fetch signal on IG/Threads all-zero metrics). Rather
+    # than skipping such blueprints entirely, use the 168h late reward as
+    # the FIRST authoritative reward: backfill it into pending_feedback
+    # so the bandit posterior picks it up on next backfill cycle. This
+    # closes the "IG delay bias" leak — sports IG posts that eventually
+    # accumulate views now train the bandit with correct data.
+    reward_48h_was_null = reward_48h is None
 
     # Fetch late-window metrics (injectable for tests)
     if fetch_platform_metrics_fn is None:
@@ -286,6 +288,53 @@ def recompute_late_reward(
         )
         if own_conn:
             conn.close()
+        return None
+
+    # 2026-08-11 Task B: backfill path — reward_48h was NULL (from
+    # Task A's premature-fetch signal), and we now have a real
+    # reward_late from 168h. Write it as the first authoritative
+    # reward_48h for this blueprint/platform so the standard bandit
+    # backfill script (backfill_bandit_from_pending_feedback.py) picks
+    # it up on next fire. No delta to record (nothing to compare
+    # against), so return None here after the write.
+    if reward_48h_was_null:
+        try:
+            conn.execute(
+                """
+                UPDATE pending_feedback
+                SET reward_48h = %s,
+                    extra = COALESCE(extra, '{}'::jsonb) || jsonb_build_object(
+                        'reward_backfilled_from_168h', now()::text,
+                        'reward_backfilled_reason', 'task_b_premature_fetch_recovery'
+                    )
+                WHERE post_id = %s
+                  AND platform = %s
+                  AND reward_48h IS NULL
+                """,
+                (float(reward_late), platform_post_id, platform),
+            )
+            conn.commit()
+            logger.info(
+                "late_reward.backfilled bp=%s platform=%s reward_late=%.3f "
+                "— no prior 48h reward (Task A premature-fetch recovery); "
+                "reward_late written as authoritative reward_48h for bandit "
+                "backfill",
+                blueprint_id,
+                platform,
+                reward_late,
+            )
+        except Exception as exc:  # noqa: BLE001 — fail-open
+            logger.warning(
+                "late_reward.backfill_failed bp=%s platform=%s err=%s",
+                blueprint_id,
+                platform,
+                exc,
+            )
+        if own_conn:
+            conn.close()
+        # Return None — no LateRewardDelta to record (we don't have a
+        # 48h baseline to measure delta against; the write above IS the
+        # signal we care about).
         return None
 
     delta = float(reward_late) - float(reward_48h)

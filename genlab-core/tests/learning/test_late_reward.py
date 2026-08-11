@@ -127,7 +127,10 @@ class TestRecomputeLateReward:
         )
         assert result is None
 
-    def test_returns_none_when_no_baseline(self):
+    def test_returns_none_when_no_baseline_and_late_fetch_empty(self):
+        """No baseline + empty late metrics → still None (no signal to
+        backfill from). Task B backfill only fires when reward_late is
+        computable."""
         conn = self._mock_conn(
             row={
                 "id": "abc",
@@ -143,9 +146,105 @@ class TestRecomputeLateReward:
             "abc",
             conn=conn,
             shaper=MagicMock(),
-            fetch_platform_metrics_fn=lambda *a, **k: {"views": 100},
+            fetch_platform_metrics_fn=lambda *a, **k: {},  # empty metrics
         )
         assert result is None
+
+    def test_backfill_fires_when_no_baseline_and_late_reward_available(self, caplog):
+        """2026-08-11 Task B: reward_48h was NULL (from Task A premature-
+        fetch on IG/Threads). Now that 168h has real data, backfill
+        reward_late as the first authoritative reward_48h so the bandit
+        posterior picks it up on next backfill cycle.
+
+        Regression pin: if a future refactor removes the backfill path,
+        sports IG returns to the 0/16 positive rewards pathology."""
+        import logging
+
+        conn = self._mock_conn(
+            row={
+                "id": "abc",
+                "niche_id": "sports",
+                "arm_id": "hour:12:instagram:sports",
+                "platform": "instagram",
+                "platform_post_id": "instagram:post123",
+                "published_at": None,
+                "reward_48h": None,  # Task A left this NULL
+            }
+        )
+        shaper = MagicMock()
+        shaper.compute_reward.return_value = 0.42  # computed from 168h real data
+
+        with caplog.at_level(logging.INFO):
+            result = late_reward.recompute_late_reward(
+                "abc",
+                conn=conn,
+                shaper=shaper,
+                fetch_platform_metrics_fn=lambda *a, **k: {"views": 500, "likes": 10},
+            )
+
+        # Return is None (no delta to record, since no baseline exists)
+        assert result is None, (
+            "backfill path returns None (no delta measurement to record)"
+        )
+
+        # INFO log confirms the backfill happened
+        assert any(
+            "late_reward.backfilled" in r.message
+            and "premature-fetch recovery" in r.message
+            for r in caplog.records
+        ), (
+            "Task B must emit late_reward.backfilled INFO log so operators "
+            "can grep for the recovery path in journalctl."
+        )
+
+        # Conn.execute was called with an UPDATE — the backfill SQL fired
+        update_calls = [
+            call for call in conn.execute.call_args_list
+            if "UPDATE pending_feedback" in str(call).replace("\\n", " ")
+        ]
+        assert update_calls, (
+            "Task B backfill must execute UPDATE pending_feedback SET "
+            "reward_48h=<reward_late>. Regression: reverting this path "
+            "re-introduces the sports-IG 0/16 positive-reward pathology."
+        )
+
+    def test_no_backfill_when_baseline_exists(self):
+        """Regression pin: when reward_48h has a value already, DON'T
+        backfill — normal delta measurement path is authoritative."""
+        conn = self._mock_conn(
+            row={
+                "id": "abc",
+                "niche_id": "gaming",
+                "arm_id": "style:x",
+                "platform": "instagram",
+                "platform_post_id": "post123",
+                "published_at": None,
+                "reward_48h": 0.15,  # has baseline
+            }
+        )
+        shaper = MagicMock()
+        shaper.compute_reward.return_value = 0.30
+
+        result = late_reward.recompute_late_reward(
+            "abc",
+            conn=conn,
+            shaper=shaper,
+            fetch_platform_metrics_fn=lambda *a, **k: {"views": 500, "likes": 5},
+        )
+
+        assert result is not None
+        assert result.reward_48h == pytest.approx(0.15)
+        assert result.reward_late == pytest.approx(0.30)
+
+        # No UPDATE fired — only the SELECT for the row read
+        update_calls = [
+            call for call in conn.execute.call_args_list
+            if "UPDATE pending_feedback" in str(call).replace("\\n", " ")
+        ]
+        assert not update_calls, (
+            "When reward_48h has a value, we should NOT backfill — the "
+            "existing value is authoritative and only delta gets recorded."
+        )
 
     def test_computes_delta_correctly(self):
         conn = self._mock_conn(
