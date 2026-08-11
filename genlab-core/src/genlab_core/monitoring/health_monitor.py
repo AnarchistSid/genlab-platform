@@ -190,21 +190,17 @@ def write_alerts_to_db(alerts: list[Alert]) -> int:
         conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id="all")
         cur = conn.cursor()
 
-        # Ensure table exists
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS pipeline_alerts (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                niche_id TEXT,
-                check_name TEXT NOT NULL,
-                severity TEXT NOT NULL DEFAULT 'warning',
-                message TEXT NOT NULL,
-                details JSONB,
-                auto_fix_applied TEXT,
-                auto_fix_result TEXT,
-                resolved_at TIMESTAMPTZ,
-                created_at TIMESTAMPTZ DEFAULT NOW()
-            )
-        """)
+        # 2026-08-11 Bug 5: removed the eager CREATE TABLE IF NOT EXISTS.
+        # Prod runs as genlab_app (BYPASSRLS=false per Audit A credential
+        # rotation) which lacks CREATE privilege on schema public. Every
+        # health_monitor fire since the role split threw
+        # `permission denied for schema public`, poisoning the transaction
+        # so ALL subsequent INSERTs failed silently — health_monitor
+        # computed alerts correctly but wrote 0 to pipeline_alerts.
+        # Same DDL-in-write-path pattern as late_reward Bug 1b
+        # (fixed 4649aa3c). Table already exists in prod; the IF NOT
+        # EXISTS was defensive against fresh installs (should be handled
+        # by migration instead).
 
         # Grace period after manual resolve.  Configurable via env var; default
         # 1 hour.  When an operator resolves an alert, the next health monitor
