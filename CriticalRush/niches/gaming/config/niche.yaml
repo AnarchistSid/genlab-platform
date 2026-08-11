@@ -58,6 +58,16 @@ video_sourcing:
   # this on 2026-06-27). 7 gives push_to_backlog 2 extra survivors to
   # clear dedup. Default stays 5 in code so other niches unaffected.
   filter_top_n: 7
+  # 2026-08-11 Option A game-name cooldown: reject any signal-only gaming
+  # candidate (twitch_trending / steam_spike / rss — no video_id) whose
+  # title matches a game published/scheduled within the last N days. Fixes
+  # the LoL x10 / Fortnite x7 / Rust x3 repeat pattern surfaced in
+  # class-of-bug-fetcher-schema-drift-from-downstream-contract.md. Only
+  # applies to gaming because it's the only niche whose local fetchers
+  # emit signal-only stories with game-name-as-title. Set to 0 to disable.
+  # Video-bearing stories (real YT video_id) bypass this — they have
+  # their own dedup key via video_id_dedup.
+  game_name_cooldown_days: 7
   min_view_velocity: 200
   use_google_trends: true
   allow_keyword_search: true

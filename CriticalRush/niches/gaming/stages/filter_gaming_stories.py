@@ -24,7 +24,8 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Any
+import os
+from typing import Any, Callable
 
 from genlab_core.media.trending_video_fetcher import FetchTrendingVideos
 from genlab_core.pipeline.models import collect_emitted_sources
@@ -179,15 +180,42 @@ class FilterGamingStories:
 
     def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         stories = context.get("stories", [])
+        niche_config = context.get("niche_config", {})
+
+        # 2026-08-11 Option A: game-name cooldown. Gaming's local fetchers
+        # emit ``title = game_name`` without video_id (see Option C
+        # StoryCandidate bypass), so video_id_dedup silently no-ops and the
+        # same top-trending games (LoL x10, Fortnite x7, Rust x3) surface
+        # every fetch cycle. The cooldown rejects any signal-only gaming
+        # candidate whose title matches a game published/scheduled within
+        # the window. Config: video_sourcing.game_name_cooldown_days
+        # (default 0 = disabled; gaming sets 7 in niche.yaml). Video-
+        # bearing stories (populated video_id) bypass the cooldown —
+        # video_id_dedup handles them and a real YouTube video that
+        # happens to be titled "Rust" shouldn't be blocked on title alone.
+        cooldown_days = int(
+            niche_config.get("video_sourcing", {}).get("game_name_cooldown_days", 0)
+        )
+        recent_titles_lower: set[str] = set()
+        if cooldown_days > 0:
+            recent_titles_lower = self._recent_gaming_titles(cooldown_days)
 
         filtered = []
         rejected = []
+        cooldown_rejected_titles: list[str] = []
 
         for story in stories:
-            if self._is_gaming_content(story):
-                filtered.append(story)
-            else:
+            if not self._is_gaming_content(story):
                 rejected.append(story["title"])
+                continue
+            # Cooldown only applies to signal-only stories (no video_id).
+            # Video-bearing stories have video_id_dedup as their key.
+            if cooldown_days > 0 and not story.get("video_id"):
+                title_lower = (story.get("title") or "").strip().lower()
+                if title_lower and title_lower in recent_titles_lower:
+                    cooldown_rejected_titles.append(story["title"])
+                    continue
+            filtered.append(story)
 
         # Sort by score descending, take top N (config-driven, default 5).
         #
@@ -203,7 +231,6 @@ class FilterGamingStories:
         # Hetzner VPS); render only runs when sources line up so the actual
         # marginal cost is small.
         filtered.sort(key=lambda s: s.get("score", 0), reverse=True)
-        niche_config = context.get("niche_config", {})
         filter_top_n = niche_config.get("video_sourcing", {}).get("filter_top_n", 5)
         top_stories = filtered[:filter_top_n]
 
@@ -214,15 +241,95 @@ class FilterGamingStories:
             "selected": len(top_stories),
             "rejected": len(rejected),
             "rejected_titles": rejected[:5],
+            "cooldown_rejected": len(cooldown_rejected_titles),
+            "cooldown_rejected_titles": cooldown_rejected_titles[:10],
         }
 
+        cooldown_note = ""
+        if cooldown_rejected_titles:
+            cooldown_note = f" (game-name cooldown: {len(cooldown_rejected_titles)})"
         logger.info(
-            "[FILTER] %d → %d stories after gaming filter (rejected: %d)",
+            "[FILTER] %d → %d stories after gaming filter (rejected: %d%s)",
             len(stories),
             len(top_stories),
             len(rejected),
+            cooldown_note,
         )
         return context
+
+    def _recent_gaming_titles(self, cooldown_days: int) -> set[str]:
+        """Return the set of lowercased titles of gaming blueprints active
+        within the last ``cooldown_days``.
+
+        "Active" = status in PUBLISHED / VISUAL_READY / READY_TO_PUBLISH
+        / SCHEDULED (any state that IS or WILL be a live reel). Uses
+        ``updated_at`` as the recency signal so PUBLISHED rows drop out of
+        the cooldown set N days after publish and newly-scheduled rows
+        block for N days from their scheduling time.
+
+        Wrapped by ``_safe_recent_gaming_titles`` in tests + in production
+        so DB blips fail-open (empty set + WARN log per rule #19). The
+        raw method is the module boundary that tests monkeypatch when
+        they want to inject a synthetic recent-set.
+        """
+        return self._safe_recent_gaming_titles(cooldown_days)
+
+    def _safe_recent_gaming_titles(
+        self,
+        cooldown_days: int,
+        *,
+        _query: Callable[[int], set[str]] | None = None,
+    ) -> set[str]:
+        """Fail-open shim around the DB query. If the query raises, log
+        WARN and return empty set (no cooldown enforced this run).
+
+        The ``_query`` kwarg exists for test injection — production code
+        never passes it; tests pass a mock query that raises so the
+        fail-open branch is exercised.
+        """
+        query = _query if _query is not None else self._query_recent_titles
+        try:
+            return query(cooldown_days)
+        except Exception as exc:  # noqa: BLE001 — fail-open by design
+            logger.warning(
+                "[FILTER] game-name cooldown query failed (%s) — cooldown "
+                "disabled for this run. Better to occasionally publish a "
+                "repeat than to silent-block gaming on a DB blip.",
+                exc,
+            )
+            return set()
+
+    def _query_recent_titles(self, cooldown_days: int) -> set[str]:
+        """Direct DB query. Extracted so tests can monkey-patch it via the
+        ``_query`` param of ``_safe_recent_gaming_titles`` without needing
+        a mock BacklogClient."""
+        dsn = os.environ.get("DATABASE_URL", "").strip()
+        if not dsn:
+            logger.warning(
+                "[FILTER] DATABASE_URL unset — game-name cooldown disabled"
+            )
+            return set()
+
+        import psycopg  # local import — keeps the module import-time cheap
+
+        with psycopg.connect(dsn, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT DISTINCT LOWER(title)
+                    FROM blueprints
+                    WHERE niche_id = 'gaming'
+                      AND status IN (
+                          'PUBLISHED',
+                          'VISUAL_READY',
+                          'READY_TO_PUBLISH',
+                          'SCHEDULED'
+                      )
+                      AND updated_at > NOW() - make_interval(days => %s)
+                    """,
+                    (cooldown_days,),
+                )
+                return {row[0] for row in cur.fetchall() if row[0]}
 
     def _is_gaming_content(self, story: dict[str, Any]) -> bool:
         # Trust all gaming-by-construction fetcher sources outright. The

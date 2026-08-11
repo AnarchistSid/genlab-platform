@@ -235,3 +235,218 @@ class TestFilterTopN:
         assert kept_titles == ["high", "mid"], (
             f"Expected top-2 by score [high, mid], got {kept_titles}"
         )
+
+
+# ─── Option A game-name cooldown filter (2026-08-11) ─────────────────────────
+
+
+class TestGameNameCooldown:
+    """Pin the fix for gaming's LoL x10 / Fortnite x7 / Rust x3 repeat
+    pattern.
+
+    Root cause: gaming's local fetchers (SteamSpikeFetcher,
+    TwitchTrendingFetcher, RSSFeedAggregator) emit ``title = game_name``
+    with no stable video_id. Downstream video_id_dedup silently no-ops.
+    Same top-trending games (LoL, Fortnite, Rust) surface every fetch
+    cycle and create new blueprints.
+
+    Fix: filter_gaming_stories rejects any candidate whose title matches
+    a game published/scheduled within the cooldown window (default 0 =
+    disabled; gaming sets 7 in niche.yaml). Case-insensitive exact match
+    on title.
+
+    Fail-open by design: if the backlog query fails, all candidates pass
+    with a WARN log (rule #19). Better to occasionally publish a repeat
+    than to block all gaming on a DB blip.
+    """
+
+    def test_recent_publish_blocks_same_title(self, monkeypatch):
+        """A gaming candidate whose title matches something published/
+        scheduled in the cooldown window gets rejected."""
+        stage = FilterGamingStories()
+        # Mock the DB probe — pretend LoL was published 3 days ago
+        monkeypatch.setattr(
+            stage,
+            "_recent_gaming_titles",
+            lambda cooldown_days: {"league of legends"},
+        )
+        stories = [
+            _make_story("League of Legends", source="twitch_trending", score=0.9),
+            _make_story("Fortnite", source="twitch_trending", score=0.8),
+        ]
+        context = {
+            "stories": stories,
+            "run_stats": {},
+            "niche_config": {"video_sourcing": {"game_name_cooldown_days": 7}},
+        }
+        result = stage.execute(context)
+
+        kept_titles = [s["title"] for s in result["stories"]]
+        assert kept_titles == ["Fortnite"], (
+            f"Expected only Fortnite kept (LoL blocked by cooldown), "
+            f"got {kept_titles}"
+        )
+        # Cooldown-rejected stories must be reported in run_stats
+        assert result["run_stats"]["filter"].get("cooldown_rejected") == 1
+        assert "League of Legends" in result["run_stats"]["filter"].get(
+            "cooldown_rejected_titles", []
+        )
+
+    def test_no_matching_recent_title_allows_candidate(self, monkeypatch):
+        """A candidate whose title isn't in the recent-publishes set
+        passes through the cooldown check."""
+        stage = FilterGamingStories()
+        monkeypatch.setattr(
+            stage,
+            "_recent_gaming_titles",
+            lambda cooldown_days: {"minecraft", "palworld"},
+        )
+        stories = [_make_story("Rust", source="twitch_trending", score=0.9)]
+        context = {
+            "stories": stories,
+            "run_stats": {},
+            "niche_config": {"video_sourcing": {"game_name_cooldown_days": 7}},
+        }
+        result = stage.execute(context)
+        assert len(result["stories"]) == 1
+        assert result["run_stats"]["filter"].get("cooldown_rejected", 0) == 0
+
+    def test_cooldown_disabled_when_config_zero_or_missing(self, monkeypatch):
+        """Backward compat: if game_name_cooldown_days is 0 or unset, the
+        cooldown query is skipped entirely (no DB access, no filtering).
+        Other niches consuming this stage must be unaffected."""
+        stage = FilterGamingStories()
+
+        # If the stage calls _recent_gaming_titles despite the config being
+        # unset, we crash the test to catch the regression.
+        def _should_not_be_called(days):
+            raise AssertionError(
+                "_recent_gaming_titles must not be called when "
+                "game_name_cooldown_days is unset or 0"
+            )
+
+        monkeypatch.setattr(stage, "_recent_gaming_titles", _should_not_be_called)
+        stories = [
+            _make_story("League of Legends", source="twitch_trending", score=0.9),
+        ]
+        # Case 1: config missing entirely
+        result = stage.execute({"stories": stories, "run_stats": {}})
+        assert len(result["stories"]) == 1
+
+        # Case 2: config explicitly 0
+        result = stage.execute(
+            {
+                "stories": stories,
+                "run_stats": {},
+                "niche_config": {
+                    "video_sourcing": {"game_name_cooldown_days": 0}
+                },
+            }
+        )
+        assert len(result["stories"]) == 1
+
+    def test_cooldown_is_case_insensitive(self, monkeypatch):
+        """Titles compared lowercase both sides — a fetcher that emits
+        'LEAGUE OF LEGENDS' still gets blocked by 'league of legends'
+        in the recent set."""
+        stage = FilterGamingStories()
+        monkeypatch.setattr(
+            stage,
+            "_recent_gaming_titles",
+            lambda cooldown_days: {"league of legends"},
+        )
+        stories = [
+            _make_story("LEAGUE OF LEGENDS", source="twitch_trending", score=0.9),
+            _make_story("league Of legends", source="twitch_trending", score=0.8),
+        ]
+        context = {
+            "stories": stories,
+            "run_stats": {},
+            "niche_config": {"video_sourcing": {"game_name_cooldown_days": 7}},
+        }
+        result = stage.execute(context)
+        assert len(result["stories"]) == 0
+
+    def test_fail_open_on_backlog_query_error(self, monkeypatch, caplog):
+        """Rule #19 — if the recent-titles query fails, log WARN and let
+        all candidates through. Better to occasionally publish a repeat
+        than to silent-block gaming on a DB blip."""
+        import logging
+
+        stage = FilterGamingStories()
+
+        def _failing_query(cooldown_days):
+            raise RuntimeError("simulated DB unreachable")
+
+        # Wrap the failing query with the same fail-open shim the real
+        # code must implement. Pin: the shim MUST return set() + WARN log.
+        monkeypatch.setattr(
+            stage,
+            "_recent_gaming_titles",
+            lambda cd: stage._safe_recent_gaming_titles(cd, _query=_failing_query),
+        )
+
+        stories = [_make_story("Rust", source="twitch_trending", score=0.9)]
+        with caplog.at_level(logging.WARNING):
+            result = stage.execute(
+                {
+                    "stories": stories,
+                    "run_stats": {},
+                    "niche_config": {
+                        "video_sourcing": {"game_name_cooldown_days": 7}
+                    },
+                }
+            )
+        # Fail-open: story passes
+        assert len(result["stories"]) == 1
+        # But WARN was logged so operator sees the outage
+        assert any(
+            "cooldown" in r.message.lower() and "disabled" in r.message.lower()
+            for r in caplog.records
+            if r.levelno >= logging.WARNING
+        )
+
+    def test_cooldown_only_applies_to_gaming_source_stories(self, monkeypatch):
+        """A candidate whose title matches the recent-set but comes from
+        a source we don't cooldown-check (e.g. content_pool youtube_trending
+        video with unique video_id) still passes. The cooldown targets the
+        game-name-repeat pathology from local fetchers; a real YouTube
+        video that happens to be titled 'Rust' shouldn't be blocked
+        purely on title.
+
+        Pin: cooldown only fires for stories that lack a video_id (the
+        signal-only pathway). Stories with populated video_id have their
+        own dedup key (video_id_dedup) and don't need title cooldown."""
+        stage = FilterGamingStories()
+        monkeypatch.setattr(
+            stage,
+            "_recent_gaming_titles",
+            lambda cooldown_days: {"rust"},
+        )
+        stories = [
+            # signal-only story from twitch_trending — has bypass declared
+            # (Option C convention), no video_id → cooldown applies
+            {
+                **_make_story("Rust", source="twitch_trending", score=0.9),
+                "bypass_video_id_dedup": True,
+                "bypass_reason": "twitch_trending:live_channel_not_clip",
+            },
+            # video-bearing story from youtube_trending with a real YT
+            # video_id — cooldown does NOT apply, video_id_dedup handles it
+            {
+                **_make_story("Rust", source="youtube_trending", score=0.85),
+                "video_id": "abc123",
+            },
+        ]
+        context = {
+            "stories": stories,
+            "run_stats": {},
+            "niche_config": {"video_sourcing": {"game_name_cooldown_days": 7}},
+        }
+        result = stage.execute(context)
+        kept = [(s["title"], s.get("source")) for s in result["stories"]]
+        # Only the video-bearing youtube_trending story survives
+        assert kept == [("Rust", "youtube_trending")], (
+            f"Expected only the video-bearing Rust story to pass "
+            f"(twitch_trending Rust should be blocked by cooldown), got {kept}"
+        )
