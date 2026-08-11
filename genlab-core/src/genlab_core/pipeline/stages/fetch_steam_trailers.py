@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Final
 
 import requests
 
@@ -30,6 +30,38 @@ _DEFAULT_APP_IDS = [
 ]
 
 
+# 2026-08-12: Writer requires >=40 chars of writable context in
+# `summary` OR the story gets silently dropped at QC. Previously this
+# fetcher emitted "Official trailer for <game_name>" which for short
+# game names fell below the floor. Now we prefer Steam's
+# short_description (always well-formed marketing prose from the
+# store page) and fall back to a synthesized string including
+# app_id + trailer type as padding. Sibling fix to
+# _build_twitch_summary in fetch_twitch_clips.py.
+_WRITER_MIN_CONTEXT_CHARS: Final[int] = 40
+
+
+def _build_steam_summary(
+    *,
+    game_name: str,
+    movie_name: str,
+    short_description: str,
+    app_id: int,
+) -> str:
+    """Construct a writer-usable summary >=40 chars from Steam
+    Storefront metadata. Prefers short_description (real prose)
+    when present; falls back to synthesized string for the rare
+    case where Steam returns a game with no short_description."""
+    sd = (short_description or "").strip()
+    if sd:
+        return f"{game_name} — {movie_name}. {sd}"[:500]
+    # Synthesized fallback — pad with trailer type + app_id.
+    return (
+        f"Official {movie_name} trailer for {game_name} "
+        f"(Steam app {app_id})"
+    )
+
+
 def _fetch_trailers_for_app(app_id: int, max_trailers: int = 2) -> list[dict]:
     """Fetch official game trailers from Steam Storefront API."""
     try:
@@ -43,6 +75,12 @@ def _fetch_trailers_for_app(app_id: int, max_trailers: int = 2) -> list[dict]:
             return []
         app_data = data.get("data", {})
         game_name = app_data.get("name", f"App {app_id}")
+        # 2026-08-12: pass through the game's short_description so the
+        # downstream summary can clear the writer's >=40 char floor
+        # even when the game name is very short (e.g. "Wu Kong").
+        # Steam's `short_description` is one-line marketing prose
+        # that's always well-formed. See sibling fix in fetch_twitch_clips.py.
+        short_description = (app_data.get("short_description") or "").strip()
         results = []
         for movie in app_data.get("movies", [])[:max_trailers]:
             mp4 = movie.get("mp4", {})
@@ -50,13 +88,16 @@ def _fetch_trailers_for_app(app_id: int, max_trailers: int = 2) -> list[dict]:
             url = mp4.get("480") or mp4.get("max")
             if not url:
                 continue
+            movie_name = movie.get("name", "Trailer")
             results.append(
                 {
-                    "title": f"{game_name} - {movie.get('name', 'Trailer')}",
+                    "title": f"{game_name} - {movie_name}",
                     "clip_url": url,
                     "source": "steam_trailer",
                     "app_id": app_id,
                     "game_name": game_name,
+                    "movie_name": movie_name,
+                    "short_description": short_description,
                 }
             )
         return results
@@ -117,6 +158,12 @@ class FetchSteamTrailers(FetcherStage):
             new_stories = []
             for t in all_trailers[:8]:  # Cap at 8 trailers
                 sid = generate_story_id(t["clip_url"], now_iso)
+                summary = _build_steam_summary(
+                    game_name=t.get("game_name", ""),
+                    movie_name=t.get("movie_name", "Trailer"),
+                    short_description=t.get("short_description", ""),
+                    app_id=t.get("app_id", 0),
+                )
                 new_stories.append(
                     {
                         "story_id": sid,
@@ -126,7 +173,7 @@ class FetchSteamTrailers(FetcherStage):
                         "canonical_url": t["clip_url"],
                         "published_at": now_iso,
                         "fetched_at": now_iso,
-                        "summary": f"Official trailer for {t.get('game_name', '')}",
+                        "summary": summary,
                         "niche_id": niche_id,
                         "video_source": "steam",
                         "_trending_video": True,

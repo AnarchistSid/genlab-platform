@@ -11,7 +11,7 @@ import logging
 import os
 import time
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Final
 
 import requests
 
@@ -144,6 +144,35 @@ def _filter_clips_by_min_duration(
         else:
             dropped.append(dur)
     return kept, dropped
+
+
+# 2026-08-12: Writer requires >=40 chars of writable context in
+# `summary` OR the story gets silently dropped as
+# `excluded_incomplete_content` at QC (see run_report metric.qc).
+# Previously this fetcher emitted "Twitch clip by <broadcaster>"
+# (~15-25 chars) and every Twitch clip failed the floor -> gaming
+# pipeline blueprints_count=0. Synthesizing from title + broadcaster
+# + view_count + duration always clears the floor even for very terse
+# clip titles like "gg". See sibling _build_steam_summary in
+# fetch_steam_trailers.py; class-of-bug-fetcher-schema-drift memo.
+_WRITER_MIN_CONTEXT_CHARS: Final[int] = 40
+
+
+def _build_twitch_summary(
+    *,
+    title: str,
+    broadcaster: str,
+    view_count: int,
+    duration: float,
+) -> str:
+    """Construct a writer-usable summary >=40 chars from Twitch clip
+    metadata. Even a bare "gg" title + "Kai_Cenat" broadcaster
+    + view/duration facts yields ~55 chars — comfortably above the
+    writer's thin-context floor."""
+    return (
+        f"{title}. Twitch highlight from {broadcaster}"
+        f" — {int(view_count):,} views in {float(duration):.0f}s"
+    ).strip()
 
 
 def _get_twitch_app_token(client_id: str, client_secret: str) -> str | None:
@@ -347,16 +376,23 @@ class FetchTwitchClips(FetcherStage):
                 clip_url = clip["clip_url"]
                 sid = generate_story_id(clip_url, now_iso)
                 broadcaster = clip.get("broadcaster", "")
+                clip_title = clip["title"] or ""
+                summary = _build_twitch_summary(
+                    title=clip_title,
+                    broadcaster=broadcaster,
+                    view_count=clip.get("view_count", 0),
+                    duration=clip.get("duration", 0),
+                )
                 new_stories.append(
                     {
                         "story_id": sid,
-                        "title": clip["title"],
+                        "title": clip_title,
                         "source": "twitch_clips",
                         "source_url": clip.get("url", clip_url),
                         "canonical_url": clip_url,
                         "published_at": clip.get("created_at", now_iso),
                         "fetched_at": now_iso,
-                        "summary": f"Twitch clip by {broadcaster}",
+                        "summary": summary,
                         "view_count": clip.get("view_count", 0),
                         "duration_seconds": clip.get("duration", 0),
                         "niche_id": niche_id,
