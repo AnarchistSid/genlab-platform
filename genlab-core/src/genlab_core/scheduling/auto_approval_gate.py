@@ -409,6 +409,46 @@ def evaluate(
                 "(under-trained-model uncertainty, no contribution)"
             )
 
+    # ── 7. Render QC vision-judge quality (soft signal) ───────────────
+    # 2026-08-12: G3 render_qc runs a Claude Vision ensemble over 3
+    # frames of the rendered MP4 + returns min_quality_score (0-10).
+    # Wire is one-way today — the verdict runs in ValidateVideos and
+    # persists via push_to_backlog as `render_qc_min_score` on
+    # blueprints.extra. Same soft-signal pattern as hook_classifier:
+    # contribute to confidence aggregate, never fail on its own (vision
+    # judge is noisy at the frame-cover level; a bad-frame render can
+    # still perform if the content is strong).
+    #
+    #   - missing: no contribution (cold-start / flag off)
+    #   - >= 7.0 out of 10: strong pass, +0.9 confidence
+    #   - 5.0-7.0: borderline, contribute normalized score / 10
+    #   - < 5.0: contribute low confidence (drags avg down; does NOT
+    #     force a failed_checks entry — vision-judge false-negatives
+    #     would over-suppress otherwise-fine renders)
+    render_qc_score = _to_float(extra.get("render_qc_min_score"))
+    if render_qc_score is None:
+        reasons.append("render_qc_min_score missing (no contribution)")
+    else:
+        # Clamp to [0, 10] then normalize to [0, 1]
+        clamped_10 = max(0.0, min(10.0, render_qc_score))
+        normalized = clamped_10 / 10.0
+        if clamped_10 >= 7.0:
+            passed.append("render_qc")
+            reasons.append(
+                f"render_qc_min_score={clamped_10:.1f}/10 ≥ 7.0 (vision judge: strong)"
+            )
+            confidences.append(max(0.9, normalized))
+        elif clamped_10 >= 5.0:
+            reasons.append(
+                f"render_qc_min_score={clamped_10:.1f}/10 (borderline)"
+            )
+            confidences.append(normalized)
+        else:
+            reasons.append(
+                f"render_qc_min_score={clamped_10:.1f}/10 < 5.0 (vision judge: weak)"
+            )
+            confidences.append(normalized)
+
     # ── Aggregate confidence ──────────────────────────────────────────
     # Average across the per-score confidences. Empty list means no
     # numeric signals were available — fall back to 0.5 (neutral prior).

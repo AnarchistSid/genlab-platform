@@ -2644,6 +2644,21 @@ class PushToBacklog:
                         # since validation_status is a dict (matches
                         # virality_features pattern above).
                         "validation_status": json.dumps(story.get("validation_status") or {}),
+                        # 2026-08-12: persist render_qc verdict (Lever G3)
+                        # so auto_approval_gate can read it as a soft
+                        # quality signal at gate time. The verdict lives on
+                        # `story["media"]["video_validation"]["render_qc"]`
+                        # at pipeline time — flattening the min_quality_score
+                        # scalar here means the gate doesn't need to know
+                        # the media-dict nesting. Absent when render_qc
+                        # was disabled or fail-opened (fine — gate treats
+                        # absent as cold-start-tolerant "no contribution").
+                        "render_qc_min_score": (
+                            ((story.get("media") or {})
+                             .get("video_validation") or {})
+                            .get("render_qc", {})
+                            .get("min_quality_score")
+                        ),
                         # Granular origin (espn_news, youtube_trending, scorebat,
                         # rss, twitch_trending, ...). Previously only the derived
                         # `topic` was stored, so blueprints.source was always
