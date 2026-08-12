@@ -24,9 +24,31 @@ change — done in L3 PR 2.
 See docs/MONETIZATION-LAYER-3-DESIGN.md § Phase A for the full sprint
 sequence.
 
-Revision ID: a8w9x0y1z2a3
-Revises: z7v8w9x0y1z2
-Create Date: 2026-07-07
+Revision ID: l3mon202608
+Revises: n1i2j3k4l5m6
+Create Date: 2026-07-07 (original), 2026-08-12 (re-chained)
+
+## Why re-chained (2026-08-12)
+
+Original revision id ``a8w9x0y1z2a3`` collided with
+``a8w9x0y1z2a3_blueprints_action_taken_source.py`` (identical
+revision string in both files). Alembic silently picked the
+action_taken_source one; this migration was NEVER applied to prod.
+
+Symptom: for 35 days (2026-07-08 -> 2026-08-12), every affiliate
+click INSERT failed with
+    column "commission_pct" of relation "affiliate_clicks" does not exist
+swallowed by log_click's outer try/except. Result: 0 rows written
+to affiliate_clicks, entire product-bandit reward loop dead.
+
+Fix: renamed revision to ``l3mon202608`` + re-pointed down_revision
+to the current head ``n1i2j3k4l5m6`` so alembic runs it on next
+``upgrade head``. Migration body is fully idempotent (every ALTER
+wrapped in ``IF NOT EXISTS`` DO $$ block) so it's safe on prod.
+
+Detection heuristic for this class-of-bug: alembic emits
+``UserWarning: Revision X is present more than once`` on any command
+touching a duplicate-revision file. Pin test needed.
 """
 
 from __future__ import annotations
@@ -35,8 +57,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "a8w9x0y1z2a3"
-down_revision = "z7v8w9x0y1z2"
+revision = "l3mon202608"
+down_revision = "n1i2j3k4l5m6"
 branch_labels = None
 depends_on = None
 
