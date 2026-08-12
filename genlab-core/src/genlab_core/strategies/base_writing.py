@@ -434,18 +434,35 @@ class BaseWritingStrategy(WritingStrategy):
             extra_instructions=extra_instructions,
         )
 
+        # Optional retry on near-dupe hook — turns the observability
+        # signal (log_similarity_signal below) into a recovery action.
+        # Adds ~$0.008/blueprint on retry (2× the write_video_content
+        # cost) but unlocks blueprints that would otherwise be dropped
+        # by push_to_backlog.py:2408 at persist time. Flag-gated
+        # `GENLAB_HOOK_NEAR_DUPE_RETRY_ENABLED` — off by default so
+        # operator sees NEAR_DUPE rate for 1-2 weeks first before
+        # deciding whether the LLM $ is worth the throughput gain.
+        result = self._maybe_retry_on_near_dupe(
+            first_result=result,
+            video=video,
+            existing_hooks=existing_hooks,
+            extra_instructions=extra_instructions,
+            llm_client=llm_client,
+        )
+
         content = story.setdefault("content", {})
         content["hook"] = result.get("hook", "")
         content["caption"] = result.get("instagram_caption", "")
         content["written"] = True
         content["written_by"] = "llm"
 
-        # Observability: log when the LLM emitted a hook near-duplicate
-        # to a recent one. push_to_backlog.py:2408 drops such hooks at
-        # persist time (Jaccard > 0.6) — this WARN surfaces the pattern
-        # earlier so operators can see how often the LLM ignores its
-        # HOOK DEDUP prompt hint. Zero effect on selection; downstream
-        # drop remains authoritative. Fail-open on any error.
+        # Observability: log when the LLM's FINAL hook (post-retry if
+        # retry fired) is still near-dupe to a recent one.
+        # push_to_backlog.py:2408 drops such hooks at persist time
+        # (Jaccard > 0.6) — this WARN surfaces the pattern earlier so
+        # operators can measure the drop-at-persist rate. When retry
+        # is off, this is the ONLY early-warning surface. When retry
+        # is on, this log fires only for the "retry still failed" case.
         emitted_hook = result.get("hook", "")
         if emitted_hook and existing_hooks:
             try:
@@ -652,6 +669,114 @@ class BaseWritingStrategy(WritingStrategy):
 
         story["content"] = content
         return story
+
+    def _maybe_retry_on_near_dupe(
+        self,
+        *,
+        first_result: dict,
+        video: dict,
+        existing_hooks: list[str],
+        extra_instructions: str,
+        llm_client: Any,
+    ) -> dict:
+        """Optionally retry `write_video_content` with an explicit avoid-
+        hint when the first-attempt hook is near-dupe to a recent one.
+
+        Returns the retry result when: flag on AND first attempt was
+        near-dupe AND retry produced a non-near-dupe hook. Otherwise
+        returns `first_result` unchanged.
+
+        Fail-open at every layer: any exception in similarity check or
+        retry call is swallowed and the first attempt is returned.
+
+        Cost: on retry, adds one full `write_video_content` call
+        (~$0.008 with Haiku). Flag-gated so operator opts in after
+        seeing the NEAR_DUPE rate.
+        """
+        first_hook = first_result.get("hook", "") or ""
+        if not first_hook or not existing_hooks:
+            return first_result
+
+        try:
+            from genlab_core.settings import env_true
+
+            if not env_true("GENLAB_HOOK_NEAR_DUPE_RETRY_ENABLED"):
+                return first_result
+
+            from genlab_core.writing.hook_similarity import find_most_similar
+
+            match = find_most_similar(first_hook, existing_hooks)
+            if match is None:
+                return first_result
+        except Exception as exc:
+            logger.debug(
+                "[hook_similarity] retry-precheck raised (falling back): %s", exc,
+            )
+            return first_result
+
+        # Retry: augment extra_instructions with an explicit avoid-hint
+        # that names both the rejected hook and the specific match.
+        # Include the rejected hook in existing_hooks so the second
+        # attempt sees BOTH the historical dupe AND its own prior attempt.
+        retry_extra = (
+            f"{extra_instructions}\n\n"
+            f"CRITICAL RETRY: Your previous hook '{first_hook}' was flagged "
+            f"as too similar to a recent hook '{match.matched_hook}' "
+            f"(Jaccard {match.similarity:.0%}). Write a hook with a "
+            f"COMPLETELY different angle, wording, and topic focus. "
+            f"Avoid reusing the shared words."
+        )
+        try:
+            from genlab_core.writing.video_content_writer import write_video_content
+            retry_result = write_video_content(
+                video=video,
+                niche_id=self._niche_id,
+                llm_client=llm_client,
+                existing_hooks=list(existing_hooks) + [first_hook],
+                extra_instructions=retry_extra,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[hook_similarity] retry write_video_content raised (keeping first): %s",
+                exc,
+            )
+            return first_result
+
+        retry_hook = retry_result.get("hook", "") or ""
+        if not retry_hook:
+            logger.info(
+                "[hook_similarity] RETRY_EMPTY niche=%s (keeping first)",
+                self._niche_id,
+            )
+            return first_result
+
+        try:
+            from genlab_core.writing.hook_similarity import find_most_similar
+            retry_match = find_most_similar(
+                retry_hook, list(existing_hooks) + [first_hook]
+            )
+        except Exception:
+            retry_match = None
+
+        if retry_match is None:
+            logger.info(
+                "[hook_similarity] RETRY_SUCCESS niche=%s original=%r retry=%r",
+                self._niche_id, first_hook[:60], retry_hook[:60],
+            )
+            return retry_result
+
+        # Retry ALSO produced a near-dupe. Keep the first-attempt
+        # result and let the downstream push_to_backlog drop handle it.
+        logger.warning(
+            "[hook_similarity] RETRY_FAILED niche=%s first=%r retry=%r "
+            "(still Jaccard %.0f%% vs %r)",
+            self._niche_id,
+            first_hook[:60],
+            retry_hook[:60],
+            100 * retry_match.similarity,
+            retry_match.matched_hook[:60],
+        )
+        return first_result
 
     # ------------------------------------------------------------------
     # execute() — shared pipeline entry point
