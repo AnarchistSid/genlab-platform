@@ -21,12 +21,17 @@ from genlab_core.media.trending_audio_scraper import scrape_and_cache_trending_m
 logger = logging.getLogger(__name__)
 
 
+# Real prod paths verified 2026-08-12 via
+# `find /opt/genlab -name visuals.yaml -path '*/config/*'`.
+# Only CriticalRush (gaming) uses the niches/<niche>/ sub-path;
+# BlackboxBrief / ClutchWire / SpliceReel / FrameDrift keep configs
+# at the channel-package root.
 _NICHE_VISUALS = {
     "ai_creators": "BlackboxBrief/config/visuals.yaml",
     "gaming": "CriticalRush/niches/gaming/config/visuals.yaml",
-    "sports": "ClutchWire/niches/sports/config/visuals.yaml",
-    "movies": "SpliceReel/niches/movies/config/visuals.yaml",
-    "anime": "FrameDrift/niches/anime/config/visuals.yaml",
+    "sports": "ClutchWire/config/visuals.yaml",
+    "movies": "SpliceReel/config/visuals.yaml",
+    "anime": "FrameDrift/config/visuals.yaml",
 }
 
 
