@@ -191,6 +191,60 @@ def _product_slug(name: str) -> str:
 _TRACKING_DOMAIN_WARNING_EMITTED = False
 
 
+# 2026-08-12 (F-QB-0701): FTC/ASCI disclosure MUST appear before the
+# platform "more" fold on IG/FB/Threads. Prior behaviour appended
+# `#ad` to the CTA block at the caption tail (after hashtags +
+# hook + attribution + product line) — well past the ~100 char fold.
+# QB-2026-08 verified 17/17 movies affiliate posts non-compliant.
+_DISCLOSURE_HEAD_CHAR_LIMIT: int = 100
+
+# Case-insensitive substrings that count as valid FTC disclosure per
+# the pre-publish compliance gate. Kept as a module constant so future
+# additions (new platform requirements) are in one place.
+#
+# "made with " covers the BlackboxBrief source-tool disclosure path
+# (bb_strategies.affiliate_match.apply_source_tool_disclosure) which
+# prepends "Made with <Tool> — <link>" as its affiliate marker.
+# Treating it as a valid marker keeps us from stacking a second #ad
+# on top of BB's already-present disclosure.
+_DISCLOSURE_MARKERS: tuple[str, ...] = (
+    "#ad",
+    "#affiliate",
+    "#sponsored",
+    "sponsored",
+    "paid partnership",
+    "paid promotion",
+    "made with ",
+)
+
+
+def _has_disclosure_in_head(text: str, char_limit: int = _DISCLOSURE_HEAD_CHAR_LIMIT) -> bool:
+    """Does ``text[:char_limit]`` contain any recognised disclosure marker?"""
+    if not text:
+        return False
+    head = text[:char_limit].lower()
+    return any(marker in head for marker in _DISCLOSURE_MARKERS)
+
+
+def _ensure_top_disclosure(text: str, prepend: str = "#ad") -> str:
+    """Prepend ``prepend`` to ``text`` iff no disclosure marker is
+    already present in the first ``_DISCLOSURE_HEAD_CHAR_LIMIT`` chars.
+
+    Idempotent: safe to call multiple times. Returns unchanged text
+    when already compliant so a caption written with an explicit
+    ``#ad`` prefix by the LLM stays untouched.
+
+    FTC 16 CFR 255 / ASCI guideline: sponsored content must disclose
+    "clearly and conspicuously" — burying #ad past a "more" fold on
+    a 100-char preview does not satisfy that standard.
+    """
+    if not text:
+        return text
+    if _has_disclosure_in_head(text):
+        return text
+    return f"{prepend} {text}"
+
+
 def _tracked_url(raw_url: str, product_name: str, *, niche_id: str, attribution_id: str) -> str:
     """Route the published affiliate link through the /links/go redirect so
     clicks are tracked (R-23).
@@ -387,6 +441,12 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
                 caption = caption[:insert_pos] + cta_snippet + caption[insert_pos:]
             else:
                 caption = caption + cta_snippet
+            # 2026-08-12 (F-QB-0701): FTC/ASCI disclosure must land in
+            # first 100 chars, before the IG "more" fold. Idempotent
+            # — no double-#ad when the LLM already opens with a marker.
+            # Runs BEFORE _enforce_length so length is calculated on
+            # the final shape.
+            caption = _ensure_top_disclosure(caption)
             # Enforce Instagram caption length limit
             caption = _enforce_length(caption, "instagram", len(cta_snippet), len(ig_disclosure))
         fields["caption"] = caption
@@ -440,6 +500,11 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
                 len(fb_disclosure_snippet),
                 len(fb_disclosure_snippet),
             )
+        # 2026-08-12 (F-QB-0701): FTC/ASCI disclosure at head. Runs after
+        # length enforcement (FB doesn't have a tight cap that would
+        # clash with a 4-char prepend). Idempotent — noop when the LLM
+        # or fb_disclosure block above already opens with a marker.
+        fb_content = _ensure_top_disclosure(fb_content)
         fields["facebook_content"] = fb_content
 
         # First-comment: the affiliate CTA itself, posted after main post
@@ -522,8 +587,11 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
                     logger.debug("[CTAEngine] Bandit select failed for threads: %s", e)
             th_cta = f"\n\n{th_disclosure}\n{th_cta_text}"
             th_content = th_content.rstrip() + th_cta
+            # 2026-08-12 (F-QB-0701): FTC/ASCI disclosure at head, BEFORE
+            # length enforcement so the 500-char Threads cap accounts for it.
+            th_content = _ensure_top_disclosure(th_content)
             if len(th_content) > 500:
-                # Threads has 500 char limit
+                # Threads has 500 char limit — truncate middle, keep CTA tail.
                 overage = len(th_content) - 500
                 th_content = th_content[: len(th_content) - len(th_cta) - overage] + th_cta
             fields["threads_content"] = th_content
