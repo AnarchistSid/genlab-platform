@@ -539,6 +539,25 @@ _ARTIFACT_FRESHNESS_MANIFEST: tuple[tuple[str, int, str], ...] = (
         840,  # 35 days
         "genlab-counterfactual-replay",
     ),
+    # 2026-08-12 (unaudited-services audit): added after confirming
+    # both services healthy but neither had freshness monitoring.
+    # If either goes silent-dead the pattern is identical to the
+    # cross-niche-transfer 29-day silent stall discovered manually.
+    #
+    # Bandit-arms daily snapshot — timer 03:00 IST daily, 24h + 12h slack.
+    (
+        "/mnt/genlab-media/snapshots/bandit_arms_*.csv",
+        36,
+        "genlab-bandit-snapshot",
+    ),
+    # Bayesian gate state — nightly refit timer, 24h + 12h slack.
+    # Overwrites the same file each run (not glob), so stale-mtime
+    # correctly signals a stopped writer.
+    (
+        "/opt/genlab/.tmp/bayesian_gate_state.json",
+        36,
+        "genlab-bayesian-gate-refit",
+    ),
 )
 
 
