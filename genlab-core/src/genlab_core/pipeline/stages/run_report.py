@@ -39,6 +39,78 @@ DEFAULT_P95_TARGET = 600
 DEFAULT_BUDGET_USD = 5.0
 
 
+# -----------------------------------------------------------------
+# 2026-08-12: SLO-violations → pipeline_alerts sink
+# -----------------------------------------------------------------
+#
+# Stable check-name per violation TYPE so different SLOs create
+# distinct alerts but repeats dedup properly (write_alerts_to_db
+# keys on `check_name + niche_id`). Prefix-match the violation
+# message against known shapes; fall through to a generic
+# "slo:other" bucket for unrecognised messages.
+_SLO_CHECK_NAME_PREFIXES: list[tuple[str, str]] = [
+    ("Zero blueprints produced", "slo:zero_blueprints"),
+    ("QC pass rate", "slo:qc_pass_rate"),
+    ("P95 pipeline", "slo:p95_pipeline"),
+    ("LLM cost", "slo:llm_cost"),
+    ("Video validation", "slo:video_validation"),
+    ("Render failed", "slo:render_failed"),
+]
+
+
+def _slo_check_name(violation_message: str) -> str:
+    """Map a violation message to a stable check_name for dedup."""
+    for prefix, name in _SLO_CHECK_NAME_PREFIXES:
+        if violation_message.startswith(prefix):
+            return name
+    return "slo:other"
+
+
+def _write_slo_violations_to_alerts_table(report: dict) -> int:
+    """Emit one pipeline_alerts row per SLO violation in the report.
+
+    Severity mirrors the report's status:
+      * "failed"  -> critical
+      * "partial" -> warning
+      * (other)   -> warning (defensive default)
+
+    Returns the number of alerts persisted. Fail-open: any DB error
+    is logged by the underlying write_alerts_to_db but never raises.
+    """
+    slo_violations = report.get("slo_violations") or []
+    if not slo_violations:
+        return 0
+
+    from genlab_core.monitoring.alerts import Alert
+    from genlab_core.monitoring.health_monitor import write_alerts_to_db
+
+    status = str(report.get("status", "")).lower()
+    severity = "critical" if status == "failed" else "warning"
+    niche_id = str(report.get("niche_id", "")) or ""
+    run_id = str(report.get("run_id", "")) or ""
+    metrics = report.get("metrics") or {}
+
+    alerts: list[Alert] = []
+    for violation in slo_violations:
+        alerts.append(
+            Alert(
+                check=_slo_check_name(str(violation)),
+                severity=severity,
+                message=str(violation),
+                niche_id=niche_id,
+                details={
+                    "run_id": run_id,
+                    "status": status,
+                    "blueprints_count": metrics.get("blueprints_count"),
+                    "stage_failures": report.get("stage_failures") or {},
+                    "bottleneck_stage": report.get("bottleneck_stage"),
+                    "bottleneck_reason": report.get("bottleneck_reason"),
+                },
+            )
+        )
+    return int(write_alerts_to_db(alerts))
+
+
 class RunReport:
     """Write per-run JSON summary to .tmp/runs/<run_id>/run_report.json.
 
@@ -435,6 +507,31 @@ class RunReport:
                 run_id,
                 exc,
             )
+
+        # 2026-08-12: ALSO write SLO violations to `pipeline_alerts`
+        # so Mission Control surfaces them. The Slack webhook above is
+        # opt-in and requires infrastructure the operator may not have
+        # set up. The `pipeline_alerts` sink is always on (dashboard
+        # is deployed with every install) and drives the alerts card
+        # operators actually look at.
+        #
+        # Gaming's "Zero blueprints produced from N stories" fired
+        # every day for weeks without any operator-visible alarm
+        # until manual investigation on 2026-08-12. That's the exact
+        # class of failure this sink prevents.
+        if slo_violations:
+            try:
+                _write_slo_violations_to_alerts_table(report)
+            except Exception as exc:
+                # Fail-open — same contract as the webhook above.
+                # DB write failure must not block run_report writing.
+                logger.warning(
+                    "[RunReport] slo→pipeline_alerts write failed for "
+                    "%s run %s: %s",
+                    niche_id,
+                    run_id,
+                    exc,
+                )
 
         # Push dashboard notification event
         try:
