@@ -421,13 +421,35 @@ class YouTubeClient:
         # short-form detection). Also keeps titles cleaner (title is
         # user-facing; #Shorts is algorithmic metadata).
         # See: YouTube Creator Academy "Shorts algorithm" 2024 update.
-        hashtags_str = " ".join(payload.hashtags) if payload.hashtags else ""
-        description_parts = ["#Shorts"]
-        if payload.caption:
-            description_parts.append(payload.caption.strip())
-        if hashtags_str:
-            description_parts.append(hashtags_str)
-        description = "\n\n".join(description_parts)[:5000]
+        #
+        # 2026-08-12 (item #4 Shorts-native): description construction
+        # delegated to `publishing.youtube_shorts_seo.build_shorts_description`.
+        # Flag-gated OFF (GENLAB_YT_SHORTS_SEO_ENABLED) — when off the
+        # helper returns the byte-identical legacy shape below. When on,
+        # emits enriched Shorts-SEO structure (hook curiosity-anchor +
+        # follow CTA + niche-topical hashtag anchors).
+        try:
+            from genlab_core.publishing.youtube_shorts_seo import (
+                build_shorts_description,
+            )
+            description = build_shorts_description(
+                hook=payload.hook or "",
+                caption=payload.caption or "",
+                hashtags=list(payload.hashtags or []),
+                niche_id=payload.niche_id,
+                source_credit=getattr(payload, "source_credit", "") or "",
+            )
+        except Exception as exc:
+            self._log.warning(
+                "YouTube: shorts SEO builder failed (%s) — using legacy shape", exc
+            )
+            hashtags_str = " ".join(payload.hashtags) if payload.hashtags else ""
+            description_parts = ["#Shorts"]
+            if payload.caption:
+                description_parts.append(payload.caption.strip())
+            if hashtags_str:
+                description_parts.append(hashtags_str)
+            description = "\n\n".join(description_parts)[:5000]
 
         # Tags from hashtags field
         tags = [h.lstrip("#") for h in payload.hashtags if h]
