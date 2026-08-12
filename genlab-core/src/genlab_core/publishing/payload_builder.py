@@ -284,7 +284,22 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
                 ),
             }
         )
-        if _src_attr and _src_attr.strip() and _src_attr.strip() not in caption:
+        # 2026-08-12 (F-QB-0708): soften idempotence guard from
+        # exact-string match to marker match. Prior behavior compared
+        # the full `_src_attr` ("🎬 Original: @X — https://URL") against
+        # the LLM's output — but the LLM often wrote a partial variant
+        # like "🎬 Original: @X — " (no URL) or "🎬 Original creator:
+        # @X". Exact match missed → guard didn't fire → BOTH forms
+        # coexisted in the caption. Result: 36% of recent captions had
+        # double "🎬 Original:" markers, matching YouTube's inauthentic-
+        # content template signature (F-QB-0708). Marker-only check
+        # catches every variant the LLM produces.
+        if (
+            _src_attr
+            and _src_attr.strip()
+            and "🎬 Original:" not in caption
+            and "🎬 Original creator:" not in caption
+        ):
             caption = caption.rstrip() + "\n\n" + _src_attr
 
     # Hashtags — accept either a list or a space-separated string.
