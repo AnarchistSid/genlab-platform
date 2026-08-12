@@ -311,7 +311,13 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
             metrics["reactions"] = reel_insights["reactions"]
 
     metrics.setdefault("shares", 0)
-    metrics.setdefault("completion_rate", 0.0)
+    # 2026-08-12: removed `metrics.setdefault("completion_rate", 0.0)`.
+    # Prior behavior stamped 0.0 whenever the reel-insights endpoint
+    # didn't return avg_view_time_ms → reward-shaper trained bandit on
+    # a synthetic zero (facebook has completion_rate weight 0.20; ~5%
+    # reward penalty per post from this alone). Better: leave the
+    # metric ABSENT so redistribution scales up the observed metrics
+    # rather than compute reward on false-negative data.
 
     # 2026-08-12: compute VTR (view-through-rate) as a derived signal.
     # `reach` = unique users the algorithm showed the post to.

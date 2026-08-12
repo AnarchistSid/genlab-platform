@@ -76,11 +76,19 @@ def fetch_platform_metrics(
     post_id: str,
     window: CollectionWindow,
     niche_id: str = "",
+    duration_seconds: float | None = None,
 ) -> dict[str, Any]:
     """Fetch metrics for a single post from its platform API.
 
     Uses per-niche credentials via niche_credentials to avoid cross-channel
     token leakage (e.g. fetching CriticalRush metrics with BB tokens).
+
+    2026-08-12: added optional ``duration_seconds`` kwarg. When
+    supplied, threads to fetchers that can compute derived signals
+    (Instagram Reels 6h: completion_rate = avg_watch_time / duration).
+    Absent for callers that don't have blueprint context; fetchers
+    omit the derived metric when duration is None so the reward-shaper
+    redistributes weight rather than trains on synthetic zeros.
     """
     # Strip platform prefix from composite IDs (e.g., "instagram:123" → "123").
     #
@@ -104,7 +112,11 @@ def fetch_platform_metrics(
     # Instagram Reels: use specialised 6h fetcher for early skip-rate signal
     if platform == "instagram" and window == "6h":
         try:
-            return _fetch_instagram_reels_6h(raw_id, niche_id=niche_id)
+            return _fetch_instagram_reels_6h(
+                raw_id,
+                niche_id=niche_id,
+                duration_seconds=duration_seconds,
+            )
         except Exception as exc:
             logger.warning(
                 "[metric_collector] instagram reels 6h fetch failed for %s: %s", post_id, exc

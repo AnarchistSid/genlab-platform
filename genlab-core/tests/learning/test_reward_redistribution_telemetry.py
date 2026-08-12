@@ -86,6 +86,11 @@ class TestWarningThreshold:
                 "comments": 3,
                 "likes": 20,
                 "watch_time_pct": 0.6,
+                # 2026-08-12: added vtr + completion_rate to keep this
+                # test in sync with BASE_WEIGHTS after the reward-signal-
+                # richness expansion.
+                "vtr": 0.15,
+                "completion_rate": 0.35,
             },
             channel_metrics={"total_followers": 1000, "posts_last_30d": 20},
         )

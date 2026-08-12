@@ -110,6 +110,12 @@ BASE_WEIGHTS: dict[str, dict[str, float]] = {
         # populate. Small weight (0.10) — nudges without dominating.
         "views": 0.15,
         "vtr": 0.10,
+        # 2026-08-12: added completion_rate at 0.10. Retention signal
+        # orthogonal to VTR — VTR asks "did they click play?",
+        # completion_rate asks "did they watch to the end?" Populated
+        # by _fetch_instagram_reels_6h when caller passes
+        # duration_seconds. Conservative weight matches VTR.
+        "completion_rate": 0.10,
         "saves": 0.25,
         "dm_send_rate": 0.25,
         "shares": 0.15,

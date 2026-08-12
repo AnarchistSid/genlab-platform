@@ -164,8 +164,20 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
     return {}
 
 
-def _fetch_instagram_reels_6h(post_id: str, niche_id: str = "") -> dict:
-    """IG Reels-specific metrics for early 6h skip-rate signal."""
+def _fetch_instagram_reels_6h(
+    post_id: str,
+    niche_id: str = "",
+    duration_seconds: float | None = None,
+) -> dict:
+    """IG Reels-specific metrics for early 6h skip-rate signal.
+
+    2026-08-12: added optional ``duration_seconds`` kwarg. When
+    supplied along with ``ig_reels_avg_watch_time`` from the API,
+    computes ``completion_rate = avg_watch_time_seconds /
+    duration_seconds`` clamped [0, 1] — a content-retention signal
+    orthogonal to raw view counts. Reward-shaper picks this up via
+    the new `completion_rate` weight in BASE_WEIGHTS["instagram"].
+    """
     from genlab_core.publishing.niche_credentials import resolve_meta_credentials
 
     token = resolve_meta_credentials(niche_id).get("ig_access_token", "")
@@ -223,6 +235,19 @@ def _fetch_instagram_reels_6h(post_id: str, niche_id: str = "") -> dict:
             elif name == "plays":
                 # Legacy fallback — `views` wins via setdefault.
                 metrics.setdefault("views", val)
+
+        # 2026-08-12: completion_rate = avg_watch_time_seconds / duration.
+        # `ig_reels_avg_watch_time` is in MILLISECONDS per view per Meta
+        # API docs. Compute only when duration_seconds is supplied AND
+        # avg_watch_time was populated. Absent when either is missing so
+        # reward-shaper redistribution scales up observed metrics rather
+        # than training on a synthetic 0.0 (sibling to the FB
+        # completion_rate pollution fix in the same commit).
+        avg_ms = metrics.get("avg_watch_time", 0.0)
+        if avg_ms and duration_seconds and duration_seconds > 0:
+            completion = min(1.0, (float(avg_ms) / 1000.0) / float(duration_seconds))
+            metrics["completion_rate"] = round(completion, 4)
+
         return metrics
 
     logger.warning("[metric_collector] All IG reels 6h metric sets failed for %s", post_id)
