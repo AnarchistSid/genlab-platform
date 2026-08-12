@@ -686,6 +686,18 @@ def run_pass(
     policy = load_policy(niche_id, genlab_root=genlab_root)
     result = AutoApprovalPassResult(niche_id=niche_id, policy=policy, dry_run=dry_run)
 
+    # Ratchet advancement observability — logs per-niche
+    # calibration + outcome-readiness state so operator can see when
+    # to bump rollout_pct without needing dashboard queries. Runs
+    # BEFORE guards so operator gets signal even when policy is
+    # disabled or kill switch is active (helps decide when to enable).
+    # Fail-open per module docstring.
+    try:
+        from genlab_core.scheduling.ratchet_advancement import log_ratchet_signal
+        log_ratchet_signal(niche_id)
+    except Exception:
+        pass  # observability never blocks the pass
+
     # ── Guard 1: global kill switch (env var OR file flag) ───────────────
     active, source = _kill_switch_active()
     if active:
