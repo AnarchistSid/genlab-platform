@@ -1,0 +1,17 @@
+[Unit]
+Description=GenLab Trending Audio Scraper Timer — every 6 hours
+
+[Timer]
+# Every 6 hours matches the trending_audio_meta._CACHE_TTL_HOURS
+# constant. Fires at 00:00, 06:00, 12:00, 18:00 UTC.
+#
+# Persistent=false is deliberate — this is a high-frequency cache
+# refresh. Missed fires (VPS reboot) recover on the next scheduled
+# tick within 6h max; Persistent=true would create a thundering herd
+# on boot after long downtime.
+OnCalendar=*-*-* 00,06,12,18:00:00 UTC
+Persistent=false
+Unit=genlab-trending-audio-scraper.service
+
+[Install]
+WantedBy=timers.target

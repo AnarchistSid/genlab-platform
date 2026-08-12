@@ -1,0 +1,38 @@
+[Unit]
+Description=GenLab Trending Audio Scraper — Meta Reels + fallback sources
+Documentation=file:///opt/genlab/scripts/run_trending_audio_scraper.py
+After=network-online.target
+
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=GENLAB_TMP=/opt/genlab/.tmp
+
+# Iterates all 5 niches, reads each niche's music_mood vocabulary,
+# scrapes Meta trending audio, LLM-classifies into moods, writes
+# cache at .tmp/cache/trending_audio_meta/<niche>.json.
+#
+# Playwright is a soft dep — when not installed, scraper falls back
+# to requests-based Facebook Sound Kits page. When both paths fail,
+# runner exits 0 with WARN log (rule #26: "no data" is a data-side
+# signal, not an incident).
+#
+# One-time prod setup:
+#   pip install playwright
+#   playwright install chromium
+#   sudo cp deploy/systemd-phase2/genlab-trending-audio-scraper.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now genlab-trending-audio-scraper.timer
+ExecStart=/opt/genlab/.venv/bin/python scripts/run_trending_audio_scraper.py
+
+TimeoutSec=600
+
+[Install]
+WantedBy=multi-user.target

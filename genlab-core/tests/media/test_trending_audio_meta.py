@@ -33,16 +33,16 @@ class TestStubBehavior:
         monkeypatch.delenv("GENLAB_TRENDING_AUDIO_META_ENABLED", raising=False)
         assert get_trending_moods_for_niche("sports") == []
 
-    def test_flag_on_stub_still_empty(self, monkeypatch, caplog):
-        """When flag is on but no real scraper is deployed, the stub
-        returns [] + logs an INFO stub-notice. Verifies the operator
-        can see the stub is being called (helps triage 'why aren't
-        trending moods flowing')."""
+    def test_flag_on_no_cache_returns_empty(self, monkeypatch, tmp_path):
+        """When flag is on but the scraper has never written a cache
+        (fresh install / scraper not deployed yet), returns []. The
+        old STUB log is gone since 2026-08-12 — the cache reader is
+        the real code path now, and cache-miss returns [] silently."""
         monkeypatch.setenv("GENLAB_TRENDING_AUDIO_META_ENABLED", "1")
-        with caplog.at_level(logging.INFO):
-            result = get_trending_moods_for_niche("sports")
-        assert result == []
-        assert any("STUB" in r.message for r in caplog.records)
+        # Redirect cache root to an empty tmpdir so no stale prod cache
+        # can accidentally satisfy the read
+        monkeypatch.setenv("GENLAB_TMP", str(tmp_path))
+        assert get_trending_moods_for_niche("sports") == []
 
     def test_never_raises_on_flag_on(self, monkeypatch):
         """Even if internals blow up, the contract is fail-open."""

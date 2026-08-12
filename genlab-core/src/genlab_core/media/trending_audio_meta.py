@@ -151,15 +151,19 @@ def _read_cache(niche_id: str) -> list[TrendingAudioMood]:
     """Read the cache file for a niche. Returns [] on cache miss
     or stale entries.
 
-    TODO(scraper session): implement the real cache read once the
-    scraper writes to disk. For now: always returns [] with an INFO
-    log so operators can see the stub is being called.
+    2026-08-12 (`0000000`): wired to the actual scraper's cache reader.
+    When the scraper has never run OR the cache is stale (> 6h old),
+    returns []. Otherwise returns the classified moods.
     """
-    logger.info(
-        "[trending_audio_meta] STUB: no scraper implementation yet niche=%s",
-        niche_id,
-    )
-    return []
+    try:
+        from genlab_core.media.trending_audio_scraper import read_cache_for_niche
+        return read_cache_for_niche(niche_id, ttl_hours=_CACHE_TTL_HOURS)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(
+            "[trending_audio_meta] cache read helper failed for %s: %s",
+            niche_id, exc,
+        )
+        return []
 
 
 def moods_as_prompt_context(trending: list[TrendingAudioMood]) -> str:
