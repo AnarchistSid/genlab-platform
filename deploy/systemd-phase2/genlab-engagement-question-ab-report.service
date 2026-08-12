@@ -1,0 +1,36 @@
+[Unit]
+Description=GenLab Engagement Question A/B Report — weekly lift analysis
+Documentation=file:///opt/genlab/genlab-core/src/genlab_core/tools/analyze_engagement_question_ab.py
+After=network-online.target
+
+# 2026-07-14: mass OnFailure coverage — every genlab service
+# should route failures to the shared failure-alert template so
+# systemd_unit_failed critical alerts land in pipeline_alerts.
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=GENLAB_TMP=/opt/genlab/.tmp
+
+# Runs the engagement-question A/B analysis over the last 14 days
+# and emits the table to journalctl. Operator greps for
+# 'engagement_question_ab' or reads the systemd log after the timer
+# fires to see per-(niche, platform) lift + significance verdict.
+#
+# The tool exits 0 on success (even if some cells have insufficient
+# data — that's an expected steady-state, not a service failure).
+# Exit non-zero only on actual DB errors or missing DATABASE_URL.
+# Per rule #26: don't route empty-data cases to systemd exit codes.
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.tools.analyze_engagement_question_ab \
+    --window-days 14 --format table
+
+TimeoutSec=300
+
+[Install]
+WantedBy=multi-user.target

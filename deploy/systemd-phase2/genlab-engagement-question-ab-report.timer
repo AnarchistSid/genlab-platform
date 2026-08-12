@@ -1,0 +1,22 @@
+[Unit]
+Description=GenLab Engagement Question A/B Report Timer — Mondays 10:00 UTC weekly
+
+[Timer]
+# Monday 10:00 UTC (15:30 IST). Weekly cadence matches the
+# operator's Monday review pattern. Fires AFTER:
+#   * genlab-anticipation-accuracy.timer at 05:00 UTC (fresh data)
+#   * genlab-strategist.timer at 02:00 UTC Sunday (weekly retrospective)
+#   * genlab-late-reward.timer at 04:00 UTC (48h reward materialized)
+#
+# So by 10:00 UTC Monday, publishing_analytics.comments is fresh for
+# every blueprint published up through Saturday.
+#
+# Persistent=true so a missed fire (VPS reboot Monday morning)
+# catches up on next boot rather than silently skipping until next
+# week. Rule #21 (2026-07-14) applies to any weekly timer.
+OnCalendar=Mon *-*-* 10:00:00 UTC
+Persistent=true
+Unit=genlab-engagement-question-ab-report.service
+
+[Install]
+WantedBy=timers.target
