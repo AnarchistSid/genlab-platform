@@ -223,6 +223,146 @@ class TestFailOpen:
         assert signal.outcome_samples == 0
 
 
+class TestLogDedup:
+    """Log-level dedup: INFO only on material state change; DEBUG on
+    identical repeat emissions. Turns 240 near-identical lines/day
+    into ~2-5 informative INFO lines/day per niche."""
+
+    @pytest.fixture(autouse=True)
+    def _state_in_tmp(self, tmp_path, monkeypatch):
+        monkeypatch.setenv(
+            "GENLAB_RATCHET_LOG_STATE_PATH",
+            str(tmp_path / "ratchet_log_state.json"),
+        )
+
+    def _patched(self, monkeypatch, cal_stats, outcome, flag_on=False):
+        if flag_on:
+            monkeypatch.setenv("GENLAB_OUTCOME_READINESS_RATCHET_ENABLED", "1")
+        else:
+            monkeypatch.delenv("GENLAB_OUTCOME_READINESS_RATCHET_ENABLED", raising=False)
+        return (
+            patch(
+                "genlab_core.scheduling.calibration_logger.stats",
+                return_value=cal_stats,
+            ),
+            patch(
+                "genlab_core.scheduling.ratchet_advancement._query_outcome_readiness",
+                return_value=outcome,
+            ),
+        )
+
+    def test_first_call_emits_info(self, monkeypatch, caplog):
+        cal, out = self._patched(
+            monkeypatch,
+            _FakeCalStats(sample_count=10, agreement_count=8, ready_for_enforcement=False),
+            _FakeOutcome(sample_count=13, outcome_good_count=11, outcome_good_rate=0.85, ready=False),
+        )
+        with cal, out, caplog.at_level(logging.INFO):
+            log_ratchet_signal("ai_creators")
+        info_records = [r for r in caplog.records if r.levelname == "INFO" and "[ratchet]" in r.message]
+        assert len(info_records) == 1
+
+    def test_identical_second_call_is_debug(self, monkeypatch, caplog):
+        cal_stats = _FakeCalStats(sample_count=10, agreement_count=8, ready_for_enforcement=False)
+        outcome = _FakeOutcome(sample_count=13, outcome_good_count=11, outcome_good_rate=0.85, ready=False)
+        # First call establishes baseline
+        cal, out = self._patched(monkeypatch, cal_stats, outcome)
+        with cal, out:
+            log_ratchet_signal("ai_creators")
+        caplog.clear()
+        # Second identical call must NOT emit INFO
+        cal, out = self._patched(monkeypatch, cal_stats, outcome)
+        with cal, out, caplog.at_level(logging.DEBUG):
+            log_ratchet_signal("ai_creators")
+        info_ratchet = [
+            r for r in caplog.records if r.levelname == "INFO" and "[ratchet]" in r.message
+        ]
+        debug_ratchet = [
+            r for r in caplog.records if r.levelname == "DEBUG" and "[ratchet]" in r.message
+        ]
+        assert len(info_ratchet) == 0
+        assert len(debug_ratchet) == 1
+
+    def test_combined_ready_flip_emits_info(self, monkeypatch, caplog):
+        cal_stats_a = _FakeCalStats(sample_count=10, agreement_count=8, ready_for_enforcement=False)
+        outcome_a = _FakeOutcome(sample_count=13, outcome_good_count=11, outcome_good_rate=0.85, ready=False)
+        # First call — establish baseline (combined=False since flag off)
+        cal, out = self._patched(monkeypatch, cal_stats_a, outcome_a)
+        with cal, out:
+            log_ratchet_signal("ai_creators")
+        caplog.clear()
+        # Turn flag on — outcome_ready=True now flips combined_ready to True
+        outcome_b = _FakeOutcome(sample_count=13, outcome_good_count=11, outcome_good_rate=0.85, ready=True)
+        cal, out = self._patched(monkeypatch, cal_stats_a, outcome_b, flag_on=True)
+        with cal, out, caplog.at_level(logging.INFO):
+            log_ratchet_signal("ai_creators")
+        info_ratchet = [
+            r for r in caplog.records if r.levelname == "INFO" and "[ratchet]" in r.message
+        ]
+        assert len(info_ratchet) == 1
+        assert "combined=True" in info_ratchet[0].message
+
+    def test_sample_count_jump_emits_info(self, monkeypatch, caplog):
+        cal, out = self._patched(
+            monkeypatch,
+            _FakeCalStats(sample_count=10, agreement_count=8, ready_for_enforcement=False),
+            _FakeOutcome(sample_count=13, outcome_good_count=11, outcome_good_rate=0.85, ready=False),
+        )
+        with cal, out:
+            log_ratchet_signal("gaming")
+        caplog.clear()
+        # outcome_samples jumped by 7 -> should re-emit INFO
+        cal, out = self._patched(
+            monkeypatch,
+            _FakeCalStats(sample_count=10, agreement_count=8, ready_for_enforcement=False),
+            _FakeOutcome(sample_count=20, outcome_good_count=17, outcome_good_rate=0.85, ready=False),
+        )
+        with cal, out, caplog.at_level(logging.INFO):
+            log_ratchet_signal("gaming")
+        info_ratchet = [
+            r for r in caplog.records if r.levelname == "INFO" and "[ratchet]" in r.message
+        ]
+        assert len(info_ratchet) == 1
+
+    def test_sub_threshold_sample_change_is_debug(self, monkeypatch, caplog):
+        """Sample count change < 5 — not material, DEBUG only."""
+        cal, out = self._patched(
+            monkeypatch,
+            _FakeCalStats(sample_count=10, agreement_count=8, ready_for_enforcement=False),
+            _FakeOutcome(sample_count=13, outcome_good_count=11, outcome_good_rate=0.85, ready=False),
+        )
+        with cal, out:
+            log_ratchet_signal("sports")
+        caplog.clear()
+        # outcome_samples changed by only 3 — below the >= 5 threshold
+        cal, out = self._patched(
+            monkeypatch,
+            _FakeCalStats(sample_count=10, agreement_count=8, ready_for_enforcement=False),
+            _FakeOutcome(sample_count=16, outcome_good_count=14, outcome_good_rate=0.875, ready=False),
+        )
+        with cal, out, caplog.at_level(logging.DEBUG):
+            log_ratchet_signal("sports")
+        info_ratchet = [
+            r for r in caplog.records if r.levelname == "INFO" and "[ratchet]" in r.message
+        ]
+        assert len(info_ratchet) == 0
+
+    def test_per_niche_dedup_independent(self, monkeypatch, caplog):
+        """Each niche has its own dedup state — gaming's log doesn't
+        affect sports' emission decision."""
+        cal_stats = _FakeCalStats(sample_count=10, agreement_count=8, ready_for_enforcement=False)
+        outcome = _FakeOutcome(sample_count=13, outcome_good_count=11, outcome_good_rate=0.85, ready=False)
+        cal, out = self._patched(monkeypatch, cal_stats, outcome)
+        with cal, out, caplog.at_level(logging.INFO):
+            log_ratchet_signal("gaming")
+            log_ratchet_signal("sports")
+        info_ratchet = [
+            r for r in caplog.records if r.levelname == "INFO" and "[ratchet]" in r.message
+        ]
+        # Both niches emit their own INFO (both are "first call after startup")
+        assert len(info_ratchet) == 2
+
+
 class TestLogEmission:
     def test_log_line_shape(self, monkeypatch, caplog):
         monkeypatch.delenv("GENLAB_OUTCOME_READINESS_RATCHET_ENABLED", raising=False)

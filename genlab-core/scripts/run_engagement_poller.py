@@ -309,6 +309,13 @@ def main() -> None:
         "Engagement poller starting — mode=%s niche=%s platform=%s", mode, args.niche, args.platform
     )
 
+    # Flag-state audit — see genlab_core.observability.flag_audit
+    try:
+        from genlab_core.observability.flag_audit import log_active_flags
+        log_active_flags(context=f"engagement_poller_{args.platform}_{args.niche}")
+    except Exception:
+        pass
+
     # Multi-niche mode
     if args.niche == "all":
         asyncio.run(_run_all_pollers(args.platform))

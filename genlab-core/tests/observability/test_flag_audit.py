@@ -162,3 +162,20 @@ class TestStructuralWires:
         src = path.read_text()
         assert "from genlab_core.observability.flag_audit import log_active_flags" in src
         assert 'log_active_flags(context="publisher")' in src
+
+    def test_engagement_poller_calls_flag_audit(self):
+        """The engagement_poller is a long-running daemon; its
+        startup should emit flag_audit so operator can verify env
+        state independent of pipeline / publisher fires."""
+        import pathlib
+
+        path = (
+            pathlib.Path(__file__).parents[3]
+            / "genlab-core"
+            / "scripts"
+            / "run_engagement_poller.py"
+        )
+        src = path.read_text()
+        assert "from genlab_core.observability.flag_audit import log_active_flags" in src
+        assert "log_active_flags(context=f" in src
+        assert "engagement_poller_" in src
