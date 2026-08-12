@@ -218,6 +218,58 @@ class ThreadsClient:
             hashtags_str = " ".join(payload.hashtags)
             caption = f"{caption}\n\n{hashtags_str}".strip()
 
+        # First-frame brightness observability + auto-fix. Threads uses
+        # IG Reels' feed icon behavior — dark first frame = black tile
+        # = feed-CTR drop. Only fires when media_type == "video" AND
+        # first path is local (URL means past-the-fix-point). Same
+        # two-flag ladder as YT + IG + FB.
+        if media_type == "video" and media_paths:
+            first_path_str = str(media_paths[0])
+            if not first_path_str.startswith("http"):
+                try:
+                    from genlab_core.settings import env_true
+                    if env_true("GENLAB_FIRST_FRAME_VALIDATOR_ENABLED"):
+                        from pathlib import Path as _Path
+
+                        from genlab_core.media.first_frame_validator import (
+                            log_first_frame_signal,
+                        )
+                        local_path = _Path(first_path_str)
+                        quality = log_first_frame_signal(
+                            local_path,
+                            niche_id=payload.niche_id,
+                            platform="threads",
+                        )
+                        if (
+                            not quality.passed
+                            and quality.yavg is not None
+                            and env_true("GENLAB_FIRST_FRAME_AUTOFIX_ENABLED")
+                        ):
+                            from genlab_core.media.first_frame_brightener import (
+                                brighten_first_frames,
+                            )
+                            brightened = local_path.with_stem(
+                                f"{local_path.stem}_ff_brightened"
+                            )
+                            if brighten_first_frames(local_path, brightened):
+                                self._log.info(
+                                    "[first_frame_autofix] Threads swapped video "
+                                    "path=%s -> %s (original yavg=%.1f)",
+                                    local_path, brightened, quality.yavg,
+                                )
+                                media_paths = [brightened, *media_paths[1:]]
+                            else:
+                                self._log.warning(
+                                    "[first_frame_autofix] Threads brighten failed, "
+                                    "keeping original path=%s (yavg=%.1f)",
+                                    local_path, quality.yavg,
+                                )
+                except Exception as exc:
+                    self._log.debug(
+                        "[first_frame_validator] Threads wire raised (non-fatal): %s",
+                        exc,
+                    )
+
         try:
             if media_type == "video" and media_paths:
                 result = self._publish_video(caption=caption, media_paths=media_paths)

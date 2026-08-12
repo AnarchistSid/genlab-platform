@@ -276,3 +276,74 @@ class TestInstagramWire:
         )
         src = ig_path.read_text()
         assert "video_url = str(brightened)" in src
+
+
+class TestFacebookWire:
+    def test_facebook_source_wires_autofix(self):
+        """Structural pin: FB publish path wires the brightener."""
+        import pathlib
+
+        fb_path = (
+            pathlib.Path(__file__).parents[2]
+            / "src"
+            / "genlab_core"
+            / "platforms"
+            / "facebook.py"
+        )
+        src = fb_path.read_text()
+        assert "GENLAB_FIRST_FRAME_AUTOFIX_ENABLED" in src
+        assert "brighten_first_frames" in src
+        # Guard against remote-URL branch
+        assert 'if not video_url.startswith("http"):' in src
+        # Reassigns video_url on brighten success (FB path passes URL
+        # to _publish_video downstream)
+        assert "video_url = str(brightened)" in src
+
+
+class TestThreadsWire:
+    def test_threads_source_wires_autofix(self):
+        import pathlib
+
+        th_path = (
+            pathlib.Path(__file__).parents[2]
+            / "src"
+            / "genlab_core"
+            / "platforms"
+            / "threads.py"
+        )
+        src = th_path.read_text()
+        assert "GENLAB_FIRST_FRAME_AUTOFIX_ENABLED" in src
+        assert "brighten_first_frames" in src
+
+    def test_threads_wire_gates_on_video_media_type(self):
+        """Threads accepts video, image, or text media_type. Autofix
+        must only fire when media_type == 'video' — no point brightening
+        a still image or text-only post."""
+        import pathlib
+
+        th_path = (
+            pathlib.Path(__file__).parents[2]
+            / "src"
+            / "genlab_core"
+            / "platforms"
+            / "threads.py"
+        )
+        src = th_path.read_text()
+        assert 'if media_type == "video" and media_paths:' in src
+
+    def test_threads_wire_reassigns_first_media_path(self):
+        """Threads takes media_paths as a list. When brighten succeeds,
+        the first entry must be swapped for the brightened Path so the
+        downstream _publish_video uses it. Pin `media_paths = [brightened,`
+        prefix to catch a copy-paste that reassigns wrong variable."""
+        import pathlib
+
+        th_path = (
+            pathlib.Path(__file__).parents[2]
+            / "src"
+            / "genlab_core"
+            / "platforms"
+            / "threads.py"
+        )
+        src = th_path.read_text()
+        assert "media_paths = [brightened" in src

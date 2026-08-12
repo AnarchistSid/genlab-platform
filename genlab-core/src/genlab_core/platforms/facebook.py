@@ -225,6 +225,55 @@ class FacebookClient:
                 error="Video required — Facebook text-only posts disabled (video-first mandate)",
             )
 
+        # First-frame brightness observability + auto-fix. FB Reels feed
+        # icon behaves the same as YT Shorts / IG Reels — dark first
+        # frame renders as a black tile that drops feed-CTR. Only
+        # fires on local paths (already-uploaded URLs are past the
+        # fix point). Same two-flag ladder as YT + IG wires.
+        if not video_url.startswith("http"):
+            try:
+                from genlab_core.settings import env_true
+                if env_true("GENLAB_FIRST_FRAME_VALIDATOR_ENABLED"):
+                    from pathlib import Path as _Path
+
+                    from genlab_core.media.first_frame_validator import (
+                        log_first_frame_signal,
+                    )
+                    local_path = _Path(video_url)
+                    quality = log_first_frame_signal(
+                        local_path,
+                        niche_id=payload.niche_id,
+                        platform="facebook",
+                    )
+                    if (
+                        not quality.passed
+                        and quality.yavg is not None
+                        and env_true("GENLAB_FIRST_FRAME_AUTOFIX_ENABLED")
+                    ):
+                        from genlab_core.media.first_frame_brightener import (
+                            brighten_first_frames,
+                        )
+                        brightened = local_path.with_stem(
+                            f"{local_path.stem}_ff_brightened"
+                        )
+                        if brighten_first_frames(local_path, brightened):
+                            self._log.info(
+                                "[first_frame_autofix] FB swapped video path=%s -> %s "
+                                "(original yavg=%.1f)",
+                                local_path, brightened, quality.yavg,
+                            )
+                            video_url = str(brightened)
+                        else:
+                            self._log.warning(
+                                "[first_frame_autofix] FB brighten failed, keeping "
+                                "original path=%s (yavg=%.1f)",
+                                local_path, quality.yavg,
+                            )
+            except Exception as exc:
+                self._log.debug(
+                    "[first_frame_validator] FB wire raised (non-fatal): %s", exc,
+                )
+
         result = self._publish_video(video_url=video_url, message=message)
 
         # Post affiliate link as first comment (FB downranks external URLs
