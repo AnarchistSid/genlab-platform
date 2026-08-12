@@ -317,6 +317,50 @@ def _write_back_to_blueprint(
     )
 
 
+def _mark_insights_unavailable(
+    client: Any,
+    record_id: str,
+    platform: str,
+    post_id: str,
+    age_hours: float,
+) -> None:
+    """Terminal-advance a publishing_analytics row from SUCCESS to
+    INSIGHTS_UNAVAILABLE.
+
+    Called from the insights fetcher loop when a row is >72h past
+    publish AND `_fetch_platform_insights` returns empty. The
+    platform's API is reporting no data (usually a 400 for a deleted
+    post, sometimes a permissions issue, sometimes a persistent 5xx).
+    Twelve+ retry cycles across 72h means transient failures have
+    already cleared — leaving the row at SUCCESS forever causes
+    infinite retry storms AND clutters the stuck-at-SUCCESS monitor.
+
+    Terminal state semantics: matches DELETED / REMOVED_BY_META /
+    SKIPPED. Downstream (late_reward, bandit) treats it as "no data
+    available", not as a failure to retry.
+    """
+    logger.warning(
+        "insights_unavailable_terminal_advance platform=%s post_id=%s "
+        "age_h=%.1f — advancing SUCCESS -> INSIGHTS_UNAVAILABLE",
+        platform, post_id, age_hours,
+    )
+    try:
+        client.publishing_analytics.update(
+            record_id,
+            {"status": "INSIGHTS_UNAVAILABLE"},
+            typecast=True,
+        )
+    except Exception as exc:
+        # Same fail-open contract as _mark_window_completed. The
+        # WARNING above already logged what the caller cared about;
+        # a persist failure here just means the row will retry next
+        # cycle (identical to pre-fix behavior).
+        logger.warning(
+            "insights_unavailable update failed for %s/%s: %s",
+            platform, post_id, exc,
+        )
+
+
 def _mark_window_completed(
     client: Any,
     record_id: str,
@@ -417,6 +461,25 @@ def fetch_insights_for_window(
         if not insights:
             p_stats["errors"] += 1
             stats["errors"] += 1
+            # 2026-08-12: age-gated terminal advance for perpetually-failing
+            # fetches. If the row is >72h past publish AND fetch returned
+            # empty, the post is likely deleted / permissions revoked /
+            # unrecoverable — advance to INSIGHTS_UNAVAILABLE (terminal)
+            # so run_fetch_insights stops retrying it every cycle and the
+            # stuck-monitor stops firing for it. 72h = 12+ timer fires at
+            # 6h cadence — enough attempts that transient failures have
+            # already cleared. Motivating incident: 257 historical Threads
+            # rows stuck forever from pre-2026-07-22 wire-gap era.
+            try:
+                published_at_str = f.get("published_at", "")
+                age_h = _post_age_hours(published_at_str)
+                if age_h is not None and age_h > 72.0:
+                    _mark_insights_unavailable(client, r["id"], platform, post_id, age_h)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "insights_unavailable advance failed for %s/%s: %s",
+                    platform, post_id, exc,
+                )
             continue
 
         # Write to Analytics table

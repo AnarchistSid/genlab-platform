@@ -862,6 +862,12 @@ def _check_stuck_at_success_past_24h(dsn: str) -> list[Alert]:
     Alert per (niche, platform) with >=3 stuck rows — one-off stuck posts
     (single-post deletion) are noise; systemic issues cluster.
     """
+    # 2026-08-12 (same-day sibling): status='INSIGHTS_UNAVAILABLE' is
+    # the terminal advance from run_fetch_insights when a row is
+    # >72h old + fetch persistently empty. Exclude it here — those
+    # rows have been ACKNOWLEDGED as unrecoverable and shouldn't fire
+    # perpetual alerts. The 30-day floor already bounds the query;
+    # this filter ensures the terminal-state escape hatch works.
     with pg_connect(dsn) as conn:
         rows = conn.execute(
             """
