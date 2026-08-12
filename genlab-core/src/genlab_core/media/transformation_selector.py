@@ -436,6 +436,30 @@ def _log_music_mood_llm_steer(
     except Exception as exc:  # noqa: BLE001
         logger.debug("[transform_selector] music_mood_llm_fit import failed: %s", exc)
         return
+    # Optional trending-audio context. Reads Meta Reels catalog via
+    # `trending_audio_meta` (STUB today — returns [] unless the real
+    # scraper is deployed AND flag on AND cache populated). Empty
+    # context string = baseline behavior; non-empty biases the LLM
+    # toward viral moods when tone allows. See trending_audio_meta.py
+    # for the multi-day spike scope + implementation checklist.
+    trending_context = ""
+    try:
+        from genlab_core.media.trending_audio_meta import (
+            get_trending_moods_for_niche,
+            moods_as_prompt_context,
+        )
+        trending = get_trending_moods_for_niche(niche_id)
+        # Filter to moods present in this niche's available set — no
+        # point suggesting a trending mood the orchestrator can't
+        # actually pick.
+        trending_filtered = [t for t in trending if t.mood in available_moods]
+        trending_context = moods_as_prompt_context(trending_filtered)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(
+            "[transform_selector] trending_audio_meta failed (falling back to baseline): %s",
+            exc,
+        )
+
     try:
         suggestion = suggest_mood(
             niche_id=niche_id,
@@ -443,6 +467,7 @@ def _log_music_mood_llm_steer(
             title=str(blueprint_context.get("title") or ""),
             summary=str(blueprint_context.get("summary") or ""),
             available_moods=sorted(available_moods),
+            trending_context=trending_context,
         )
     except Exception as exc:  # noqa: BLE001
         logger.debug("[transform_selector] suggest_mood raised (should not): %s", exc)

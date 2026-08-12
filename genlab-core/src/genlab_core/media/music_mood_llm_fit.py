@@ -84,6 +84,13 @@ Selection criteria (in order):
 2. Tempo match (fast-cut action -> high-energy mood)
 3. Genre convention (sports highlights typically hype/aggressive;
    trailer reveals typically cinematic/mysterious)
+4. When "TRENDING ON META REELS: ..." context is provided AND the
+   trending mood is a reasonable tone-fit (not a clash), prefer
+   the trending mood — Meta's Reels algorithm boosts videos using
+   currently-viral audio. When the trending mood clashes with the
+   content tone (e.g., trending mood is "whimsical" but content is
+   a tragic sports moment), IGNORE the trending signal and pick on
+   tone alone. Tone mismatch is worse than missing a viral wave.
 
 Respond with JSON ONLY:
   {"mood": "<exact_mood_from_available_list>",
@@ -130,8 +137,23 @@ def suggest_mood(
     title: str,
     summary: str,
     available_moods: list[str],
+    *,
+    trending_context: str = "",
 ) -> MoodSuggestion | None:
     """Ask an LLM to pick the best-fit music mood from a set.
+
+    Args:
+        niche_id, hook, title, summary: content classification inputs.
+        available_moods: mood labels the transformation orchestrator
+            can consume. LLM's answer MUST be in this list; hallucinated
+            picks are rejected (return None).
+        trending_context: optional pre-formatted string injected into
+            the prompt when non-empty. Comes from
+            `trending_audio_meta.moods_as_prompt_context(...)` which
+            reads Meta Reels trending audio catalog. Empty string
+            (default) = no trending signal available -> baseline LLM
+            selection. See `trending_audio_meta.py` for the stub
+            + design doc.
 
     Returns None on any failure (flag off, no API key, LLM refusal,
     unparseable output, mood not in available list). Never raises.
@@ -157,12 +179,22 @@ def suggest_mood(
         logger.debug("[music_mood_llm_fit] anthropic package not installed")
         return None
 
+    trending_line = ""
+    if trending_context:
+        # Empty-string check preserves the "no trending signal ->
+        # baseline behavior" invariant. Non-empty context injects one
+        # extra prompt line so the LLM biases toward viral moods when
+        # the content tone is otherwise ambiguous. Zero cost impact —
+        # ~20 additional tokens.
+        trending_line = f"{trending_context}\n\n"
+
     user_prompt = (
         f"NICHE: {niche_id}\n\n"
         f"HOOK: {hook[:200]}\n\n"
         f"TITLE: {title[:200]}\n\n"
         f"SUMMARY: {summary[:500]}\n\n"
         f"AVAILABLE MOODS: {', '.join(available_moods)}\n\n"
+        f"{trending_line}"
         "Pick the best-fit mood."
     )
 
