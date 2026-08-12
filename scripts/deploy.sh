@@ -292,15 +292,16 @@ log "New HEAD: $HEAD_AFTER ✓"
 # re-accumulate silently. Runs as root (we already are); repair script
 # is idempotent + short — always safe to run.
 if [[ "$APPLY" -eq 1 ]]; then
-    log "Repairing ownership drift (chown -R genlab:genlab /opt/genlab)..."
+    log "Repairing ownership drift (chown -R genlab:genlab)..."
+    # .git ALWAYS needs chown — repair_permissions.sh's scan
+    # explicitly excludes .git/, but every `git fetch`/`git pull`
+    # above wrote root-owned objects there. This was the 2026-08-12
+    # gap: repair_permissions.sh cleaned everything else but left
+    # 8 objects root-owned in .git.
+    chown -R genlab:genlab /opt/genlab/.git 2>&1 | tee -a "$LOG"
     if [[ -x /opt/genlab/scripts/repair_permissions.sh ]]; then
         /opt/genlab/scripts/repair_permissions.sh --apply 2>&1 \
           | grep -E '\[.*\]|repair complete' | tee -a "$LOG"
-    else
-        # Fallback: repair_permissions.sh not present yet in the tree
-        # we just pulled — do the minimal chown inline so at least .git
-        # is safe for the next fetch.
-        chown -R genlab:genlab /opt/genlab/.git 2>&1 | tee -a "$LOG"
     fi
 fi
 
