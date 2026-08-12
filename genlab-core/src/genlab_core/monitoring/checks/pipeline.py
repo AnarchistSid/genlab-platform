@@ -317,36 +317,89 @@ def check_qc_collapse(reports: list[dict], niche_id: str) -> list[Alert]:
 
 
 def check_source_starvation(reports: list[dict], niche_id: str) -> list[Alert]:
-    """Check if source fetch is returning too few videos."""
+    """Check if source fetch produced enough content for the pipeline.
+
+    The historical implementation only read `trending_videos.json` —
+    written by `FetchTrendingVideos` (the YouTube Data API path used
+    by gaming / sports / movies / ai_creators). Anime's pipeline does
+    NOT run that stage (no YouTube native anime category); it uses
+    RSS + `FetchAnimePromos` + `AnimeContentResearchStrategy` and
+    populates stories via different context keys. So anime always had
+    `trending_videos.json == []` even on healthy runs, producing a
+    persistent false-positive `source_starvation` WARN every 30 min.
+
+    Fix (2026-08-12): consult the run report's `stories_count` as the
+    authoritative "did fetch succeed" signal. When
+    `trending_videos.json` is empty but `stories_count >= 3`, an
+    alt-source fetcher (RSS/promos/etc) succeeded — no starvation.
+    Only warn when BOTH signals show low counts.
+    """
     alerts = []
-    if reports:
-        latest = reports[0]
-        tv_path = pathlib.Path(latest.get("_run_dir", "")) / "trending_videos.json"
-        if tv_path.exists():
-            try:
-                vids = json.loads(tv_path.read_text())
-                if len(vids) < 3:
-                    alerts.append(
-                        Alert(
-                            check="source_starvation",
-                            severity="warning",
-                            message=f"Only {len(vids)} videos fetched (< 3 minimum)",
-                            niche_id=niche_id,
-                        )
-                    )
-                # Check single-source dependency
-                channels = set(v.get("channel_name", "") for v in vids)
-                if len(channels) == 1 and len(vids) > 3:
-                    alerts.append(
-                        Alert(
-                            check="single_source",
-                            severity="warning",
-                            message=f"All {len(vids)} videos from single channel: {channels.pop()}",
-                            niche_id=niche_id,
-                        )
-                    )
-            except (json.JSONDecodeError, ValueError):
-                pass
+    if not reports:
+        return alerts
+    latest = reports[0]
+
+    # Alt-source fallback signal — how many stories actually landed
+    # in the pipeline, regardless of which fetcher produced them.
+    # Anime relies entirely on this path.
+    stories_count = 0
+    try:
+        stories_count = int(
+            latest.get("metrics", {}).get("stories_count", 0)
+        )
+    except (TypeError, ValueError):
+        stories_count = 0
+
+    tv_path = pathlib.Path(latest.get("_run_dir", "")) / "trending_videos.json"
+    if not tv_path.exists():
+        # No trending_videos.json file: fall back entirely on
+        # stories_count. Warn only if BOTH signals starve.
+        if stories_count < 3:
+            alerts.append(
+                Alert(
+                    check="source_starvation",
+                    severity="warning",
+                    message=(
+                        f"Only {stories_count} stories fetched via alt sources; "
+                        "no trending_videos.json manifest"
+                    ),
+                    niche_id=niche_id,
+                )
+            )
+        return alerts
+
+    try:
+        vids = json.loads(tv_path.read_text())
+    except (json.JSONDecodeError, ValueError):
+        return alerts
+
+    # Combined signal: warn only when trending_videos < 3 AND
+    # stories_count < 3. An alt-source fetch producing ≥3 stories
+    # counts as "not starved" even if trending_videos is empty.
+    if len(vids) < 3 and stories_count < 3:
+        alerts.append(
+            Alert(
+                check="source_starvation",
+                severity="warning",
+                message=(
+                    f"Only {len(vids)} trending videos + {stories_count} "
+                    "alt-source stories fetched (< 3 combined minimum)"
+                ),
+                niche_id=niche_id,
+            )
+        )
+    # Check single-source dependency — only meaningful when there ARE
+    # trending videos to inspect
+    channels = set(v.get("channel_name", "") for v in vids)
+    if len(channels) == 1 and len(vids) > 3:
+        alerts.append(
+            Alert(
+                check="single_source",
+                severity="warning",
+                message=f"All {len(vids)} videos from single channel: {channels.pop()}",
+                niche_id=niche_id,
+            )
+        )
     return alerts
 
 
