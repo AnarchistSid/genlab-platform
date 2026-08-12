@@ -503,6 +503,7 @@ def check_learning_loops_silent_fail() -> list[Alert]:
         _check_strategist_apply_dead,
         _check_reward_pipeline_flow,
         _check_ig_view_metric_regression,
+        _check_stuck_at_success_past_24h,
     ):
         try:
             alerts.extend(check_fn(dsn))
@@ -841,3 +842,74 @@ def _check_ig_view_metric_regression(dsn: str) -> list[Alert]:
             )
         ]
     return []
+
+
+def _check_stuck_at_success_past_24h(dsn: str) -> list[Alert]:
+    """Detect publishing_analytics rows stuck at SUCCESS past the 24h
+    insight window. Root cause is usually one of:
+
+    * Post deleted / removed by platform → API returns 400 → fetcher
+      returns empty dict → run_fetch_insights `if not insights: continue`
+      loops forever.
+    * Post_id malformed (double-prefix, wrong shape).
+    * Fetcher raising unhandled exception → swallowed by outer try/except.
+
+    Motivating incident: 2026-08-12 audit found 257 historical Threads
+    rows stuck at SUCCESS forever. Test on the most-recent stuck row
+    (gaming Aug 10) reproduced the class: post returns 400 from Threads
+    API → `_fetch_threads` returns {} → status never advances.
+
+    Alert per (niche, platform) with >=3 stuck rows — one-off stuck posts
+    (single-post deletion) are noise; systemic issues cluster.
+    """
+    with pg_connect(dsn) as conn:
+        rows = conn.execute(
+            """
+            SELECT niche_id, platform, COUNT(*) AS n,
+                   MIN(published_at) AS oldest_stuck,
+                   MAX(published_at) AS newest_stuck
+            FROM publishing_analytics
+            WHERE status = 'SUCCESS'
+              AND published_at < NOW() - INTERVAL '24 hours'
+              AND published_at > NOW() - INTERVAL '30 days'
+            GROUP BY niche_id, platform
+            HAVING COUNT(*) >= 3
+            ORDER BY COUNT(*) DESC
+            """
+        ).fetchall()
+
+    alerts: list[Alert] = []
+    for row in rows:
+        niche_id = row.get("niche_id") if hasattr(row, "get") else row[0]
+        platform = row.get("platform") if hasattr(row, "get") else row[1]
+        n = int((row.get("n") if hasattr(row, "get") else row[2]) or 0)
+        newest = row.get("newest_stuck") if hasattr(row, "get") else row[4]
+        alerts.append(
+            Alert(
+                check=f"silent_fail_insights_stuck:{platform}",
+                severity="warning",
+                niche_id=str(niche_id or ""),
+                message=(
+                    f"{n} {platform} posts for {niche_id} stuck at SUCCESS "
+                    f"past 24h (newest stuck: {newest}). Insights fetcher "
+                    f"likely returning empty dict for these posts — "
+                    f"run_fetch_insights `if not insights: continue` never "
+                    f"advances status. Common causes: post deleted (API 400), "
+                    f"post_id malformed, fetcher raising swallowed exception."
+                ),
+                details={
+                    "stuck_count": n,
+                    "platform": str(platform),
+                    "oldest": str(row.get("oldest_stuck") if hasattr(row, "get") else row[3]),
+                    "newest": str(newest),
+                },
+                auto_fix=(
+                    "1) sample the stuck post_ids; 2) call the platform's "
+                    "fetch_* directly to reproduce; 3) if 400 = post deleted, "
+                    "batch-update to INSIGHTS_UNAVAILABLE (needs enum add); "
+                    "4) if 5xx / network = transient, re-run insights fetcher "
+                    "manually."
+                ),
+            )
+        )
+    return alerts

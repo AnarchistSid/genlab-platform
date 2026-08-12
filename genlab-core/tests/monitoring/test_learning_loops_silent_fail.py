@@ -22,6 +22,7 @@ from genlab_core.monitoring.checks.bandit_engagement import (
     _check_outcome_calibration_dead,
     _check_reward_pipeline_flow,
     _check_strategist_apply_dead,
+    _check_stuck_at_success_past_24h,
     check_learning_loops_silent_fail,
 )
 
@@ -331,11 +332,11 @@ class TestOrchestrator:
         alerts = check_learning_loops_silent_fail()
         assert alerts == []
 
-    def test_orchestrator_wires_all_six_sub_checks(self, monkeypatch):
+    def test_orchestrator_wires_all_seven_sub_checks(self, monkeypatch):
         """Regression pin: if a sub-check gets accidentally removed
         from the tuple, coverage silently drops. This test names each
-        sub-check explicitly. 6 sub-checks after 2026-08-11 artifact-
-        freshness addendum (was 5)."""
+        sub-check explicitly. 7 sub-checks after 2026-08-12 stuck-at-
+        SUCCESS addendum (was 6 after 2026-08-11 artifact-freshness)."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://mock")
 
         import inspect
@@ -350,6 +351,7 @@ class TestOrchestrator:
             "_check_strategist_apply_dead",
             "_check_reward_pipeline_flow",
             "_check_ig_view_metric_regression",
+            "_check_stuck_at_success_past_24h",
         ):
             assert expected_check in source, (
                 f"check_learning_loops_silent_fail must include "
@@ -387,3 +389,107 @@ class TestOrchestrator:
         alert_checks = {a.check for a in alerts}
         assert "silent_fail_late_reward" in alert_checks
         assert "silent_fail_outcome_calibration" in alert_checks
+
+
+class TestStuckAtSuccessPast24h:
+    """2026-08-12: publishing_analytics rows stuck at SUCCESS past 24h
+    indicate the insights fetcher is silently returning empty for
+    those posts — run_fetch_insights `if not insights: continue`
+    never advances the status. Motivating case: 257 historical Threads
+    rows stuck forever because API returns 400 on deleted posts."""
+
+    def test_alerts_when_niche_platform_has_gte_3_stuck(self):
+        stuck_rows = [
+            {
+                "niche_id": "ai_creators",
+                "platform": "threads",
+                "n": 60,
+                "oldest_stuck": "2026-04-06",
+                "newest_stuck": "2026-07-14",
+            },
+            {
+                "niche_id": "gaming",
+                "platform": "threads",
+                "n": 46,
+                "oldest_stuck": "2026-03-15",
+                "newest_stuck": "2026-08-10",
+            },
+        ]
+
+        conn = MagicMock()
+        conn.__enter__ = MagicMock(return_value=conn)
+        conn.__exit__ = MagicMock(return_value=None)
+        result = MagicMock()
+        result.fetchall.return_value = stuck_rows
+        conn.execute.return_value = result
+
+        with patch(
+            "genlab_core.monitoring.checks.bandit_engagement.pg_connect",
+            return_value=conn,
+        ):
+            alerts = _check_stuck_at_success_past_24h("postgresql://x")
+
+        assert len(alerts) == 2
+        assert all(a.check == "silent_fail_insights_stuck:threads" for a in alerts)
+        # Niche_id propagated so dedup keys on (check_name, niche_id) — same
+        # platform issue on gaming vs ai_creators produces distinct alerts.
+        assert {a.niche_id for a in alerts} == {"ai_creators", "gaming"}
+        # Details carry actionable info for triage
+        assert all(a.details["stuck_count"] > 0 for a in alerts)
+        assert all(a.severity == "warning" for a in alerts)
+
+    def test_no_alert_when_below_threshold(self):
+        """1-2 stuck rows per (niche, platform) is single-post noise
+        (deletion, one-off). Alert only fires at >=3 which indicates
+        a systemic pattern. SQL HAVING clause enforces this."""
+        conn = MagicMock()
+        conn.__enter__ = MagicMock(return_value=conn)
+        conn.__exit__ = MagicMock(return_value=None)
+        result = MagicMock()
+        result.fetchall.return_value = []  # HAVING >= 3 already filtered
+        conn.execute.return_value = result
+
+        with patch(
+            "genlab_core.monitoring.checks.bandit_engagement.pg_connect",
+            return_value=conn,
+        ):
+            alerts = _check_stuck_at_success_past_24h("postgresql://x")
+
+        assert alerts == []
+
+    def test_check_name_encodes_platform_for_dedup(self):
+        """Distinct check_name per platform — different platforms
+        with same shape should NOT dedup into one alert
+        (write_alerts_to_db keys on check_name + niche_id)."""
+        conn = MagicMock()
+        conn.__enter__ = MagicMock(return_value=conn)
+        conn.__exit__ = MagicMock(return_value=None)
+        result = MagicMock()
+        result.fetchall.return_value = [
+            {
+                "niche_id": "gaming",
+                "platform": "threads",
+                "n": 5,
+                "oldest_stuck": "x",
+                "newest_stuck": "y",
+            },
+            {
+                "niche_id": "gaming",
+                "platform": "instagram",
+                "n": 3,
+                "oldest_stuck": "x",
+                "newest_stuck": "y",
+            },
+        ]
+        conn.execute.return_value = result
+
+        with patch(
+            "genlab_core.monitoring.checks.bandit_engagement.pg_connect",
+            return_value=conn,
+        ):
+            alerts = _check_stuck_at_success_past_24h("postgresql://x")
+
+        assert {a.check for a in alerts} == {
+            "silent_fail_insights_stuck:threads",
+            "silent_fail_insights_stuck:instagram",
+        }
