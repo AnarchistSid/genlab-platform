@@ -131,6 +131,21 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
             # weight to metrics we actually observe — otherwise their 0.3 +
             # -0.05 weight share becomes a permanent dead zone in the IG
             # reward signal.
+
+            # 2026-08-12: compute VTR (view-through-rate) as a derived signal.
+            # `reach` = unique users the algorithm showed the reel to.
+            # `views` = plays. VTR = views / reach measures "of the people
+            # who saw it, how many watched?" — a purer content-quality signal
+            # than raw views (which conflates algorithm-distribution size
+            # with content appeal). Reward-shaper picks this up via the
+            # new `vtr` weight in BASE_WEIGHTS["instagram"].
+            reach_val = int(metrics.get("reach", 0) or 0)
+            views_val = int(metrics.get("views", 0) or 0)
+            if reach_val > 0 and views_val > 0:
+                # Clamp at 1.0 for rare cases where views > reach (multiple
+                # views per unique user; algorithm counting differs slightly).
+                metrics["vtr"] = min(1.0, views_val / reach_val)
+
             return metrics
         except Exception as exc:
             # Per-set failure gets a WARNING so a Meta metric deprecation

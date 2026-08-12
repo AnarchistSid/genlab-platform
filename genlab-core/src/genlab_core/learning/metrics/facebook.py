@@ -313,6 +313,17 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
     metrics.setdefault("shares", 0)
     metrics.setdefault("completion_rate", 0.0)
 
+    # 2026-08-12: compute VTR (view-through-rate) as a derived signal.
+    # `reach` = unique users the algorithm showed the post to.
+    # `video_views` = plays. VTR measures "of the people who saw it,
+    # how many watched?" — content-quality signal orthogonal to raw
+    # reach. Reward-shaper picks this up via the new `vtr` weight in
+    # BASE_WEIGHTS["facebook"]. Same logic as instagram sibling.
+    reach_val = int(metrics.get("reach", 0) or 0)
+    views_val = int(metrics.get("video_views", 0) or 0)
+    if reach_val > 0 and views_val > 0:
+        metrics["vtr"] = min(1.0, views_val / reach_val)
+
     # PR #523 (2026-06-24): v23 synthetic fallback for engaged_users.
     # post_engaged_users is deprecated for new posts in v22.0 and will
     # silently return 0 once Meta cuts over. Per the registry's

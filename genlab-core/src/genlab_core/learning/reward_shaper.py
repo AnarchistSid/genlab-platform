@@ -100,7 +100,16 @@ BASE_WEIGHTS: dict[str, dict[str, float]] = {
         # the audience. Wired by learning/metrics/follower_delta.py
         # augment call at 168h reward-collection window. Other weights
         # reduced proportionally to preserve sum ≈ 1.0.
+        #
+        # 2026-08-12: added `vtr` at 0.10 (view-through-rate = views/reach).
+        # Prior IG reward was BLIND to algorithm-distribution quality —
+        # a post with 100 views on 1000 reach (10% VTR) and one with
+        # 100 views on 100 reach (100% VTR) scored identically. VTR
+        # is the content-quality signal orthogonal to raw reach.
+        # Computed by _fetch_instagram when both `views` + `reach`
+        # populate. Small weight (0.10) — nudges without dominating.
         "views": 0.15,
+        "vtr": 0.10,
         "saves": 0.25,
         "dm_send_rate": 0.25,
         "shares": 0.15,
@@ -119,10 +128,19 @@ BASE_WEIGHTS: dict[str, dict[str, float]] = {
         # legacy weights had ZERO follower-growth signal even though FB
         # is the highest-follower niche for ai_creators (10K legacy) +
         # movies (8.7K).
+        #
+        # 2026-08-12: added `vtr` at 0.10 (view-through-rate =
+        # video_views/reach). Sibling to instagram vtr — content-quality
+        # signal orthogonal to raw reach. Computed by _fetch_facebook
+        # when both video_views + reach populate. completion_rate stays
+        # at 0.20 (Facebook was the only platform with this weight
+        # pre-2026-08-12; instagram gets it in a follow-up ship once
+        # duration-threading lands).
         "minutes_viewed": 0.30,
         "shares": 0.25,
         "completion_rate": 0.20,
         "follower_gained": 0.15,
+        "vtr": 0.10,
         "reach": 0.10,
     },
     "twitter": {
