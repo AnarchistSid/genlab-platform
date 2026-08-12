@@ -276,6 +276,35 @@ fi
 log "New HEAD: $HEAD_AFTER ✓"
 
 # ----------------------------------------------------------------------------
+# Phase 5a — Repair ownership drift
+# ----------------------------------------------------------------------------
+# Deploy runs as root (required for systemctl in Phase 7). Every `git
+# fetch` + `git pull` above writes new objects to .git/ owned by root.
+# Every unit-file copy in Phase 6b writes to /etc/systemd/ owned by
+# root (correct there). But leaving /opt/genlab objects owned by root
+# breaks: (a) next `sudo -u genlab git fetch` fails "insufficient
+# permission", (b) uv.lock refresh fails "Permission denied",
+# (c) triggers git_ownership_drift + permissions_drift CRITICAL alerts.
+#
+# Historical: this recurrence source lit up 2× critical alerts tonight
+# (2026-08-12) with 767 root-owned files. Manual repair via
+# repair_permissions.sh cleared. Now built into deploy so drift can't
+# re-accumulate silently. Runs as root (we already are); repair script
+# is idempotent + short — always safe to run.
+if [[ "$APPLY" -eq 1 ]]; then
+    log "Repairing ownership drift (chown -R genlab:genlab /opt/genlab)..."
+    if [[ -x /opt/genlab/scripts/repair_permissions.sh ]]; then
+        /opt/genlab/scripts/repair_permissions.sh --apply 2>&1 \
+          | grep -E '\[.*\]|repair complete' | tee -a "$LOG"
+    else
+        # Fallback: repair_permissions.sh not present yet in the tree
+        # we just pulled — do the minimal chown inline so at least .git
+        # is safe for the next fetch.
+        chown -R genlab:genlab /opt/genlab/.git 2>&1 | tee -a "$LOG"
+    fi
+fi
+
+# ----------------------------------------------------------------------------
 # Phase 5.5 — Restore +x bit on shell scripts
 # ----------------------------------------------------------------------------
 # Discovered 2026-06-30: git stores the executable bit but a fresh
