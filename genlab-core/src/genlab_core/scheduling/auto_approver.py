@@ -607,6 +607,22 @@ def load_policy(niche_id: str, *, genlab_root: Path | None = None) -> AutoApprov
             rollout_pct = 1.0
         else:
             rollout_pct = rollout_pct_raw
+
+        # AUTO #2 Phase 3 auto-advance override (2026-08-12). When
+        # ratchet_advancer has advanced this niche's pct beyond the
+        # YAML baseline, use the advanced value. Monotone-up only —
+        # never lets state DEMOTE the YAML value (operator YAML edit
+        # is authoritative for pauses/lowers). Fail-open per module.
+        try:
+            from genlab_core.scheduling.ratchet_advancer import (
+                get_state_override_for_niche,
+            )
+            rollout_pct = get_state_override_for_niche(
+                niche_id, yaml_pct=rollout_pct,
+            )
+        except Exception:
+            pass  # observability wired in ratchet_advancer
+
         return AutoApprovalPolicy(
             enabled=bool(block.get("enabled", False)),
             min_confidence=float(block.get("min_confidence", 0.85)),
