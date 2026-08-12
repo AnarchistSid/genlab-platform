@@ -371,23 +371,54 @@ class YouTubeClient:
 
         video_path = payload.media_paths[0]
 
-        # First-frame brightness observability. YouTube Shorts displays
-        # the video's first frame as the feed icon before playback —
-        # dark first frames render as black tiles and drop feed-CTR.
-        # Flag-gated `GENLAB_FIRST_FRAME_VALIDATOR_ENABLED`, log-only
-        # today (no reject). See `media.first_frame_validator` for
-        # the compositor-fix follow-up plan.
+        # First-frame brightness observability + auto-fix. YouTube Shorts
+        # displays the video's first frame as the feed icon before
+        # playback — dark first frames render as black tiles and drop
+        # feed-CTR.
+        #
+        # Two-flag ladder:
+        #   * GENLAB_FIRST_FRAME_VALIDATOR_ENABLED — measure + log
+        #     DARK_FIRST_FRAME rate (observability only)
+        #   * GENLAB_FIRST_FRAME_AUTOFIX_ENABLED — when dark detected,
+        #     re-encode with 100ms brightness boost so YouTube's feed
+        #     icon extraction grabs a bright frame. Requires validator
+        #     flag on too (needs the DARK verdict to trigger).
         try:
             from genlab_core.settings import env_true
             if env_true("GENLAB_FIRST_FRAME_VALIDATOR_ENABLED"):
                 from genlab_core.media.first_frame_validator import (
                     log_first_frame_signal,
                 )
-                log_first_frame_signal(
+                quality = log_first_frame_signal(
                     video_path,
                     niche_id=payload.niche_id,
                     platform="youtube",
                 )
+                # Auto-fix if operator opted in AND validator flagged dark
+                if (
+                    not quality.passed
+                    and quality.yavg is not None  # actually measured
+                    and env_true("GENLAB_FIRST_FRAME_AUTOFIX_ENABLED")
+                ):
+                    from genlab_core.media.first_frame_brightener import (
+                        brighten_first_frames,
+                    )
+                    brightened = video_path.with_stem(
+                        f"{video_path.stem}_ff_brightened"
+                    )
+                    if brighten_first_frames(video_path, brightened):
+                        self._log.info(
+                            "[first_frame_autofix] swapped video path=%s -> %s "
+                            "(original yavg=%.1f)",
+                            video_path, brightened, quality.yavg,
+                        )
+                        video_path = brightened
+                    else:
+                        self._log.warning(
+                            "[first_frame_autofix] brighten failed, keeping "
+                            "original path=%s (yavg=%.1f)",
+                            video_path, quality.yavg,
+                        )
         except Exception as exc:
             self._log.debug(
                 "[first_frame_validator] wire raised (non-fatal): %s", exc,
