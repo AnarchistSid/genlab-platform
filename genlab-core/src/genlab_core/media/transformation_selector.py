@@ -260,6 +260,7 @@ def select_transformation_dimensions(
     *,
     proxy=None,
     rng: random.Random | None = None,
+    blueprint_context: dict | None = None,
 ) -> TransformationChoices:
     """Pick one arm per enabled dimension for a niche.
 
@@ -270,6 +271,13 @@ def select_transformation_dimensions(
         proxy: optional bandit_arms proxy. When None, constructs a
             fresh BacklogClient. Tests pass a mock proxy directly.
         rng: optional random.Random for deterministic tests.
+        blueprint_context: optional dict carrying blueprint metadata
+            (hook, title, summary) — used ONLY for observability
+            steer-logging on the music_mood dimension. Fed to
+            music_mood_llm_fit.suggest_mood() when the flag is on,
+            which returns a suggestion the operator can compare
+            against the bandit pick over the following weeks.
+            Does NOT alter selection outcome in this commit.
 
     Returns TransformationChoices — may be empty if:
         - ``config.enabled`` is False
@@ -390,7 +398,68 @@ def select_transformation_dimensions(
         len(result.choices),
         len(_DIMENSION_ARM_LIST_FIELDS),
     )
+
+    # Observability-only steer for music_mood. Runs AFTER bandit pick,
+    # never overrides. Follow-up commit (after operator sees ~1-2wk of
+    # this log data) will decide whether to promote to override / veto /
+    # prior-boost. See [[session-2026-08-12-fourteen-commit-arc]] for the
+    # ship-observability-BEFORE-consumer discipline that produced this
+    # split. Fail-open at every layer: missing context, disabled flag,
+    # missing API key, LLM refusal — all silently no-op.
+    _log_music_mood_llm_steer(niche_id, config, result, blueprint_context)
+
     return result
+
+
+def _log_music_mood_llm_steer(
+    niche_id: str,
+    config: IntelligentTransformConfig,
+    result: TransformationChoices,
+    blueprint_context: dict | None,
+) -> None:
+    """Emit a comparison log if the LLM steer has an opinion on this
+    blueprint's music mood. Zero effect on selection.
+    """
+    if blueprint_context is None:
+        return
+    music_choice = result.choices.get("music_mood")
+    if music_choice is None:
+        return
+    dim_config = getattr(config.dimensions, "music_mood", None)
+    if dim_config is None:
+        return
+    available_moods = _get_declared_values(dim_config, "moods")
+    if not available_moods:
+        return
+    try:
+        from genlab_core.media.music_mood_llm_fit import suggest_mood
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("[transform_selector] music_mood_llm_fit import failed: %s", exc)
+        return
+    try:
+        suggestion = suggest_mood(
+            niche_id=niche_id,
+            hook=str(blueprint_context.get("hook") or ""),
+            title=str(blueprint_context.get("title") or ""),
+            summary=str(blueprint_context.get("summary") or ""),
+            available_moods=sorted(available_moods),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("[transform_selector] suggest_mood raised (should not): %s", exc)
+        return
+    if suggestion is None:
+        return
+    agree = suggestion.top_mood == music_choice.dimension_value
+    logger.info(
+        "[transform_selector] LLM_STEER music_mood niche=%s bandit=%s llm=%s "
+        "confidence=%.2f agree=%s reasoning=%s",
+        niche_id,
+        music_choice.dimension_value,
+        suggestion.top_mood,
+        suggestion.confidence,
+        agree,
+        suggestion.reasoning[:120] if suggestion.reasoning else "",
+    )
 
 
 __all__ = [

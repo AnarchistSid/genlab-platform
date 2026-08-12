@@ -261,7 +261,9 @@ def apply_transformations(
             select_transformation_dimensions,
         )
 
-        choices = select_transformation_dimensions(niche_id, config)
+        choices = select_transformation_dimensions(
+            niche_id, config, blueprint_context=blueprint_context
+        )
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             "[transformation_orchestrator] selector failed for %s: %s",
