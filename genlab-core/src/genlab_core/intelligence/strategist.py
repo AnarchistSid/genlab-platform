@@ -31,6 +31,80 @@ from genlab_core.intelligence.proposal_schema import SCHEMA_VERSION, StrategistR
 logger = logging.getLogger(__name__)
 
 
+# 2026-08-12: per-type `proposed` field shape validator.
+#
+# The strategist prompt (`1cd74f5a`) instructs the LLM to emit
+# type-specific `proposed` values (number for reward_weight/
+# gate_threshold/novelty_rate; dict for arm_add; enum-string for
+# phase_shift; prose for playbook_update/manual_action). Prompts
+# are guidance — the LLM sometimes ignores them and writes prose
+# where a number is required. Prior to this validator, malformed
+# proposals landed in `strategist_reports.proposals` with the wrong
+# shape and every downstream auto-accept classifier silently
+# rejected them at consumer time (skip:non_numeric_proposed).
+# Result: prompt fix looked "shipped" but produced zero usable
+# proposals for weeks (F-QB-0702-adjacent class-of-bug).
+#
+# Salvage-pass pattern (parallel to _salvage_playbook /
+# _salvage_hypotheses at strategist.py:247+): drop malformed
+# proposals with a WARNING, keep the well-formed ones. Fail-soft
+# — one bad proposal doesn't invalidate the whole weekly report.
+
+_PHASE_ENUM_VALUES: frozenset[str] = frozenset(
+    {"BOOTSTRAP", "GROWTH", "OPTIMIZE", "MONETIZE", "DEFEND"}
+)
+
+
+def _proposal_has_valid_proposed_shape(p: dict) -> tuple[bool, str]:
+    """Validate a proposal's `proposed` field against its `type`.
+
+    Returns (ok, reason). Reason is short (dedup key) when ok=False.
+
+    * reward_weight / gate_threshold / novelty_rate -> `float(proposed)` must work
+    * arm_add -> dict with arm_id (or JSON-string form per 2026-07-24 compat)
+    * phase_shift -> string in the phase enum
+    * playbook_update / manual_action -> non-empty string
+    * Unknown types -> pass (outer Pydantic validator catches)
+    """
+    ptype = p.get("type") if isinstance(p, dict) else None
+    proposed = p.get("proposed") if isinstance(p, dict) else None
+
+    if ptype in ("reward_weight", "gate_threshold", "novelty_rate"):
+        try:
+            float(proposed)  # type: ignore[arg-type]
+            return True, ""
+        except (TypeError, ValueError):
+            return False, f"{ptype}:non_numeric_proposed"
+
+    if ptype == "arm_add":
+        if isinstance(proposed, dict) and "arm_id" in proposed:
+            return True, ""
+        if isinstance(proposed, str) and proposed.strip().startswith("{"):
+            # 2026-07-24 compat: LLM sometimes serialises the dict as a
+            # JSON string. classify_arm_add parses this shape.
+            try:
+                parsed = json.loads(proposed)
+                if isinstance(parsed, dict) and "arm_id" in parsed:
+                    return True, ""
+                return False, "arm_add:json_string_no_arm_id"
+            except (json.JSONDecodeError, ValueError):
+                return False, "arm_add:unparseable_json_string"
+        return False, "arm_add:not_dict_or_json_string"
+
+    if ptype == "phase_shift":
+        if isinstance(proposed, str) and proposed.upper() in _PHASE_ENUM_VALUES:
+            return True, ""
+        return False, "phase_shift:not_enum_string"
+
+    if ptype in ("playbook_update", "manual_action"):
+        if isinstance(proposed, str) and len(proposed.strip()) > 0:
+            return True, ""
+        return False, f"{ptype}:empty_string"
+
+    # Unknown type — let outer Pydantic ProposalType enum catch it.
+    return True, ""
+
+
 class StateCollector(Protocol):
     """Pluggable input source. Real implementation queries Postgres; tests inject mocks."""
 
@@ -262,6 +336,45 @@ class Strategist:
                     len(salvaged),
                 )
             payload["universal_playbook_proposals"] = salvaged
+
+        # 2026-08-12 salvage — per-type `proposed` field shape check.
+        # See _proposal_has_valid_proposed_shape docstring for the
+        # motivating class-of-bug + shape rules per type. Failing this
+        # check means the downstream auto-accept classifier would silently
+        # reject the proposal at consumer time (skip:non_numeric_proposed
+        # etc.), producing no user-visible signal. Salvage here so the
+        # operator sees exactly what got dropped and why.
+        proposals = payload.get("proposals") or []
+        if isinstance(proposals, list):
+            salvaged_proposals: list[Any] = []
+            drop_reason_counter: dict[str, int] = {}
+            for p in proposals:
+                ok, reason = _proposal_has_valid_proposed_shape(
+                    p if isinstance(p, dict) else {}
+                )
+                if ok:
+                    salvaged_proposals.append(p)
+                else:
+                    drop_reason_counter[reason] = (
+                        drop_reason_counter.get(reason, 0) + 1
+                    )
+            dropped_n = len(proposals) - len(salvaged_proposals)
+            if dropped_n:
+                # Compact per-reason summary so a future operator
+                # digging into a low-proposal week sees the shape
+                # of the LLM's drift.
+                reason_summary = ",".join(
+                    f"{r}={n}" for r, n in sorted(drop_reason_counter.items())
+                )
+                logger.warning(
+                    "strategist.salvage_proposals niche=%s dropped=%d kept=%d "
+                    "reasons=%s",
+                    niche_id,
+                    dropped_n,
+                    len(salvaged_proposals),
+                    reason_summary,
+                )
+            payload["proposals"] = salvaged_proposals
 
         # CausalHypothesis.evidence requires ≥1 item — filter empty-evidence
         # hypotheses. Same principle: don't let one under-specified entry
