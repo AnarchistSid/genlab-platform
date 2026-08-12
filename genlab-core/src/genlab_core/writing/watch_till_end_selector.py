@@ -63,7 +63,18 @@ _MAX_DURATION_SECONDS = 90
 # Keywords that identify "compilation-type" content where the source has
 # no built-in hook — WE need to create the payoff-promise. Lowercase
 # comparison. Multi-word phrases (e.g. "best of") match as substrings.
+#
+# 2026-08-12 (variant experiments per operator ship): widened from the
+# original 12-keyword compilation-only vocabulary to include news-shape
+# + trailer-shape patterns after audit showed 125/126 blueprints in a
+# 14d window defaulted to single_clip. Real content in the pipeline
+# has sports-news titles ("Islam knocks out Volkanovski"), anime
+# season markers ("Grand Blue Dreaming Season 3"), and movie trailers
+# ("American Doctor | Official Trailer"). These all benefit from
+# watch_till_end framing — the "who wins" / "which scene is best" /
+# "did the trailer deliver" tension IS a payoff promise.
 _COMPILATION_KEYWORDS: tuple[str, ...] = (
+    # Original compilation vocabulary
     "highlights",
     "highlight ",  # "highlight reel" etc — with trailing space to avoid
     # matching "highlighted" or "highlighter"
@@ -77,6 +88,24 @@ _COMPILATION_KEYWORDS: tuple[str, ...] = (
     "recap",
     "reel",
     "supercut",
+    # 2026-08-12 additions — news/event-shape (sports, some gaming).
+    # Deliberately excludes " vs " / " vs. " — those go to the more-
+    # specific split_screen variant (lower in the priority chain but
+    # semantically the better match for A-vs-B comparisons).
+    "knocks out",     # "Islam knocks out Volkanovski"
+    "wins ",          # "Wins the title", "wins gold" — trailing space
+    "defeats ",       # "Defeats reigning champion"
+    "beats ",         # "Beats world record" — trailing space
+    # 2026-08-12 additions — trailer/preview-shape (movies):
+    "trailer",        # "Official Trailer", "Launch Trailer"
+    "teaser",         # "Official Teaser"
+    "first look",     # "First Look at ..."
+    # "reveal" alone matches "after the reveal, before the crash" —
+    # too generic. Pair it with "trailer" for the trailer-shape signal.
+    "reveal trailer", # "Reveal Trailer for X"
+    # 2026-08-12 additions — anime/serial-shape (anime, series-type gaming):
+    " season ",       # "Grand Blue Dreaming Season 3" — spaces avoid seasonal
+    "episode ",       # "Episode 1", "Episode Finale" — trailing space
 )
 
 

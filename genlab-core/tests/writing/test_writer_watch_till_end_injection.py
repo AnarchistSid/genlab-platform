@@ -82,7 +82,10 @@ class TestWriterWatchTillEndInjection:
         from genlab_core.writing.video_content_writer import write_video_content
 
         video = {
-            "title": "New Elden Ring DLC trailer",  # no compilation keyword
+            # 2026-08-12: "trailer" is now in the widened compilation
+            # vocabulary. Use a title matching neither old nor new vocab
+            # so the negative-case test is stable across widenings.
+            "title": "Deep dive into React hooks internals",
             "channel_id": "UC_test",
             "channel_name": "TestChannel",
             "view_count": 100000,

@@ -89,8 +89,12 @@ class TestNegativeEligibility:
     """Real trending-title patterns that MUST NOT fire."""
 
     def test_no_compilation_keyword(self) -> None:
+        # 2026-08-12: "trailer" is now in the widened compilation-keyword
+        # list (movies/anime trailers benefit from watch_till_end
+        # framing). Use a title that matches NEITHER the old nor the new
+        # vocabulary so the negative case is stable.
         story = {
-            "title": "New Elden Ring DLC trailer",
+            "title": "Deep dive into React hooks internals",
             "duration_seconds": 55,
         }
         assert is_watch_till_end_eligible(story) is False
