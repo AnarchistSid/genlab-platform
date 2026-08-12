@@ -337,11 +337,39 @@ def generate_hashtags(
 
     tags: list[str] = []
 
-    # 1. Niche base tags (always first). Task #627: prefer the
-    # per-platform × per-niche pool if config supplies one;
-    # otherwise fall through to the legacy per-niche defaults.
+    # 1. Niche base tags. Task #627: prefer the per-platform ×
+    # per-niche pool if config supplies one; fall through to the
+    # legacy per-niche defaults.
+    #
+    # 2026-08-12 (F-QB-0708 pt 3): sample 2 tags deterministically
+    # from the pool rather than always taking the first two.
+    # Motivating audit: 29% of recent captions had `#{Niche}Reels`
+    # (position #2 in the old pool) creating a template signature
+    # YouTube's inauthentic-content detection flags. Deterministic
+    # per story_id so a retry produces identical tags (no churn)
+    # but different stories get different pairs (variety).
+    #
+    # Fall back to `base[:2]` (deterministic first-two) when the
+    # pool is small (<= 2 tags — the sample would degenerate to
+    # the same result anyway) or when no story_id is available.
     base = _resolve_niche_base(niche_id, platform)
-    tags.extend(base[:2])
+    if len(base) <= 2:
+        tags.extend(base[:2])
+    else:
+        story_id = str(story.get("story_id") or story.get("id") or "").strip()
+        if story_id:
+            import hashlib
+            import random as _random
+
+            seed_bytes = hashlib.sha256(
+                f"{story_id}|{niche_id}|{platform}".encode()
+            ).digest()
+            rng = _random.Random(int.from_bytes(seed_bytes[:8], "big"))
+            tags.extend(rng.sample(base, 2))
+        else:
+            # No story_id → fall back to first-two (matches pre-fix
+            # behavior for tests / one-off calls without a story).
+            tags.extend(base[:2])
 
     # 2. Topic-specific tags from story content
     topic_tags = _extract_topic_hashtags(story, niche_id, max_tags=limit - len(tags))

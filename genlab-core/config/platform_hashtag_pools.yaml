@@ -31,12 +31,19 @@
 platforms:
 
   instagram:
-    # Instagram Reels — aesthetic + discovery + niche-broad
-    gaming: ["#Gaming", "#GamingReels", "#GamerLife"]
-    sports: ["#Sports", "#SportsHighlights", "#Clutch"]
-    movies: ["#Movies", "#Cinema", "#FilmTok"]
-    anime: ["#Anime", "#AnimeReels", "#Otaku"]
-    ai_creators: ["#AI", "#AITools", "#Tech"]
+    # Instagram Reels — aesthetic + discovery + niche-broad.
+    # 2026-08-12 (F-QB-0708 pt 3): expanded from 3 -> 6+ tags per
+    # niche. hashtag_generator now DETERMINISTICALLY SAMPLES 2 per
+    # story (seed = story_id) rather than always picking the first
+    # two. Every story still gets 2 niche tags; different stories
+    # get different combinations; breaks the "every post has
+    # #GamingReels" template signature YouTube's inauthenticity
+    # detection flags.
+    gaming: ["#Gaming", "#GamingReels", "#GamerLife", "#GamingClips", "#Gamer", "#VideoGames", "#GameplayFootage"]
+    sports: ["#Sports", "#SportsHighlights", "#Clutch", "#SportsFans", "#GameDay", "#AthleteLife", "#SportsCulture"]
+    movies: ["#Movies", "#Cinema", "#FilmTok", "#MovieClips", "#Cinephile", "#FilmCommunity", "#MovieBuffs"]
+    anime: ["#Anime", "#AnimeReels", "#Otaku", "#AnimeCommunity", "#AnimeLover", "#MangaFan", "#AnimeClips"]
+    ai_creators: ["#AI", "#AITools", "#Tech", "#TechTools", "#MachineLearning", "#DeepLearning", "#AICreators"]
 
   tiktok:
     # TikTok — trend signals + ForYouPage bait
