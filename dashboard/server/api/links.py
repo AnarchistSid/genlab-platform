@@ -1126,7 +1126,16 @@ def link_go(product_slug: str):
         )
         return redirect(_fallback_url, 302)
 
-    # Validate redirect URL domain against allowlist (prevent open redirect)
+    # Validate redirect URL domain against allowlist (prevent open redirect).
+    # 2026-08-12 (F-QB-0702): added claude.ai + midjourney.com + openai.com
+    # + runwayml.com — all present in affiliate_catalog.yaml for the
+    # ai_creators niche but silently blocked here. Silent-block was
+    # confirmed via `Blocked redirect to non-allowlisted domain: claude.ai`
+    # in the dashboard error log — the redirect fell through to
+    # `_fallback_url` (back to landing page), no click was logged, and
+    # every attempted click on an AI-tool affiliate produced zero rows
+    # in `affiliate_clicks`. Pin test `test_all_catalog_domains_in_allowlist`
+    # catches future catalog additions that miss allowlist updates.
     _ALLOWED_DOMAINS = (
         "amazon.com",
         "amazon.in",
@@ -1144,6 +1153,11 @@ def link_go(product_slug: str):
         "hotstar.com",
         "flipkart.com",
         "myntra.com",
+        # AI-tool affiliates for the ai_creators niche
+        "claude.ai",
+        "midjourney.com",
+        "openai.com",
+        "runwayml.com",
     )
     try:
         from urllib.parse import urlparse
