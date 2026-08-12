@@ -544,6 +544,32 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
                 logger.debug("[CTAEngine] Bandit select failed for youtube: %s", e)
         fields["youtube_first_comment"] = yt_cta_text
 
+    # ── YouTube engagement question (2026-08-12 organic growth) ───────────────
+    # When there's NO affiliate CTA, populate youtube_first_comment with
+    # an LLM-generated engagement question that invites viewer replies.
+    # Early comment activity is a top-3 algorithmic signal for YouTube
+    # Shorts recommendation — blueprints without affiliates would ship
+    # zero pinned comment otherwise (payload_builder falls through to
+    # empty first_comment_text, YouTubeClient.publish skips the reply).
+    # Flag-gated `GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED`; fail-open.
+    if not fields.get("youtube_first_comment"):
+        try:
+            from genlab_core.publishing.first_comment_question import (
+                generate_engagement_question,
+            )
+            question = generate_engagement_question(
+                niche_id=str(fields.get("niche_id", "") or ""),
+                hook=str(fields.get("hook", "") or ""),
+                title=str(fields.get("title", "") or ""),
+                summary=str(fields.get("summary", "") or ""),
+            )
+            if question:
+                fields["youtube_first_comment"] = question
+        except Exception as e:
+            logger.debug(
+                "[CTAEngine] engagement question generation failed: %s", e
+            )
+
     # ── Twitter / X first-reply ───────────────────────────────────────────────
     # X links in the main tweet body get downranked; standard creator
     # practice is to drop the affiliate URL as a self-reply. Main
