@@ -3,17 +3,25 @@
 ## Reality-check disclaimer
 
 Meta does NOT expose the Reels Music Library trending list via any
-public no-auth API. Every viable path requires JS-rendered scraping
-with a browser context. This module:
+public no-auth API. Verified 2026-08-12:
+`facebook.com/business/help/366812203871232` returns 500 to
+non-authenticated User-Agents. Direct scraping requires:
+  * a real Meta account + session cookies (TOS-adjacent), OR
+  * Playwright headless-browser with a logged-in profile
 
-  1. Attempts Playwright headless-browser scrape when the library
-     is installed AND browser binaries are available
-  2. Falls back to a lightweight `requests`-based fetch of the
-     public Facebook Sound Kits page (works today; may break as
-     Meta changes markup)
-  3. Skips gracefully with WARN log if neither path is viable —
-     the consumer (`trending_audio_meta.get_trending_moods_for_niche`)
-     falls through to empty list, preserving pre-fix behavior
+This module ships a PROXY: chart-topping songs from
+**iTunes RSS Charts** (public, no-auth JSON API,
+`rss.applemarketingtools.com/api/v2/us/music/most-played/50/songs.json`)
+strongly correlate with Meta Reels trending audio. Reels users
+pick from the same viral songs that top the charts.
+
+Fetch order:
+  1. **iTunes RSS Charts** — the primary, works today, no auth
+  2. **Playwright + Meta URL** — optional, requires setup, real
+     Meta signal when the operator flips it on
+  3. **Facebook Sound Kits page** — kept as last-resort, currently
+     returns 500 but may work in the future
+  4. Skip gracefully with WARN log if all paths fail
 
 ## What this ships (concrete)
 
@@ -141,10 +149,15 @@ def scrape_and_cache_trending_moods(
 def _fetch_trending_track_names() -> list[dict]:
     """Return `[{"name": str, "meta_audio_id": str, "rank": int}, ...]`.
 
-    Tries Playwright first (Meta Reels page needs JS), falls back to
-    requests (Facebook Sound Kits page, sometimes has trending in
-    server-rendered markup).
+    Fetch order (first non-empty result wins):
+      1. iTunes RSS Charts (public JSON, no auth) — primary
+      2. Playwright + Meta Reels URL (optional dep)
+      3. Facebook Sound Kits page (requests, currently 500s)
     """
+    itunes_result = _try_itunes_rss_charts()
+    if itunes_result:
+        return itunes_result
+
     playwright_result = _try_playwright_scrape()
     if playwright_result:
         return playwright_result
@@ -154,6 +167,77 @@ def _fetch_trending_track_names() -> list[dict]:
         return requests_result
 
     return []
+
+
+_ITUNES_CHARTS_URL: Final[str] = (
+    "https://rss.applemarketingtools.com/api/v2/us/music/most-played/50/songs.json"
+)
+
+
+def _try_itunes_rss_charts() -> list[dict]:
+    """Fetch top-50 most-played songs from iTunes RSS Charts.
+
+    Returns [{"name": "Track — Artist", "meta_audio_id": apple_id,
+    "rank": 1..N}, ...]. Rank preserved via list position.
+
+    Fail-open: any network / parse error returns [].
+    """
+    import urllib.error
+    import urllib.request
+
+    req = urllib.request.Request(
+        _ITUNES_CHARTS_URL,
+        headers={"User-Agent": _USER_AGENT},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            if response.status != 200:
+                logger.debug(
+                    "[trending_audio_scraper] iTunes charts status=%d",
+                    response.status,
+                )
+                return []
+            payload = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
+        logger.warning(
+            "[trending_audio_scraper] iTunes charts fetch failed: %s", exc,
+        )
+        return []
+    except (ValueError, json.JSONDecodeError) as exc:
+        logger.warning(
+            "[trending_audio_scraper] iTunes charts JSON parse failed: %s", exc,
+        )
+        return []
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "[trending_audio_scraper] iTunes charts unexpected error: %s", exc,
+        )
+        return []
+
+    results = (payload.get("feed") or {}).get("results") or []
+    if not results:
+        logger.debug("[trending_audio_scraper] iTunes charts empty results")
+        return []
+
+    tracks: list[dict] = []
+    for i, entry in enumerate(results[:20]):  # cap to top-20
+        name = str(entry.get("name") or "").strip()
+        artist = str(entry.get("artistName") or "").strip()
+        apple_id = str(entry.get("id") or "").strip()
+        if not name:
+            continue
+        # Combine name + artist for the classifier so it disambiguates
+        # (many songs share titles; the artist is crucial context)
+        display = f"{name} — {artist}" if artist else name
+        tracks.append({
+            "name": display,
+            "meta_audio_id": apple_id,  # apple ID stands in for meta_audio_id
+            "rank": i + 1,
+        })
+    logger.info(
+        "[trending_audio_scraper] iTunes charts fetched %d tracks", len(tracks),
+    )
+    return tracks
 
 
 def _try_playwright_scrape() -> list[dict]:

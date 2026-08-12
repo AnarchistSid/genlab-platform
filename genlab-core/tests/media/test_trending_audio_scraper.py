@@ -136,6 +136,131 @@ class TestReadCache:
         assert read_cache_for_niche("gaming") == []
 
 
+class TestITunesCharts:
+    """Pin the iTunes RSS Charts primary source. Verified working
+    2026-08-12 — returns real trending music data with no auth."""
+
+    def test_fetch_url_is_apple_marketing_tools(self):
+        """Pin the URL — Apple changing marketing tools domain would
+        silently break the source."""
+        from genlab_core.media.trending_audio_scraper import (
+            _ITUNES_CHARTS_URL,
+        )
+        assert "rss.applemarketingtools.com" in _ITUNES_CHARTS_URL
+        assert "most-played" in _ITUNES_CHARTS_URL
+
+    def test_parses_valid_response(self, monkeypatch):
+        from unittest.mock import MagicMock, patch
+
+        from genlab_core.media.trending_audio_scraper import (
+            _try_itunes_rss_charts,
+        )
+        payload = json.dumps({
+            "feed": {
+                "results": [
+                    {"name": "Song A", "artistName": "Artist X", "id": "111"},
+                    {"name": "Song B", "artistName": "Artist Y", "id": "222"},
+                ],
+            },
+        }).encode("utf-8")
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = payload
+        mock_response.__enter__ = lambda self: self
+        mock_response.__exit__ = lambda *_: None
+
+        with patch("urllib.request.urlopen", return_value=mock_response):
+            tracks = _try_itunes_rss_charts()
+        assert len(tracks) == 2
+        assert tracks[0]["name"] == "Song A — Artist X"
+        assert tracks[0]["meta_audio_id"] == "111"
+        assert tracks[0]["rank"] == 1
+        assert tracks[1]["rank"] == 2
+
+    def test_empty_results_returns_empty(self):
+        from unittest.mock import MagicMock, patch
+
+        from genlab_core.media.trending_audio_scraper import (
+            _try_itunes_rss_charts,
+        )
+        payload = json.dumps({"feed": {"results": []}}).encode("utf-8")
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = payload
+        mock_response.__enter__ = lambda self: self
+        mock_response.__exit__ = lambda *_: None
+
+        with patch("urllib.request.urlopen", return_value=mock_response):
+            assert _try_itunes_rss_charts() == []
+
+    def test_network_error_returns_empty(self):
+        import urllib.error
+        from unittest.mock import patch
+
+        from genlab_core.media.trending_audio_scraper import (
+            _try_itunes_rss_charts,
+        )
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.URLError("connection refused"),
+        ):
+            assert _try_itunes_rss_charts() == []
+
+    def test_non_200_status_returns_empty(self):
+        from unittest.mock import MagicMock, patch
+
+        from genlab_core.media.trending_audio_scraper import (
+            _try_itunes_rss_charts,
+        )
+        mock_response = MagicMock()
+        mock_response.status = 500
+        mock_response.__enter__ = lambda self: self
+        mock_response.__exit__ = lambda *_: None
+        with patch("urllib.request.urlopen", return_value=mock_response):
+            assert _try_itunes_rss_charts() == []
+
+    def test_malformed_json_returns_empty(self):
+        from unittest.mock import MagicMock, patch
+
+        from genlab_core.media.trending_audio_scraper import (
+            _try_itunes_rss_charts,
+        )
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = b"{malformed"
+        mock_response.__enter__ = lambda self: self
+        mock_response.__exit__ = lambda *_: None
+        with patch("urllib.request.urlopen", return_value=mock_response):
+            assert _try_itunes_rss_charts() == []
+
+    def test_caps_at_20_tracks(self):
+        """Cost bound: max 20 tracks per fetch even if source returns
+        50+. Each track = one LLM classification call."""
+        from unittest.mock import MagicMock, patch
+
+        from genlab_core.media.trending_audio_scraper import (
+            _try_itunes_rss_charts,
+        )
+        payload = json.dumps({
+            "feed": {
+                "results": [
+                    {"name": f"Song {i}", "artistName": "X", "id": str(i)}
+                    for i in range(50)
+                ],
+            },
+        }).encode("utf-8")
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = payload
+        mock_response.__enter__ = lambda self: self
+        mock_response.__exit__ = lambda *_: None
+        with patch("urllib.request.urlopen", return_value=mock_response):
+            tracks = _try_itunes_rss_charts()
+        assert len(tracks) == 20
+
+
 class TestPlaywrightOptional:
     def test_missing_playwright_returns_empty(self):
         """Playwright is a soft dep — scraper must handle ImportError
