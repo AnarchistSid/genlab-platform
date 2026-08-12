@@ -204,6 +204,37 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
 }
 
 
+# 2026-08-12 (F-QB-0708): strip LLM-emitted `Via {source}` lines.
+# Prompt tells the LLM not to write these, but ~36% of recent
+# captions still contained them — combined with the pipeline's
+# `🎬 Original:` append, this creates YouTube's inauthentic-content
+# template signature. Belt-and-suspenders: prompt (line 744-747)
+# + this post-process strip. Recognised patterns:
+#
+#   Via r/subreddit
+#   Via YouTube
+#   Via {any_word_or_dot_slashed_path}
+#   Via @creator
+#   VIA source     (case-insensitive)
+#
+# Deliberately NOT matching "via " inside a sentence — only when
+# it's a line-anchored block that reads as attribution.
+_VIA_SOURCE_LINE_RE = re.compile(
+    r"^\s*[Vv][Ii][Aa]\s+[^\s].{0,60}?\s*$",
+    re.MULTILINE,
+)
+
+
+def _strip_via_source_lines(text: str) -> str:
+    """Remove standalone `Via {source}` attribution lines from LLM
+    output. Idempotent — safe to call multiple times."""
+    if not text or "via" not in text.lower():
+        return text
+    stripped = _VIA_SOURCE_LINE_RE.sub("", text)
+    # Collapse any newline runs the strip created into standard \n\n
+    return re.sub(r"\n{3,}", "\n\n", stripped).strip()
+
+
 # Fields the writer must always populate. Used by
 # _complete_and_parse_json to detect "valid JSON but missing required
 # keys" responses and trigger a retry. See 2026-06-17 audit: anime/
@@ -741,6 +772,10 @@ def write_video_content(
         "  specific person. Focus on the CONTENT (what happens, why it's\n"
         "  interesting). Source credit is appended AFTER your output by the\n"
         "  pipeline — don't try to duplicate it.\n"
+        "  DO NOT write lines like 'Via r/subreddit', 'Via YouTube', or\n"
+        "  'Via {source_name}' — this creates a template signature that\n"
+        "  YouTube's inauthentic-content detection flags. The pipeline's\n"
+        "  '🎬 Original: @X — {URL}' line covers attribution.\n"
         "\n"
         "BANNED PHRASES (never use — these are the #1 'AI-generated' tells):\n"
         "  - 'something big happened'\n"
@@ -956,6 +991,11 @@ def write_video_content(
         if isinstance(ig, dict):
             ig = ig.get("caption") or ig.get("text") or str(list(ig.values())[0]) if ig else ""
             content["instagram_caption"] = ig
+        # 2026-08-12 (F-QB-0708): strip LLM-emitted "Via {source}" lines
+        # before assembly. Runs BEFORE split/reassembly so the stripped
+        # form flows through the rest of the pipeline.
+        ig = _strip_via_source_lines(ig)
+        content["instagram_caption"] = ig
         if ig:
             # Split caption body from hashtags
             ig_parts = ig.split("\n\n")
@@ -1041,6 +1081,9 @@ def write_video_content(
         if isinstance(fb, dict):
             fb = fb.get("text") or fb.get("post") or str(list(fb.values())[0]) if fb else ""
             content["facebook_content"] = fb
+        # F-QB-0708: strip LLM-emitted `Via {source}` lines.
+        fb = _strip_via_source_lines(fb)
+        content["facebook_content"] = fb
         if fb and len(fb) > 300:
             fb = fb[:297].rsplit(" ", 1)[0] + "..."
             content["facebook_content"] = fb
@@ -1050,6 +1093,9 @@ def write_video_content(
         if isinstance(th, dict):
             th = th.get("text") or th.get("post") or str(list(th.values())[0]) if th else ""
             content["threads_content"] = th
+        # F-QB-0708: strip LLM-emitted `Via {source}` lines.
+        th = _strip_via_source_lines(th)
+        content["threads_content"] = th
         if th and len(th) > 300:
             th = th[:297].rsplit(" ", 1)[0] + "..."
             content["threads_content"] = th
