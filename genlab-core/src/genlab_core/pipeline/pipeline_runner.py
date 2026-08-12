@@ -236,6 +236,15 @@ class GenericPipelineRunner:
         if niche_id not in self._niche_roots:
             raise ValueError(f"Unsupported niche '{niche_id}'. Supported: {self.supported_niches}")
 
+        # Flag-state audit — logs which GENLAB_*_ENABLED flags are on
+        # right now so operators can verify env propagation independent
+        # of whether feature-specific codepaths fire this run.
+        try:
+            from genlab_core.observability.flag_audit import log_active_flags
+            log_active_flags(context=f"pipeline_{niche_id}")
+        except Exception:
+            pass  # observability never blocks pipeline
+
         # Acquire per-niche file lock. Non-blocking: if another pipeline
         # instance is already running this niche we raise immediately
         # rather than race. Different niches can still run in parallel.

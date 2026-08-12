@@ -753,6 +753,13 @@ def main() -> int:
 
     load_dotenv(override=True)
 
+    # Flag-state audit — see genlab_core.observability.flag_audit
+    try:
+        from genlab_core.observability.flag_audit import log_active_flags
+        log_active_flags(context="publisher")
+    except Exception:
+        pass
+
     from genlab_core.http.backlog_client import BacklogClient
     from genlab_core.publishing.daily_cap import DailyCapEnforcer
 
