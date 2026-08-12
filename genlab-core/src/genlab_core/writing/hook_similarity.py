@@ -25,11 +25,13 @@ so the two sites agree on which hooks get flagged.
 ## Consumer wires
 
   * `base_writing._write_story_llm` — logs WARN when LLM emits near-
-    dupe. Zero effect on selection (downstream push_to_backlog still
-    handles the drop) — this is observability only.
-  * `push_to_backlog._merge_story` (future) — could be migrated to
-    use this module for shared threshold definition. Left inline
-    today to minimize blast radius.
+    dupe. Observability-only.
+  * `base_writing._maybe_retry_on_near_dupe` — retries the writer
+    with an explicit avoid-hint. Flag-gated recovery action.
+  * `push_to_backlog._merge_story` — the authoritative drop-at-
+    persist gate. Migrated 2026-08-12 to use this module (was
+    inline duplicate math). Shares threshold + algorithm so all
+    three sites drop the same set of hooks.
 """
 
 from __future__ import annotations
@@ -41,11 +43,9 @@ from typing import Final
 logger = logging.getLogger(__name__)
 
 SIMILARITY_THRESHOLD: Final[float] = 0.6
-"""Above this ratio, hooks are considered near-duplicates. Matches
-the inline threshold at `push_to_backlog.py:2413`. Changing this
-here without changing the push_to_backlog site would create a
-detection-vs-action gap (writer logs WARN but push doesn't drop,
-or vice versa)."""
+"""Above this ratio, hooks are considered near-duplicates. Since
+2026-08-12 all three sites (writer WARN, writer retry, push drop)
+import this constant — changing it here changes them all in lockstep."""
 
 MIN_WORDS: Final[int] = 3
 """Minimum word count on BOTH hooks for a meaningful Jaccard.

@@ -2394,32 +2394,36 @@ class PushToBacklog:
                 logger.debug("[PUSH] episodic bandit_pick emit failed: %s", exc)
 
             # Cross-run hook dedup: exact + fuzzy (Jaccard similarity > 0.6)
+            #
+            # 2026-08-12: fuzzy logic migrated to the shared
+            # `writing.hook_similarity` primitive so this site + the
+            # writer's early-warning observability + the retry-on-
+            # near-dupe recovery all agree on threshold + math. Same
+            # class-of-bug remediation as tonight's YT Shorts SEO ship
+            # (shared contract, N implementers, silent divergence).
+            # `find_most_similar` returns the HIGHEST-scoring match
+            # above threshold (vs the previous first-seen behavior)
+            # — the log is now more informative for operator triage
+            # without changing the drop-or-keep decision.
             if hook:
                 hook_lower = hook.strip().lower()
-                hook_words = set(hook_lower.split())
 
                 # Exact match
                 if hook_lower in existing_hooks:
                     logger.info("[PUSH] Exact hook dupe, skipping: '%s'", hook[:60])
                     continue
 
-                # Fuzzy match — Jaccard similarity against recent hooks
-                is_near_dupe = False
-                for existing in existing_hooks:
-                    existing_words = set(existing.split())
-                    if len(hook_words) > 2 and len(existing_words) > 2:
-                        intersection = len(hook_words & existing_words)
-                        union = len(hook_words | existing_words)
-                        if union > 0 and intersection / union > 0.6:
-                            logger.info(
-                                "[PUSH] Near-dupe hook (%.0f%% similar), skipping: '%s' ≈ '%s'",
-                                100 * intersection / union,
-                                hook[:40],
-                                existing[:40],
-                            )
-                            is_near_dupe = True
-                            break
-                if is_near_dupe:
+                # Fuzzy match via shared primitive
+                from genlab_core.writing.hook_similarity import find_most_similar
+
+                match = find_most_similar(hook, existing_hooks)
+                if match is not None:
+                    logger.info(
+                        "[PUSH] Near-dupe hook (%.0f%% similar), skipping: '%s' ≈ '%s'",
+                        100 * match.similarity,
+                        hook[:40],
+                        match.matched_hook[:40],
+                    )
                     continue
 
                 existing_hooks.add(hook_lower)

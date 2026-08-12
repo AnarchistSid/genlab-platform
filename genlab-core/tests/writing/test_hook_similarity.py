@@ -63,11 +63,36 @@ class TestJaccard:
         assert jaccard_similarity("anything at all", "") == 0.0
         assert jaccard_similarity("", "") == 0.0
 
-    def test_matches_push_to_backlog_threshold(self):
-        """The threshold constant MUST equal 0.6 to stay symmetric
-        with push_to_backlog.py:2413. Changing here without changing
-        there creates a detection-vs-action gap."""
+    def test_threshold_locked_at_zero_six(self):
+        """0.6 is the historical Jaccard threshold from the push_to_
+        backlog inline logic (pre-2026-08-12). All three sites (writer
+        WARN, writer retry, push drop) now import from here — this
+        assertion locks the value so future changes are deliberate."""
         assert SIMILARITY_THRESHOLD == 0.6
+
+    def test_push_to_backlog_uses_shared_module(self):
+        """Structural pin: push_to_backlog imports find_most_similar
+        rather than reimplementing the Jaccard math inline. Guards
+        against a future refactor accidentally re-introducing the
+        divergence class-of-bug."""
+        import pathlib
+
+        push_path = (
+            pathlib.Path(__file__).parents[2]
+            / "src"
+            / "genlab_core"
+            / "pipeline"
+            / "stages"
+            / "push_to_backlog.py"
+        )
+        src = push_path.read_text()
+        assert "from genlab_core.writing.hook_similarity import" in src
+        assert "find_most_similar" in src
+        # And the old inline Jaccard math should be GONE
+        assert "hook_words & existing_words" not in src, (
+            "inline Jaccard duplicated in push_to_backlog — should import "
+            "from writing.hook_similarity instead"
+        )
 
     def test_min_words_stability(self):
         """MIN_WORDS = 3 avoids the "2-word hooks score 50% on any
