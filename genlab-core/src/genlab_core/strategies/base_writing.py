@@ -440,6 +440,27 @@ class BaseWritingStrategy(WritingStrategy):
         content["written"] = True
         content["written_by"] = "llm"
 
+        # Observability: log when the LLM emitted a hook near-duplicate
+        # to a recent one. push_to_backlog.py:2408 drops such hooks at
+        # persist time (Jaccard > 0.6) — this WARN surfaces the pattern
+        # earlier so operators can see how often the LLM ignores its
+        # HOOK DEDUP prompt hint. Zero effect on selection; downstream
+        # drop remains authoritative. Fail-open on any error.
+        emitted_hook = result.get("hook", "")
+        if emitted_hook and existing_hooks:
+            try:
+                from genlab_core.writing.hook_similarity import (
+                    log_similarity_signal,
+                )
+                log_similarity_signal(
+                    emitted_hook,
+                    existing_hooks,
+                    niche_id=self._niche_id,
+                )
+            except Exception:
+                # Never break the writer for observability
+                pass
+
         # Bug C fix (2026-07-13 audit W1 trace): the writer sets
         # ``result["source_attribution"]`` with the audience-facing credit
         # line ("🎬 Original: @channel — url"), but this propagator only
