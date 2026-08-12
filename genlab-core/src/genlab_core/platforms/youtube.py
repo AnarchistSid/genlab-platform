@@ -371,6 +371,28 @@ class YouTubeClient:
 
         video_path = payload.media_paths[0]
 
+        # First-frame brightness observability. YouTube Shorts displays
+        # the video's first frame as the feed icon before playback —
+        # dark first frames render as black tiles and drop feed-CTR.
+        # Flag-gated `GENLAB_FIRST_FRAME_VALIDATOR_ENABLED`, log-only
+        # today (no reject). See `media.first_frame_validator` for
+        # the compositor-fix follow-up plan.
+        try:
+            from genlab_core.settings import env_true
+            if env_true("GENLAB_FIRST_FRAME_VALIDATOR_ENABLED"):
+                from genlab_core.media.first_frame_validator import (
+                    log_first_frame_signal,
+                )
+                log_first_frame_signal(
+                    video_path,
+                    niche_id=payload.niche_id,
+                    platform="youtube",
+                )
+        except Exception as exc:
+            self._log.debug(
+                "[first_frame_validator] wire raised (non-fatal): %s", exc,
+            )
+
         # Niche → YouTube category mapping.
         #
         # 2026-07-17 (Layer 1 batch 2): ai_creators changed 28→24.
