@@ -275,6 +275,13 @@ def main() -> int:
         default="table",
         help="Output format",
     )
+    parser.add_argument(
+        "--post-to-slack",
+        action="store_true",
+        help="POST the report to SLACK_WEBHOOK_URL (env var) in addition "
+             "to stdout. Fail-open — if the webhook fails, the stdout report "
+             "still prints and exit code is unaffected.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -315,7 +322,72 @@ def main() -> int:
         print(_to_json(results))
     else:
         print(_format_table(results))
+
+    if args.post_to_slack:
+        _post_report_to_slack(results, window_days=args.window_days)
     return 0
+
+
+def _post_report_to_slack(results: list[ABResult], *, window_days: int) -> None:
+    """POST the report to `SLACK_WEBHOOK_URL` if set. Fail-open.
+
+    Format: single message with a header + monospace table block. Slack's
+    incoming-webhook API accepts `{"text": ...}` for plain text. Wraps
+    the table in triple-backticks so Slack renders it monospace.
+    """
+    import os
+    import urllib.error
+    import urllib.request
+
+    webhook_url = os.environ.get("SLACK_WEBHOOK_URL", "").strip()
+    if not webhook_url:
+        logger.warning(
+            "[analyze_ab] --post-to-slack requested but SLACK_WEBHOOK_URL "
+            "not set — skipping (report still printed to stdout)"
+        )
+        return
+
+    # Slack payload: header + monospace table. Newlines inside the
+    # triple-backticks preserve column alignment.
+    header = (
+        f"*Engagement Question A/B Report — {window_days}d window*\n"
+        f"Actionable verdicts have `-> ROLLOUT_PCT=...` suffix.\n"
+    )
+    table = _format_table(results)
+    text = f"{header}\n```\n{table}\n```"
+
+    payload = json.dumps({"text": text}).encode("utf-8")
+    req = urllib.request.Request(
+        webhook_url,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            # Rule #25: explicit User-Agent (Slack doesn't 403 default
+            # python-urllib, but consistency + observability wins)
+            "User-Agent": "GenLab/1.0 (+https://github.com/AnarchistSid/genlab-platform)",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            code = response.status
+            body = response.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        logger.warning(
+            "[analyze_ab] Slack POST HTTP error %d: %s", exc.code,
+            exc.read().decode("utf-8", errors="replace")[:200],
+        )
+        return
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[analyze_ab] Slack POST failed: %s", exc)
+        return
+
+    if code == 200 and body == "ok":
+        logger.info("[analyze_ab] Slack POST ok")
+    else:
+        logger.warning(
+            "[analyze_ab] Slack POST returned code=%d body=%r", code, body[:200],
+        )
 
 
 if __name__ == "__main__":

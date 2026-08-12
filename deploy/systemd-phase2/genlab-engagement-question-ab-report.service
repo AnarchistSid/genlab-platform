@@ -19,16 +19,20 @@ Environment=HOME=/opt/genlab
 Environment=GENLAB_TMP=/opt/genlab/.tmp
 
 # Runs the engagement-question A/B analysis over the last 14 days
-# and emits the table to journalctl. Operator greps for
-# 'engagement_question_ab' or reads the systemd log after the timer
-# fires to see per-(niche, platform) lift + significance verdict.
+# and emits the table to journalctl + Slack (when SLACK_WEBHOOK_URL
+# is set in .env). Operator greps for 'engagement_question_ab' or
+# reads the systemd log after the timer fires to see per-(niche,
+# platform) lift + significance verdict.
+#
+# --post-to-slack is opt-in via SLACK_WEBHOOK_URL — no webhook, no
+# post, no error. Adds table wrapped in a Slack monospace block.
 #
 # The tool exits 0 on success (even if some cells have insufficient
 # data — that's an expected steady-state, not a service failure).
 # Exit non-zero only on actual DB errors or missing DATABASE_URL.
 # Per rule #26: don't route empty-data cases to systemd exit codes.
 ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.tools.analyze_engagement_question_ab \
-    --window-days 14 --format table
+    --window-days 14 --format table --post-to-slack
 
 TimeoutSec=300
 

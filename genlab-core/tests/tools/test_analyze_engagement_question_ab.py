@@ -127,6 +127,103 @@ class TestVerdict:
         assert "keep_running" in v
 
 
+class TestSlackPost:
+    """The --post-to-slack sink is fail-open — no webhook URL, network
+    failure, non-200 response, etc. must never raise or affect exit."""
+
+    def test_no_webhook_url_skips_silently(self, monkeypatch, caplog):
+        monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+        from genlab_core.tools.analyze_engagement_question_ab import (
+            _post_report_to_slack,
+        )
+        import logging
+        with caplog.at_level(logging.WARNING):
+            _post_report_to_slack([], window_days=14)
+        # Emits WARN so operator sees why post was skipped
+        assert any("SLACK_WEBHOOK_URL" in r.message for r in caplog.records)
+
+    def test_successful_post_logs_ok(self, monkeypatch, caplog):
+        monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.com/services/FAKE")
+        from unittest.mock import MagicMock, patch
+
+        from genlab_core.tools.analyze_engagement_question_ab import (
+            _post_report_to_slack,
+        )
+        # Mock urlopen context manager
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = b"ok"
+        mock_response.__enter__ = lambda self: self
+        mock_response.__exit__ = lambda *_: None
+
+        with patch("urllib.request.urlopen", return_value=mock_response):
+            import logging
+            with caplog.at_level(logging.INFO):
+                _post_report_to_slack([], window_days=14)
+        assert any("Slack POST ok" in r.message for r in caplog.records)
+
+    def test_non_200_response_logs_warn_no_raise(self, monkeypatch, caplog):
+        monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.com/services/FAKE")
+        from unittest.mock import MagicMock, patch
+
+        from genlab_core.tools.analyze_engagement_question_ab import (
+            _post_report_to_slack,
+        )
+        mock_response = MagicMock()
+        mock_response.status = 500
+        mock_response.read.return_value = b"server error"
+        mock_response.__enter__ = lambda self: self
+        mock_response.__exit__ = lambda *_: None
+
+        with patch("urllib.request.urlopen", return_value=mock_response):
+            import logging
+            with caplog.at_level(logging.WARNING):
+                _post_report_to_slack([], window_days=14)
+        # Never raises; logs WARN
+        assert any("code=500" in r.message for r in caplog.records)
+
+    def test_network_error_fails_open(self, monkeypatch, caplog):
+        monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.com/services/FAKE")
+        from unittest.mock import patch
+
+        from genlab_core.tools.analyze_engagement_question_ab import (
+            _post_report_to_slack,
+        )
+        with patch("urllib.request.urlopen", side_effect=OSError("connection refused")):
+            import logging
+            with caplog.at_level(logging.WARNING):
+                # Must not raise
+                _post_report_to_slack([], window_days=14)
+        assert any("Slack POST failed" in r.message for r in caplog.records)
+
+    def test_user_agent_header_set(self, monkeypatch):
+        """Rule #25: WAF-fronted APIs 403 default python-urllib UA.
+        Slack itself doesn't 403, but consistency: every HTTP client
+        we ship sets an identifiable UA."""
+        monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.com/services/FAKE")
+        from unittest.mock import MagicMock, patch
+
+        from genlab_core.tools.analyze_engagement_question_ab import (
+            _post_report_to_slack,
+        )
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = b"ok"
+        mock_response.__enter__ = lambda self: self
+        mock_response.__exit__ = lambda *_: None
+
+        captured_req = []
+
+        def _fake_urlopen(req, timeout=None):
+            captured_req.append(req)
+            return mock_response
+
+        with patch("urllib.request.urlopen", side_effect=_fake_urlopen):
+            _post_report_to_slack([], window_days=14)
+        assert len(captured_req) == 1
+        assert "GenLab" in captured_req[0].headers.get("User-agent", "")
+
+
 class TestScriptStructure:
     """Pin the script's public surface to catch accidental removal."""
 
@@ -137,6 +234,22 @@ class TestScriptStructure:
         assert hasattr(mod, "query_ab_data")
         assert hasattr(mod, "compute_bucket_stats")
         assert hasattr(mod, "welch_t_test")
+        assert hasattr(mod, "_post_report_to_slack")
+
+    def test_systemd_service_passes_post_to_slack_flag(self):
+        """Structural pin: the timer's ExecStart passes
+        --post-to-slack so a webhook config alone activates the
+        post (no code change needed)."""
+        import pathlib
+
+        service = (
+            pathlib.Path(__file__).parents[3]
+            / "deploy"
+            / "systemd-phase2"
+            / "genlab-engagement-question-ab-report.service"
+        )
+        src = service.read_text()
+        assert "--post-to-slack" in src
 
     def test_analyze_one_returns_ab_result(self):
         """The analyze_one function must accept a conn + kwargs and
