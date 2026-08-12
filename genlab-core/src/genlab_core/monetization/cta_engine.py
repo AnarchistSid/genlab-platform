@@ -672,11 +672,36 @@ def _apply_engagement_question_fallback(fields: dict) -> None:
     if not any((hook, title, summary)):
         return
 
+    # A/B canary bucketing. Same deterministic-hash pattern as AUTO #2
+    # rollout ladder — `sha256(candidate_id) % 10000 / 100` gives a
+    # 0-100 float per blueprint. Compare against ROLLOUT_PCT to bucket.
+    #   * ROLLOUT_PCT unset or >= 100 -> 100% "with_q" (backward compat
+    #     with tonight's flag flip; no A/B until operator opts in)
+    #   * ROLLOUT_PCT = 50 -> ~50% with_q, ~50% without_q (A/B split)
+    #   * ROLLOUT_PCT = 0 -> 100% without_q (kill switch, same as
+    #     turning platform flags off but keeps the log surface active)
+    bucket = _engagement_question_ab_bucket(
+        candidate_id=str(fields.get("candidate_id", "") or ""),
+    )
+    logger.info(
+        "[CTAEngine] engagement_question_ab niche=%s candidate=%s bucket=%s",
+        niche_id,
+        str(fields.get("candidate_id", "") or "")[:16],
+        bucket,
+    )
+
     cached_question: str | None = None
     for slot, flag in _PLATFORM_FLAGS:
         if fields.get(slot):
             continue
         if not env_true(flag):
+            continue
+        # A/B bucketing: control ("without_q") leaves the slot empty
+        # so we measure comment-rate lift against baseline. Structured
+        # log above lets operator query bucket assignment per
+        # candidate_id vs downstream comments metric.
+        if bucket == "without_q":
+            fields[f"{slot}__ab_bucket"] = bucket
             continue
         try:
             if cached_question is None:
@@ -694,8 +719,53 @@ def _apply_engagement_question_fallback(fields: dict) -> None:
                     # this call. Mark as "attempted" so we short-circuit.
                     return
             fields[slot] = cached_question
+            fields[f"{slot}__ab_bucket"] = bucket
         except Exception as e:
             logger.debug(
                 "[CTAEngine] engagement question wire failed slot=%s: %s",
                 slot, e,
             )
+
+
+def _engagement_question_ab_bucket(candidate_id: str) -> str:
+    """Deterministically bucket a blueprint into "with_q" or "without_q"
+    based on `GENLAB_ENGAGEMENT_QUESTION_ROLLOUT_PCT` (0-100 int).
+
+    Same sha256-hash-mod pattern used by AUTO #2 rollout ladder so
+    the same blueprint always lands in the same bucket across pipeline
+    re-runs (idempotent A/B assignment).
+
+    Returns:
+        "with_q" if the blueprint's hash-slot < ROLLOUT_PCT
+        "without_q" otherwise
+
+    Special cases:
+        * Empty candidate_id -> "with_q" (fail-open — don't punish
+          blueprints missing an ID)
+        * ROLLOUT_PCT unset -> "with_q" (backward compat with tonight's
+          flag flip that assumed 100%)
+        * ROLLOUT_PCT >= 100 -> "with_q" always
+        * ROLLOUT_PCT <= 0 -> "without_q" always
+        * ROLLOUT_PCT parse error -> "with_q" (fail-open)
+    """
+    import hashlib
+    import os
+
+    if not candidate_id:
+        return "with_q"
+
+    raw = os.environ.get("GENLAB_ENGAGEMENT_QUESTION_ROLLOUT_PCT", "")
+    if not raw:
+        return "with_q"
+    try:
+        pct = int(raw)
+    except (ValueError, TypeError):
+        return "with_q"
+    if pct >= 100:
+        return "with_q"
+    if pct <= 0:
+        return "without_q"
+
+    digest = hashlib.sha256(candidate_id.encode("utf-8")).hexdigest()
+    slot = int(digest[:8], 16) % 10000 / 100.0  # 0.0 - 99.99
+    return "with_q" if slot < pct else "without_q"
