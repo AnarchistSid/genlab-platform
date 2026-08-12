@@ -254,6 +254,61 @@ class InstagramClient:
         first_path = payload.media_paths[0]
         video_url = str(first_path)
 
+        # First-frame brightness observability + auto-fix. IG Reels feed
+        # icon behaves the same way YT Shorts does — dark first frame
+        # renders as a black tile that drops feed-CTR. Only meaningful
+        # on LOCAL video paths (already-uploaded URLs are past the
+        # point of fixing without re-uploading a different file, so
+        # we skip in that case).
+        #
+        # Two-flag ladder (same as YT):
+        #   * GENLAB_FIRST_FRAME_VALIDATOR_ENABLED — measure + log
+        #   * GENLAB_FIRST_FRAME_AUTOFIX_ENABLED — re-encode dark
+        #     first frames with 100ms brightness boost
+        if not video_url.startswith("http"):
+            try:
+                from genlab_core.settings import env_true
+                if env_true("GENLAB_FIRST_FRAME_VALIDATOR_ENABLED"):
+                    from pathlib import Path as _Path
+
+                    from genlab_core.media.first_frame_validator import (
+                        log_first_frame_signal,
+                    )
+                    local_path = _Path(video_url)
+                    quality = log_first_frame_signal(
+                        local_path,
+                        niche_id=payload.niche_id,
+                        platform="instagram",
+                    )
+                    if (
+                        not quality.passed
+                        and quality.yavg is not None
+                        and env_true("GENLAB_FIRST_FRAME_AUTOFIX_ENABLED")
+                    ):
+                        from genlab_core.media.first_frame_brightener import (
+                            brighten_first_frames,
+                        )
+                        brightened = local_path.with_stem(
+                            f"{local_path.stem}_ff_brightened"
+                        )
+                        if brighten_first_frames(local_path, brightened):
+                            self._log.info(
+                                "[first_frame_autofix] IG swapped video path=%s -> %s "
+                                "(original yavg=%.1f)",
+                                local_path, brightened, quality.yavg,
+                            )
+                            video_url = str(brightened)
+                        else:
+                            self._log.warning(
+                                "[first_frame_autofix] IG brighten failed, keeping "
+                                "original path=%s (yavg=%.1f)",
+                                local_path, quality.yavg,
+                            )
+            except Exception as exc:
+                self._log.debug(
+                    "[first_frame_validator] IG wire raised (non-fatal): %s", exc,
+                )
+
         # Build caption with hashtags (avoid duplication — caption may already
         # contain inline hashtags from the writing stage)
         caption = payload.caption

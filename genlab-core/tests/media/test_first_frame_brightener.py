@@ -221,3 +221,58 @@ class TestYouTubeWire:
         )
         src = yt_path.read_text()
         assert "video_path = brightened" in src
+
+
+class TestInstagramWire:
+    def test_instagram_source_wires_autofix(self):
+        """Structural pin: platforms/instagram.py wires the brightener
+        behind GENLAB_FIRST_FRAME_AUTOFIX_ENABLED."""
+        import pathlib
+
+        ig_path = (
+            pathlib.Path(__file__).parents[2]
+            / "src"
+            / "genlab_core"
+            / "platforms"
+            / "instagram.py"
+        )
+        src = ig_path.read_text()
+        assert "GENLAB_FIRST_FRAME_AUTOFIX_ENABLED" in src
+        assert "brighten_first_frames" in src
+
+    def test_instagram_wire_only_on_local_paths(self):
+        """IG accepts either a local path OR an already-uploaded URL.
+        The autofix must skip when the caller passed an HTTPS URL —
+        we can't re-encode a remote file, and the video is already
+        past the point of fixing without re-uploading a different
+        file. The wire is inside `if not video_url.startswith('http'):`."""
+        import pathlib
+
+        ig_path = (
+            pathlib.Path(__file__).parents[2]
+            / "src"
+            / "genlab_core"
+            / "platforms"
+            / "instagram.py"
+        )
+        src = ig_path.read_text()
+        # The autofix branch must be inside a `not http` guard so
+        # already-uploaded URLs skip the primitive
+        assert "if not video_url.startswith(\"http\"):" in src
+
+    def test_instagram_wire_swaps_video_url_not_path(self):
+        """YT swaps video_path; IG swaps video_url (str, not Path)
+        because that's what the downstream _publish_reel takes.
+        Pin the correct variable name to catch a copy-paste from
+        YT."""
+        import pathlib
+
+        ig_path = (
+            pathlib.Path(__file__).parents[2]
+            / "src"
+            / "genlab_core"
+            / "platforms"
+            / "instagram.py"
+        )
+        src = ig_path.read_text()
+        assert "video_url = str(brightened)" in src
