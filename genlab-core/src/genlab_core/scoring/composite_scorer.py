@@ -89,6 +89,47 @@ _TARGET_LIKE_RATIO: float = _TUNING.target_like_ratio
 _ENGAGEMENT_FLOOR: float = _TUNING.engagement_floor
 
 
+# 2026-08-12: source_reach_multiplier — per-niche per-source calibration
+# from observed publish-side reach. Motivating investigation: composite_score
+# had Pearson r=-0.44 (log r=-0.75) against anime/facebook reach over 30d
+# because velocity_score measures SOURCE-PLATFORM virality (YouTube view
+# velocity) but doesn't predict DESTINATION-PLATFORM reach (Facebook).
+#
+# Data per source × platform (n=5-7 each, 30d anime window):
+#
+#   source           facebook   instagram   threads   youtube
+#   ---------------  --------   ---------   -------   -------
+#   anilist            695         134         51        4
+#   youtube_trending     4          23          8        0
+#
+# Blended reach ratio (mean-across-4-platforms vs platform-baseline)
+# per source, applied as a multiplier to composite_score at score time.
+# Only niches with strong signal are populated; everything else defaults
+# to 1.0 (no effect). Refit periodically as more data accumulates.
+#
+# Conservative bounds: no boost > 2.0x, no penalty < 0.4x. Even with
+# strong signal, small sample sizes (n<10 per cell) mean the point
+# estimates are noisy — the multiplier should nudge, not overwrite.
+_SOURCE_REACH_MULTIPLIER: dict[str, dict[str, float]] = {
+    "anime": {
+        # anilist wins across all 4 target platforms (5x more Facebook
+        # reach than the mean; only source with n>3 hits >500 views).
+        "anilist": 1.5,
+        # youtube_trending: 90% of anime posts, avg 15 views across
+        # non-Threads platforms. Not zero-value (Threads works OK) —
+        # nudge down, don't kill.
+        "youtube_trending": 0.6,
+    },
+}
+
+
+def _source_reach_multiplier(niche_id: str, source: str) -> float:
+    """Look up per-(niche, source) reach multiplier. Returns 1.0 (no
+    effect) when the cell is unpopulated — safe default keeps the
+    existing scoring behavior for niches without calibration data."""
+    return _SOURCE_REACH_MULTIPLIER.get(niche_id, {}).get(source, 1.0)
+
+
 @dataclass
 class VideoScore:
     """Composite score breakdown for a single video candidate."""
@@ -193,7 +234,15 @@ class CompositeScorer:
         else:
             engagement_factor = 1.0
 
-        composite = velocity_score * trend_mult * relevance * engagement_factor
+        # 2026-08-12: per-source reach calibration. Only nudges when
+        # the (niche, source) cell has strong observed signal
+        # (currently anime.anilist=1.5x, anime.youtube_trending=0.6x).
+        # All other cells return 1.0 = no effect.
+        source_mult = _source_reach_multiplier(
+            self.niche_id, str(video.get("source", ""))
+        )
+
+        composite = velocity_score * trend_mult * relevance * engagement_factor * source_mult
 
         # Absolute-reach gate: reject a KNOWN-low view_count regardless of score.
         passed = composite >= self.min_composite
