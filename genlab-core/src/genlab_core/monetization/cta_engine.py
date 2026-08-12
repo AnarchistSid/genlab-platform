@@ -544,31 +544,7 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
                 logger.debug("[CTAEngine] Bandit select failed for youtube: %s", e)
         fields["youtube_first_comment"] = yt_cta_text
 
-    # ── YouTube engagement question (2026-08-12 organic growth) ───────────────
-    # When there's NO affiliate CTA, populate youtube_first_comment with
-    # an LLM-generated engagement question that invites viewer replies.
-    # Early comment activity is a top-3 algorithmic signal for YouTube
-    # Shorts recommendation — blueprints without affiliates would ship
-    # zero pinned comment otherwise (payload_builder falls through to
-    # empty first_comment_text, YouTubeClient.publish skips the reply).
-    # Flag-gated `GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED`; fail-open.
-    if not fields.get("youtube_first_comment"):
-        try:
-            from genlab_core.publishing.first_comment_question import (
-                generate_engagement_question,
-            )
-            question = generate_engagement_question(
-                niche_id=str(fields.get("niche_id", "") or ""),
-                hook=str(fields.get("hook", "") or ""),
-                title=str(fields.get("title", "") or ""),
-                summary=str(fields.get("summary", "") or ""),
-            )
-            if question:
-                fields["youtube_first_comment"] = question
-        except Exception as e:
-            logger.debug(
-                "[CTAEngine] engagement question generation failed: %s", e
-            )
+    # ── Twitter / X first-reply ───────────────────────────────────────────────
 
     # ── Twitter / X first-reply ───────────────────────────────────────────────
     # X links in the main tweet body get downranked; standard creator
@@ -647,8 +623,79 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
             th_first_comment = th_first_comment[:497].rstrip() + "..."
         fields["threads_first_comment"] = th_first_comment
 
+    # ── Engagement question fallback (2026-08-12 organic growth) ─────────────
+    # When a platform's first-comment slot is empty after ALL affiliate
+    # blocks above, populate it with an LLM-generated engagement question.
+    # Early comment activity is a top-3 algorithmic signal — empty
+    # first-comment = wasted algo surface.
+    #
+    # Per-platform flags (graduated rollout):
+    #   * GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED      — YouTube
+    #   * GENLAB_IG_ENGAGEMENT_QUESTION_ENABLED      — Instagram
+    #   * GENLAB_THREADS_ENGAGEMENT_QUESTION_ENABLED — Threads
+    #
+    # Primitive owns the LLM call; wire owns the flag. Fail-open at
+    # every layer.
+    _apply_engagement_question_fallback(fields)
+
     # Store the selected variant arm_id for downstream attribution
     if selected_variants:
         fields["affiliate_cta_variant"] = ",".join(selected_variants)
 
     return fields
+
+
+def _apply_engagement_question_fallback(fields: dict) -> None:
+    """Populate `{platform}_first_comment` with an LLM engagement
+    question when the slot is empty AND the platform's flag is on.
+
+    Mutates `fields` in place. Never raises — every failure path
+    is caught + logged at DEBUG.
+
+    Runs at the tail of `inject_affiliate_cta` so all affiliate-CTA
+    branches have had a chance to populate the slots. Only fires for
+    slots STILL empty at this point — never overrides an affiliate CTA.
+    """
+    from genlab_core.settings import env_true
+
+    _PLATFORM_FLAGS = (
+        ("youtube_first_comment", "GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED"),
+        ("instagram_first_comment", "GENLAB_IG_ENGAGEMENT_QUESTION_ENABLED"),
+        ("threads_first_comment", "GENLAB_THREADS_ENGAGEMENT_QUESTION_ENABLED"),
+    )
+    hook = str(fields.get("hook", "") or "")
+    title = str(fields.get("title", "") or "")
+    summary = str(fields.get("summary", "") or "")
+    niche_id = str(fields.get("niche_id", "") or "")
+    # Skip the LLM call entirely if there's no content context (the
+    # primitive would return None anyway, but this saves the import).
+    if not any((hook, title, summary)):
+        return
+
+    cached_question: str | None = None
+    for slot, flag in _PLATFORM_FLAGS:
+        if fields.get(slot):
+            continue
+        if not env_true(flag):
+            continue
+        try:
+            if cached_question is None:
+                from genlab_core.publishing.first_comment_question import (
+                    generate_engagement_question,
+                )
+                cached_question = generate_engagement_question(
+                    niche_id=niche_id,
+                    hook=hook,
+                    title=title,
+                    summary=summary,
+                )
+                if cached_question is None:
+                    # LLM failed once — don't retry per platform in
+                    # this call. Mark as "attempted" so we short-circuit.
+                    return
+            fields[slot] = cached_question
+        except Exception as e:
+            logger.debug(
+                "[CTAEngine] engagement question wire failed slot=%s: %s",
+                slot, e,
+            )

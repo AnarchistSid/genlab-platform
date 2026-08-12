@@ -46,14 +46,24 @@ At 5 blueprints/day = ~$0.02/month. Trivial.
 
 Every failure path returns None:
 
-  * Flag off (default)
   * No API key
   * Empty content context
   * LLM refusal / unparseable output
   * API exception
 
-Never raises. Caller (cta_engine) leaves youtube_first_comment empty
-— identical to pre-fix behavior.
+Never raises. Caller (cta_engine) leaves the first-comment slot
+empty — identical to pre-fix behavior.
+
+## Flag ownership
+
+The primitive itself is FLAG-AGNOSTIC — each wire site owns its own
+per-platform flag:
+
+  * `GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED` — YouTube wire
+  * `GENLAB_IG_ENGAGEMENT_QUESTION_ENABLED` — Instagram wire
+  * `GENLAB_THREADS_ENGAGEMENT_QUESTION_ENABLED` — Threads wire
+
+This lets operator graduated-rollout one platform at a time.
 """
 
 from __future__ import annotations
@@ -110,13 +120,6 @@ Nothing else. No preamble, no markdown fences.
 """
 
 
-def _is_enabled() -> bool:
-    """Env kill switch. Default OFF."""
-    from genlab_core.settings import env_true
-
-    return env_true("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED")
-
-
 def _extract_json_object(raw: str) -> dict | None:
     """Locate the first JSON object, tolerating markdown fences."""
     import re
@@ -148,13 +151,14 @@ def generate_engagement_question(
     """Generate a viewer-facing engagement question for a video's
     pinned first comment.
 
-    Returns None on any failure (flag off, no API key, LLM refusal,
-    unparseable output, question too short/long, doesn't end with ?).
-    Never raises.
-    """
-    if not _is_enabled():
-        return None
+    Returns None on any failure (no API key, LLM refusal, unparseable
+    output, question too short/long, doesn't end with ?, or matches
+    bait-pattern list). Never raises.
 
+    Flag ownership: this primitive is flag-agnostic. Each wire site
+    checks its own per-platform flag before calling. See the module
+    docstring for the flag naming convention.
+    """
     if not any((hook, title, summary)):
         return None
 

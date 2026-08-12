@@ -29,16 +29,12 @@ class _MockAnthropicResponse:
         self.content = [block]
 
 
-class TestFlagGating:
-    def test_disabled_returns_none(self, monkeypatch):
-        monkeypatch.delenv("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED", raising=False)
-        from genlab_core.publishing.first_comment_question import (
-            generate_engagement_question,
-        )
-        assert generate_engagement_question(niche_id="sports", hook="hook") is None
+class TestPrimitiveIsFlagAgnostic:
+    """The primitive itself has no flag check — each wire site owns
+    its own per-platform flag. This lets operator graduated-rollout
+    per platform without a flag-thrash on the primitive."""
 
-    def test_enabled_but_no_content_returns_none(self, monkeypatch):
-        monkeypatch.setenv("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED", "1")
+    def test_no_content_returns_none(self):
         from genlab_core.publishing.first_comment_question import (
             generate_engagement_question,
         )
@@ -47,7 +43,6 @@ class TestFlagGating:
         ) is None
 
     def test_no_api_key_returns_none(self, monkeypatch):
-        monkeypatch.setenv("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED", "1")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "")
         from genlab_core.publishing.first_comment_question import (
             generate_engagement_question,
@@ -59,7 +54,6 @@ class TestFlagGating:
 
 class TestLLMCallAndParse:
     def _flag_on_with_key(self, monkeypatch):
-        monkeypatch.setenv("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED", "1")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     def test_valid_question_returned(self, monkeypatch):
@@ -188,69 +182,116 @@ class TestLLMCallAndParse:
 
 
 class TestCTAEngineWire:
-    """The cta_engine wire fires ONLY when youtube_first_comment is
-    empty after the affiliate block. Never overrides affiliate CTA."""
+    """The cta_engine helper `_apply_engagement_question_fallback`
+    fires per-platform when (a) that platform's slot is empty AND
+    (b) that platform's flag is on. Never overrides affiliate CTAs.
 
-    def test_does_not_override_affiliate_cta(self, monkeypatch):
-        monkeypatch.setenv("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED", "1")
+    Caches the LLM call across the 3 platforms in a single invocation
+    so we don't pay 3× the cost when all 3 flags are on."""
+
+    _FIELDS_TEMPLATE = {
+        "niche_id": "sports",
+        "hook": "Buzzer beater to win Game 7",
+        "title": "Game-winning shot from half-court",
+        "summary": "Down by 2, shot from beyond half-court to win series.",
+    }
+
+    def _apply(self, fields, monkeypatch, mock_return="which surprised you more, the play or the reaction?"):
+        from genlab_core.monetization import cta_engine
         from genlab_core.publishing import first_comment_question as fcq
-        called = []
+        call_log = []
 
-        def fake_generate(**_):
-            called.append(True)
-            return "Fake question generated?"
+        def fake_generate(**kwargs):
+            call_log.append(kwargs)
+            return mock_return
 
         monkeypatch.setattr(fcq, "generate_engagement_question", fake_generate)
+        cta_engine._apply_engagement_question_fallback(fields)
+        return call_log
 
-        # Manually simulate the cta_engine branch logic:
-        fields = {
-            "youtube_first_comment": "🔗 Get Foo: https://x.co/y",
-            "niche_id": "sports",
-            "hook": "hook",
-            "title": "title",
-            "summary": "summary",
-        }
-        # Branch: only fires when youtube_first_comment is falsy
-        if not fields.get("youtube_first_comment"):
-            fields["youtube_first_comment"] = fcq.generate_engagement_question(
-                niche_id=fields["niche_id"],
-                hook=fields["hook"],
-                title=fields["title"],
-                summary=fields["summary"],
-            )
+    def test_no_flags_no_llm_call(self, monkeypatch):
+        # All flags off (default)
+        monkeypatch.delenv("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED", raising=False)
+        monkeypatch.delenv("GENLAB_IG_ENGAGEMENT_QUESTION_ENABLED", raising=False)
+        monkeypatch.delenv("GENLAB_THREADS_ENGAGEMENT_QUESTION_ENABLED", raising=False)
+        fields = dict(self._FIELDS_TEMPLATE)
+        calls = self._apply(fields, monkeypatch)
+        assert calls == []
+        assert not fields.get("youtube_first_comment")
+        assert not fields.get("instagram_first_comment")
+        assert not fields.get("threads_first_comment")
 
+    def test_yt_flag_only_populates_yt(self, monkeypatch):
+        monkeypatch.setenv("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED", "1")
+        monkeypatch.delenv("GENLAB_IG_ENGAGEMENT_QUESTION_ENABLED", raising=False)
+        monkeypatch.delenv("GENLAB_THREADS_ENGAGEMENT_QUESTION_ENABLED", raising=False)
+        fields = dict(self._FIELDS_TEMPLATE)
+        self._apply(fields, monkeypatch)
+        assert fields.get("youtube_first_comment", "").endswith("?")
+        assert not fields.get("instagram_first_comment")
+        assert not fields.get("threads_first_comment")
+
+    def test_ig_flag_only_populates_ig(self, monkeypatch):
+        monkeypatch.delenv("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED", raising=False)
+        monkeypatch.setenv("GENLAB_IG_ENGAGEMENT_QUESTION_ENABLED", "1")
+        monkeypatch.delenv("GENLAB_THREADS_ENGAGEMENT_QUESTION_ENABLED", raising=False)
+        fields = dict(self._FIELDS_TEMPLATE)
+        self._apply(fields, monkeypatch)
+        assert not fields.get("youtube_first_comment")
+        assert fields.get("instagram_first_comment", "").endswith("?")
+        assert not fields.get("threads_first_comment")
+
+    def test_threads_flag_only_populates_threads(self, monkeypatch):
+        monkeypatch.delenv("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED", raising=False)
+        monkeypatch.delenv("GENLAB_IG_ENGAGEMENT_QUESTION_ENABLED", raising=False)
+        monkeypatch.setenv("GENLAB_THREADS_ENGAGEMENT_QUESTION_ENABLED", "1")
+        fields = dict(self._FIELDS_TEMPLATE)
+        self._apply(fields, monkeypatch)
+        assert not fields.get("youtube_first_comment")
+        assert not fields.get("instagram_first_comment")
+        assert fields.get("threads_first_comment", "").endswith("?")
+
+    def test_all_flags_on_shares_llm_call(self, monkeypatch):
+        """Cost optimization: same LLM call reused across all 3
+        platforms in one invocation. LLM called ONCE for all 3."""
+        monkeypatch.setenv("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED", "1")
+        monkeypatch.setenv("GENLAB_IG_ENGAGEMENT_QUESTION_ENABLED", "1")
+        monkeypatch.setenv("GENLAB_THREADS_ENGAGEMENT_QUESTION_ENABLED", "1")
+        fields = dict(self._FIELDS_TEMPLATE)
+        calls = self._apply(fields, monkeypatch)
+        assert len(calls) == 1  # ← shared call
+        assert fields.get("youtube_first_comment", "").endswith("?")
+        assert fields.get("instagram_first_comment", "").endswith("?")
+        assert fields.get("threads_first_comment", "").endswith("?")
+
+    def test_affiliate_cta_not_overridden(self, monkeypatch):
+        """When YT slot already has affiliate CTA, wire skips YT but
+        still fires for empty IG + Threads (if their flags are on)."""
+        monkeypatch.setenv("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED", "1")
+        monkeypatch.setenv("GENLAB_IG_ENGAGEMENT_QUESTION_ENABLED", "1")
+        fields = dict(self._FIELDS_TEMPLATE)
+        fields["youtube_first_comment"] = "🔗 Get Foo: https://x.co/y"
+        self._apply(fields, monkeypatch)
         assert fields["youtube_first_comment"] == "🔗 Get Foo: https://x.co/y"
-        assert called == []
+        assert fields.get("instagram_first_comment", "").endswith("?")
 
-    def test_wire_populates_when_empty(self, monkeypatch):
+    def test_llm_returns_none_no_write(self, monkeypatch):
         monkeypatch.setenv("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED", "1")
-        from genlab_core.publishing import first_comment_question as fcq
+        fields = dict(self._FIELDS_TEMPLATE)
+        self._apply(fields, monkeypatch, mock_return=None)
+        assert not fields.get("youtube_first_comment")
 
-        def fake_generate(**_):
-            return "which surprised you more, the play or the reaction?"
-
-        monkeypatch.setattr(fcq, "generate_engagement_question", fake_generate)
-
-        fields = {
-            "youtube_first_comment": "",
-            "niche_id": "sports",
-            "hook": "hook",
-            "title": "title",
-            "summary": "summary",
-        }
-        if not fields.get("youtube_first_comment"):
-            fields["youtube_first_comment"] = fcq.generate_engagement_question(
-                niche_id=fields["niche_id"],
-                hook=fields["hook"],
-                title=fields["title"],
-                summary=fields["summary"],
-            )
-
-        assert fields["youtube_first_comment"].endswith("?")
+    def test_no_content_context_skips_llm(self, monkeypatch):
+        """Save the LLM call when hook + title + summary are all
+        empty — the primitive would return None anyway."""
+        monkeypatch.setenv("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED", "1")
+        fields = {"niche_id": "sports", "hook": "", "title": "", "summary": ""}
+        calls = self._apply(fields, monkeypatch)
+        assert calls == []
 
     def test_cta_engine_source_contains_wire(self):
-        """Structural pin: the actual cta_engine.py has the wire.
-        Guards against a future refactor accidentally deleting it."""
+        """Structural pin: the actual cta_engine.py has the wire and
+        the helper function it delegates to."""
         import pathlib
 
         cta_engine_path = (
@@ -261,8 +302,7 @@ class TestCTAEngineWire:
             / "cta_engine.py"
         )
         src = cta_engine_path.read_text()
-        assert "generate_engagement_question" in src
-        # cta_engine should not CALL env_true on the flag directly —
-        # the primitive owns the gate. (Flag name may appear in a
-        # doc-comment referencing the primitive; that's fine.)
-        assert 'env_true("GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED")' not in src
+        assert "_apply_engagement_question_fallback" in src
+        assert "GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED" in src
+        assert "GENLAB_IG_ENGAGEMENT_QUESTION_ENABLED" in src
+        assert "GENLAB_THREADS_ENGAGEMENT_QUESTION_ENABLED" in src
