@@ -355,9 +355,19 @@ else
     else
         log "WARN: backup_db.sh not found/executable — skipping backup (risky)"
     fi
+    # 2026-08-12: log which URL alembic will use. env.py prefers
+    # MIGRATION_DATABASE_URL over DATABASE_URL — with the role split
+    # (genlab_app runtime vs genlab owner) after Audit A, DATABASE_URL
+    # alone can't ALTER tables. Operator visibility so a `must be owner
+    # of table` failure is diagnosable in one log grep.
+    if [[ -n "${MIGRATION_DATABASE_URL:-}" ]]; then
+        log "Using MIGRATION_DATABASE_URL for alembic (owner-role override)"
+    else
+        log "Using DATABASE_URL for alembic (set MIGRATION_DATABASE_URL if migrations need DDL owner role)"
+    fi
     log "Running alembic upgrade head..."
     "$UV" run --package genlab-core alembic -c genlab-core/alembic.ini upgrade head 2>&1 | tee -a "$LOG" \
-        || fail "alembic upgrade FAILED — code is on new HEAD but schema is on old revision. Roll back code (git reset --hard $HEAD_BEFORE) OR investigate the migration before restarting services."
+        || fail "alembic upgrade FAILED — code is on new HEAD but schema is on old revision. If error was 'must be owner of table', set MIGRATION_DATABASE_URL in /opt/genlab/.env pointing at the schema-owner role and rerun. Roll back code (git reset --hard $HEAD_BEFORE) OR investigate the migration before restarting services."
     log "Migrations applied ✓"
 fi
 

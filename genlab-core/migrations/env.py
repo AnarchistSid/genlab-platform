@@ -23,7 +23,18 @@ config.set_section_option(config.config_ini_section, "POSTGRES_PASSWORD", pg_pas
 # to prod's DB (auth failed because the password differs). With this
 # override, the CI step sets ``DATABASE_URL=postgresql+psycopg://...:15432/...``
 # and the migration applies against the ephemeral CI postgres.
-_db_url_override = os.environ.get("DATABASE_URL")
+#
+# 2026-08-12: MIGRATION_DATABASE_URL takes precedence over DATABASE_URL
+# when set. Motivation: post-Audit-A role hardening, DATABASE_URL points
+# at `genlab_app` (no DDL privilege) — every ALTER TABLE fails with
+# `must be owner of table`. Tonight's F-QB-0702 migration required a
+# manual override to run as the `genlab` owner role. This env var makes
+# the pattern first-class: prod sets `MIGRATION_DATABASE_URL=postgresql://
+# genlab:<pw>@127.0.0.1:5432/genlab` and alembic auto-picks it.
+# Falls back to DATABASE_URL when unset, preserving CI + dev behavior.
+_db_url_override = os.environ.get("MIGRATION_DATABASE_URL") or os.environ.get(
+    "DATABASE_URL"
+)
 if _db_url_override:
     # SQLAlchemy expects the ``+psycopg`` dialect prefix (psycopg3); upgrade
     # bare ``postgresql://`` URLs from libpq-style env values transparently.
