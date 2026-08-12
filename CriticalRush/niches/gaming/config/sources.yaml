@@ -3,7 +3,16 @@
 
 clip_sourcer:
   max_duration_seconds: 300
-  min_duration_seconds: 5
+  # 2026-08-12: raised 5 -> 15 to match validate_videos.SPEC.min_duration.
+  # Prior 5s allowed 6-9s Twitch clips through source, wasted a
+  # ~36s render pass per clip, then got hard-rejected at
+  # ValidateVideos. The core FetchTwitchClips fetcher already
+  # filters at 15s (fetch_twitch_clips._MIN_CLIP_DURATION_SECONDS)
+  # but this niche-local clip_sourcer bypassed that path. Aligning
+  # here fixes the "next silent-fail in the chain" surfaced after
+  # the b46ef2de thin-context fix let Rainbow Six Siege reach
+  # RenderGamingVideo with a 6.9s Twitch source.
+  min_duration_seconds: 15
   target_resolution: "1080"
   trim_start_pct: 0.25
   output_dir: ".tmp/clips"

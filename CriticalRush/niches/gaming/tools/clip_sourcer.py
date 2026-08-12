@@ -48,7 +48,14 @@ class ClipSourcerConfig(BaseModel):
     """Configuration for the clip sourcer, loaded from sources.yaml."""
 
     max_duration_seconds: int = Field(default=60)
-    min_duration_seconds: int = Field(default=5)
+    # 2026-08-12: default was 5, allowing 6-9s clips to reach
+    # RenderGamingVideo then hard-fail at ValidateVideos (which
+    # enforces SPEC.min_duration = 15.0). Sibling code path
+    # `genlab_core.pipeline.stages.fetch_twitch_clips._MIN_CLIP_DURATION_SECONDS`
+    # already correctly defaulted to 15; this default now agrees.
+    # Niche configs can still override via sources.yaml if they
+    # have a legitimate reason for a different value.
+    min_duration_seconds: int = Field(default=15)
     target_resolution: str = Field(default="1080")
     trim_start_pct: float = Field(default=0.25)
     output_dir: str = Field(default=".tmp/clips")
