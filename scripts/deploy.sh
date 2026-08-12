@@ -191,10 +191,18 @@ fi
 # Phase 3 — Detect pending migrations
 # ----------------------------------------------------------------------------
 # Migrations only ship inside `genlab-core/migrations/versions/`, so we
-# can scan the commit range for adds/changes in that path.
+# can scan the commit range for adds/renames in that path.
+#
+# 2026-08-12: `--diff-filter=AR` (was `A` only). A rename that gives a
+# migration file a new revision id (e.g. renaming to break a duplicate-
+# revision-id collision — see commit a8242c5c) shows as `R`, not `A`,
+# and was silently missed. Result: prod skipped the alembic step even
+# though the pull carried a functionally-new migration.
+# `--name-only` gives the DESTINATION filename for renames, so the
+# emitted list is the correct set of files alembic needs to run.
 NEW_MIGRATIONS=""
 if [[ "$BEHIND_COUNT" -gt 0 ]]; then
-    NEW_MIGRATIONS=$(git diff --name-only --diff-filter=A "$HEAD_BEFORE..$REMOTE_HEAD" -- 'genlab-core/migrations/versions/*.py' || true)
+    NEW_MIGRATIONS=$(git diff --name-only --diff-filter=AR "$HEAD_BEFORE..$REMOTE_HEAD" -- 'genlab-core/migrations/versions/*.py' || true)
 fi
 if [[ -n "$NEW_MIGRATIONS" ]]; then
     log "New migrations in this pull:"
