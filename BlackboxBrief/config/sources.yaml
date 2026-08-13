@@ -148,6 +148,38 @@ youtube_channels:
   - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC1_uAIS3r8Vu6JjXWvastJg"
     name: "3blue1brown"
 
+ai_news_rss_with_video:
+  # Task #112 (2026-08-13): AI news RSS + YouTube search pairing.
+  # For each headline, `yt-dlp ytsearch1:{title}` finds a creator's
+  # reaction/demo/analysis video. Zero YouTube Data API quota (uses
+  # yt-dlp's public scraper, not search.list at 100 units/call).
+  #
+  # Flag-gated: only fires when GENLAB_AI_NEWS_WITH_VIDEO_ENABLED=1.
+  # Operator flips after reviewing initial run's story quality vs
+  # noise from the news headlines.
+  #
+  # per_feed_limit: 3 keeps per-fire cost at 5 feeds x 3 searches x
+  # ~3s each = ~45s. Reduce if pipeline duration budget tight.
+  enabled: true
+  per_feed_limit: 3
+  feeds:
+    - url: "https://techcrunch.com/category/artificial-intelligence/feed/"
+      name: "TechCrunch AI"
+    - url: "https://venturebeat.com/category/ai/feed/"
+      name: "VentureBeat AI"
+    - url: "https://www.marktechpost.com/feed/"
+      name: "MarkTechPost"
+    - url: "https://artificialintelligence-news.com/feed/"
+      name: "AI News"
+    - url: "https://the-decoder.com/feed/"
+      name: "The Decoder"
+    # Task #113 (2026-08-13): Product Hunt AI category. Same Atom
+    # feed shape → reuses the fetch_ai_news_with_video stage. 3-5 new
+    # AI launches per day, each searched on YouTube for demo/reaction
+    # videos. Extends source diversity beyond news → product-launch.
+    - url: "https://www.producthunt.com/feed?category=ai-software"
+      name: "Product Hunt AI"
+
 google_trends:
   stub_mode: false
   seed_keywords: ["AI", "artificial intelligence", "ChatGPT"]

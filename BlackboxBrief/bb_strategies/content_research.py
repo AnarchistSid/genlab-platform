@@ -189,6 +189,21 @@ class BBContentResearchStrategy(ContentResearchStrategy):
             )
         context["stories"] = existing_stories
 
+        # Task #112 (2026-08-13): flag-gated AI news RSS + YT search
+        # pairing. Adds a second source type: news-driven video
+        # discovery (TechCrunch/VentureBeat/etc. headline → yt-dlp
+        # ytsearch1 → creator video). Fires only when
+        # GENLAB_AI_NEWS_WITH_VIDEO_ENABLED=1 to give operator control
+        # over the ~45s pipeline-time cost until confidence built.
+        try:
+            self._maybe_add_ai_news_with_video_stories(context)
+        except Exception as ai_news_exc:
+            # Never let this optional stage break the primary pipeline
+            logger.warning(
+                "[ai_creators] AI news + YT search enrichment failed: %s",
+                ai_news_exc,
+            )
+
         context.setdefault("run_stats", {})["fetch"] = {
             "total_entries": total_entries,
             "sources_attempted": len(sources),
@@ -199,3 +214,61 @@ class BBContentResearchStrategy(ContentResearchStrategy):
             "dropped_thin_context": dropped_thin,
         }
         return context
+
+    def _maybe_add_ai_news_with_video_stories(self, context: Any) -> None:
+        """Task #112 hook. Reads sources_config → ai_news_rss_with_video
+        block, calls the shared fetch_for_niche helper when the env flag
+        is set, merges results into context['stories']. Idempotent (dedupes
+        by source_url against existing stories)."""
+        import os as _os
+
+        if _os.environ.get(
+            "GENLAB_AI_NEWS_WITH_VIDEO_ENABLED", ""
+        ).strip().lower() not in ("1", "true", "yes", "on"):
+            return
+
+        # Load the sources.yaml block. Uses the same loader BB already
+        # uses so config parsing stays consistent.
+        import yaml as _yaml
+        sources_yaml_path = BB_ROOT / "config" / "sources.yaml"
+        try:
+            with open(sources_yaml_path) as f:
+                full_config = _yaml.safe_load(f) or {}
+        except Exception as exc:
+            logger.warning("[ai_creators] Failed to read sources.yaml for AI-news block: %s", exc)
+            return
+
+        cfg = full_config.get("ai_news_rss_with_video", {})
+        if not cfg or cfg.get("enabled") is False:
+            return
+        rss_feeds = cfg.get("feeds", [])
+        if not rss_feeds:
+            return
+        per_feed_limit = int(cfg.get("per_feed_limit", 3))
+
+        from genlab_core.media.fetch_ai_news_with_video import fetch_for_niche
+
+        new_stories = fetch_for_niche(
+            niche_id="ai_creators",
+            rss_feeds=rss_feeds,
+            per_feed_limit=per_feed_limit,
+        )
+        if not new_stories:
+            return
+
+        existing = context.get("stories", []) or []
+        existing_urls = {s.get("source_url") for s in existing}
+        deduped = [
+            s for s in new_stories
+            if s.get("source_url") and s["source_url"] not in existing_urls
+        ]
+        existing.extend(deduped)
+        context["stories"] = existing
+
+        run_stats = context.setdefault("run_stats", {})
+        run_stats["ai_news_with_video_stories_found"] = len(deduped)
+        logger.info(
+            "[ai_creators] AI news + YT search added %d new stories (%d "
+            "candidates after dedup vs existing %d)",
+            len(deduped), len(new_stories), len(existing) - len(deduped),
+        )
