@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -341,6 +342,62 @@ class SteamTrailerFetcher:
 # ---------------------------------------------------------------------------
 
 
+_TRADEMARK_CHARS = re.compile(r"[™®©℗℠]")
+"""Trademark/copyright/service-mark symbols to strip from search
+queries. YouTube's search index doesn't tokenize these consistently
+and their presence often returns 0 results."""
+
+_VERBOSE_SUFFIX_PATTERNS = re.compile(
+    r"\s+("
+    r"LAUNCH\s+TRAILER"
+    r"|OFFICIAL\s+(LAUNCH\s+)?TRAILER"
+    r"|OFFICIAL\s+(GAME\s+)?(OVERVIEW\s+)?TRAILER"
+    r"|OFFICIAL\s+RELEASE"
+    r"|OFFICIAL\s+GAMEPLAY(\s+OVERVIEW)?"
+    r"|GAMEPLAY\s+TRAILER"
+    r"|GAMEPLAY\s+OVERVIEW"
+    r"|LEGACY\s+EDITION"
+    r"|DEFINITIVE\s+EDITION"
+    r"|(REVEAL|ANNOUNCE(MENT)?|CINEMATIC)\s+TRAILER"
+    r")\s*$",
+    re.IGNORECASE,
+)
+"""Verbose suffixes that make queries too specific for YT search.
+Games are indexed by their common name (e.g., "Dawn of War 4") not
+brand-complete titles ("Warhammer 40,000: Dawn of War 4 - Official
+Release"). Strip trailing marketing tags. `re.IGNORECASE` handles
+"LAUNCH TRAILER" / "Launch Trailer" / "launch trailer" alike."""
+
+_WHITESPACE = re.compile(r"\s+")
+
+
+def _normalize_search_title(title: str) -> str:
+    """Prepare a game title for YouTube search.
+
+    Strips trademark symbols + verbose marketing suffixes + normalizes
+    whitespace. Idempotent (running twice gives the same result).
+
+    Examples:
+      "The Lord of the Rings™ War in the North™ Legacy Edition LAUNCH TRAILER"
+        -> "The Lord of the Rings War in the North"
+      "ACE COMBAT 8 The Art of Aircraft Trailer"
+        -> "ACE COMBAT 8 The Art of Aircraft"  (no matching suffix)
+      "Warhammer 40,000: Dawn of War 4 - Official Release"
+        -> "Warhammer 40,000: Dawn of War 4 -"
+    """
+    if not title:
+        return ""
+    cleaned = _TRADEMARK_CHARS.sub("", title)
+    # Strip verbose suffixes iteratively — some titles have layered
+    # suffixes ("LAUNCH TRAILER" preceded by "LEGACY EDITION").
+    for _ in range(3):
+        stripped = _VERBOSE_SUFFIX_PATTERNS.sub("", cleaned)
+        if stripped == cleaned:
+            break
+        cleaned = stripped
+    return _WHITESPACE.sub(" ", cleaned).strip()
+
+
 class YouTubeTrailerFetcher:
     """Search YouTube for game trailers via yt-dlp."""
 
@@ -357,9 +414,18 @@ class YouTubeTrailerFetcher:
     def fetch(self, game_title: str, output_dir: Path) -> str | None:
         if not game_title:
             return None
+        # Normalize the title before passing to YT search. Live 2026-08-13
+        # discovery: gaming pipeline dropped 5/5 stories because titles
+        # like "The Lord of the Rings™ War in the North™ Legacy Edition
+        # LAUNCH TRAILER" returned 0 YouTube search results. Two failure
+        # modes: (a) trademark symbols confuse the search index,
+        # (b) verbose suffixes ("Legacy Edition LAUNCH TRAILER") make
+        # queries too specific — YT indexes by common names not brand-
+        # complete titles. Strip both classes before searching.
+        clean_title = _normalize_search_title(game_title)
         try:
-            query = self._search_template.format(game_title=game_title)
-            output_path = output_dir / f"yt_{game_title.replace(' ', '_')[:40]}.mp4"
+            query = self._search_template.format(game_title=clean_title)
+            output_path = output_dir / f"yt_{clean_title.replace(' ', '_')[:40]}.mp4"
 
             [
                 "yt-dlp",
