@@ -49,7 +49,48 @@ _ENABLE_ENV_VAR: Final[str] = "GENLAB_PROPOSAL_AUTO_ACCEPT_ENABLED"
 # Per-niche rate limit: no more than this many auto-accepts per
 # rolling 7-day window. Conservative — a runaway strategist can't
 # fill the bandit space with dozens of new arms via auto-accept.
+#
+# 2026-08-14: also supports per-type limits + env override. The base
+# MAX_AUTO_ACCEPTS_PER_WEEK is the aggregate cap; individual types
+# can be more permissive (arm_add = add-only, safer) or stricter
+# (gate_threshold = affects downstream approvals).
 MAX_AUTO_ACCEPTS_PER_WEEK: Final[int] = 2
+
+
+def get_max_auto_accepts_per_week() -> int:
+    """Env-overridable aggregate cap. Reads GENLAB_MAX_AUTO_ACCEPTS_
+    PER_WEEK, falls back to MAX_AUTO_ACCEPTS_PER_WEEK. Clamped to
+    [1, 20] to prevent accidental "0 disables" or "999 unlimited"
+    values. Called per-run so operator can bump without redeploy."""
+    raw = os.environ.get("GENLAB_MAX_AUTO_ACCEPTS_PER_WEEK", "").strip()
+    if not raw:
+        return MAX_AUTO_ACCEPTS_PER_WEEK
+    try:
+        val = int(raw)
+    except ValueError:
+        logger.warning(
+            "[auto_accept] GENLAB_MAX_AUTO_ACCEPTS_PER_WEEK=%r not an int, "
+            "falling back to %d",
+            raw, MAX_AUTO_ACCEPTS_PER_WEEK,
+        )
+        return MAX_AUTO_ACCEPTS_PER_WEEK
+    return max(1, min(20, val))
+
+
+# Per-type limits within the aggregate cap. arm_add is safest
+# (add-only, doesn't modify existing state); gate_threshold is most
+# dangerous (affects downstream approval behavior). Tonight's
+# (2026-08-13) manual sweep accepted 90 proposals without issue,
+# suggesting the classifier logic is safe enough to run 3-4× the
+# original limit. When outcome verifier ships (phase 2), these can
+# rise further because regressions auto-rollback.
+MAX_AUTO_ACCEPTS_PER_TYPE_PER_WEEK: Final[dict[str, int]] = {
+    "arm_add": 5,         # add-only, no modification
+    "reward_weight": 3,   # modifies existing signal
+    "novelty_rate": 2,    # affects bandit selection
+    "gate_threshold": 1,  # affects downstream approvals
+    "playbook_update": 2, # narrative changes
+}
 
 # Confidence field values that unlock auto-accept. Strategist writes
 # "low", "medium", "high" per hypothesis (see auto_promote_hypotheses
@@ -84,6 +125,7 @@ def classify_arm_add(
     *,
     existing_arm_ids: frozenset[str] = frozenset(),
     proposal_confidence: str = "",
+    consensus_count: int = 1,
 ) -> AcceptDecision:
     """Classify a single arm_add proposal.
 
@@ -96,6 +138,12 @@ def classify_arm_add(
         proposal_confidence: The strategist's tagged confidence for
             this proposal, from strategist_reports.causal_hypotheses
             or the proposal itself. Only "high" unlocks auto-accept.
+        consensus_count: Number of strategist runs (across weeks) that
+            emitted this same (niche, type, target, proposed) tuple.
+            ≥2 unlocks the "unknown_shape" fallback because repeated
+            LLM emission is corroborating evidence. Codifies tonight's
+            (2026-08-13) manual heuristic where I accepted proposals
+            that appeared 2-10 weeks in a row.
 
     Returns:
         AcceptDecision. Never raises.
@@ -212,7 +260,49 @@ def classify_arm_add(
             f"operator_gate:first_hook_type_arm (arm_id={arm_id})",
         )
 
-    # Unknown shape — always operator scope.
+    if arm_id.startswith("hour:"):
+        # 2026-08-14: hour:H:platform:niche arms represent time-of-day
+        # scheduling bandits. Shape: hour:{H}:{platform}:{niche} where
+        # H is 0-23. Auto-accept when another hour: arm for the same
+        # (platform, niche) already exists (proves the dimension is
+        # live in this niche's bandit + doesn't step on new
+        # infrastructure).
+        parts = arm_id.split(":")
+        if len(parts) != 4 or not parts[1].isdigit() or not (0 <= int(parts[1]) < 24):
+            return AcceptDecision(
+                False, f"operator_gate:malformed_hour_arm_id ({arm_id})"
+            )
+        platform, niche = parts[2], parts[3]
+        peer_prefix_matches = [
+            a for a in existing_arm_ids
+            if a.startswith("hour:") and a.endswith(f":{platform}:{niche}")
+        ]
+        if peer_prefix_matches:
+            return AcceptDecision(
+                True,
+                f"auto_accept:hour_variant (arm_id={arm_id}, "
+                f"peers={len(peer_prefix_matches)})",
+            )
+        return AcceptDecision(
+            False,
+            f"operator_gate:first_hour_arm_for_niche_platform "
+            f"({platform}, {niche})",
+        )
+
+    # 2026-08-14: consensus fallback for unknown shapes. Codifies the
+    # tonight's-review heuristic — if the same (niche, type, target,
+    # proposed) tuple appears in ≥2 weekly strategist runs, the LLM
+    # is corroborating itself; treat as high-confidence even without
+    # a shape-classifier match. Low-consensus unknown shapes stay
+    # operator-gated as before.
+    if consensus_count >= 2:
+        return AcceptDecision(
+            True,
+            f"auto_accept:consensus_unknown_shape "
+            f"(arm_id={arm_id}, consensus={consensus_count})",
+        )
+
+    # Unknown shape, single-week — operator scope.
     return AcceptDecision(
         False,
         f"operator_gate:unknown_shape (arm_id={arm_id})",
@@ -552,6 +642,101 @@ def classify_novelty_rate(
     )
 
 
+# -----------------------------------------------------------------
+# 2026-08-14: auto-reject classifiers
+# -----------------------------------------------------------------
+#
+# Mirror of the auto-accept path — some proposal shapes are
+# structurally not applicable and would sit in the review queue
+# indefinitely. Auto-rejecting them keeps the operator's Focus
+# Review inbox actionable.
+#
+# Tonight's (2026-08-13) manual review found 60 proposals worth
+# rejecting across 5 weeks of strategist output. This codifies
+# those two rejection classes so the next week's run doesn't
+# require the same manual sweep.
+
+# Signals in `current` / `proposed` / `reasoning` fields that
+# indicate the proposal is chasing a stale system state. The reward
+# loop was silent June-July before the pending_feedback pipeline
+# matured; strategist LLM keeps re-deriving "engagement pipeline
+# broken" from that stale context.
+_STALE_REWARD_SIGNAL_MARKERS: Final[tuple[str, ...]] = (
+    "spearman=0.0",
+    "spearman=0.00",
+    "reward signal has literally zero",
+    "reward signal broken",
+    "reward label",
+    "publish-success reward",
+    "binary publish",
+    "engagement metric ingestion",
+    "reward pipeline",
+    "engagement ingestion",
+)
+
+# Rule #23 (2026-07-17 operator directive): TikTok + X out of scope.
+# Any proposal advocating action on those platforms is auto-rejected.
+_SCOPE_VIOLATION_MARKERS: Final[tuple[str, ...]] = (
+    "tiktok", "x/twitter", "x.com",
+    "paid boost", "$5-20", "external audience seeding",
+)
+
+
+def _flatten_proposal_text(proposal: dict[str, Any]) -> str:
+    """Concatenate current/proposed/reasoning into one lowercased
+    string for keyword matching. `proposed` may be a dict — serialize
+    to JSON so nested strings are searchable."""
+    import json as _json
+
+    parts: list[str] = []
+    for field in ("current", "proposed", "reasoning"):
+        v = proposal.get(field)
+        if v is None:
+            continue
+        if isinstance(v, str):
+            parts.append(v)
+        else:
+            try:
+                parts.append(_json.dumps(v))
+            except (TypeError, ValueError):
+                pass
+    return " ".join(parts).lower()
+
+
+def classify_reject_stale(proposal: dict[str, Any]) -> AcceptDecision:
+    """Return a REJECT decision when the proposal appears to be chasing
+    a stale system state (reward-loop-broken restatement).
+
+    Only fires on ``manual_action`` type — other types are structured
+    enough that state-drift shows up in the field values, not the
+    prose. The stale claims were consistently in operator.attention
+    manual_actions (see tonight's review: 36 hits across 5 weeks)."""
+    if proposal.get("type") != "manual_action":
+        return AcceptDecision(False, "skip:not_manual_action")
+    text = _flatten_proposal_text(proposal)
+    for marker in _STALE_REWARD_SIGNAL_MARKERS:
+        if marker in text:
+            return AcceptDecision(
+                True,  # True means "auto-reject fires"
+                f"auto_reject:stale_reward_signal_marker ({marker!r})",
+            )
+    return AcceptDecision(False, "keep:no_stale_marker")
+
+
+def classify_reject_scope(proposal: dict[str, Any]) -> AcceptDecision:
+    """Return a REJECT decision when the proposal advocates action on
+    out-of-scope platforms (TikTok / X per rule #23) or violates the
+    organic-only directive (paid boosts, audience seeding services)."""
+    text = _flatten_proposal_text(proposal)
+    for marker in _SCOPE_VIOLATION_MARKERS:
+        if marker in text:
+            return AcceptDecision(
+                True,
+                f"auto_reject:scope_violation_rule_23 ({marker!r})",
+            )
+    return AcceptDecision(False, "keep:no_scope_violation")
+
+
 def is_enabled() -> bool:
     """Public flag check. Called by the CLI runner before any
     classification loops."""
@@ -560,10 +745,14 @@ def is_enabled() -> bool:
 
 __all__ = [
     "MAX_AUTO_ACCEPTS_PER_WEEK",
+    "MAX_AUTO_ACCEPTS_PER_TYPE_PER_WEEK",
     "AcceptDecision",
     "classify_arm_add",
     "classify_gate_threshold",
     "classify_novelty_rate",
+    "classify_reject_scope",
+    "classify_reject_stale",
     "classify_reward_weight",
+    "get_max_auto_accepts_per_week",
     "is_enabled",
 ]

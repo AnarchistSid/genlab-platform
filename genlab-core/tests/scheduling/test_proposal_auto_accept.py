@@ -233,6 +233,208 @@ class TestUnknownShape:
         assert d.should_auto_accept is False
         assert "unknown_shape" in d.reason
 
+    def test_unknown_shape_with_consensus_2_auto_accepts(self):
+        """2026-08-14: consensus_count>=2 unlocks unknown-shape fallback.
+        Codifies tonight's manual heuristic — repeated LLM emission of
+        same proposal across weeks is corroborating evidence."""
+        from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+        d = classify_arm_add(
+            {"type": "arm_add", "proposed": {"arm_id": "weird_new_shape:foo:bar"}},
+            existing_arm_ids=frozenset(),
+            proposal_confidence="high",
+            consensus_count=2,
+        )
+        assert d.should_auto_accept is True
+        assert "consensus_unknown_shape" in d.reason
+
+    def test_unknown_shape_with_consensus_1_still_gates(self):
+        """Single-week unknown shape still requires operator review."""
+        from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+        d = classify_arm_add(
+            {"type": "arm_add", "proposed": {"arm_id": "weird_new_shape:foo:bar"}},
+            existing_arm_ids=frozenset(),
+            proposal_confidence="high",
+            consensus_count=1,
+        )
+        assert d.should_auto_accept is False
+
+
+class TestHourArmClassification:
+    """2026-08-14: hour:H:platform:niche arm shape support.
+    Tonight's manual review found several hour:20:instagram:gaming
+    proposals that fell to unknown_shape."""
+
+    def test_hour_arm_with_existing_peer_auto_accepts(self):
+        from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+        d = classify_arm_add(
+            {"type": "arm_add", "proposed": {"arm_id": "hour:20:instagram:gaming"}},
+            existing_arm_ids=frozenset({"hour:6:instagram:gaming"}),
+            proposal_confidence="high",
+        )
+        assert d.should_auto_accept is True
+        assert "hour_variant" in d.reason
+
+    def test_hour_arm_no_peer_operator_gates(self):
+        from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+        d = classify_arm_add(
+            {"type": "arm_add", "proposed": {"arm_id": "hour:20:instagram:gaming"}},
+            existing_arm_ids=frozenset(),
+            proposal_confidence="high",
+        )
+        assert d.should_auto_accept is False
+        assert "first_hour_arm" in d.reason
+
+    def test_hour_arm_malformed_out_of_range(self):
+        from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+        d = classify_arm_add(
+            {"type": "arm_add", "proposed": {"arm_id": "hour:25:instagram:gaming"}},
+            existing_arm_ids=frozenset({"hour:6:instagram:gaming"}),
+            proposal_confidence="high",
+        )
+        assert d.should_auto_accept is False
+        assert "malformed_hour_arm_id" in d.reason
+
+    def test_hour_arm_wrong_platform_no_auto_accept(self):
+        """Peer with different platform shouldn't unlock — bandit
+        dimensions are per (platform, niche)."""
+        from genlab_core.scheduling.proposal_auto_accept import classify_arm_add
+
+        d = classify_arm_add(
+            {"type": "arm_add", "proposed": {"arm_id": "hour:20:instagram:gaming"}},
+            existing_arm_ids=frozenset({"hour:6:facebook:gaming"}),  # different platform
+            proposal_confidence="high",
+        )
+        assert d.should_auto_accept is False
+
+
+class TestAutoRejectStale:
+    def test_manual_action_with_spearman_marker_rejects(self):
+        from genlab_core.scheduling.proposal_auto_accept import classify_reject_stale
+
+        d = classify_reject_stale({
+            "type": "manual_action",
+            "target": "operator.attention",
+            "current": "Spearman=0.0 for 7 consecutive days",
+            "proposed": "Audit reward signal pipeline",
+        })
+        assert d.should_auto_accept is True
+        assert "stale_reward_signal_marker" in d.reason
+
+    def test_manual_action_with_reward_signal_broken_rejects(self):
+        from genlab_core.scheduling.proposal_auto_accept import classify_reject_stale
+
+        d = classify_reject_stale({
+            "type": "manual_action",
+            "current": "system state ok",
+            "proposed": "The current reward signal broken. Fix now.",
+        })
+        assert d.should_auto_accept is True
+
+    def test_non_manual_action_skipped(self):
+        from genlab_core.scheduling.proposal_auto_accept import classify_reject_stale
+
+        d = classify_reject_stale({
+            "type": "arm_add",
+            "current": "Spearman=0.0",
+        })
+        assert d.should_auto_accept is False
+        assert "not_manual_action" in d.reason
+
+    def test_no_stale_marker_keeps(self):
+        from genlab_core.scheduling.proposal_auto_accept import classify_reject_stale
+
+        d = classify_reject_stale({
+            "type": "manual_action",
+            "current": "gaming pipeline needs baseline instrumentation",
+        })
+        assert d.should_auto_accept is False
+
+
+class TestAutoRejectScope:
+    def test_tiktok_mention_rejects(self):
+        from genlab_core.scheduling.proposal_auto_accept import classify_reject_scope
+
+        d = classify_reject_scope({
+            "type": "manual_action",
+            "proposed": "Distribute to TikTok for viral reach",
+        })
+        assert d.should_auto_accept is True
+        assert "scope_violation_rule_23" in d.reason
+
+    def test_paid_boost_rejects(self):
+        from genlab_core.scheduling.proposal_auto_accept import classify_reject_scope
+
+        d = classify_reject_scope({
+            "type": "manual_action",
+            "proposed": "Run a minimal paid boost ($5-20) on top-performing FB post",
+        })
+        assert d.should_auto_accept is True
+
+    def test_organic_action_keeps(self):
+        from genlab_core.scheduling.proposal_auto_accept import classify_reject_scope
+
+        d = classify_reject_scope({
+            "type": "manual_action",
+            "proposed": "Post more content to Facebook",  # in-scope
+        })
+        assert d.should_auto_accept is False
+
+
+class TestPerTypeRateLimits:
+    def test_per_type_dict_exists(self):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            MAX_AUTO_ACCEPTS_PER_TYPE_PER_WEEK,
+        )
+        for t in ("arm_add", "reward_weight", "novelty_rate", "gate_threshold"):
+            assert t in MAX_AUTO_ACCEPTS_PER_TYPE_PER_WEEK
+
+    def test_arm_add_more_permissive_than_gate_threshold(self):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            MAX_AUTO_ACCEPTS_PER_TYPE_PER_WEEK,
+        )
+        assert (MAX_AUTO_ACCEPTS_PER_TYPE_PER_WEEK["arm_add"]
+                > MAX_AUTO_ACCEPTS_PER_TYPE_PER_WEEK["gate_threshold"])
+
+    def test_env_override_respects_bounds(self, monkeypatch):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            get_max_auto_accepts_per_week,
+        )
+        monkeypatch.setenv("GENLAB_MAX_AUTO_ACCEPTS_PER_WEEK", "10")
+        assert get_max_auto_accepts_per_week() == 10
+
+    def test_env_override_clamps_high(self, monkeypatch):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            get_max_auto_accepts_per_week,
+        )
+        monkeypatch.setenv("GENLAB_MAX_AUTO_ACCEPTS_PER_WEEK", "9999")
+        assert get_max_auto_accepts_per_week() == 20
+
+    def test_env_override_clamps_low(self, monkeypatch):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            get_max_auto_accepts_per_week,
+        )
+        monkeypatch.setenv("GENLAB_MAX_AUTO_ACCEPTS_PER_WEEK", "0")
+        assert get_max_auto_accepts_per_week() == 1
+
+    def test_env_missing_falls_back(self, monkeypatch):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            MAX_AUTO_ACCEPTS_PER_WEEK, get_max_auto_accepts_per_week,
+        )
+        monkeypatch.delenv("GENLAB_MAX_AUTO_ACCEPTS_PER_WEEK", raising=False)
+        assert get_max_auto_accepts_per_week() == MAX_AUTO_ACCEPTS_PER_WEEK
+
+    def test_env_bad_value_falls_back(self, monkeypatch):
+        from genlab_core.scheduling.proposal_auto_accept import (
+            MAX_AUTO_ACCEPTS_PER_WEEK, get_max_auto_accepts_per_week,
+        )
+        monkeypatch.setenv("GENLAB_MAX_AUTO_ACCEPTS_PER_WEEK", "not_an_int")
+        assert get_max_auto_accepts_per_week() == MAX_AUTO_ACCEPTS_PER_WEEK
+
 
 class TestMalformedProposal:
     def test_missing_type_skips(self):
