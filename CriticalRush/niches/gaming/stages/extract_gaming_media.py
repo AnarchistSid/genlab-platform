@@ -39,9 +39,31 @@ class ExtractGamingMedia:
     def _source_clip_for_story(
         self, story: dict[str, Any], project_root: Path
     ) -> dict[str, Any] | None:
-        """Source a clip for a single story. Returns clip dict or None."""
+        """Source a clip for a single story. Returns clip dict or None.
+
+        Prefers `canonical_name` (from IGDB enrichment) over the raw
+        story title when passing to ClipSourcer. 2026-08-13 discovery:
+        raw RSS/trending titles carry marketing suffixes ("- Official
+        Trailer | PS5 Games", "The Art of Aircraft Trailer") that make
+        YT search return 0 hits. IGDB fuzzy matches the actual game
+        name (e.g., "ACE COMBAT 8" instead of the verbose original) so
+        the YT tier of ClipSourcer can find general gameplay clips
+        rather than needing an exact-verbose-title match.
+
+        Fall back to story['title'] when IGDB enrichment didn't run OR
+        didn't find a match (canonical_name is None).
+        """
         sourcer = self._get_sourcer()
-        game_title = story.get("title", "")
+        # Prefer IGDB canonical name for the YT search; keep raw title
+        # for logs so operator sees the mapping.
+        raw_title = story.get("title", "")
+        canonical_name = story.get("canonical_name") or ""
+        game_title = canonical_name or raw_title
+        if canonical_name and canonical_name.lower() != raw_title.lower():
+            logger.info(
+                "[ExtractGamingMedia] IGDB canonical: %r -> %r",
+                raw_title[:80], canonical_name,
+            )
         steam_app_id = story.get("steam_app_id")
         igdb_game_id = story.get("igdb_game_id")
 

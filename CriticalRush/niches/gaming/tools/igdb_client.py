@@ -120,6 +120,19 @@ class IGDBClient:
 
             return {
                 "igdb_game_id": str(chosen["id"]),
+                # canonical_name: the game's canonical title stripped
+                # of marketing suffixes (trademark chars, trailer
+                # descriptors, platform tags). Downstream ClipSourcer's
+                # YouTube search uses this in preference to the raw
+                # story title, which typically carries RSS/trending-feed
+                # marketing suffixes ("- Official Trailer | PS5 Games")
+                # that make YT search return 0 hits. 2026-08-13 fix:
+                # gaming pipeline was 100% Twitch-sourced because YT
+                # search on raw titles failed universally. IGDB fuzzy
+                # match returns the actual game name (e.g., "ACE COMBAT
+                # 8" instead of "ACE COMBAT 8 The Art of Aircraft
+                # Trailer").
+                "canonical_name": chosen.get("name") or None,
                 "steam_app_id": steam_app_id,
                 "developer": developer,
                 "cover_url": cover_url,
