@@ -33,10 +33,26 @@ class PublishGatekeeper:
     gatekeeper runs BEFORE payload construction.
     """
 
+    # Score-floor hysteresis constants (2026-08-13, live-fire fix
+    # for the "0.005 below cutoff loses today's slot" pattern that
+    # took out gaming's daily publish). Defaults are conservative:
+    # scores must be within 5% (0.05) of the floor AND the niche
+    # must have starved forward queue (<2 scheduled next 48h) for
+    # the relaxation to apply.
+    _HYSTERESIS_BAND: float = 0.05
+    _STARVED_QUEUE_THRESHOLD: int = 2
+    _QUEUE_LOOKAHEAD_HOURS: int = 48
+
     def __init__(self, config: dict = None, daily_cap=None, backlog=None):
         self._config = config or {}
         self._daily_cap = daily_cap
         self._backlog = backlog
+        # Per-instance cache: niche_id -> forward queue depth. Avoids
+        # re-querying the backlog when multiple blueprints for the same
+        # niche+platform are evaluated in one publisher pass. The
+        # gatekeeper is short-lived (recreated per pass) so cache
+        # freshness matches the pass's own consistency window.
+        self._forward_queue_cache: dict[str, int] = {}
         self._gates = [
             self._approval_gate,
             self._format_gate,
@@ -152,13 +168,106 @@ class PublishGatekeeper:
                     floor = float(pub.get("score_floor", 0.3))
                 except (TypeError, ValueError):
                     floor = 0.3
-        if score < floor:
+        if score >= floor:
             return GateResult(
-                allowed=False,
-                reason=f"Score {score} below floor {floor}",
+                allowed=True,
+                reason=f"Score {score}",
                 gate_name="score_floor_gate",
             )
-        return GateResult(allowed=True, reason=f"Score {score}", gate_name="score_floor_gate")
+        # Hysteresis: score is BELOW the strict floor. Allow when
+        # (a) score is within _HYSTERESIS_BAND of the floor AND
+        # (b) the niche's forward queue is starved. Prevents "0.005
+        # below cutoff loses today's slot" pattern. When queue is
+        # healthy, strict floor still applies — protects content
+        # quality when we have alternatives.
+        if score >= floor - self._HYSTERESIS_BAND:
+            niche_id = str(bp.get("niche_id", "") or "")
+            if niche_id and self._is_forward_queue_starved(niche_id):
+                return GateResult(
+                    allowed=True,
+                    reason=(
+                        f"Score {score} below floor {floor} but within "
+                        f"{self._HYSTERESIS_BAND} hysteresis; niche "
+                        f"forward queue starved (<{self._STARVED_QUEUE_THRESHOLD} "
+                        f"in next {self._QUEUE_LOOKAHEAD_HOURS}h)"
+                    ),
+                    gate_name="score_floor_gate",
+                )
+        return GateResult(
+            allowed=False,
+            reason=f"Score {score} below floor {floor}",
+            gate_name="score_floor_gate",
+        )
+
+    def _is_forward_queue_starved(self, niche_id: str) -> bool:
+        """Query backlog for scheduled blueprints in the next
+        `_QUEUE_LOOKAHEAD_HOURS`. Returns True when count is below
+        `_STARVED_QUEUE_THRESHOLD`.
+
+        Fail-CLOSED (return False = strict floor stays enforced) on
+        any error — safer to reject a borderline blueprint than to
+        accept a low-quality one because a DB read failed. Different
+        from most fail-open observability wires; hysteresis relaxation
+        is a quality-gate change and deserves conservative fallback.
+
+        Cached per-instance for the publisher pass — one query per
+        niche_id per gatekeeper instance.
+        """
+        if niche_id in self._forward_queue_cache:
+            return (
+                self._forward_queue_cache[niche_id] < self._STARVED_QUEUE_THRESHOLD
+            )
+        depth = self._query_forward_queue_depth(niche_id)
+        if depth is None:
+            # Fail-closed: caller sees "not starved" -> strict floor applies
+            return False
+        self._forward_queue_cache[niche_id] = depth
+        return depth < self._STARVED_QUEUE_THRESHOLD
+
+    def _query_forward_queue_depth(self, niche_id: str) -> int | None:
+        """Count blueprints with scheduled_for in the next N hours.
+
+        Returns None on any error (caller treats as not-starved =
+        strict floor applies).
+        """
+        if not self._backlog:
+            return None
+        try:
+            # BacklogClient.blueprints.all supports niche_id + a
+            # SharePoint-style formula. Use a permissive query and
+            # filter in-Python for portability across the SP/Postgres
+            # backends the client abstracts over.
+            rows = self._backlog.blueprints.all(
+                niche_id=niche_id,
+                max_records=50,
+                formula="AND({scheduled_for}!='')",
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "[gatekeeper] forward_queue query failed niche=%s: %s",
+                niche_id, exc,
+            )
+            return None
+        now = datetime.now(UTC)
+        cutoff = now + timedelta(hours=self._QUEUE_LOOKAHEAD_HOURS)
+        count = 0
+        for row in rows:
+            fields = row.get("fields", row) if isinstance(row, dict) else {}
+            sched_raw = fields.get("scheduled_for") or fields.get("scheduledFor")
+            if not sched_raw:
+                continue
+            try:
+                # ISO-8601 with Z or +offset — Python 3.11+ handles both
+                sched = datetime.fromisoformat(
+                    str(sched_raw).replace("Z", "+00:00")
+                )
+                if sched.tzinfo is None:
+                    sched = sched.replace(tzinfo=UTC)
+            except (ValueError, TypeError):
+                continue
+            if now <= sched <= cutoff:
+                count += 1
+        return count
 
     def _media_ready_gate(self, bp: dict, platform: str) -> GateResult:
         paths = bp.get("visual_paths", "[]")
