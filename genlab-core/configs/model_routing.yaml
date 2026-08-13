@@ -33,13 +33,24 @@ task_routing:
   enrich_metadata: "gpt-4o-mini"
   summarise_article: "gpt-4o-mini"
 
-  # NANO tier — trivial extraction (GPT-4.1-nano, cheapest)
-  extract_game_name: "gpt-4.1-nano"
-  classify_content_type: "gpt-4.1-nano"
+  # NANO tier — trivial extraction. Was `gpt-4.1-nano` but that model
+  # name doesn't exist in OpenAI's API (verified 2026-08-13 via 404
+  # not_found_error in prod journal for every enrich_with_igdb call —
+  # the LLM fallback path was 100% broken, breaking IGDB canonical-
+  # name lookup for 5/7 gaming candidates daily). Switched to
+  # `gpt-4o-mini` which is the real cheapest OpenAI tier actually
+  # available today ($0.15/$0.60 per M — same tier as the "BULK"
+  # block above, so functionally consolidated).
+  extract_game_name: "gpt-4o-mini"
+  classify_content_type: "gpt-4o-mini"
 
   # VIDEO tier — Gemini Flash for video input
   video_analysis: "gemini-2.5-flash"
 
 budget_fallbacks:
   expensive_to_mid: "gpt-4o-mini"
-  mid_to_cheapest: "gpt-4.1-nano"
+  # mid_to_cheapest was `gpt-4.1-nano` (non-existent). Fallback tier
+  # now uses the same gpt-4o-mini — no cheaper tier is actually
+  # available in OpenAI today. When cheaper models ship, update both
+  # entries in this file simultaneously.
+  mid_to_cheapest: "gpt-4o-mini"

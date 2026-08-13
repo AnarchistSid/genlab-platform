@@ -66,12 +66,28 @@ class ExtractGamingMedia:
             )
         steam_app_id = story.get("steam_app_id")
         igdb_game_id = story.get("igdb_game_id")
+        # 2026-08-13: pass download_url through so ClipSourcer's
+        # Tier 0 short-circuits YT search when the story already has
+        # an exact video URL (FetchTrendingVideos populates this for
+        # every YT trending gaming video). Was the root architectural
+        # issue behind the "100% Twitch, 5/7 candidates dropped daily"
+        # pattern — we already knew which video to download, but
+        # ClipSourcer went back to first principles and searched YT.
+        download_url = story.get("download_url") or story.get("source_url")
+        if download_url and str(download_url).startswith("http"):
+            logger.info(
+                "[ExtractGamingMedia] direct_url tier available: %s",
+                str(download_url)[:80],
+            )
+        else:
+            download_url = None
 
         result = sourcer.source_clip(
             game_title=game_title,
             steam_app_id=steam_app_id,
             igdb_game_id=igdb_game_id,
             project_root=project_root,
+            download_url=download_url,
         )
         if result:
             return result.model_dump()

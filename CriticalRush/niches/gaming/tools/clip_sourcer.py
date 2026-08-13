@@ -931,6 +931,64 @@ class GamingClipSourcer:
         output.mkdir(parents=True, exist_ok=True)
         return output
 
+    def _direct_url_fetch(self, url: str, output_dir: Path) -> str | None:
+        """Download an exact known video URL via yt-dlp. Used as Tier 0
+        when the story already has `download_url` (e.g., from
+        FetchTrendingVideos which returns YT trending gaming videos
+        with their exact video_id + URL). Bypasses YT search entirely.
+
+        Returns file path on success, None on any failure. Fail-open
+        so downstream tiers still fire.
+        """
+        # Slug the URL into a safe filename
+        import hashlib as _hash
+
+        slug = _hash.sha1(url.encode("utf-8")).hexdigest()[:12]
+        output_path = output_dir / f"direct_{slug}.mp4"
+
+        cmd = [
+            "yt-dlp",
+            url,
+            "--format",
+            "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]",
+            "--merge-output-format",
+            "mp4",
+            "--no-playlist",
+            "--output",
+            str(output_path),
+            "--quiet",
+            "--no-warnings",
+        ]
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning("[DirectURL] Timeout downloading %s", url)
+            return None
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[DirectURL] Failed to download %s: %s", url, exc)
+            return None
+        if result.returncode != 0:
+            logger.info(
+                "[DirectURL] yt-dlp exit=%d for %s — stderr tail: %s",
+                result.returncode, url,
+                "\n".join((result.stderr or "").strip().splitlines()[-2:]),
+            )
+            return None
+        if not output_path.exists() or output_path.stat().st_size < 1024:
+            logger.info(
+                "[DirectURL] Empty/missing output for %s (size=%d)",
+                url,
+                output_path.stat().st_size if output_path.exists() else 0,
+            )
+            return None
+        logger.info("[DirectURL] Downloaded %s -> %s", url, output_path.name)
+        return str(output_path)
+
     def _post_process(self, file_path: str) -> ClipResult | None:
         """Probe, trim, and build a ClipResult."""
         trimmed = trim_to_highlight(
@@ -967,11 +1025,48 @@ class GamingClipSourcer:
         steam_app_id: str | None = None,
         igdb_game_id: str | None = None,
         project_root: Path | None = None,
+        download_url: str | None = None,
     ) -> ClipResult | None:
-        """Try all tiers in order, return first success or None."""
+        """Try all tiers in order, return first success or None.
+
+        Tier order (2026-08-13 restructure):
+          0. Direct download URL (when story already has an exact
+             video URL from FetchTrendingVideos). Avoids the fragile
+             YT search step entirely when we already know which
+             video to download.
+          1. Steam trailer via app_id
+          2. YouTube search via game_title (fragile — needs canonical
+             name; IGDB enrichment helps but often fails on marketing
+             titles)
+          3. Twitch clips via IGDB id
+          4. (Pexels stock footage — permanently disabled per
+             clip_sourcer.py:932-937)
+        """
         output_dir = self._ensure_output_dir(
             project_root or Path("."),
         )
+
+        # Tier 0: Direct download URL short-circuit (2026-08-13 fix).
+        # ROOT ARCHITECTURAL ISSUE: stories from FetchTrendingVideos
+        # arrive with `download_url` = the exact YouTube video URL
+        # (e.g., https://www.youtube.com/watch?v=vPqLcA9LQMo for
+        # "ACE COMBAT 8"). But the historical tier order ignored that
+        # and did a fresh `ytsearch3:{title}` — which returns 0 hits
+        # for marketing-suffix-laden titles ("The Art of Aircraft
+        # Trailer") and drops the candidate. Result: 5-of-7 candidates
+        # dropped daily despite already having valid YT URLs.
+        #
+        # This tier just downloads the known URL via yt-dlp. No search,
+        # no matching, no IGDB dependency — the story told us exactly
+        # which video it wants.
+        if download_url:
+            path = self._direct_url_fetch(download_url, output_dir)
+            if path:
+                result = self._post_process(path)
+                if result:
+                    result.source_tier = "direct_url"
+                    result.source_url = download_url
+                    return result
 
         # Tier 1: Steam
         if steam_app_id:
@@ -983,7 +1078,7 @@ class GamingClipSourcer:
                     result.source_url = f"https://store.steampowered.com/app/{steam_app_id}"
                     return result
 
-        # Tier 2: YouTube
+        # Tier 2: YouTube search (fragile on marketing titles)
         path = self._youtube.fetch(game_title, output_dir)
         if path:
             result = self._post_process(path)
