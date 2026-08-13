@@ -34,6 +34,7 @@ dependencies = [
     "gtts>=2.0",
     "python-slugify[unidecode]>=8.0",  # Override GPL text-unidecode with MIT unidecode
     "argon2-cffi>=23.1",  # PR #561 — password hashing for users table (auth path)
+    "praw>=7.7",  # 2026-08-13 (task #113): Reddit OAuth client for reddit_oauth_client.py — 600 rpm quota vs anonymous RSS ~1-2 rpm from datacenter IP. Activation gated on GENLAB_REDDIT_OAUTH_ENABLED + REDDIT_CLIENT_ID/SECRET/USER_AGENT env vars; without them the module returns None on every call and existing RSS path stays authoritative.
 ]
 
 [project.optional-dependencies]
