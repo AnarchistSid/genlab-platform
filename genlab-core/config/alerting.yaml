@@ -8,7 +8,22 @@
 thresholds:
   # Maximum acceptable p95 pipeline duration (seconds).
   # Pipelines consistently above this indicate a performance regression.
-  pipeline_duration_p95_seconds: 600
+  #
+  # 2026-08-13: raised 600 -> 1800 after live audit found EVERY run
+  # exceeds 600s (ai_creators 20min, movies 23min, sports 26min,
+  # anime 14min). Root cause is 4GB VPS reality:
+  #   * VisualRenderStrategy 5-18 min (FFmpeg encoding on limited CPU)
+  #   * FetchRedditClips 5 min (sequential Reddit API + probes)
+  # Together those are 60-80% of each pipeline's runtime.
+  #
+  # 600s was aspirational for a beefier machine that never landed.
+  # 1800s (30 min) matches current-VPS reality with headroom to
+  # detect genuine regressions (e.g., an LLM call blocking 5 min
+  # would push past 30 min). Real optimization work (parallel
+  # Reddit fetch, encoder tuning) deserves its own session — this
+  # config change just stops chronic false alarms from drowning
+  # real perf signals.
+  pipeline_duration_p95_seconds: 1800
 
   # Maximum 24-hour error rate (percent of pipeline runs that fail).
   error_rate_24h_pct: 10
