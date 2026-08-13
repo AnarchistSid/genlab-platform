@@ -50,6 +50,7 @@ import logging
 import os
 import sys
 from datetime import UTC, date, datetime
+from typing import Any
 
 logger = logging.getLogger("run_strategist")
 
@@ -215,6 +216,13 @@ def _run_all(niches: list[str], week: date, *, dry_run: bool) -> int:
                 outcome.cost_usd,
                 outcome.duration_sec,
             )
+            # 2026-08-13: emit pipeline_alerts row so silent failures
+            # surface on Mission Control. Rule #19 sibling — the
+            # strategist_reports table only records success, so 3
+            # weeks (07-13/07-20/07-27) of `validation_failed` runs
+            # from a 4_000-token truncation bug were invisible until
+            # investigated by hand. Fail-open on DB errors.
+            _emit_strategist_failure_alert(niche, outcome)
 
     total = successes + failures
     logger.info(
@@ -247,6 +255,61 @@ def _run_all(niches: list[str], week: date, *, dry_run: bool) -> int:
         max_error_rate=0.999,
         high_error_exit_code=1,
     )
+
+
+def _emit_strategist_failure_alert(niche_id: str, outcome: Any) -> None:
+    """Best-effort pipeline_alerts insert for non-persisted RunOutcome.
+    Mirrors hook_classifier._emit_training_failure_alert. Dedupe per
+    (niche_id, status) so a persistent failure mode doesn't spam the
+    table. Fail-open — alert emission must never re-raise into runner.
+
+    2026-08-13: added after investigating the 3-week silent gap
+    (weeks 07-13/07-20/07-27) caused by 4_000-token truncation. Rule
+    #19 sibling — WARN log alone is not observability when journal
+    rotates faster than review cadence.
+    """
+    try:
+        import json as _json
+        from genlab_core.storage.tenant_context import pg_connect
+
+        dsn = os.environ.get("DATABASE_URL", "").strip()
+        if not dsn:
+            return
+        check_name = f"strategist_{outcome.status}"
+        message = (
+            f"Strategist run for {niche_id} week={outcome.week_of} "
+            f"failed at stage '{outcome.status}': {(outcome.error or '')[:200]}"
+        )
+        with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM pipeline_alerts WHERE check_name = %s "
+                    "AND niche_id = %s AND resolved_at IS NULL",
+                    (check_name, niche_id),
+                )
+                if cur.fetchone():
+                    return
+                cur.execute(
+                    "INSERT INTO pipeline_alerts "
+                    "(niche_id, check_name, severity, message, details) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (
+                        niche_id,
+                        check_name,
+                        "warning",
+                        message,
+                        _json.dumps({
+                            "week_of": str(outcome.week_of),
+                            "status": outcome.status,
+                            "error": (outcome.error or "")[:500],
+                            "cost_usd": float(outcome.cost_usd or 0),
+                            "duration_sec": float(outcome.duration_sec or 0),
+                        }),
+                    ),
+                )
+                conn.commit()
+    except Exception:
+        pass
 
 
 class _MinimalCollector:

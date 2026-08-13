@@ -25,7 +25,17 @@ logger = logging.getLogger(__name__)
 # (different models interpret structured-output instructions differently;
 # treating them as a versioned contract surface prevents silent drift).
 STRATEGIST_MODEL = "claude-sonnet-4-6"
-MAX_OUTPUT_TOKENS = 4_000  # ~3K JSON + headroom
+MAX_OUTPUT_TOKENS = 16_000
+# 2026-08-13: bumped 4_000 → 16_000 after silent 3-week Strategist
+# outage. Investigation of the 07-13/07-20/07-27 missing-reports gap
+# found the LLM was consistently emitting 3600-3935 tokens (right at
+# the 4_000 cap) with the Aug 9 successes; longer emissions like the
+# missing movies week 08-03 truncated mid-string. Truncation →
+# `json_decode_failed` → `validation_failed` → no persist → invisible
+# because strategist_reports only records SUCCESS.
+# Sonnet 4.6 supports 64k output tokens; 16k gives 4x safety margin
+# over historical p95 without changing any cost characteristic
+# (billing is per output token, not per max_tokens cap).
 # 2026-07-07: bumped 60.0 → 180.0 after live-fire caught 60s was
 # ~10% short of the real call duration. Measured on prod with the
 # actual Strategist prompt shape: 67.02s for one niche (1724 input
