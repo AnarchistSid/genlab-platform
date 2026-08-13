@@ -48,6 +48,28 @@ class FetchRedditClips(FetcherStage):
         if not niche_id:
             return context
 
+        # Global kill switch (2026-08-13). Live-fire discovery: Reddit
+        # rate-limits 100% of requests from prod's IP with 429, and
+        # this stage has contributed 0 publishes across ALL 5 niches
+        # in the past 30 days despite spending 5 min per pipeline run
+        # (10 subs x 30s 429-retry sleep). Total waste: ~25 min/day
+        # CPU across niches + continuous rate-limit pressure on
+        # Reddit's edge. Env var lets operator disable universally
+        # without editing 5 sources.yaml blocks. Real fix: Reddit
+        # OAuth (600 rpm, days-to-weeks approval — see fetch_reddit_
+        # clips.py comment on fetch_for_niche).
+        import os as _os
+
+        if _os.environ.get("GENLAB_REDDIT_FETCH_DISABLED", "").strip().lower() in (
+            "1", "true", "yes", "on",
+        ):
+            logger.info(
+                "[RedditClips] niche=%s — GENLAB_REDDIT_FETCH_DISABLED set, "
+                "skipping (0 publishes across all niches in 30d; saves ~5min/run)",
+                niche_id,
+            )
+            return context
+
         sources_config = context.get("sources_config", {})
         reddit_cfg = sources_config.get("reddit", {})
         if reddit_cfg.get("enabled") is False:
