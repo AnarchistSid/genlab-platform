@@ -188,6 +188,37 @@ class TestDirectUrlFetchImpl:
         assert result is None
 
 
+class TestYtDlpCookiesArgs:
+    """Cookies-file helper: env var pointing at a real file activates
+    --cookies. Missing / non-file → empty args (yt-dlp runs unauth'd
+    and fails on YT bot check as before)."""
+
+    def test_no_env_returns_empty(self, monkeypatch):
+        monkeypatch.delenv("YT_DLP_COOKIES_FILE", raising=False)
+        from niches.gaming.tools.clip_sourcer import _yt_dlp_cookies_args
+        assert _yt_dlp_cookies_args() == []
+
+    def test_empty_env_returns_empty(self, monkeypatch):
+        monkeypatch.setenv("YT_DLP_COOKIES_FILE", "")
+        from niches.gaming.tools.clip_sourcer import _yt_dlp_cookies_args
+        assert _yt_dlp_cookies_args() == []
+
+    def test_nonexistent_path_returns_empty(self, monkeypatch, tmp_path):
+        monkeypatch.setenv(
+            "YT_DLP_COOKIES_FILE", str(tmp_path / "missing.txt"),
+        )
+        from niches.gaming.tools.clip_sourcer import _yt_dlp_cookies_args
+        assert _yt_dlp_cookies_args() == []
+
+    def test_real_file_returns_args(self, monkeypatch, tmp_path):
+        cookies = tmp_path / "cookies.txt"
+        cookies.write_text("# fake cookies")
+        monkeypatch.setenv("YT_DLP_COOKIES_FILE", str(cookies))
+        from niches.gaming.tools.clip_sourcer import _yt_dlp_cookies_args
+        args = _yt_dlp_cookies_args()
+        assert args == ["--cookies", str(cookies)]
+
+
 class TestExtractGamingMediaWireDownloadUrl:
     """The wire from stage → sourcer must pass download_url. Without
     this the Tier 0 short-circuit is inert."""

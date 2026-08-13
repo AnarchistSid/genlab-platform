@@ -342,6 +342,34 @@ class SteamTrailerFetcher:
 # ---------------------------------------------------------------------------
 
 
+def _yt_dlp_cookies_args() -> list[str]:
+    """Return `--cookies /path` args when YT_DLP_COOKIES_FILE env var
+    points at a real file. Empty list otherwise (yt-dlp runs without
+    auth). Consolidated helper so all 3 yt-dlp call sites in this
+    module (direct-URL Tier 0 + YT search info + YT search download)
+    stay in lockstep.
+
+    Operator setup (one-time):
+      1. Install a browser extension like "Get cookies.txt LOCALLY"
+      2. Visit youtube.com while logged in
+      3. Export cookies.txt to /opt/genlab/.runtime/yt_cookies.txt
+      4. Add YT_DLP_COOKIES_FILE=/opt/genlab/.runtime/yt_cookies.txt to .env
+      5. chmod 600 the file; sudo chown genlab:genlab it (rule #15)
+
+    Without this setup, YT downloads fail from datacenter IPs with
+    "Sign in to confirm you're not a bot" — verified 2026-08-13.
+    Twitch/Steam tiers unaffected (different backends).
+    """
+    import os as _os
+
+    path = _os.environ.get("YT_DLP_COOKIES_FILE", "").strip()
+    if not path:
+        return []
+    if not Path(path).is_file():
+        return []
+    return ["--cookies", path]
+
+
 _TRADEMARK_CHARS = re.compile(r"[™®©℗℠]")
 """Trademark/copyright/service-mark symbols to strip from search
 queries. YouTube's search index doesn't tokenize these consistently
@@ -445,16 +473,22 @@ class YouTubeTrailerFetcher:
                 "%(title)s",
             ]
 
-            # First, get info to check for banned fragments
+            # First, get info to check for banned fragments.
+            # 2026-08-13: added player_client=ios,web_embedded for the
+            # same bot-detection bypass as Tier 0 direct download.
+            # YouTube blocks default web-client from datacenter IPs.
             info_cmd = [
                 "yt-dlp",
                 f"ytsearch3:{query}",
                 "--no-download",
+                "--extractor-args",
+                "youtube:player_client=ios,web_embedded",
                 "--print",
                 "%(title)s",
                 "--quiet",
                 "--no-warnings",
             ]
+            info_cmd.extend(_yt_dlp_cookies_args())
             info_result = subprocess.run(
                 info_cmd,
                 capture_output=True,
@@ -493,7 +527,7 @@ class YouTubeTrailerFetcher:
                     )
                     return None
 
-            # Download the clean result
+            # Download the clean result (bot-check bypass same as info_cmd)
             dl_cmd = [
                 "yt-dlp",
                 search_url,
@@ -502,11 +536,14 @@ class YouTubeTrailerFetcher:
                 "--merge-output-format",
                 "mp4",
                 "--no-playlist",
+                "--extractor-args",
+                "youtube:player_client=ios,web_embedded",
                 "--output",
                 str(output_path),
                 "--quiet",
                 "--no-warnings",
             ]
+            dl_cmd.extend(_yt_dlp_cookies_args())
             result = subprocess.run(dl_cmd, capture_output=True, text=True, timeout=120)
             if result.returncode != 0:
                 logger.warning(
@@ -946,6 +983,20 @@ class GamingClipSourcer:
         slug = _hash.sha1(url.encode("utf-8")).hexdigest()[:12]
         output_path = output_dir / f"direct_{slug}.mp4"
 
+        # 2026-08-13: YouTube's bot detection blocks default yt-dlp
+        # web-client requests from datacenter IPs (Hetzner VPS returns
+        # "Sign in to confirm you're not a bot" on every YT URL).
+        # Live-tested bypasses:
+        #   * player_client=ios,web_embedded — still blocks (verified)
+        #   * player_client=web_embedded     — still blocks (verified)
+        #   * --cookies /path/to/cookies.txt — WORKS (operator setup)
+        #
+        # Cookies-file support: when YT_DLP_COOKIES_FILE env var is set
+        # and the path exists, yt-dlp uses those cookies which pass
+        # YouTube's bot check. Operator exports cookies once via a
+        # browser extension (e.g., "Get cookies.txt LOCALLY"), drops
+        # the file on prod, sets env var → all YT downloads unlocked.
+        # Without cookies, YT tier fails but Twitch/Steam still work.
         cmd = [
             "yt-dlp",
             url,
@@ -954,11 +1005,14 @@ class GamingClipSourcer:
             "--merge-output-format",
             "mp4",
             "--no-playlist",
+            "--extractor-args",
+            "youtube:player_client=ios,web_embedded",
             "--output",
             str(output_path),
             "--quiet",
             "--no-warnings",
         ]
+        cmd.extend(_yt_dlp_cookies_args())
         try:
             result = subprocess.run(
                 cmd,
