@@ -88,6 +88,28 @@ fix_ownership() {
 fix_ownership "$COOKIES_FILE"
 fix_ownership "$SESSION_FILE"
 
+# ── 2b. YT cookies startup health probe ────────────────────────────────────
+# Verifies YT_DLP_COOKIES_FILE actually works against a sentinel URL BEFORE
+# the pipeline burns 20 min discovering cookies are stale. Fail-open (never
+# blocks the pipeline); failure signal reaches operator via pipeline_alerts.
+# Runs as `genlab` (drops privileges via sudo -u so pg_connect uses the
+# service DSN, and the venv's python is on PATH).
+if [[ -x "${VENV_PYTHON}" ]] && [[ -f "${GENLAB_ROOT}/scripts/probe_yt_cookies.py" ]]; then
+  if command -v sudo >/dev/null 2>&1; then
+    sudo -u genlab -E env \
+        DATABASE_URL="${DATABASE_URL:-}" \
+        YT_DLP_COOKIES_FILE="${YT_DLP_COOKIES_FILE:-}" \
+        PATH="/usr/local/bin:/usr/bin:/bin" \
+        "${VENV_PYTHON}" "${GENLAB_ROOT}/scripts/probe_yt_cookies.py" \
+        2>&1 | while IFS= read -r line; do log "probe: $line"; done \
+        || log "WARN: probe_yt_cookies.py exited non-zero (should never happen; probe is fail-open)"
+  else
+    log "WARN: sudo not found; skipping cookies probe"
+  fi
+else
+  log "probe_yt_cookies.py missing or venv not ready; skipping cookies probe"
+fi
+
 # ── 3. uv binary visibility under HOME=/opt/genlab ────────────────────────
 # scripts/daily_intel.sh now resolves uv via `command -v` first
 # (PR-fixed 2026-06-14), but historical callers + the operator's

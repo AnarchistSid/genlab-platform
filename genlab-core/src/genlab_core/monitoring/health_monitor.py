@@ -80,6 +80,7 @@ from genlab_core.monitoring.checks.pipeline import (
     check_publish_failures,
     check_publish_silence,
     check_qc_collapse,
+    check_source_diversity,
     check_source_starvation,
     check_stale_drafted,
     check_stuck_publishing,
@@ -104,6 +105,7 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_zero_blueprints(reports, nid))
         all_alerts.extend(check_qc_collapse(reports, nid))
         all_alerts.extend(check_source_starvation(reports, nid))
+        all_alerts.extend(check_source_diversity(nid))
         # 2026-06-30 (COMMIT 3 / B2): detect silent-no-op fetchers
         # (sources_config-style bug). Reads .tmp/runs/*/metrics.jsonl
         # for each niche, fires warning if a fetcher stage reports
@@ -428,6 +430,7 @@ __all__ = [
     "check_publish_silence",
     "check_qc_collapse",
     "check_services",
+    "check_source_diversity",
     "check_source_starvation",
     "check_stale_drafted",
     "check_stuck_publishing",

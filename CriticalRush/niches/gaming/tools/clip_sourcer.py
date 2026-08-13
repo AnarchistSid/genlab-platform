@@ -370,6 +370,71 @@ def _yt_dlp_cookies_args() -> list[str]:
     return ["--cookies", path]
 
 
+_BOT_CHECK_MARKERS = (
+    "sign in to confirm you're not a bot",
+    "sign in to confirm your age",
+    "confirm you're not a bot",
+    "use --cookies-from-browser or --cookies",
+    "http error 429",
+)
+
+
+def _is_bot_check_stderr(stderr: str) -> bool:
+    """True when yt-dlp stderr contains YouTube's datacenter-IP bot
+    detection signature. Used to route the failure into a WARNING-level
+    log path with a stable error_code so cookies-stale conditions surface
+    on Mission Control instead of being buried in INFO-level noise.
+    Class-of-bug: [[class-of-bug-datacenter-ip-bot-detection]]."""
+    low = (stderr or "").lower()
+    return any(marker in low for marker in _BOT_CHECK_MARKERS)
+
+
+def _emit_cookies_stale_alert(niche_id: str, url: str, stderr_tail: str) -> None:
+    """Best-effort insert into pipeline_alerts. Dedupe by (niche_id,
+    check_name) so we don't fill the table when 10 candidates in a row
+    fail from the same stale cookie state. Fail-open: alert emission
+    never propagates back into the caller. Mirrors the shape of
+    hook_classifier._emit_training_failure_alert (rule #19 sibling)."""
+    try:
+        import json as _json
+        import os as _os
+
+        from genlab_core.storage.tenant_context import pg_connect
+
+        dsn = _os.environ.get("DATABASE_URL", "")
+        if not dsn:
+            return
+        message = (
+            f"yt-dlp bot-check hit for {niche_id} — YT_DLP_COOKIES_FILE is "
+            f"stale, missing, or unset. Re-run the cookies export "
+            f"(Playwright + SCP flow) to unblock. URL sample: {url[:120]}"
+        )
+        with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM pipeline_alerts WHERE check_name = %s "
+                    "AND niche_id = %s AND resolved_at IS NULL",
+                    ("yt_cookies_stale", niche_id),
+                )
+                if cur.fetchone():
+                    return
+                cur.execute(
+                    "INSERT INTO pipeline_alerts "
+                    "(niche_id, check_name, severity, message, details) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (
+                        niche_id,
+                        "yt_cookies_stale",
+                        "warning",
+                        message,
+                        _json.dumps({"url": url[:200], "stderr_tail": stderr_tail[:500]}),
+                    ),
+                )
+                conn.commit()
+    except Exception:
+        pass
+
+
 _TRADEMARK_CHARS = re.compile(r"[™®©℗℠]")
 """Trademark/copyright/service-mark symbols to strip from search
 queries. YouTube's search index doesn't tokenize these consistently
@@ -496,7 +561,20 @@ class YouTubeTrailerFetcher:
                 timeout=30,
             )
             if info_result.returncode != 0:
-                logger.info("[YouTube] Search returned no results for '%s'", game_title)
+                if _is_bot_check_stderr(info_result.stderr or ""):
+                    logger.warning(
+                        "[YouTube] YT bot-check on search for '%s' — cookies "
+                        "stale or missing; stderr tail: %s",
+                        game_title,
+                        "\n".join((info_result.stderr or "").splitlines()[-2:]),
+                    )
+                    _emit_cookies_stale_alert(
+                        "gaming",
+                        f"ytsearch:{game_title}",
+                        (info_result.stderr or "")[-500:],
+                    )
+                else:
+                    logger.info("[YouTube] Search returned no results for '%s'", game_title)
                 return None
 
             titles = info_result.stdout.strip().split("\n")
@@ -546,9 +624,20 @@ class YouTubeTrailerFetcher:
             dl_cmd.extend(_yt_dlp_cookies_args())
             result = subprocess.run(dl_cmd, capture_output=True, text=True, timeout=120)
             if result.returncode != 0:
-                logger.warning(
-                    "[YouTube] Download failed for '%s': %s", game_title, result.stderr[:200]
-                )
+                if _is_bot_check_stderr(result.stderr or ""):
+                    logger.warning(
+                        "[YouTube] YT bot-check on download for '%s' — cookies "
+                        "stale or missing; stderr tail: %s",
+                        game_title, (result.stderr or "")[-200:],
+                    )
+                    _emit_cookies_stale_alert(
+                        "gaming", search_url, (result.stderr or "")[-500:],
+                    )
+                else:
+                    logger.warning(
+                        "[YouTube] Download failed for '%s': %s",
+                        game_title, result.stderr[:200],
+                    )
                 return None
 
             if output_path.exists():
@@ -1027,11 +1116,19 @@ class GamingClipSourcer:
             logger.warning("[DirectURL] Failed to download %s: %s", url, exc)
             return None
         if result.returncode != 0:
-            logger.info(
-                "[DirectURL] yt-dlp exit=%d for %s — stderr tail: %s",
-                result.returncode, url,
-                "\n".join((result.stderr or "").strip().splitlines()[-2:]),
-            )
+            stderr_tail = "\n".join((result.stderr or "").strip().splitlines()[-2:])
+            if _is_bot_check_stderr(result.stderr or ""):
+                logger.warning(
+                    "[DirectURL] YT bot-check hit for %s (cookies stale or missing) "
+                    "— stderr tail: %s",
+                    url, stderr_tail,
+                )
+                _emit_cookies_stale_alert("gaming", url, stderr_tail)
+            else:
+                logger.info(
+                    "[DirectURL] yt-dlp exit=%d for %s — stderr tail: %s",
+                    result.returncode, url, stderr_tail,
+                )
             return None
         if not output_path.exists() or output_path.stat().st_size < 1024:
             logger.info(

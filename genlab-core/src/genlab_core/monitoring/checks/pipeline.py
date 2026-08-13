@@ -1455,3 +1455,65 @@ def check_content_pool_health() -> list[Alert]:
     except Exception as exc:
         logger.debug("[content_pool_health] probe failed: %s", exc)
     return alerts
+
+
+def check_source_diversity(niche_id: str) -> list[Alert]:
+    """Fire WARNING when a niche produces ≥3 blueprints over the last
+    48h and all of them come from a single `source` value (fetcher
+    tier). Would have caught the 30-day gaming-100%-Twitch pattern
+    that stayed silent until 2026-08-13 (see
+    ``[[class-of-bug-fetcher-schema-drift-from-downstream-contract]]``
+    and ``[[class-of-bug-datacenter-ip-bot-detection]]``).
+
+    Fail-open on DB errors — this is a health signal, not a critical
+    path. Rule #26 sibling: never elevate observability-check errors
+    to systemd non-zero exit.
+    """
+    alerts: list[Alert] = []
+    try:
+        dsn = os.environ.get("DATABASE_URL", "")
+        if not dsn:
+            return alerts
+        with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT source, COUNT(*) FROM blueprints "
+                    "WHERE niche_id = %s "
+                    "AND created_at >= NOW() - INTERVAL '48 hours' "
+                    "AND source IS NOT NULL "
+                    "GROUP BY source ORDER BY 2 DESC",
+                    (niche_id,),
+                )
+                rows = cur.fetchall() or []
+        if not rows:
+            return alerts
+        total = sum(int(r[1]) for r in rows)
+        # Small samples aren't diagnostic — 1 blueprint 100% one source
+        # is just how the pipeline works when it's low-throughput.
+        if total < 3:
+            return alerts
+        if len(rows) == 1:
+            only_source = rows[0][0]
+            alerts.append(
+                Alert(
+                    check="source_diversity_collapsed",
+                    severity="warning",
+                    message=(
+                        f"All {total} blueprints for {niche_id} in the last "
+                        f"48h came from a single source '{only_source}'. "
+                        "The fetcher-mix is collapsed — other tiers "
+                        "(e.g., YouTube if cookies stale, Reddit if API "
+                        "creds expired) are silently 0-output. Check "
+                        "pipeline_alerts for yt_cookies_stale + fetcher "
+                        "silent-failure rows."
+                    ),
+                    details={
+                        "only_source": only_source,
+                        "total_48h": total,
+                        "distinct_sources": 1,
+                    },
+                )
+            )
+    except Exception as exc:
+        logger.debug("[source_diversity] probe failed for %s: %s", niche_id, exc)
+    return alerts

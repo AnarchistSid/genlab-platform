@@ -188,6 +188,63 @@ class TestDirectUrlFetchImpl:
         assert result is None
 
 
+class TestBotCheckDetector:
+    """`_is_bot_check_stderr` must recognize the datacenter-IP bot
+    detection signatures. Wire from ClipSourcer routes these into a
+    WARNING log + pipeline_alerts row instead of the silent INFO path.
+    Class-of-bug: [[class-of-bug-datacenter-ip-bot-detection]]."""
+
+    def test_matches_sign_in_marker(self):
+        from niches.gaming.tools.clip_sourcer import _is_bot_check_stderr
+        assert _is_bot_check_stderr(
+            "ERROR: [youtube] abc123: Sign in to confirm you're not a bot."
+        )
+
+    def test_matches_cookies_from_browser_hint(self):
+        from niches.gaming.tools.clip_sourcer import _is_bot_check_stderr
+        assert _is_bot_check_stderr(
+            "Use --cookies-from-browser or --cookies for the authentication."
+        )
+
+    def test_matches_http_429(self):
+        from niches.gaming.tools.clip_sourcer import _is_bot_check_stderr
+        assert _is_bot_check_stderr("ERROR: HTTP Error 429: Too Many Requests")
+
+    def test_case_insensitive(self):
+        from niches.gaming.tools.clip_sourcer import _is_bot_check_stderr
+        assert _is_bot_check_stderr("SIGN IN TO CONFIRM YOU'RE NOT A BOT")
+
+    def test_rejects_generic_failure(self):
+        from niches.gaming.tools.clip_sourcer import _is_bot_check_stderr
+        assert not _is_bot_check_stderr(
+            "ERROR: [youtube] Video unavailable: This video is private."
+        )
+
+    def test_rejects_empty(self):
+        from niches.gaming.tools.clip_sourcer import _is_bot_check_stderr
+        assert not _is_bot_check_stderr("")
+        assert not _is_bot_check_stderr(None or "")
+
+
+class TestCookiesStaleAlertFailOpen:
+    """`_emit_cookies_stale_alert` must never raise into the caller. If
+    DATABASE_URL is unset, pg_connect times out, or the table is missing,
+    the write is silently dropped. Same fail-open shape as
+    hook_classifier._emit_training_failure_alert."""
+
+    def test_no_dsn_returns_silently(self, monkeypatch):
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        from niches.gaming.tools.clip_sourcer import _emit_cookies_stale_alert
+        # Must not raise
+        _emit_cookies_stale_alert("gaming", "https://youtube.com/w?v=x", "err")
+
+    def test_pg_connect_error_swallowed(self, monkeypatch):
+        monkeypatch.setenv("DATABASE_URL", "postgresql://nowhere:1/none")
+        from niches.gaming.tools.clip_sourcer import _emit_cookies_stale_alert
+        # pg_connect will fail (bogus DSN) — helper swallows
+        _emit_cookies_stale_alert("gaming", "https://youtube.com/w?v=x", "err")
+
+
 class TestYtDlpCookiesArgs:
     """Cookies-file helper: env var pointing at a real file activates
     --cookies. Missing / non-file → empty args (yt-dlp runs unauth'd
