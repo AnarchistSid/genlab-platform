@@ -122,6 +122,32 @@ youtube_channels:
   - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC1kNX-sPGsy6fb94OgFHi1A"
     name: "AI War"
 
+  # --- Added 2026-08-13 — AI education / demo / news creators ---
+  # Task #111 (sources-diversity sweep). Channel IDs verified via
+  # scripts/lookup_youtube_channel_id.sh using @handle → externalId
+  # scrape, then confirmed with RSS feed HTTP 200 + latest video title
+  # check. Skipping @perplexity + @NVIDIAAI handle-lookup hits — those
+  # resolved to unrelated third-party channels (meme + Turkish content).
+  # 9 net additions after skipping wrong-topic hits.
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCcIXc5mJsHVYTZR1maL5l9w"
+    name: "DeepLearningAI"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCC-lyoTfSrcJzA1ab3APAgw"
+    name: "LangChain"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBp3w4DCEC64FZr4k9ROxig"
+    name: "Weights & Biases"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCMLtBahI5DMrt0NPvDSoIRQ"
+    name: "Machine Learning Street Talk"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCYO_jab_esuFRV4b17AJtAw"
+    name: "Andrej Karpathy"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC8cc4pVKVHG7A9fbNsRNrLQ"
+    name: "IBM Technology"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC0m81bQuthaQZmFbXEY9QSw"
+    name: "AICodeKing"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCCGpCl9sHj6M_CWL_lnOBPQ"
+    name: "MervinPraisonAI"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC1_uAIS3r8Vu6JjXWvastJg"
+    name: "3blue1brown"
+
 google_trends:
   stub_mode: false
   seed_keywords: ["AI", "artificial intelligence", "ChatGPT"]

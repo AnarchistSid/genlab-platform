@@ -22,30 +22,35 @@ import pytest
 from genlab_core.monitoring.checks.pipeline import check_source_diversity
 
 
-def _mock_cur(rows):
-    """Build a mock DB cursor that returns `rows` from fetchall."""
+def _mock_cur(rows, creator_count: int = 0):
+    """Build a mock DB cursor. `rows` for the first fetchall (source
+    breakdown), `creator_count` for the second fetchone (creator count
+    within the single source)."""
     cur = MagicMock()
     cur.fetchall.return_value = rows
+    cur.fetchone.return_value = (creator_count,) if creator_count else None
     cur.__enter__ = MagicMock(return_value=cur)
     cur.__exit__ = MagicMock(return_value=None)
     return cur
 
 
-def _mock_conn(rows):
+def _mock_conn(rows, creator_count: int = 0):
     conn = MagicMock()
-    conn.cursor.return_value = _mock_cur(rows)
+    conn.cursor.return_value = _mock_cur(rows, creator_count=creator_count)
     conn.__enter__ = MagicMock(return_value=conn)
     conn.__exit__ = MagicMock(return_value=None)
     return conn
 
 
 class TestSourceDiversityCollapsed:
-    def test_all_twitch_fires_warning(self, monkeypatch):
+    def test_all_twitch_single_creator_fires_warning(self, monkeypatch):
+        """The 2026-07-13 → 2026-08-13 gaming pattern: one Twitch fetcher,
+        one dominant channel_id. Both layers collapsed."""
         monkeypatch.setenv("DATABASE_URL", "postgres://fake")
-        rows = [("twitch_trending", 42)]  # 42 blueprints, 1 source
+        rows = [("twitch_trending", 42)]
         with patch(
             "genlab_core.monitoring.checks.pipeline.pg_connect",
-            return_value=_mock_conn(rows),
+            return_value=_mock_conn(rows, creator_count=1),
         ):
             alerts = check_source_diversity("gaming")
         assert len(alerts) == 1
@@ -53,43 +58,72 @@ class TestSourceDiversityCollapsed:
         assert alerts[0].severity == "warning"
         assert alerts[0].details["only_source"] == "twitch_trending"
         assert alerts[0].details["total_48h"] == 42
-        assert "twitch_trending" in alerts[0].message
+        assert alerts[0].details["distinct_creators"] == 1
+
+    def test_single_source_but_many_creators_no_alert(self, monkeypatch):
+        """The 2026-08-13 ai_creators false positive: single fetcher
+        (youtube_trending), but 11 distinct creators. Healthy."""
+        monkeypatch.setenv("DATABASE_URL", "postgres://fake")
+        rows = [("youtube_trending", 27)]
+        with patch(
+            "genlab_core.monitoring.checks.pipeline.pg_connect",
+            return_value=_mock_conn(rows, creator_count=11),
+        ):
+            alerts = check_source_diversity("ai_creators")
+        assert alerts == [], (
+            "Single fetcher with many creators must NOT alert — this "
+            "is the exact false-positive shape that fired 2026-08-13."
+        )
 
     def test_two_sources_no_alert(self, monkeypatch):
+        """Two fetchers = diverse at the top layer; don't even check
+        creator diversity."""
         monkeypatch.setenv("DATABASE_URL", "postgres://fake")
         rows = [("twitch_trending", 30), ("youtube_trending", 10)]
         with patch(
             "genlab_core.monitoring.checks.pipeline.pg_connect",
-            return_value=_mock_conn(rows),
+            return_value=_mock_conn(rows, creator_count=0),
         ):
             alerts = check_source_diversity("gaming")
         assert alerts == []
 
     def test_two_blueprints_below_diagnostic_threshold(self, monkeypatch):
         monkeypatch.setenv("DATABASE_URL", "postgres://fake")
-        rows = [("twitch_trending", 2)]  # < 3, not diagnostic
+        rows = [("twitch_trending", 2)]
         with patch(
             "genlab_core.monitoring.checks.pipeline.pg_connect",
-            return_value=_mock_conn(rows),
+            return_value=_mock_conn(rows, creator_count=1),
         ):
             alerts = check_source_diversity("gaming")
         assert alerts == []
 
-    def test_exactly_three_from_one_source_fires(self, monkeypatch):
+    def test_exactly_three_single_creator_fires(self, monkeypatch):
         monkeypatch.setenv("DATABASE_URL", "postgres://fake")
         rows = [("twitch_trending", 3)]
         with patch(
             "genlab_core.monitoring.checks.pipeline.pg_connect",
-            return_value=_mock_conn(rows),
+            return_value=_mock_conn(rows, creator_count=1),
         ):
             alerts = check_source_diversity("gaming")
         assert len(alerts) == 1
+        assert alerts[0].details["distinct_creators"] == 1
+
+    def test_exactly_three_two_creators_no_alert(self, monkeypatch):
+        """Boundary: same fetcher, 2 creators, 3 total = healthy enough."""
+        monkeypatch.setenv("DATABASE_URL", "postgres://fake")
+        rows = [("twitch_trending", 3)]
+        with patch(
+            "genlab_core.monitoring.checks.pipeline.pg_connect",
+            return_value=_mock_conn(rows, creator_count=2),
+        ):
+            alerts = check_source_diversity("gaming")
+        assert alerts == []
 
     def test_empty_rows_no_alert(self, monkeypatch):
         monkeypatch.setenv("DATABASE_URL", "postgres://fake")
         with patch(
             "genlab_core.monitoring.checks.pipeline.pg_connect",
-            return_value=_mock_conn([]),
+            return_value=_mock_conn([], creator_count=0),
         ):
             alerts = check_source_diversity("gaming")
         assert alerts == []

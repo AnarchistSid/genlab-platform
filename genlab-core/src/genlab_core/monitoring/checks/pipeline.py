@@ -1459,15 +1459,28 @@ def check_content_pool_health() -> list[Alert]:
 
 def check_source_diversity(niche_id: str) -> list[Alert]:
     """Fire WARNING when a niche produces ≥3 blueprints over the last
-    48h and all of them come from a single `source` value (fetcher
-    tier). Would have caught the 30-day gaming-100%-Twitch pattern
-    that stayed silent until 2026-08-13 (see
-    ``[[class-of-bug-fetcher-schema-drift-from-downstream-contract]]``
-    and ``[[class-of-bug-datacenter-ip-bot-detection]]``).
+    48h and either:
 
-    Fail-open on DB errors — this is a health signal, not a critical
-    path. Rule #26 sibling: never elevate observability-check errors
-    to systemd non-zero exit.
+      1. All from a single fetcher-level `source` value, AND
+      2. All from a single `source_channel_id` (creator) — even within
+         one fetcher bucket, real creator diversity means the pipeline
+         is healthy.
+
+    Two-layer check: fetcher-mix + creator-mix. This prevents the
+    2026-08-13 false-positive on ai_creators where 27 blueprints from
+    `source=youtube_trending` were actually spread across 11 different
+    YouTube channels (healthy) but bucketed under one fetcher label.
+    Rule: the alert fires only when both layers collapse — same fetcher
+    AND same creator.
+
+    Would still have caught the 30-day gaming-100%-Twitch pattern
+    (which was one Twitch fetcher + no diverse creators either), and
+    the 30-day ai_creators-only-youtube_trending pattern (if that were
+    also single-creator, which it isn't).
+
+    Fail-open on DB errors — health signal, not critical path. Rule
+    #26 sibling: never elevate observability-check errors to systemd
+    non-zero exit.
     """
     alerts: list[Alert] = []
     try:
@@ -1485,35 +1498,52 @@ def check_source_diversity(niche_id: str) -> list[Alert]:
                     (niche_id,),
                 )
                 rows = cur.fetchall() or []
-        if not rows:
-            return alerts
-        total = sum(int(r[1]) for r in rows)
-        # Small samples aren't diagnostic — 1 blueprint 100% one source
-        # is just how the pipeline works when it's low-throughput.
-        if total < 3:
-            return alerts
-        if len(rows) == 1:
-            only_source = rows[0][0]
-            alerts.append(
-                Alert(
-                    check="source_diversity_collapsed",
-                    severity="warning",
-                    message=(
-                        f"All {total} blueprints for {niche_id} in the last "
-                        f"48h came from a single source '{only_source}'. "
-                        "The fetcher-mix is collapsed — other tiers "
-                        "(e.g., YouTube if cookies stale, Reddit if API "
-                        "creds expired) are silently 0-output. Check "
-                        "pipeline_alerts for yt_cookies_stale + fetcher "
-                        "silent-failure rows."
-                    ),
-                    details={
-                        "only_source": only_source,
-                        "total_48h": total,
-                        "distinct_sources": 1,
-                    },
+                if not rows:
+                    return alerts
+                total = sum(int(r[1]) for r in rows)
+                if total < 3:
+                    return alerts
+                if len(rows) > 1:
+                    # Fetcher-mix is diverse — no alert
+                    return alerts
+                only_source = rows[0][0]
+                # Layer 2 — within that one source, check creator diversity
+                cur.execute(
+                    "SELECT COUNT(DISTINCT COALESCE("
+                    "  source_channel_id, "
+                    "  extra->>'creator_name', "
+                    "  extra->>'source_channel_id'"
+                    ")) FROM blueprints "
+                    "WHERE niche_id = %s "
+                    "AND created_at >= NOW() - INTERVAL '48 hours' "
+                    "AND source = %s",
+                    (niche_id, only_source),
                 )
+                creator_row = cur.fetchone()
+                distinct_creators = int(creator_row[0]) if creator_row else 0
+        if distinct_creators >= 2:
+            # Same fetcher, diverse creators — healthy
+            return alerts
+        alerts.append(
+            Alert(
+                check="source_diversity_collapsed",
+                severity="warning",
+                message=(
+                    f"All {total} blueprints for {niche_id} in the last "
+                    f"48h came from a single source '{only_source}' AND "
+                    f"a single creator ({distinct_creators} distinct "
+                    f"source_channel_id). The fetcher-mix is collapsed "
+                    f"AND creator diversity is dead. Check pipeline_alerts "
+                    f"for yt_cookies_stale + fetcher silent-failure rows."
+                ),
+                details={
+                    "only_source": only_source,
+                    "total_48h": total,
+                    "distinct_sources": 1,
+                    "distinct_creators": distinct_creators,
+                },
             )
+        )
     except Exception as exc:
         logger.debug("[source_diversity] probe failed for %s: %s", niche_id, exc)
     return alerts
