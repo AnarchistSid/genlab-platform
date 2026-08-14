@@ -108,6 +108,16 @@ def apply_pending_actions(niche_id: str | None = None) -> dict[str, int]:
                         if _apply_arm_add(conn, report["niche_id"], proposal):
                             _mark_applied(conn, report["id"], idx)
                             counters["arm_add"] += 1
+                            # Phase 1.A (2026-08-14): register the
+                            # apply for post-48h outcome verification.
+                            # Fail-open — registration failure NEVER
+                            # unwinds the apply itself. Only fires on
+                            # arm_add because the verifier only knows
+                            # how to snapshot arm_reward metrics today.
+                            _register_verification(
+                                report["id"], idx,
+                                report["niche_id"], proposal,
+                            )
                     # Other proposal types (phase_shift, gate_threshold,
                     # reward_weight, novelty_rate, playbook_update) are
                     # READ-path integrations handled by strategy_phase.
@@ -182,6 +192,46 @@ def _already_applied_indices(extra: dict[str, Any] | str) -> set[int]:
         except (TypeError, ValueError):
             return set()
     return set()
+
+
+def _register_verification(
+    report_id: str, idx: int, niche_id: str, proposal: dict[str, Any],
+) -> None:
+    """Phase 1.A: register the newly-applied arm for post-48h outcome
+    verification. Fail-open — never re-raises. The Verifier fills in
+    baseline metric snapshot at register time; the runner reads it
+    back after 48h to grade the outcome + auto-rollback regressions.
+
+    Only registers arm_add proposals today because that's the only
+    proposal type the PostgresMetricSnapshotProvider knows how to
+    snapshot (`arm_reward:{niche}:{arm_id}`). Extending to
+    reward_weight / novelty_rate is a follow-up when the runner adds
+    those metric prefixes."""
+    try:
+        from datetime import UTC, datetime
+
+        from genlab_core.scheduling.outcome_verifier import Verifier
+        from genlab_core.scheduling.outcome_verifier_postgres import (
+            PostgresMetricSnapshotProvider,
+            PostgresVerificationRecordStore,
+        )
+
+        verifier = Verifier(
+            metrics=PostgresMetricSnapshotProvider(),
+            store=PostgresVerificationRecordStore(),
+        )
+        verifier.register(
+            proposal_id=f"{report_id}:{idx}",
+            proposal=proposal,
+            niche_id=niche_id,
+            applied_at=datetime.now(UTC),
+        )
+    except Exception as exc:
+        logger.warning(
+            "strategist_actions.register_verification_failed "
+            "report=%s idx=%d err=%s",
+            report_id, idx, exc,
+        )
 
 
 def _apply_arm_add(conn, niche_id: str, proposal: dict[str, Any]) -> bool:

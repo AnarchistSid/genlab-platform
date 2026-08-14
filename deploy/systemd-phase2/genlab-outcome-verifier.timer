@@ -1,0 +1,14 @@
+[Unit]
+Description=Fire GenLab outcome verifier every 6h — grades applied strategist proposals against post-48h metric outcomes
+Requires=genlab-outcome-verifier.service
+
+[Timer]
+OnCalendar=*-*-* 02,08,14,20:15:00 UTC
+# 15-min offset to spread load away from top-of-hour cron collisions.
+# Persistent=true so a missed fire (VPS restart) catches up on next
+# boot instead of skipping until the next scheduled hour.
+Persistent=true
+Unit=genlab-outcome-verifier.service
+
+[Install]
+WantedBy=timers.target
