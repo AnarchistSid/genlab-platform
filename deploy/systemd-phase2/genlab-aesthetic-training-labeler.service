@@ -1,0 +1,25 @@
+[Unit]
+Description=GenLab aesthetic training labeler — snapshots top-20/bottom-20 reward buckets + extracts composition features
+After=network-online.target
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=GENLAB_TMP=/opt/genlab/.tmp
+Environment=UV_FROZEN=1
+TimeoutStartSec=15min
+ExecStart=/usr/local/bin/uv run python scripts/run_aesthetic_training_labeler.py
+StandardOutput=journal
+StandardError=journal
+
+MemoryMax=512M
+CPUWeight=25
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Fire GenLab aesthetic training labeler nightly 03:30 UTC — after reward_48h has finalized for prior day
+Requires=genlab-aesthetic-training-labeler.service
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 UTC
+Persistent=true
+Unit=genlab-aesthetic-training-labeler.service
+
+[Install]
+WantedBy=timers.target
