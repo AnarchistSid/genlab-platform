@@ -380,12 +380,18 @@ def main() -> int:
             proposals = report.get("proposals") or []
             already_accepted = set(report.get("proposals_accepted") or [])
             recent_auto = _count_recent_auto_accepts(conn, niche_id)
-            if recent_auto >= MAX_AUTO_ACCEPTS_PER_WEEK:
+            # Phase 1.B: use env-overridable cap. Was hardcoded
+            # MAX_AUTO_ACCEPTS_PER_WEEK=2 which blocked auto-accept
+            # after last night's `GENLAB_MAX_AUTO_ACCEPTS_PER_WEEK=8`
+            # env flip because the runner ignored it. Discovered
+            # during live test of Phase 1.B.
+            effective_cap = get_max_auto_accepts_per_week()
+            if recent_auto >= effective_cap:
                 logger.info(
                     "[auto_accept] niche=%s rate-limited (recent_auto=%d ≥ max=%d)",
                     niche_id,
                     recent_auto,
-                    MAX_AUTO_ACCEPTS_PER_WEEK,
+                    effective_cap,
                 )
                 continue
 
@@ -503,7 +509,7 @@ def main() -> int:
                 # Enforce rate-limit within this run too so a single
                 # report can't burn through the whole budget.
                 if len(by_report.get(report_id, [])) >= (
-                    MAX_AUTO_ACCEPTS_PER_WEEK - recent_auto
+                    effective_cap - recent_auto
                 ):
                     break
 
