@@ -1,0 +1,25 @@
+[Unit]
+Description=GenLab content ideator — weekly LLM proposes 10-20 content ideas per niche seeded on trend/competitor/style signals
+After=network-online.target
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=GENLAB_TMP=/opt/genlab/.tmp
+Environment=UV_FROZEN=1
+TimeoutStartSec=15min
+ExecStart=/usr/local/bin/uv run python scripts/run_content_ideator.py
+StandardOutput=journal
+StandardError=journal
+
+MemoryMax=384M
+CPUWeight=25
+
+[Install]
+WantedBy=multi-user.target

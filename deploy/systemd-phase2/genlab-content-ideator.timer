@@ -1,0 +1,11 @@
+[Unit]
+Description=Fire GenLab content ideator weekly Sunday 05:30 UTC — after hook-style aggregator (04:00) + before strategist (07:30)
+Requires=genlab-content-ideator.service
+
+[Timer]
+OnCalendar=Sun *-*-* 05:30:00 UTC
+Persistent=true
+Unit=genlab-content-ideator.service
+
+[Install]
+WantedBy=timers.target
