@@ -820,6 +820,7 @@ from server.api.sponsorship_readiness import bp as sponsorship_bp
 from server.api.stories import bp as stories_bp
 from server.api.strategist import bp as strategist_bp
 from server.api.token_health import bp as token_health_bp
+from server.api.competitor_deltas import bp as competitor_deltas_bp
 from server.api.top_creator_priors import bp as top_creator_priors_bp
 from server.api.transformation_bandit import bp as transformation_bandit_bp
 from server.api.trend_anticipation import bp as trend_anticipation_bp
@@ -893,6 +894,9 @@ app.register_blueprint(
 app.register_blueprint(
     auto_experiments_bp
 )  # #9 lifecycle completer (2026-07-23): /api/v1/auto-experiments/summary — verdicts + counts
+app.register_blueprint(
+    competitor_deltas_bp
+)  # Phase 3.A (2026-08-14): /api/v1/competitor-deltas/latest — top-creator reach vs ours
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)

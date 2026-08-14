@@ -1,0 +1,24 @@
+[Unit]
+Description=GenLab competitor content deltas — compares top-tier creator reach vs ours
+After=network-online.target genlab-watch-top-creators.service
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=UV_FROZEN=1
+TimeoutStartSec=10min
+ExecStart=/usr/local/bin/uv run python scripts/compute_competitor_deltas.py
+StandardOutput=journal
+StandardError=journal
+
+MemoryMax=256M
+CPUWeight=25
+
+[Install]
+WantedBy=multi-user.target

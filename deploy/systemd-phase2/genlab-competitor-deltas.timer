@@ -1,0 +1,11 @@
+[Unit]
+Description=Fire GenLab competitor-deltas daily 09:30 UTC — after top-creator watcher's 06:00 UTC batch settles
+Requires=genlab-competitor-deltas.service
+
+[Timer]
+OnCalendar=*-*-* 09:30:00 UTC
+Persistent=true
+Unit=genlab-competitor-deltas.service
+
+[Install]
+WantedBy=timers.target
