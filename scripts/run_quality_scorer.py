@@ -79,7 +79,7 @@ def _find_unscored_blueprints(conn, niche_id: str, lookback_hours: int,
         try:
             rows = conn.execute(
                 """
-                SELECT b.id::text AS id, b.niche_id, b.extra
+                SELECT b.id::text AS id, b.niche_id, b.extra, b.story_id
                 FROM blueprints b
                 WHERE b.id = %s::uuid
                 LIMIT 1
@@ -93,7 +93,7 @@ def _find_unscored_blueprints(conn, niche_id: str, lookback_hours: int,
         try:
             rows = conn.execute(
                 """
-                SELECT b.id::text AS id, b.niche_id, b.extra
+                SELECT b.id::text AS id, b.niche_id, b.extra, b.story_id
                 FROM blueprints b
                 WHERE b.niche_id = %s
                   AND b.status IN ('VISUAL_READY', 'APPROVED', 'PUBLISHED')
@@ -113,38 +113,63 @@ def _find_unscored_blueprints(conn, niche_id: str, lookback_hours: int,
             "id": r.get("id") if hasattr(r, "get") else r[0],
             "niche_id": r.get("niche_id") if hasattr(r, "get") else r[1],
             "extra": r.get("extra") if hasattr(r, "get") else r[2],
+            "story_id": r.get("story_id") if hasattr(r, "get") else r[3],
         }
         for r in rows or []
     ]
 
 
-def _resolve_video_path(extra) -> Path | None:
-    """Blueprints store the rendered video path under a few
-    conventions. We check the common ones + fall back to None.
+def _resolve_video_path(
+    extra, story_id: str | None = None,
+) -> Path | None:
+    """Locate the rendered video for a blueprint. Two strategies:
 
-    Fail-open: caller skips scoring when None."""
-    if isinstance(extra, str):
+      1. Check extra->'media'->'render_path' (and fallback keys).
+         Ideal path — future renderers should populate.
+
+      2. If (1) fails, glob the disk for the standard convention
+         ``$GENLAB_TMP/runs/*/visuals/{story_id}/{story_id[:16]}_reel.mp4``.
+         Discovered 2026-08-14 that blueprints don't currently store
+         the render_path anywhere — 35/35 candidates hit no_video on
+         first prod dry-run. Fallback works today; strategy 1 is
+         forward-looking.
+
+    Fail-open: returns None if neither finds a file. Caller skips."""
+    # Strategy 1
+    _extra = extra
+    if isinstance(_extra, str):
         try:
-            extra = json.loads(extra)
+            _extra = json.loads(_extra)
         except json.JSONDecodeError:
-            return None
-    if not isinstance(extra, dict):
+            _extra = None
+    if isinstance(_extra, dict):
+        media = _extra.get("media") or {}
+        if isinstance(media, dict):
+            for key in ("render_path", "final_render_path",
+                        "rendered_path", "output_path"):
+                c = media.get(key)
+                if isinstance(c, str) and c.strip():
+                    p = Path(c)
+                    if p.exists():
+                        return p
+
+    # Strategy 2: glob disk by story_id convention
+    # base_visual_render.py:198 uses {story_id}/{story_id[:16]}_reel.mp4
+    if not story_id:
         return None
-    media = extra.get("media") or {}
-    if not isinstance(media, dict):
+    tmp_root_str = os.environ.get("GENLAB_TMP", "").strip()
+    tmp_root = Path(tmp_root_str) if tmp_root_str else Path.cwd() / ".tmp"
+    runs_dir = tmp_root / "runs"
+    if not runs_dir.exists():
         return None
-    candidates = [
-        media.get("render_path"),
-        media.get("final_render_path"),
-        media.get("rendered_path"),
-        media.get("output_path"),
-    ]
-    for c in candidates:
-        if isinstance(c, str) and c.strip():
-            p = Path(c)
-            if p.exists():
-                return p
-    return None
+    prefix = story_id[:16]
+    filename = f"{prefix}_reel.mp4"
+    matches = sorted(
+        runs_dir.glob(f"*/visuals/{story_id}/{filename}"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    return matches[0] if matches else None
 
 
 def _already_scored(conn, blueprint_id: str, video_hash: str) -> bool:
@@ -227,7 +252,7 @@ def _run_niche(conn, niche_id: str, lookback_hours: int,
     print(f"\n{niche_id}: {len(blueprints)} candidate blueprints (brand={brand})")
 
     for bp in blueprints:
-        video = _resolve_video_path(bp["extra"])
+        video = _resolve_video_path(bp["extra"], story_id=bp.get("story_id"))
         if video is None:
             counts["no_video"] += 1
             continue

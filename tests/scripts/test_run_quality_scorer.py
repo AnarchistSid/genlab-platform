@@ -72,6 +72,71 @@ class TestResolveVideoPath:
         assert _MOD._resolve_video_path("not json {{") is None
 
 
+class TestResolveVideoPathStrategy2:
+    """Strategy 2: disk-glob fallback via story_id convention.
+
+    Discovered 2026-08-14 that no blueprint stores render_path in
+    extra today, so this fallback is load-bearing. Pin the convention
+    from base_visual_render.py:198 so if it ever changes, this test
+    breaks and forces the runner to update in tandem."""
+
+    def _setup_convention_layout(
+        self, tmp_path, story_id: str, niche: str = "gaming",
+    ):
+        run_dir = tmp_path / "runs" / f"{niche}_20260814_120000"
+        vis_dir = run_dir / "visuals" / story_id
+        vis_dir.mkdir(parents=True)
+        video = vis_dir / f"{story_id[:16]}_reel.mp4"
+        video.write_bytes(b"fake mp4")
+        return video
+
+    def test_glob_finds_video_by_story_id(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("GENLAB_TMP", str(tmp_path))
+        story_id = "5bc794863a300f4472c5b6301e3e8b9589c5084aeedc1b8bf9b309a4e2245ca9"
+        expected = self._setup_convention_layout(tmp_path, story_id)
+        result = _MOD._resolve_video_path(None, story_id=story_id)
+        assert result == expected
+
+    def test_no_story_id_no_glob(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("GENLAB_TMP", str(tmp_path))
+        assert _MOD._resolve_video_path(None, story_id=None) is None
+        assert _MOD._resolve_video_path(None, story_id="") is None
+
+    def test_missing_runs_dir_returns_none(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("GENLAB_TMP", str(tmp_path))  # no runs/ subdir
+        assert _MOD._resolve_video_path(None, story_id="a" * 64) is None
+
+    def test_extra_takes_precedence_over_glob(self, tmp_path, monkeypatch):
+        """When both strategies could return a file, extra wins so
+        future renderers that DO populate extra can override the
+        convention."""
+        monkeypatch.setenv("GENLAB_TMP", str(tmp_path))
+        story_id = "a" * 64
+        self._setup_convention_layout(tmp_path, story_id)
+        override = tmp_path / "override.mp4"
+        override.write_bytes(b"fake")
+        extra = {"media": {"render_path": str(override)}}
+        result = _MOD._resolve_video_path(extra, story_id=story_id)
+        assert result == override
+
+    def test_glob_picks_most_recent_when_multiple(self, tmp_path, monkeypatch):
+        """Re-renders produce duplicate copies under different run
+        directories. mtime DESC sort ensures we pick the fresh one."""
+        import time
+        monkeypatch.setenv("GENLAB_TMP", str(tmp_path))
+        story_id = "b" * 64
+        old = self._setup_convention_layout(tmp_path, story_id, niche="a")
+        time.sleep(0.05)
+        new_dir = (
+            tmp_path / "runs" / "b_20260814_130000" / "visuals" / story_id
+        )
+        new_dir.mkdir(parents=True)
+        new = new_dir / f"{story_id[:16]}_reel.mp4"
+        new.write_bytes(b"newer bytes")
+        result = _MOD._resolve_video_path(None, story_id=story_id)
+        assert result == new
+
+
 class TestFindUnscored:
     def test_db_error_returns_empty(self):
         conn = MagicMock()
