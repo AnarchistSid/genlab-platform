@@ -1,0 +1,11 @@
+[Unit]
+Description=Fire GenLab content quality scorer every 30 min — scores new renders post-render, pre-metric-collection
+Requires=genlab-quality-scorer.service
+
+[Timer]
+OnCalendar=*:0/30
+Persistent=true
+Unit=genlab-quality-scorer.service
+
+[Install]
+WantedBy=timers.target
