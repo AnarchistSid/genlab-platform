@@ -67,6 +67,13 @@ class PostgresStateCollector:
         # or "(no rows yet)" — LLM sees explicit missing-signal, same
         # pattern as counterfactual_replay.
         state["competitor_context"] = self._competitor_context(niche_id)
+        # Phase 3.D session 3 (2026-08-14): active experiments —
+        # tell the LLM what A/B tests are currently running so it
+        # doesn't propose the SAME experiment again this week, plus
+        # what recent verdicts landed so it can cite them. Always
+        # returns a dict (never None) — the LLM handles empty lists
+        # naturally. Fail-open on any DB error.
+        state["active_experiments"] = self._active_experiments(niche_id)
         return state
 
     # ----- per-section best-effort queries -----
@@ -367,6 +374,102 @@ class PostgresStateCollector:
             return []
         # Just summarize; full structure is in DB
         return [{"proposal_summary": "see prior report", "operator_action": "see prior report"}]
+
+    def _active_experiments(self, niche_id: str) -> dict[str, Any]:
+        """Phase 3.D session 3 (2026-08-14): summary of the niche's
+        experiment queue for the strategist's state prompt.
+
+        Returns dict with:
+          * ``running`` — list of {arms, started_at, age_days,
+            duration_days}. Prevents "propose the same experiment
+            twice" bug.
+          * ``recent_verdicts`` — last 5 completed/discarded rows
+            with (arms, verdict, prob_b_beats_a, reason). Prevents
+            "propose again what we already tested" bug.
+
+        Fail-open on any DB error → empty dict (prompt renders
+        "no active experiments" line)."""
+        summary: dict[str, Any] = {"running": [], "recent_verdicts": []}
+
+        # Running experiments
+        rows = self._safe(
+            "active_experiments.running",
+            lambda: self._conn.execute(
+                """
+                SELECT id::text AS id, spec, started_at,
+                       EXTRACT(EPOCH FROM (NOW() - started_at))::int AS age_seconds
+                FROM auto_experiments
+                WHERE niche_id = %s AND status = 'running'
+                ORDER BY started_at ASC
+                LIMIT 10
+                """,
+                (niche_id,),
+            ).fetchall(),
+        )
+        for r in rows or []:
+            spec = r.get("spec") if hasattr(r, "get") else r[1]
+            if isinstance(spec, str):
+                try:
+                    import json as _j
+                    spec = _j.loads(spec)
+                except Exception:
+                    spec = {}
+            spec = spec or {}
+            arms = spec.get("arms") or []
+            duration = int(spec.get("duration_days") or 7)
+            age_sec = int(
+                (r.get("age_seconds") if hasattr(r, "get") else r[3]) or 0
+            )
+            summary["running"].append({
+                "arms": arms,
+                "age_days": round(age_sec / 86400.0, 1),
+                "duration_days": duration,
+            })
+
+        # Recent verdicts (last 5 across ANY terminal state so LLM
+        # sees both completed AND discarded)
+        rows = self._safe(
+            "active_experiments.verdicts",
+            lambda: self._conn.execute(
+                """
+                SELECT spec, status, result, completed_at
+                FROM auto_experiments
+                WHERE niche_id = %s
+                  AND status IN ('completed', 'discarded')
+                  AND completed_at IS NOT NULL
+                ORDER BY completed_at DESC
+                LIMIT 5
+                """,
+                (niche_id,),
+            ).fetchall(),
+        )
+        for r in rows or []:
+            spec = r.get("spec") if hasattr(r, "get") else r[0]
+            result = r.get("result") if hasattr(r, "get") else r[2]
+            for js_field in ("spec", "result"):
+                pass  # both may be dict OR str
+            if isinstance(spec, str):
+                try:
+                    import json as _j
+                    spec = _j.loads(spec)
+                except Exception:
+                    spec = {}
+            if isinstance(result, str):
+                try:
+                    import json as _j
+                    result = _j.loads(result)
+                except Exception:
+                    result = {}
+            spec = spec or {}
+            result = result or {}
+            summary["recent_verdicts"].append({
+                "arms": spec.get("arms") or [],
+                "status": r.get("status") if hasattr(r, "get") else r[1],
+                "verdict": result.get("verdict"),
+                "prob_b_beats_a": result.get("prob_b_beats_a"),
+                "reason": (result.get("reason") or "")[:120],
+            })
+        return summary
 
     def _competitor_context(self, niche_id: str) -> list[dict[str, Any]]:
         """Phase 3.A session 3 (2026-08-14): top competitor deltas for

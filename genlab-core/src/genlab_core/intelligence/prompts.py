@@ -123,6 +123,10 @@ COMPETITOR CONTEXT (top-tier creators outperforming our reach)
 --------------------------------------------------------------
 {_format_competitor_context(_get("competitor_context", []))}
 
+ACTIVE + RECENT EXPERIMENTS (don't re-propose what's running)
+-------------------------------------------------------------
+{_format_active_experiments(_get("active_experiments", {}))}
+
 ---
 
 Generate your weekly report as JSON conforming to this schema (schema_version={schema_version}):
@@ -232,6 +236,46 @@ def _format_counterfactual_replay(replay: dict[str, Any] | None) -> str:
         ips_str = f"{ips:.3f}" if isinstance(ips, (int, float)) else "-"
         dr_str = f"{dr:.3f}" if isinstance(dr, (int, float)) else "-"
         lines.append(f"    {arm_id[:45]:<45} n={n:<4} ips={ips_str:<6} dr={dr_str}")
+    return "\n".join(lines)
+
+
+def _format_active_experiments(summary: dict[str, Any]) -> str:
+    """Phase 3.D session 3 (2026-08-14): render running experiments +
+    recent verdicts so the strategist doesn't propose the same
+    experiment twice AND can cite recent verdicts in its reasoning.
+
+    Empty (cold-start or DB failure) renders explicit line so LLM
+    sees the missing-signal state (same pattern as counterfactual
+    replay + competitor context)."""
+    if not summary or not isinstance(summary, dict):
+        return "  (no experiment data available)"
+    running = summary.get("running") or []
+    recent = summary.get("recent_verdicts") or []
+    if not running and not recent:
+        return "  (no active or recent experiments)"
+
+    lines = []
+    if running:
+        lines.append(f"  Currently running ({len(running)}):")
+        for exp in running[:5]:
+            arms = exp.get("arms") or []
+            arms_str = " vs ".join(str(a)[:25] for a in arms[:2]) or "?"
+            lines.append(
+                f"    {arms_str} · {exp.get('age_days', 0):.1f}d / "
+                f"{exp.get('duration_days', 7)}d"
+            )
+    else:
+        lines.append("  (no experiments currently running)")
+
+    if recent:
+        lines.append(f"  Recent verdicts ({len(recent)}):")
+        for v in recent[:5]:
+            arms = v.get("arms") or []
+            arms_str = " vs ".join(str(a)[:25] for a in arms[:2]) or "?"
+            verdict = v.get("verdict") or v.get("status") or "?"
+            p = v.get("prob_b_beats_a")
+            p_str = f"p_b={p:.2f}" if isinstance(p, (int, float)) else "p_b=?"
+            lines.append(f"    {arms_str} → {verdict} ({p_str})")
     return "\n".join(lines)
 
 
