@@ -176,9 +176,10 @@ class PostgresVerificationRecordStore:
                       proposal_id, proposal_type, proposal_target,
                       niche_id, applied_at, metric_name,
                       baseline_value, t_plus_48h_value,
-                      verdict, rollback_recommended
+                      verdict, rollback_recommended,
+                      classifier_source, classifier_name
                     ) VALUES (
-                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     )
                     ON CONFLICT (proposal_id) DO NOTHING
                     """,
@@ -188,6 +189,7 @@ class PostgresVerificationRecordStore:
                         record.applied_at, record.metric_name,
                         record.baseline_value, record.t_plus_48h_value,
                         record.verdict.value, record.rollback_recommended,
+                        record.classifier_source, record.classifier_name,
                     ),
                 )
                 conn.commit()
@@ -239,7 +241,8 @@ class PostgresVerificationRecordStore:
                         SELECT proposal_id, proposal_type, proposal_target,
                                niche_id, applied_at, metric_name,
                                baseline_value, t_plus_48h_value,
-                               verdict, rollback_recommended, operator_notes
+                               verdict, rollback_recommended, operator_notes,
+                               classifier_source, classifier_name
                         FROM strategist_outcome_verification
                         WHERE verdict = 'pending'
                           AND applied_at < %s
@@ -260,7 +263,8 @@ class PostgresVerificationRecordStore:
                     ["proposal_id", "proposal_type", "proposal_target",
                      "niche_id", "applied_at", "metric_name",
                      "baseline_value", "t_plus_48h_value",
-                     "verdict", "rollback_recommended", "operator_notes"],
+                     "verdict", "rollback_recommended", "operator_notes",
+                     "classifier_source", "classifier_name"],
                     r,
                 ))
             records.append(VerificationRecord(
@@ -276,6 +280,8 @@ class PostgresVerificationRecordStore:
                 verdict=Verdict(d["verdict"]),
                 rollback_recommended=d["rollback_recommended"],
                 operator_notes=d["operator_notes"] or "",
+                classifier_source=d.get("classifier_source") or "unknown",
+                classifier_name=d.get("classifier_name") or "",
             ))
         return records
 

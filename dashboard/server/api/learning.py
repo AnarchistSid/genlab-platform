@@ -494,3 +494,97 @@ def get_reward_audit():
         })
 
     return api_success(data=result)
+
+
+# 2026-08-14: Phase 1.C — classifier quality endpoint.
+#
+# Reads strategist_outcome_verification and groups verified records
+# (verdict != 'pending') by (classifier_source, classifier_name).
+# For each group, reports the verdict mix — improved/unchanged/
+# regressed counts + accuracy metric.
+#
+# Consumer: ClassifierQualityCard on Mission Control shows the mix as
+# horizontal stacked bars. Operator sees at a glance which classifier
+# path is producing decisions that actually help.
+
+
+@bp.route("/classifier-quality", methods=["GET"])
+def get_classifier_quality():
+    """Return per-(classifier_source, classifier_name) verdict mix
+    from strategist_outcome_verification over last 30d.
+
+    Response shape:
+
+        {
+          "status": "ok",
+          "data": [
+            {
+              "classifier_source": "heuristic" | "llm" | "manual" | "unknown",
+              "classifier_name": "arm_add" | "reward_weight" | ... ,
+              "n_verified": 42,
+              "n_improved": 25, "n_unchanged": 12, "n_regressed": 5,
+              "accuracy": 0.595  // improved / (improved + regressed)
+            },
+            ...
+          ]
+        }
+    """
+    import os
+
+    dsn = os.environ.get("DATABASE_URL", "").strip()
+    if not dsn:
+        return api_error(error="DATABASE_URL unset", code=503)
+
+    try:
+        with pg_connect(dsn, niche_id="all", connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                      classifier_source,
+                      classifier_name,
+                      COUNT(*) AS n_verified,
+                      COUNT(*) FILTER (WHERE verdict = 'improved') AS n_improved,
+                      COUNT(*) FILTER (WHERE verdict = 'unchanged') AS n_unchanged,
+                      COUNT(*) FILTER (WHERE verdict = 'regressed') AS n_regressed
+                    FROM strategist_outcome_verification
+                    WHERE verdict != 'pending'
+                      AND applied_at >= NOW() - INTERVAL '30 days'
+                    GROUP BY classifier_source, classifier_name
+                    ORDER BY classifier_source, classifier_name
+                    """,
+                )
+                rows = cur.fetchall() or []
+    except Exception as exc:
+        logger.warning(
+            "[classifier_quality] query failed: %s", exc, exc_info=True,
+        )
+        return api_error(error="Classifier quality query failed", code=500)
+
+    result = []
+    for row in rows:
+        if hasattr(row, "get"):
+            r = dict(row)
+        else:
+            r = dict(zip(
+                ["classifier_source", "classifier_name", "n_verified",
+                 "n_improved", "n_unchanged", "n_regressed"],
+                row,
+            ))
+        improved = int(r["n_improved"] or 0)
+        regressed = int(r["n_regressed"] or 0)
+        # Accuracy denominator excludes unchanged: measures
+        # "of the decisions that moved the metric, what fraction moved
+        # in the right direction." Unchanged decisions are non-diagnostic.
+        denom = improved + regressed
+        accuracy = round(improved / denom, 3) if denom > 0 else None
+        result.append({
+            "classifier_source": r["classifier_source"],
+            "classifier_name": r["classifier_name"],
+            "n_verified": int(r["n_verified"] or 0),
+            "n_improved": improved,
+            "n_unchanged": int(r["n_unchanged"] or 0),
+            "n_regressed": regressed,
+            "accuracy": accuracy,
+        })
+    return api_success(data=result)

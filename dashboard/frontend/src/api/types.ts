@@ -1456,6 +1456,22 @@ export interface RewardAuditNiche {
   platforms: RewardAuditPlatform[];
 }
 
+// Phase 1.C (2026-08-14) — meta-learning classifier quality.
+// Per-(classifier_source, classifier_name) verdict mix over 30d.
+export type ClassifierSource = "heuristic" | "llm" | "manual" | "unknown";
+
+export interface ClassifierQualityRow {
+  classifier_source: ClassifierSource;
+  classifier_name: string;   // proposal_type: arm_add, reward_weight, etc.
+  n_verified: number;
+  n_improved: number;
+  n_unchanged: number;
+  n_regressed: number;
+  /** improved / (improved + regressed). Null when denominator is 0
+   *  (all unchanged — non-diagnostic). */
+  accuracy: number | null;
+}
+
 // Intervention 2 observability (2026-07-01) — cross-niche transferred priors.
 // Mirrors ``genlab_core.learning.cross_niche_transfer.TransferredPrior``.
 export interface CrossNichePrior {

@@ -112,6 +112,12 @@ class VerificationRecord:
     verdict: Verdict
     rollback_recommended: bool
     operator_notes: str = ""
+    # Phase 1.C (2026-08-14): meta-learning attribution.
+    # classifier_source: 'heuristic' | 'llm' | 'manual' | 'unknown'
+    # classifier_name: proposal_type mirror ('arm_add', ...) — kept
+    # separate to enable clean GROUP BY (source, name) queries.
+    classifier_source: str = "unknown"
+    classifier_name: str = ""
 
 
 class MetricSnapshotProvider(Protocol):
@@ -165,10 +171,14 @@ class Verifier:
     def register(
         self, *, proposal_id: str, proposal: dict[str, Any], niche_id: str,
         applied_at: datetime,
+        classifier_source: str = "unknown",
     ) -> VerificationRecord | None:
         """Snapshot baseline + insert pending row. Returns the record
-        on success, None if metric can't be resolved (in which case
-        we skip verification for this proposal)."""
+        on success, None if metric can't be resolved.
+
+        Phase 1.C: `classifier_source` records which decision path
+        accepted this proposal ('heuristic', 'llm', 'manual',
+        'unknown'). Feeds meta-learning on which paths actually help."""
         metric_name = self._infer_metric_name(proposal, niche_id)
         if metric_name is None:
             logger.info(
@@ -179,9 +189,10 @@ class Verifier:
             )
             return None
         baseline = self._metrics.snapshot(niche_id, metric_name)
+        proposal_type = proposal.get("type", "")
         record = VerificationRecord(
             proposal_id=proposal_id,
-            proposal_type=proposal.get("type", ""),
+            proposal_type=proposal_type,
             proposal_target=str(proposal.get("target", ""))[:200],
             niche_id=niche_id,
             applied_at=applied_at,
@@ -190,6 +201,8 @@ class Verifier:
             t_plus_48h_value=None,
             verdict=Verdict.PENDING,
             rollback_recommended=False,
+            classifier_source=classifier_source,
+            classifier_name=proposal_type,
         )
         self._store.insert(record)
         return record

@@ -43,6 +43,7 @@ import { FlagStateCard } from "./FlagStateCard";
 import { TopCreatorPriorsCard } from "./TopCreatorPriorsCard";
 import { CounterfactualReplayCard } from "./CounterfactualReplayCard";
 import { RewardSignalAuditCard } from "./RewardSignalAuditCard";
+import { ClassifierQualityCard } from "./ClassifierQualityCard";
 import { AutoExperimentsCard } from "./AutoExperimentsCard";
 import { ProductBanditCard } from "./ProductBanditCard";
 import { TransformationBanditCard } from "./TransformationBanditCard";
@@ -419,6 +420,14 @@ export default function MissionControl() {
                 distributions spread over 7 days as new reward_48h
                 lands via the fixed percentile targets. */}
             <RewardSignalAuditCard />
+            {/* Phase 1.C (2026-08-14): classifier quality meta-learning.
+                Grades heuristic vs LLM vs manual decision paths against
+                48h outcome verifier verdicts. Sibling of RewardSignalAudit
+                one layer up — this card is "which DECISION SOURCE actually
+                helps" vs "which reward SIGNAL is trustworthy". Cold-start
+                until Sat 08-16 IST when the first arm_adds from today's
+                08:30 apply worker hit their 48h window. */}
+            <ClassifierQualityCard />
             {/* #9 lifecycle observability (2026-07-23): auto-experiment
                 verdicts + queue depth. Sibling to the strategist card —
                 strategist proposes causal hypotheses; parser queues them;

@@ -164,6 +164,12 @@ export const queryKeys = {
      *  learning cards. */
     all: () => ["reward-audit", "all"] as const,
   },
+  classifierQuality: {
+    /** Phase 1.C observability (2026-08-14) — per-(source, name)
+     *  verdict mix over 30d. Backed by learning/classifier-quality.
+     *  Slow-moving aggregate; 5-min poll is plenty. */
+    all: () => ["classifier-quality", "all"] as const,
+  },
   autoExperiments: {
     /** #9 lifecycle observability (2026-07-23) — per-niche recent
      *  experiments + verdicts. Lifecycle timer fires every 6h; a

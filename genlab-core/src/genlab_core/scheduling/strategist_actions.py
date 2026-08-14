@@ -117,6 +117,7 @@ def apply_pending_actions(niche_id: str | None = None) -> dict[str, int]:
                             _register_verification(
                                 report["id"], idx,
                                 report["niche_id"], proposal,
+                                report_extra=report.get("extra") or {},
                             )
                     # Other proposal types (phase_shift, gate_threshold,
                     # reward_weight, novelty_rate, playbook_update) are
@@ -196,17 +197,30 @@ def _already_applied_indices(extra: dict[str, Any] | str) -> set[int]:
 
 def _register_verification(
     report_id: str, idx: int, niche_id: str, proposal: dict[str, Any],
+    report_extra: dict[str, Any] | None = None,
 ) -> None:
-    """Phase 1.A: register the newly-applied arm for post-48h outcome
-    verification. Fail-open — never re-raises. The Verifier fills in
-    baseline metric snapshot at register time; the runner reads it
-    back after 48h to grade the outcome + auto-rollback regressions.
+    """Phase 1.A + 1.C: register the newly-applied arm for post-48h
+    outcome verification with classifier-source attribution.
+
+    Fail-open — never re-raises. The Verifier fills in baseline metric
+    snapshot at register time; the runner reads it back after 48h to
+    grade the outcome + auto-rollback regressions + feed the meta-
+    learning classifier-quality endpoint.
 
     Only registers arm_add proposals today because that's the only
     proposal type the PostgresMetricSnapshotProvider knows how to
     snapshot (`arm_reward:{niche}:{arm_id}`). Extending to
     reward_weight / novelty_rate is a follow-up when the runner adds
-    those metric prefixes."""
+    those metric prefixes.
+
+    Phase 1.C attribution (2026-08-14): looks up which decision path
+    accepted this proposal by matching idx against the report's
+    extra JSONB markers:
+      * extra.llm_reviewer_accepted_indices → 'llm'
+      * extra.auto_accepted_indices → 'heuristic'
+      * neither → 'manual' (operator dashboard click) OR 'unknown'
+        (older data without markers)
+    """
     try:
         from datetime import UTC, datetime
 
@@ -215,6 +229,8 @@ def _register_verification(
             PostgresMetricSnapshotProvider,
             PostgresVerificationRecordStore,
         )
+
+        classifier_source = _classify_decision_source(idx, report_extra or {})
 
         verifier = Verifier(
             metrics=PostgresMetricSnapshotProvider(),
@@ -225,6 +241,7 @@ def _register_verification(
             proposal=proposal,
             niche_id=niche_id,
             applied_at=datetime.now(UTC),
+            classifier_source=classifier_source,
         )
     except Exception as exc:
         logger.warning(
@@ -232,6 +249,32 @@ def _register_verification(
             "report=%s idx=%d err=%s",
             report_id, idx, exc,
         )
+
+
+def _classify_decision_source(idx: int, report_extra: dict[str, Any]) -> str:
+    """Phase 1.C: infer which classifier path placed `idx` into the
+    accept list. Prefers LLM (Phase 1.B) over heuristic (older
+    default) because a proposal COULD be in both markers if the
+    heuristic accepted first then LLM re-ran — but that's rare and
+    LLM is the more informative signal to attribute to."""
+    def _as_list(v):
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            try:
+                import json as _json
+                return _json.loads(v)
+            except (ValueError, TypeError):
+                return []
+        return []
+
+    llm_indices = _as_list(report_extra.get("llm_reviewer_accepted_indices"))
+    if idx in llm_indices:
+        return "llm"
+    heur_indices = _as_list(report_extra.get("auto_accepted_indices"))
+    if idx in heur_indices:
+        return "heuristic"
+    return "manual"
 
 
 def _apply_arm_add(conn, niche_id: str, proposal: dict[str, Any]) -> bool:

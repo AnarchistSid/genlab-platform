@@ -1247,6 +1247,18 @@ export const rewardAudit = {
     ),
 };
 
+// 2026-08-14: Phase 1.C — classifier quality (meta-learning).
+export const classifierQuality = {
+  /** Per-(source, name) verdict mix over 30d. Backs
+   *  ClassifierQualityCard on Mission Control. */
+  fetch: () =>
+    get<{
+      data: import("./types").ClassifierQualityRow[] | null;
+    }>("/learning/classifier-quality").then((d) =>
+      unwrapEnvelope<import("./types").ClassifierQualityRow[]>(d),
+    ),
+};
+
 export const autoExperiments = {
   /** Fetch the lifecycle summary — recent experiments + per-status
    *  counts + last-30d verdict tally. Returns null on any server-side
