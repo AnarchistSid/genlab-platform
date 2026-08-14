@@ -1,0 +1,11 @@
+[Unit]
+Description=Fire GenLab hook-style-guidance weekly Sunday 04:00 UTC — before strategist Sunday 07:30 fire
+Requires=genlab-hook-style-guidance.service
+
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00 UTC
+Persistent=true
+Unit=genlab-hook-style-guidance.service
+
+[Install]
+WantedBy=timers.target
