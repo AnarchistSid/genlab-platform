@@ -568,6 +568,44 @@ def generate_hook(
     except Exception as exc:  # noqa: BLE001 — RAG is augmentation only
         logger.debug("[%s] rejection RAG failed (continuing without): %s", niche_id, exc)
 
+    # Phase 4.C session 2 (2026-08-14) — style-of-the-week guidance.
+    # Injects top-3 hook styles for this niche (from the weekly
+    # bandit-posterior aggregator) so the LLM knows what's working.
+    # Gated behind GENLAB_STYLE_GUIDANCE_ENABLED + deterministic
+    # rollout dice on story_id so A/B assignment is stable across
+    # re-writes + operator can partition history cleanly.
+    # Also records style_guidance_injected on story["content"] so
+    # StoryStore persists it to blueprints.extra for the analyzer.
+    _story_id = story.get("story_id") or ""
+    _guidance_injected = False
+    try:
+        from genlab_core.writing.style_guidance import (
+            build_prompt_block,
+            load_latest_guidance,
+            should_inject_guidance,
+        )
+        if should_inject_guidance(_story_id):
+            from genlab_core.storage.postgres import pg_connect
+            with pg_connect() as _conn:
+                _styles, _ = load_latest_guidance(_conn, niche_id)
+            _block = build_prompt_block(_styles)
+            if _block:
+                system += "\n\n" + _block + "\n"
+                _guidance_injected = True
+    except Exception as exc:  # noqa: BLE001 — augmentation only, never regress
+        logger.debug(
+            "[%s] style guidance injection failed (continuing without): %s",
+            niche_id, exc,
+        )
+    # Persist the A/B assignment so the analyzer can partition.
+    # Uses story dict since generate_hook doesn't own blueprint mutation.
+    try:
+        content = story.setdefault("content", {})
+        if isinstance(content, dict):
+            content["style_guidance_injected"] = _guidance_injected
+    except Exception:
+        pass
+
     user = f"Story: {title}\nSummary: {summary}" + used_text
 
     # Generate 3 candidates and pick the best
