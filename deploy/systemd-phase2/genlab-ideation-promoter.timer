@@ -1,0 +1,14 @@
+[Unit]
+Description=Fire GenLab ideation-pool promoter every 6h — fills daily-cadence gap when trending source under-produces
+Requires=genlab-ideation-promoter.service
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 UTC
+OnCalendar=*-*-* 09:15:00 UTC
+OnCalendar=*-*-* 15:15:00 UTC
+OnCalendar=*-*-* 21:15:00 UTC
+Persistent=true
+Unit=genlab-ideation-promoter.service
+
+[Install]
+WantedBy=timers.target

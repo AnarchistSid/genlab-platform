@@ -1,0 +1,24 @@
+[Unit]
+Description=GenLab ideation pool promoter — reserves top pending ideas + materializes as blueprints when trending source is low-signal
+After=network-online.target
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=UV_FROZEN=1
+TimeoutStartSec=5min
+ExecStart=/usr/local/bin/uv run python scripts/promote_ideas_to_blueprints.py
+StandardOutput=journal
+StandardError=journal
+
+MemoryMax=192M
+CPUWeight=20
+
+[Install]
+WantedBy=multi-user.target
