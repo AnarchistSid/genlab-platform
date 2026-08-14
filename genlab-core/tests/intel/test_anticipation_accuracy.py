@@ -226,3 +226,149 @@ class TestPersistence:
     def test_read_missing_returns_none(self, tmp_path):
         got = aa.read_latest_measurement("anime", output_dir=tmp_path)
         assert got is None
+
+
+# ── Phase 3.B (2026-08-14) — distinct failure-mode diagnostics ────
+#
+# Prior 'correlation undefined (constant input or scipy missing)'
+# reason string hid which side of the input collapsed. After 5+
+# weeks of every accuracy measurement returning that opaque reason,
+# the operator had no signal to diagnose the underlying gap
+# (pytrends throttling? anticipation ranking degenerate? scipy
+# removed from the env?).
+#
+# The new diagnostics distinguish 4 failure modes so the accuracy
+# card can surface a targeted reason per niche per week.
+
+
+class TestConstantInputDiagnostics:
+    def test_predicted_all_same(self):
+        assert aa._diagnose_constant_input([5, 5, 5], [1, 2, 3]) == "predicted_all_same"
+
+    def test_observed_all_zero(self):
+        assert aa._diagnose_constant_input([1, 2, 3], [0, 0, 0]) == "observed_all_zero"
+
+    def test_observed_all_same_nonzero(self):
+        assert (
+            aa._diagnose_constant_input([1, 2, 3], [42, 42, 42])
+            == "observed_all_same_nonzero"
+        )
+
+    def test_both_vary_returns_none(self):
+        assert aa._diagnose_constant_input([1, 2, 3], [4, 5, 6]) is None
+
+    def test_measurement_reports_observed_all_zero(self, tmp_path, monkeypatch):
+        """This is the exact failure mode caught on 2026-08-14 — every
+        pytrends fetch returned 0 for every topic. Should now surface
+        'observed_all_zero' explicitly instead of generic
+        'correlation undefined'."""
+        monkeypatch.setenv("GENLAB_ANTICIPATION_ACCURACY_ENABLED", "true")
+        monkeypatch.setenv("GENLAB_TMP", str(tmp_path))
+
+        now = datetime(2026, 8, 14, 5, 0, tzinfo=UTC)
+        artifact_dt = now - timedelta(days=7)
+        rows = [{"topic": f"topic_{i}", "composite_score": 0.9 - i * 0.1} for i in range(5)]
+        (tmp_path / "trend-anticipation").mkdir(parents=True, exist_ok=True)
+        stamp = artifact_dt.strftime("%Y%m%d")
+        (tmp_path / "trend-anticipation" / f"{stamp}-gaming.json").write_text(
+            json.dumps({
+                "generated_at": artifact_dt.isoformat(),
+                "niche_id": "gaming",
+                "flag_enabled": True,
+                "ranking": rows,
+            })
+        )
+        # All observed peaks are 0 — the pytrends-throttled failure mode
+        monkeypatch.setattr(aa, "_fetch_observed_peak", lambda t, ws, we: 0.0)
+
+        m = aa.measure_niche_accuracy("gaming", now=now)
+        assert m.n_topics == 5
+        assert m.spearman_r is None
+        assert any("observed_all_zero" in r for r in m.reasons)
+        assert m.observed_hit_rate == 0.0  # 0 of 5 topics had > 0 peak
+
+    def test_measurement_reports_predicted_all_same(self, tmp_path, monkeypatch):
+        """Anticipation ranking degenerate — every composite score
+        identical. Different failure mode from observed_all_zero;
+        must be distinguished in the reason string."""
+        monkeypatch.setenv("GENLAB_ANTICIPATION_ACCURACY_ENABLED", "true")
+        monkeypatch.setenv("GENLAB_TMP", str(tmp_path))
+
+        now = datetime(2026, 8, 14, 5, 0, tzinfo=UTC)
+        artifact_dt = now - timedelta(days=7)
+        rows = [{"topic": f"topic_{i}", "composite_score": 0.5} for i in range(5)]
+        (tmp_path / "trend-anticipation").mkdir(parents=True, exist_ok=True)
+        stamp = artifact_dt.strftime("%Y%m%d")
+        (tmp_path / "trend-anticipation" / f"{stamp}-gaming.json").write_text(
+            json.dumps({
+                "generated_at": artifact_dt.isoformat(),
+                "niche_id": "gaming",
+                "flag_enabled": True,
+                "ranking": rows,
+            })
+        )
+        monkeypatch.setattr(
+            aa, "_fetch_observed_peak",
+            lambda t, ws, we: {f"topic_{i}": i * 20 for i in range(5)}.get(t),
+        )
+
+        m = aa.measure_niche_accuracy("gaming", now=now)
+        assert m.n_topics == 5
+        assert m.spearman_r is None
+        assert any("predicted_all_same" in r for r in m.reasons)
+
+
+class TestObservedHitRate:
+    """Phase 3.B (2026-08-14): coarse secondary signal that works
+    when Spearman is undefined. Gives the operator SOMETHING to
+    look at during weeks when the correlation fails."""
+
+    def test_partial_hit_rate(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("GENLAB_ANTICIPATION_ACCURACY_ENABLED", "true")
+        monkeypatch.setenv("GENLAB_TMP", str(tmp_path))
+
+        now = datetime(2026, 8, 14, 5, 0, tzinfo=UTC)
+        artifact_dt = now - timedelta(days=7)
+        rows = [{"topic": f"topic_{i}", "composite_score": 0.9 - i * 0.1} for i in range(5)]
+        (tmp_path / "trend-anticipation").mkdir(parents=True, exist_ok=True)
+        stamp = artifact_dt.strftime("%Y%m%d")
+        (tmp_path / "trend-anticipation" / f"{stamp}-gaming.json").write_text(
+            json.dumps({
+                "generated_at": artifact_dt.isoformat(),
+                "niche_id": "gaming",
+                "flag_enabled": True,
+                "ranking": rows,
+            })
+        )
+        # 3 of 5 topics had > 0 peak
+        peaks = {"topic_0": 100, "topic_1": 50, "topic_2": 30, "topic_3": 0, "topic_4": 0}
+        monkeypatch.setattr(
+            aa, "_fetch_observed_peak", lambda t, ws, we: peaks.get(t)
+        )
+
+        m = aa.measure_niche_accuracy("gaming", now=now)
+        assert m.observed_hit_rate == pytest.approx(0.6)  # 3/5
+
+    def test_hit_rate_100pct_when_all_trended(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("GENLAB_ANTICIPATION_ACCURACY_ENABLED", "true")
+        monkeypatch.setenv("GENLAB_TMP", str(tmp_path))
+
+        now = datetime(2026, 8, 14, 5, 0, tzinfo=UTC)
+        artifact_dt = now - timedelta(days=7)
+        rows = [{"topic": f"topic_{i}", "composite_score": 0.9 - i * 0.1} for i in range(5)]
+        (tmp_path / "trend-anticipation").mkdir(parents=True, exist_ok=True)
+        stamp = artifact_dt.strftime("%Y%m%d")
+        (tmp_path / "trend-anticipation" / f"{stamp}-gaming.json").write_text(
+            json.dumps({
+                "generated_at": artifact_dt.isoformat(),
+                "niche_id": "gaming",
+                "flag_enabled": True,
+                "ranking": rows,
+            })
+        )
+        monkeypatch.setattr(
+            aa, "_fetch_observed_peak",
+            lambda t, ws, we: {f"topic_{i}": 100 - i * 10 for i in range(5)}.get(t),
+        )
+        m = aa.measure_niche_accuracy("gaming", now=now)
+        assert m.observed_hit_rate == pytest.approx(1.0)

@@ -95,6 +95,11 @@ class AccuracyMeasurement:
     artifact_date: str
     measured_at: str
     reasons: list[str] = field(default_factory=list)
+    # Phase 3.B (2026-08-14): secondary signal when Spearman is
+    # undefined. Fraction of topics with observed peak > 0 — coarse
+    # "did anticipation identify ANY topic that trended?" hit rate.
+    # None when zero usable topics.
+    observed_hit_rate: float | None = None
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -164,6 +169,34 @@ def _fetch_observed_peak(
 # ── Correlation ───────────────────────────────────────────────────
 
 
+def _diagnose_constant_input(
+    predicted: list[float], observed: list[float],
+) -> str | None:
+    """Phase 3.B (2026-08-14): distinguish which side of the input
+    lacks variance. Prior 'correlation undefined (constant input or
+    scipy missing)' reason string hid whether the anticipation
+    ranking was degenerate (predicted collapsed) or pytrends had no
+    signal for the topics (observed all-zero). Returns:
+
+      * ``'predicted_all_same'``           — ranking algo emitting
+        identical scores (algo bug or all topics tied at ceiling)
+      * ``'observed_all_zero'``            — pytrends returned 0 for
+        every topic (topics too obscure OR pytrends throttled)
+      * ``'observed_all_same_nonzero'``    — pytrends returned same
+        nonzero value for all topics (rare but possible with
+        aggressive normalization windows)
+      * ``None``                           — both sides have variance
+        so a genuine correlation is computable
+    """
+    if len(set(predicted)) < 2:
+        return "predicted_all_same"
+    if len(set(observed)) < 2:
+        if all(v == 0 for v in observed):
+            return "observed_all_zero"
+        return "observed_all_same_nonzero"
+    return None
+
+
 def spearman_rank_correlation(
     predicted: list[float],
     observed: list[float],
@@ -180,7 +213,9 @@ def spearman_rank_correlation(
     series has zero variance (all values equal), spearmanr issues
     a ConstantInputWarning and returns NaN. We return
     ``(None, None)`` in that case — the correlation is genuinely
-    undefined, not zero.
+    undefined, not zero. Callers should use
+    :func:`_diagnose_constant_input` to distinguish WHICH side is
+    degenerate so the accuracy card renders a specific reason.
     """
     if len(predicted) < 2 or len(predicted) != len(observed):
         return None, None
@@ -335,6 +370,13 @@ def measure_niche_accuracy(
 
     n_topics = len(predicted)
     if n_topics < 2:
+        # Phase 3.B: still emit hit_rate when we have at least 1 topic
+        # so the card can render "1/1 trended" even if correlation
+        # isn't computable.
+        thin_hit_rate = (
+            sum(1 for v in observed if v > 0) / len(observed)
+            if observed else None
+        )
         return AccuracyMeasurement(
             niche_id=niche_id,
             spearman_r=None,
@@ -343,12 +385,39 @@ def measure_niche_accuracy(
             artifact_date=artifact_date,
             measured_at=measured_at,
             reasons=[f"only {n_topics} usable topics ({n_fetch_failed} peak-fetch failures)"],
+            observed_hit_rate=thin_hit_rate,
         )
 
     r, p = spearman_rank_correlation(predicted, observed)
+    # Phase 3.B: coarse secondary signal — "did anticipation identify
+    # ANY topic that trended?" hit rate. Works even when Spearman is
+    # undefined (e.g., all observed values are 0 or identical).
+    observed_hit_rate = (
+        sum(1 for v in observed if v > 0) / len(observed)
+        if observed else None
+    )
     reasons = []
     if r is None:
-        reasons.append("correlation undefined (constant input or scipy missing)")
+        # Phase 3.B: distinguish WHICH side collapsed so the operator
+        # gets a targeted signal on the accuracy card.
+        diag = _diagnose_constant_input(predicted, observed)
+        if diag == "predicted_all_same":
+            reasons.append(
+                "predicted_all_same — anticipation ranking degenerate "
+                "(all composite scores identical)"
+            )
+        elif diag == "observed_all_zero":
+            reasons.append(
+                "observed_all_zero — pytrends returned 0 for every topic "
+                "(topics too obscure OR pytrends throttled)"
+            )
+        elif diag == "observed_all_same_nonzero":
+            reasons.append(
+                "observed_all_same_nonzero — pytrends returned identical "
+                "nonzero value for every topic (rare normalization case)"
+            )
+        else:
+            reasons.append("correlation undefined (scipy/numpy unavailable)")
     elif n_topics < _MIN_TOPICS_FOR_MEANINGFUL_R:
         reasons.append(f"underpowered — n_topics={n_topics} < {_MIN_TOPICS_FOR_MEANINGFUL_R}")
     if n_fetch_failed:
@@ -362,6 +431,7 @@ def measure_niche_accuracy(
         artifact_date=artifact_date,
         measured_at=measured_at,
         reasons=reasons,
+        observed_hit_rate=observed_hit_rate,
     )
 
 
