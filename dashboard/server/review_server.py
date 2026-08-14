@@ -820,6 +820,7 @@ from server.api.sponsorship_readiness import bp as sponsorship_bp
 from server.api.stories import bp as stories_bp
 from server.api.strategist import bp as strategist_bp
 from server.api.token_health import bp as token_health_bp
+from server.api.autonomous_reviewer import bp as autonomous_reviewer_bp
 from server.api.competitor_deltas import bp as competitor_deltas_bp
 from server.api.content_quality import bp as content_quality_bp
 from server.api.ideation_pool import bp as ideation_pool_bp
@@ -909,6 +910,9 @@ app.register_blueprint(
 app.register_blueprint(
     ideation_pool_bp
 )  # Phase 4.E session 3 (2026-08-14): /api/v1/ideation-pool/summary — per-niche pool depth (pending/consumed/expired)
+app.register_blueprint(
+    autonomous_reviewer_bp
+)  # Phase 5.B session 2 (2026-08-14): /api/v1/autonomous-reviewer/status — per-proposal-type outcome history + meta grade
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)

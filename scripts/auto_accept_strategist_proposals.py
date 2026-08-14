@@ -469,35 +469,92 @@ def main() -> int:
                             reviewer = None
 
                     if llm_verdict is not None:
+                        # Phase 5.B session 2 (2026-08-14): augment
+                        # the LLM verdict with outcome-verifier
+                        # history + meta-strategist grade. augmented
+                        # verdict may boost/dampen confidence + sets
+                        # should_escalate=True when confidence < 0.5
+                        # OR outcome history immature (<3) OR novel.
+                        # Gated by GENLAB_AUTONOMOUS_REVIEWER_ENABLED
+                        # so we can ship+observe before flipping the
+                        # escalation-gate behavior.
+                        augmenter_on = os.environ.get(
+                            "GENLAB_AUTONOMOUS_REVIEWER_ENABLED", "",
+                        ).strip().lower() in {"1", "true", "yes"}
+                        _augment_result = None
+                        if augmenter_on:
+                            try:
+                                from genlab_core.scheduling.autonomous_reviewer import (
+                                    augment as _autonomous_augment,
+                                )
+                                _augment_result = _autonomous_augment(
+                                    decision=llm_verdict.decision,
+                                    base_confidence=llm_verdict.confidence,
+                                    reason=llm_verdict.reason,
+                                    proposal_type=proposal_type,
+                                    conn=conn,
+                                    is_novel=False,
+                                )
+                            except Exception as exc:  # noqa: BLE001
+                                logger.warning(
+                                    "[autonomous_augmenter] failed niche=%s "
+                                    "idx=%d: %s — using base LLM verdict",
+                                    niche_id, idx, exc,
+                                )
+
+                        # Effective confidence + escalation gate
+                        eff_conf = (
+                            _augment_result.augmented_confidence
+                            if _augment_result is not None
+                            else llm_verdict.confidence
+                        )
+                        force_escalate = (
+                            _augment_result.should_escalate
+                            if _augment_result is not None
+                            else False  # base path: rely on threshold only
+                        )
+
                         if (
-                            llm_verdict.decision == "accept"
-                            and llm_verdict.confidence >= CONFIDENCE_THRESHOLD_ACCEPT
+                            not force_escalate
+                            and llm_verdict.decision == "accept"
+                            and eff_conf >= CONFIDENCE_THRESHOLD_ACCEPT
                         ):
+                            trail_note = (
+                                f" | augmented={eff_conf:.2f} "
+                                f"trail={_augment_result.augmentation_trail}"
+                                if _augment_result else ""
+                            )
                             classified["llm_accept"].append((
                                 niche_id, idx,
                                 f"llm_accept:conf={llm_verdict.confidence:.2f} "
-                                f"reason={llm_verdict.reason[:80]}",
+                                f"reason={llm_verdict.reason[:80]}{trail_note}",
                             ))
                             llm_accept_by_report.setdefault(
                                 report_id, [],
                             ).append(idx)
-                            # Also count against the aggregate rate limit
                             by_report.setdefault(report_id, [])
                             continue
                         if (
-                            llm_verdict.decision == "reject"
-                            and llm_verdict.confidence >= CONFIDENCE_THRESHOLD_REJECT
+                            not force_escalate
+                            and llm_verdict.decision == "reject"
+                            and eff_conf >= CONFIDENCE_THRESHOLD_REJECT
                         ):
+                            trail_note = (
+                                f" | augmented={eff_conf:.2f} "
+                                f"trail={_augment_result.augmentation_trail}"
+                                if _augment_result else ""
+                            )
                             classified["llm_reject"].append((
                                 niche_id, idx,
                                 f"llm_reject:conf={llm_verdict.confidence:.2f} "
-                                f"reason={llm_verdict.reason[:80]}",
+                                f"reason={llm_verdict.reason[:80]}{trail_note}",
                             ))
                             llm_reject_by_report.setdefault(
                                 report_id, [],
                             ).append(idx)
                             continue
-                        # LLM abstain or low-confidence → still operator scope
+                        # LLM abstain OR augmented below threshold OR
+                        # augmenter forced escalation → operator scope
                     classified["operator_gate"].append(
                         (niche_id, idx, decision.reason)
                     )
