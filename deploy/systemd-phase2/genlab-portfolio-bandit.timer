@@ -1,0 +1,11 @@
+[Unit]
+Description=Fire GenLab portfolio bandit weekly Sunday 06:00 UTC — computes budget allocation before strategist run at 07:30
+Requires=genlab-portfolio-bandit.service
+
+[Timer]
+OnCalendar=Sun *-*-* 06:17:00 UTC
+Persistent=true
+Unit=genlab-portfolio-bandit.service
+
+[Install]
+WantedBy=timers.target
