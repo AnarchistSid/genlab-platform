@@ -65,6 +65,8 @@ def get_summary():
                        AVG(joint_score)::float AS avg_joint,
                        AVG(visual_score)::float AS avg_visual,
                        AVG(audio_score)::float AS avg_audio,
+                       AVG(aesthetic_score)::float AS avg_aesthetic,
+                       COUNT(aesthetic_score)::int AS n_aesthetic,
                        MIN(joint_score)::float AS min_joint,
                        MAX(joint_score)::float AS max_joint,
                        MAX(computed_at) AS last_scored_at
@@ -103,6 +105,8 @@ def get_summary():
                         "avg_joint": r["avg_joint"],
                         "avg_visual": r["avg_visual"],
                         "avg_audio": r["avg_audio"],
+                        "avg_aesthetic": r["avg_aesthetic"],
+                        "n_aesthetic": r["n_aesthetic"],
                         "min_joint": r["min_joint"],
                         "max_joint": r["max_joint"],
                         "last_scored_at": _iso(r["last_scored_at"]),

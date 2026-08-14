@@ -191,8 +191,18 @@ def _already_scored(conn, blueprint_id: str, video_hash: str) -> bool:
         return False
 
 
-def _persist_score(conn, blueprint_id: str, niche_id: str, score) -> bool:
-    """Insert one JointQualityScore row. Idempotent via ON CONFLICT."""
+def _persist_score(
+    conn, blueprint_id: str, niche_id: str, score,
+    aesthetic_score: float | None = None,
+    aesthetic_model_version: int | None = None,
+) -> bool:
+    """Insert one JointQualityScore row. Idempotent via ON CONFLICT.
+
+    Phase 4.B session 3 (2026-08-14): also persists aesthetic_score
+    + aesthetic_model_version when a niche has an active model.
+    Both nullable — no active model means the columns stay NULL
+    and downstream aesthetic-aware consumers fall-through gracefully.
+    """
     try:
         conn.execute(
             """
@@ -203,13 +213,15 @@ def _persist_score(conn, blueprint_id: str, niche_id: str, score) -> bool:
                 audio_energy_variance, dialogue_density,
                 music_to_voice_ratio,
                 visual_score, audio_score, joint_score,
-                failed_extractors
+                failed_extractors,
+                aesthetic_score, aesthetic_model_version
             ) VALUES (
                 %s, %s, %s, %s,
                 %s, %s, %s, %s,
                 %s, %s, %s,
                 %s, %s, %s,
-                %s
+                %s,
+                %s, %s
             )
             ON CONFLICT (blueprint_id, video_hash) DO NOTHING
             """,
@@ -221,6 +233,7 @@ def _persist_score(conn, blueprint_id: str, niche_id: str, score) -> bool:
                 score.music_to_voice_ratio,
                 score.visual_score, score.audio_score, score.joint_score,
                 list(score.failed_extractors),
+                aesthetic_score, aesthetic_model_version,
             ),
         )
         return True
@@ -276,12 +289,34 @@ def _run_niche(conn, niche_id: str, lookback_hours: int,
             counts["persist_failed"] += 1
             continue
 
+        # Phase 4.B session 3: compute aesthetic score if a niche has
+        # an active model. Fail-open — no model / extract failure →
+        # None values persist, downstream fall-through handles it.
+        aesthetic_score = None
+        aesthetic_model_version = None
+        try:
+            from genlab_core.quality.aesthetic_scorer import score_video
+            asr = score_video(video, niche_id, conn)
+            if asr.ok:
+                aesthetic_score = asr.score
+                aesthetic_model_version = asr.model_version
+        except Exception as exc:
+            logger.warning(
+                "[scorer] aesthetic scoring crashed bp=%s: %s",
+                bp["id"], exc,
+            )
+
         print(
             f"  {bp['id'][:8]} visual={score.visual_score} "
             f"audio={score.audio_score} joint={score.joint_score} "
+            f"aesthetic={aesthetic_score} "
             f"failed={list(score.failed_extractors)}"
         )
-        if _persist_score(conn, bp["id"], niche_id, score):
+        if _persist_score(
+            conn, bp["id"], niche_id, score,
+            aesthetic_score=aesthetic_score,
+            aesthetic_model_version=aesthetic_model_version,
+        ):
             counts["scored"] += 1
         else:
             counts["persist_failed"] += 1

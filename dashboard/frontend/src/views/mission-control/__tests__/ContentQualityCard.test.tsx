@@ -38,6 +38,8 @@ const _stub = (
       avg_joint: 0.42,
       avg_visual: 0.38,
       avg_audio: 0.51,
+      avg_aesthetic: 0.55,
+      n_aesthetic: 3,
       min_joint: 0.12,
       max_joint: 0.78,
       last_scored_at: "2026-08-14T19:00:00+00:00",
@@ -74,8 +76,16 @@ describe("ContentQualityCard", () => {
     renderWithClient(<ContentQualityCard />);
     expect(await screen.findByText("gaming")).toBeInTheDocument();
     expect(screen.getByText(/joint=0\.42/)).toBeInTheDocument();
-    expect(screen.getByText(/vis=0\.38/)).toBeInTheDocument();
-    expect(screen.getByText(/aud=0\.51/)).toBeInTheDocument();
+    // v/a compact labels (session 3 shrunk from vis/aud to make
+    // room for aes column)
+    expect(screen.getByText(/v=0\.38/)).toBeInTheDocument();
+    expect(screen.getByText(/a=0\.51/)).toBeInTheDocument();
+  });
+
+  it("renders aesthetic column (Phase 4.B session 3)", async () => {
+    vi.mocked(contentQuality.summary).mockResolvedValue(_stub());
+    renderWithClient(<ContentQualityCard />);
+    expect(await screen.findByText(/aes=0\.55/)).toBeInTheDocument();
   });
 
   it("renders min/max range", async () => {
@@ -101,6 +111,7 @@ describe("ContentQualityCard", () => {
           {
             niche_id: "gaming", n_scored: 1,
             avg_joint: null, avg_visual: null, avg_audio: null,
+            avg_aesthetic: null, n_aesthetic: 0,
             min_joint: null, max_joint: null,
             last_scored_at: null,
           },

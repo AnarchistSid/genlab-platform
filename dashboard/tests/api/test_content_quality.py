@@ -50,6 +50,8 @@ class TestSummary:
             "avg_joint": 0.42,
             "avg_visual": 0.38,
             "avg_audio": 0.51,
+            "avg_aesthetic": 0.55,
+            "n_aesthetic": 3,
             "min_joint": 0.12,
             "max_joint": 0.78,
             "last_scored_at": datetime(2026, 8, 14, tzinfo=timezone.utc),
@@ -67,6 +69,9 @@ class TestSummary:
         assert body["data"]["per_niche"][0]["niche_id"] == "gaming"
         assert body["data"]["per_niche"][0]["n_scored"] == 5
         assert body["data"]["per_niche"][0]["avg_joint"] == 0.42
+        # Phase 4.B session 3 additions
+        assert body["data"]["per_niche"][0]["avg_aesthetic"] == 0.55
+        assert body["data"]["per_niche"][0]["n_aesthetic"] == 3
 
     @patch("psycopg.connect")
     def test_flag_enabled_reflected(
@@ -80,6 +85,7 @@ class TestSummary:
         row = {
             "niche_id": "gaming", "n_scored": 1,
             "avg_joint": 0.5, "avg_visual": 0.5, "avg_audio": 0.5,
+            "avg_aesthetic": None, "n_aesthetic": 0,
             "min_joint": 0.5, "max_joint": 0.5,
             "last_scored_at": datetime(2026, 8, 14, tzinfo=timezone.utc),
         }

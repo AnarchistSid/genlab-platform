@@ -52,16 +52,26 @@ function NicheRow({ row }: { row: ContentQualityPerNiche }) {
         joint={formatScore(row.avg_joint)}
       </span>
       <span
-        className={`col-span-2 font-mono ${scoreClass(row.avg_visual)}`}
+        className={`col-span-1 font-mono ${scoreClass(row.avg_visual)}`}
         title="Visual: palette · motion · cuts · brand (geometric mean)"
       >
-        vis={formatScore(row.avg_visual)}
+        v={formatScore(row.avg_visual)}
       </span>
       <span
-        className={`col-span-2 font-mono ${scoreClass(row.avg_audio)}`}
+        className={`col-span-1 font-mono ${scoreClass(row.avg_audio)}`}
         title="Audio: energy variance · dialogue density · music/voice"
       >
-        aud={formatScore(row.avg_audio)}
+        a={formatScore(row.avg_audio)}
+      </span>
+      <span
+        className={`col-span-2 font-mono ${scoreClass(row.avg_aesthetic)}`}
+        title={
+          row.avg_aesthetic === null
+            ? "No active aesthetic model — monthly retrainer needs AUC > 0.60"
+            : `Learned composition score (n=${row.n_aesthetic}) via Phase 4.B logreg`
+        }
+      >
+        aes={formatScore(row.avg_aesthetic)}
       </span>
       <span
         className="col-span-3 text-text-muted"

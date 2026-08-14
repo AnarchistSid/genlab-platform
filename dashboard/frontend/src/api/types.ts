@@ -1573,6 +1573,10 @@ export interface ContentQualityPerNiche {
   avg_joint: number | null;
   avg_visual: number | null;
   avg_audio: number | null;
+  /** Phase 4.B session 3 — nullable when niche has no active
+   *  trained model yet (retrainer AUC gate is 0.60). */
+  avg_aesthetic: number | null;
+  n_aesthetic: number;
   min_joint: number | null;
   max_joint: number | null;
   last_scored_at: string | null;
