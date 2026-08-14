@@ -1,0 +1,24 @@
+[Unit]
+Description=GenLab persona drift detector — LLM-scores sampled recent publishes against niche persona.yaml
+After=network-online.target
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=UV_FROZEN=1
+TimeoutStartSec=10min
+ExecStart=/usr/local/bin/uv run python scripts/check_persona_drift.py
+StandardOutput=journal
+StandardError=journal
+
+MemoryMax=384M
+CPUWeight=20
+
+[Install]
+WantedBy=multi-user.target

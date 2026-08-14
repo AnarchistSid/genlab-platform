@@ -1,0 +1,14 @@
+[Unit]
+Description=Fire GenLab persona drift checker every 6h — LLM-scores sampled publishes for voice drift
+Requires=genlab-persona-drift.service
+
+[Timer]
+OnCalendar=*-*-* 01:35:00 UTC
+OnCalendar=*-*-* 07:35:00 UTC
+OnCalendar=*-*-* 13:35:00 UTC
+OnCalendar=*-*-* 19:35:00 UTC
+Persistent=true
+Unit=genlab-persona-drift.service
+
+[Install]
+WantedBy=timers.target
