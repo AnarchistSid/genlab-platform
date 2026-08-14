@@ -222,6 +222,13 @@ def _daily_llm_spend_usd(conn) -> float:
         return float(row.get("spend") if hasattr(row, "get") else row[0])
     except Exception as exc:
         logger.debug("[auto_accept] daily spend query failed: %s", exc)
+        # Rollback so the caller's transaction isn't poisoned by the
+        # aborted query — Postgres aborts the whole tx on any query
+        # error inside a transaction block.
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         return 0.0
 
 
@@ -247,7 +254,11 @@ def _build_state_snapshot(conn, niche_id: str) -> dict:
                 row.get("total_arms") if hasattr(row, "get") else row[1]
             )
     except Exception:
-        pass
+        # Rollback for the same reason as _daily_llm_spend_usd
+        try:
+            conn.rollback()
+        except Exception:
+            pass
     return snap
 
 
