@@ -117,6 +117,12 @@ export const queryKeys = {
      *  poll matches. */
     priors: () => ["cross-niche-transfer", "priors"] as const,
   },
+  competitorDeltas: {
+    /** Phase 3.A observability (2026-08-14) — competitor deltas
+     *  cache key. Rewrites daily (09:30 UTC); 6h poll matches. */
+    latest: (minRatio?: number, limit?: number) =>
+      ["competitor-deltas", "latest", minRatio, limit] as const,
+  },
   topCreatorPriors: {
     /** B.2 + B.3 observability (2026-07-08) — A+B intelligence
      *  stack cache keys. Two independent artifact sources with

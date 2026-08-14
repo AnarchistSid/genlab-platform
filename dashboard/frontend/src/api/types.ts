@@ -1530,6 +1530,39 @@ export interface CrossNichePriorsArtifact {
 }
 
 // ───────────────────────────────────────────────────────────────
+// Phase 3.A observability (2026-08-14) — competitor content deltas.
+// ───────────────────────────────────────────────────────────────
+
+/** One row from ``competitor_content_deltas``. ``delta_ratio`` is
+ *  competitor_view_count / our_median_yt_views_last_7d — null when
+ *  our_median is 0 (division guarded). */
+export interface CompetitorDeltaRow {
+  niche_id: string;
+  competitor_channel_id: string;
+  competitor_channel_label: string | null;
+  competitor_video_id: string;
+  competitor_title: string | null;
+  competitor_published_at: string | null;
+  competitor_view_count: number | null;
+  competitor_like_count: number | null;
+  competitor_comment_count: number | null;
+  our_reference_view_count: number | null;
+  delta_views: number | null;
+  delta_ratio: number | null;
+  computed_at: string;
+}
+
+/** Full artifact envelope. Same ``flag_enabled`` pattern as
+ *  ``CrossNichePriorsArtifact`` — reflects
+ *  ``GENLAB_COMPETITOR_CONTEXT_ENABLED`` (session 3 wire) so the
+ *  card can badge "observation only" vs "active". */
+export interface CompetitorDeltasArtifact {
+  generated_at: string | null;
+  flag_enabled: boolean;
+  rows: CompetitorDeltaRow[];
+}
+
+// ───────────────────────────────────────────────────────────────
 // #9 auto-experiments observability (2026-07-23) — lifecycle summary.
 // ───────────────────────────────────────────────────────────────
 

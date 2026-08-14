@@ -1311,6 +1311,30 @@ export const crossNicheTransfer = {
 };
 
 // ───────────────────────────────────────────────────────────────
+// Phase 3.A observability (2026-08-14) — competitor content deltas.
+// Reads the read-only endpoint served by
+// dashboard/server/api/competitor_deltas.py. Same envelope shape
+// as crossNicheTransfer.
+// ───────────────────────────────────────────────────────────────
+
+export const competitorDeltas = {
+  /** Fetch top competitor-vs-us deltas filtered by min_ratio.
+   *  Returns null when: DB unset OR cold-start OR no rows meet
+   *  min_ratio floor. Frontend renders "No competitor deltas yet"
+   *  copy on null. */
+  latest: (params: { minRatio?: number; limit?: number } = {}) => {
+    const q: Record<string, string> = {};
+    if (params.minRatio !== undefined) q.min_ratio = String(params.minRatio);
+    if (params.limit !== undefined) q.limit = String(params.limit);
+    return get<{
+      data: import("./types").CompetitorDeltasArtifact | null;
+    }>("/competitor-deltas/latest", q).then((d) =>
+      unwrapEnvelope<import("./types").CompetitorDeltasArtifact>(d),
+    );
+  },
+};
+
+// ───────────────────────────────────────────────────────────────
 // B.2 + B.3 observability (2026-07-08) — top-creator prior client.
 // Two endpoints because the two runners have independent flag
 // gates + cadences (see the API blueprint docstring).

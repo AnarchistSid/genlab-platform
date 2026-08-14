@@ -36,6 +36,7 @@ import { TrendAnticipationCard } from "./TrendAnticipationCard";
 import { TrendAnticipationAccuracyCard } from "./TrendAnticipationAccuracyCard";
 import { BayesianGateStateCard } from "./BayesianGateStateCard";
 import { ConformalRouterStateCard } from "./ConformalRouterStateCard";
+import { CompetitorDeltasCard } from "./CompetitorDeltasCard";
 import { CrossNichePriorsCard } from "./CrossNichePriorsCard";
 import { DriftSignalCard } from "./DriftSignalCard";
 import { EnsembleVotesCard } from "./EnsembleVotesCard";
@@ -374,6 +375,17 @@ export default function MissionControl() {
                 so operator can see which artifact source is
                 observation-only vs active without checking .env. */}
             <TopCreatorPriorsCard />
+            {/* Phase 3.A observability (2026-08-14): competitor
+                content deltas. Sibling to TopCreatorPriorsCard — that
+                one shows correlation between top-creator upload
+                timing and our reward; THIS card shows the raw
+                reach-gap between their videos and ours. Both are
+                intelligence-stack observability with the same
+                observation-only vs active flag-badge pattern. Flag
+                flip (GENLAB_COMPETITOR_CONTEXT_ENABLED) wires the
+                deltas into strategist state as competitor_context —
+                session 3 ship. */}
+            <CompetitorDeltasCard />
             {/* L11 observability (2026-07-08 audit): all 36
                 catalogued GENLAB_* env flags in one card, grouped
                 by capability. Primary operator value: catches
