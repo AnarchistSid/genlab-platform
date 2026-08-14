@@ -145,28 +145,37 @@ def _tier_and_body_for_niche(niche_id: str, sender_name: str):
     dashboard helpers. Returns None on any exception so a broken
     niche doesn't kill the whole run.
 
-    The dashboard helpers read the same SharePoint/audience data
-    the Mission Control cards do — so the subject + body match
-    exactly what the operator sees when they click "Copy" on the
-    SponsorshipReadinessCard row."""
+    Mirrors the exact call sequence in
+    ``dashboard.server.api.outreach_template.outreach_template()``
+    (line 396-418) so subject + body match what the operator sees
+    when clicking "Copy" on SponsorshipReadinessCard.
+    """
     try:
         from server.api.outreach_template import (
             _build_subject,
             _build_template_body,
-            _build_audience_summary,
-            _NICHE_DISPLAY,
+            _pg_fetch_progress,
+            _compute_platform_summary,
         )
         from server.api.sponsorship_readiness import _compute_tier
+        from server.api.media_kit import _build_audience_summary
     except ImportError as exc:
         logger.warning("[outreach] dashboard helpers unimportable: %s", exc)
         return None
     try:
-        # dashboard helper reads the SP + metric data
-        audience = _build_audience_summary(niche_id)
-        tier, _nearest = _compute_tier(
-            audience.get("platforms", {}),
-            audience.get("all_metrics", []),
-        )
+        records = _pg_fetch_progress(niche_id=niche_id)
+        platforms: dict[str, list[dict]] = {}
+        for raw in records:
+            rec = raw.get("fields", raw) if isinstance(raw, dict) else {}
+            platform = rec.get("platform") or "unknown"
+            platforms.setdefault(platform, []).append(rec)
+        platforms_summary = {
+            plat: _compute_platform_summary(metrics)
+            for plat, metrics in platforms.items()
+        }
+        all_metrics = [m for metrics in platforms.values() for m in metrics]
+        tier, _ = _compute_tier(platforms_summary, all_metrics)
+        audience = _build_audience_summary(platforms)
     except Exception as exc:
         logger.warning("[outreach] tier compute failed niche=%s: %s",
                        niche_id, exc)
@@ -179,7 +188,7 @@ def _tier_and_body_for_niche(niche_id: str, sender_name: str):
     ) + f"/media-kit/{niche_id}"
     subject = _build_subject(niche_id, tier)
     body_template = _build_template_body(
-        niche_id, audience.get("platforms_flat", []), tier, kit_url,
+        niche_id, audience, tier, kit_url,
     )
     return tier, subject, body_template, kit_url
 
