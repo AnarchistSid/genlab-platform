@@ -7,11 +7,18 @@ DRAFTED → APPROVED → SENT.
 
 ## Auth
 
-Uses client-credentials flow (app-only). The Azure app needs
-``Mail.Send`` API permission granted (Graph, app-only variant) with
-admin consent. Verified for the existing tenant on first live send
-— fail-loud with a helpful message if the token comes back without
-the scope.
+Uses OAuth2 client-credentials flow (app-only) via raw HTTP —
+POST ``login.microsoftonline.com/{tenant}/oauth2/v2.0/token`` with
+grant_type=client_credentials + scope=graph.microsoft.com/.default.
+Deliberately no dependency on ``azure-identity`` — that package
+isn't a declared genlab-core dep (BacklogClient lazy-imports it),
+and prod runs Postgres-primary mode where SharePoint / azure-identity
+never fires. Raw HTTP is 20MB less to install + one fewer indirection
++ clearer error paths.
+
+The Azure app needs ``Mail.Send`` API permission granted (Graph,
+app-only variant) with admin consent. Verified on first live send
+— fail-loud with a helpful message if the token exchange fails.
 
 ## Design decisions
 
@@ -47,6 +54,7 @@ RATE_LIMITED: Final[str] = "RATE_LIMITED"
 UNKNOWN_ERROR: Final[str] = "UNKNOWN"
 
 _GRAPH_BASE: Final[str] = "https://graph.microsoft.com/v1.0"
+_TOKEN_URL_TMPL: Final[str] = "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
 
 
 @dataclass
@@ -80,7 +88,7 @@ class OutlookMailSender:
         client_id: str | None = None,
         client_secret: str | None = None,
         _requests_module=None,  # test seam
-        _credential_factory=None,  # test seam
+        _credential_factory=None,  # kept for BC — no longer used
     ):
         # 3-way fallback: constructor arg → env → raise. Ensures the
         # sender is always talking to a known identity — never
@@ -98,36 +106,57 @@ class OutlookMailSender:
                 "AZURE_TENANT_ID + AZURE_CLIENT_ID + AZURE_CLIENT_SECRET required"
             )
         self._requests = _requests_module
-        self._credential_factory = _credential_factory
-        self._cred = None  # lazy — first send builds it
-
-    def _get_credential(self):
-        """Build (once) an azure.identity ClientSecretCredential
-        matching the pattern in BacklogClient. Cached on the instance
-        so repeated sends reuse the token cache inside azure.identity."""
-        if self._cred is not None:
-            return self._cred
-        if self._credential_factory is not None:
-            self._cred = self._credential_factory(
-                self._tenant, self._client_id, self._client_secret,
-            )
-            return self._cred
-        from azure.identity import ClientSecretCredential
-        self._cred = ClientSecretCredential(
-            self._tenant, self._client_id, self._client_secret,
-        )
-        return self._cred
+        # Token cache: (token_str, expires_at_unix_seconds). Refresh
+        # when < 60s remaining. Simpler than azure.identity's own
+        # cache — we're the only caller.
+        self._cached_token: tuple[str, float] | None = None
 
     def _get_token(self) -> str:
-        """Return a bearer token for the Graph API. Fail-loud on
-        auth errors — a token with the wrong scope means the app
-        permission wasn't granted."""
-        cred = self._get_credential()
+        """Fetch (or reuse cached) OAuth2 bearer token via client-
+        credentials flow. Fail-loud on non-2xx — a missing Mail.Send
+        permission surfaces at first live send, not silently later."""
+        import time
+
+        # Reuse cached token if > 60s remaining. Tokens live ~1h;
+        # cache hit rate on a real send-batch is ~100%.
+        now = time.time()
+        if self._cached_token is not None and self._cached_token[1] > now + 60:
+            return self._cached_token[0]
+
+        requests = self._requests
+        if requests is None:
+            import requests as _r
+            requests = _r
+
+        url = _TOKEN_URL_TMPL.format(tenant=self._tenant)
         try:
-            tok = cred.get_token("https://graph.microsoft.com/.default")
+            resp = requests.post(
+                url,
+                data={
+                    "client_id": self._client_id,
+                    "client_secret": self._client_secret,
+                    "scope": "https://graph.microsoft.com/.default",
+                    "grant_type": "client_credentials",
+                },
+                timeout=15,
+            )
         except Exception as exc:
-            raise SendError(AUTH_FAILED, f"azure.identity token fetch failed: {exc}") from exc
-        return tok.token
+            raise SendError(AUTH_FAILED, f"token exchange network error: {exc}") from exc
+        if resp.status_code != 200:
+            raise SendError(
+                AUTH_FAILED,
+                f"token exchange HTTP {resp.status_code}: {resp.text[:200]}",
+            )
+        try:
+            body = resp.json()
+        except Exception as exc:
+            raise SendError(AUTH_FAILED, f"token JSON decode failed: {exc}") from exc
+        token = body.get("access_token")
+        expires_in = body.get("expires_in", 3600)
+        if not token:
+            raise SendError(AUTH_FAILED, f"no access_token in response: {body}")
+        self._cached_token = (token, now + float(expires_in))
+        return token
 
     def send(self, to_email: str, subject: str, body: str) -> SendResult:
         """Send one plain-text email. Body is treated as plain text

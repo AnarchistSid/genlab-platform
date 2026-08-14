@@ -27,15 +27,6 @@ from genlab_core.integrations.outlook_sender import (
 )
 
 
-class _FakeToken:
-    token = "fake-bearer-token"
-
-
-class _FakeCred:
-    def get_token(self, scope):
-        return _FakeToken()
-
-
 def _make_sender(_requests, from_upn="sender@example.com"):
     return OutlookMailSender(
         from_upn=from_upn,
@@ -43,16 +34,30 @@ def _make_sender(_requests, from_upn="sender@example.com"):
         client_id="client",
         client_secret="secret",
         _requests_module=_requests,
-        _credential_factory=lambda t, c, s: _FakeCred(),
     )
 
 
-def _mock_requests(status_code, text=""):
+def _mock_requests(status_code, text="", *, token_ok=True):
+    """Two-call mock: first .post = token exchange (200 with
+    access_token), second .post = sendMail (parameterized status).
+
+    Set token_ok=False to simulate token-exchange failure."""
     fake = MagicMock()
-    resp = MagicMock()
-    resp.status_code = status_code
-    resp.text = text
-    fake.post.return_value = resp
+    token_resp = MagicMock()
+    if token_ok:
+        token_resp.status_code = 200
+        token_resp.json.return_value = {
+            "access_token": "fake-bearer-token",
+            "expires_in": 3600,
+        }
+    else:
+        token_resp.status_code = 401
+        token_resp.text = "invalid client"
+        token_resp.json.return_value = {}
+    send_resp = MagicMock()
+    send_resp.status_code = status_code
+    send_resp.text = text
+    fake.post.side_effect = [token_resp, send_resp]
     return fake
 
 
@@ -85,22 +90,24 @@ class TestSendHappyPath:
         req = _mock_requests(202)
         s = _make_sender(req)
         s.send("b@x.com", "S", "B")
-        payload = req.post.call_args.kwargs["json"]
+        # 2nd post is the sendMail call (1st was token exchange)
+        send_call = req.post.call_args_list[1]
+        payload = send_call.kwargs["json"]
         assert payload["message"]["body"]["contentType"] == "Text"
 
     def test_save_to_sent_items_true(self):
         req = _mock_requests(202)
         s = _make_sender(req)
         s.send("b@x.com", "S", "B")
-        payload = req.post.call_args.kwargs["json"]
-        assert payload["saveToSentItems"] is True
+        send_call = req.post.call_args_list[1]
+        assert send_call.kwargs["json"]["saveToSentItems"] is True
 
     def test_url_uses_sender_upn(self):
         req = _mock_requests(202)
         s = _make_sender(req, from_upn="me@genlab.com")
         s.send("b@x.com", "S", "B")
-        url = req.post.call_args.args[0]
-        assert "users/me@genlab.com/sendMail" in url
+        send_call = req.post.call_args_list[1]
+        assert "users/me@genlab.com/sendMail" in send_call.args[0]
 
 
 class TestPreflightGuards:
@@ -166,23 +173,37 @@ class TestErrorClassification:
         assert exc.value.reason == UNKNOWN_ERROR
 
 
-class TestCredentialCaching:
-    def test_credential_built_once_reused_across_sends(self):
-        req = _mock_requests(202)
-        factory_calls = []
-
-        def _factory(t, c, s):
-            factory_calls.append(1)
-            return _FakeCred()
+class TestTokenCaching:
+    def test_token_exchanged_once_across_multiple_sends(self):
+        """Token cache: 1 token exchange + N send POSTs for N sends,
+        not 2N. Batch-send hits the cache on every send after the
+        first."""
+        fake = MagicMock()
+        token_resp = MagicMock()
+        token_resp.status_code = 200
+        token_resp.json.return_value = {
+            "access_token": "cached-token",
+            "expires_in": 3600,
+        }
+        send_resp = MagicMock()
+        send_resp.status_code = 202
+        send_resp.text = ""
+        # 1 token + 3 sends = 4 total POSTs
+        fake.post.side_effect = [token_resp, send_resp, send_resp, send_resp]
 
         s = OutlookMailSender(
             from_upn="me@x.com",
             tenant_id="t", client_id="c", client_secret="s",
-            _requests_module=req,
-            _credential_factory=_factory,
+            _requests_module=fake,
         )
         s.send("a@x.com", "S", "B")
         s.send("b@x.com", "S", "B")
         s.send("c@x.com", "S", "B")
-        # Cred built ONCE and cached — azure.identity handles token refresh
-        assert len(factory_calls) == 1
+        assert fake.post.call_count == 4  # 1 token + 3 sends
+
+    def test_token_exchange_401_is_auth_failed(self):
+        req = _mock_requests(202, token_ok=False)
+        s = _make_sender(req)
+        with pytest.raises(SendError) as exc:
+            s.send("b@x.com", "S", "B")
+        assert exc.value.reason == AUTH_FAILED
