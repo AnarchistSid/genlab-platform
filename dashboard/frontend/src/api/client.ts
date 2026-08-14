@@ -1235,6 +1235,18 @@ export const counterfactualReplay = {
     ),
 };
 
+// 2026-08-14: Phase 0.C — reward signal audit.
+export const rewardAudit = {
+  /** Per-niche×platform reward distribution + health verdict. Backs
+   *  RewardSignalAuditCard on Mission Control. */
+  fetch: () =>
+    get<{
+      data: import("./types").RewardAuditNiche[] | null;
+    }>("/learning/reward-audit").then((d) =>
+      unwrapEnvelope<import("./types").RewardAuditNiche[]>(d),
+    ),
+};
+
 export const autoExperiments = {
   /** Fetch the lifecycle summary — recent experiments + per-status
    *  counts + last-30d verdict tally. Returns null on any server-side

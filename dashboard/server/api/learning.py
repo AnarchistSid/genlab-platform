@@ -344,3 +344,153 @@ def source_performance():
         for r in records
     ]
     return api_success(data=data)
+
+
+# 2026-08-14: Phase 0.C — reward signal audit endpoint.
+#
+# Surfaces the reward distribution per (niche, platform) so operator
+# can tell at a glance whether the bandit is actually learning. The
+# Goodhart-broken pre-Phase-0.A state showed rewards clustered near 0
+# on YT/IG/Threads (avg 0.001-0.008); the Phase-0.A fix should
+# gradually spread these distributions over the next 7 days as new
+# reward_48h values land.
+#
+# Also computes a health verdict per niche:
+#   * "healthy" — ≥3 platforms with stddev >= 0.05 (real signal spread)
+#   * "partial" — 1-2 platforms healthy, others near-zero
+#   * "broken" — 0 platforms with meaningful spread (Goodhart-mode)
+#
+# Staleness signal: max(created_at) per (niche, platform). If >48h
+# stale, the platform's reward computation may be broken.
+
+
+@bp.route("/reward-audit", methods=["GET"])
+def get_reward_audit():
+    """Return reward-signal health snapshot per niche × platform.
+
+    Response shape:
+
+        {
+          "status": "ok",
+          "data": [
+            {
+              "niche_id": "anime",
+              "verdict": "healthy" | "partial" | "broken",
+              "platforms": [
+                {
+                  "platform": "facebook",
+                  "n_rewards_7d": 11,
+                  "min": 0.006, "max": 0.804, "avg": 0.301,
+                  "stddev": 0.271,
+                  "p25": 0.071, "p50": 0.240, "p75": 0.436,
+                  "hours_since_latest": 12.3,
+                  "signal_status": "healthy" | "weak" | "stale" | "cold"
+                },
+                ...
+              ]
+            },
+            ...
+          ]
+        }
+
+    Query params: none (returns all 5 niches).
+    """
+    import os
+
+    dsn = os.environ.get("DATABASE_URL", "").strip()
+    if not dsn:
+        return api_error(error="DATABASE_URL unset", code=503)
+
+    try:
+        with pg_connect(dsn, niche_id="all", connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                      niche_id,
+                      platform,
+                      COUNT(*) AS n_rewards_7d,
+                      MIN(reward_48h)::float AS min_r,
+                      MAX(reward_48h)::float AS max_r,
+                      AVG(reward_48h)::float AS avg_r,
+                      STDDEV(reward_48h)::float AS stddev_r,
+                      percentile_cont(0.25) WITHIN GROUP (ORDER BY reward_48h)::float AS p25,
+                      percentile_cont(0.50) WITHIN GROUP (ORDER BY reward_48h)::float AS p50,
+                      percentile_cont(0.75) WITHIN GROUP (ORDER BY reward_48h)::float AS p75,
+                      EXTRACT(EPOCH FROM (NOW() - MAX(created_at))) / 3600.0 AS hours_since_latest
+                    FROM pending_feedback
+                    WHERE reward_48h IS NOT NULL
+                      AND created_at >= NOW() - INTERVAL '7 days'
+                    GROUP BY niche_id, platform
+                    ORDER BY niche_id, platform
+                    """,
+                )
+                rows = cur.fetchall() or []
+    except Exception as exc:
+        logger.warning("[reward_audit] query failed: %s", exc, exc_info=True)
+        return api_error(error="Reward audit query failed", code=500)
+
+    # Group by niche + apply health verdicts
+    by_niche: dict[str, list] = {}
+    for row in rows:
+        # Row is a dict when tenant_context connects with dict_row,
+        # tuple otherwise. Handle both.
+        if hasattr(row, "get"):
+            r = dict(row)
+        else:
+            r = dict(zip(
+                ["niche_id", "platform", "n_rewards_7d", "min_r", "max_r",
+                 "avg_r", "stddev_r", "p25", "p50", "p75", "hours_since_latest"],
+                row,
+            ))
+        stddev = float(r.get("stddev_r") or 0)
+        hours = float(r.get("hours_since_latest") or 999)
+        n = int(r.get("n_rewards_7d") or 0)
+
+        # Signal-status heuristic:
+        #   cold: <3 samples (not enough to grade)
+        #   stale: latest reward >48h old (metric collector may be broken)
+        #   weak: samples exist but stddev < 0.05 (Goodhart-mode)
+        #   healthy: real spread
+        if n < 3:
+            signal_status = "cold"
+        elif hours > 48:
+            signal_status = "stale"
+        elif stddev < 0.05:
+            signal_status = "weak"
+        else:
+            signal_status = "healthy"
+
+        platform_row = {
+            "platform": r.get("platform"),
+            "n_rewards_7d": n,
+            "min": round(float(r.get("min_r") or 0), 4),
+            "max": round(float(r.get("max_r") or 0), 4),
+            "avg": round(float(r.get("avg_r") or 0), 4),
+            "stddev": round(stddev, 4),
+            "p25": round(float(r.get("p25") or 0), 4),
+            "p50": round(float(r.get("p50") or 0), 4),
+            "p75": round(float(r.get("p75") or 0), 4),
+            "hours_since_latest": round(hours, 1),
+            "signal_status": signal_status,
+        }
+        by_niche.setdefault(r.get("niche_id"), []).append(platform_row)
+
+    # Per-niche verdict: count healthy platforms
+    result = []
+    for niche_id in ("ai_creators", "anime", "gaming", "movies", "sports"):
+        platforms = by_niche.get(niche_id, [])
+        healthy_count = sum(1 for p in platforms if p["signal_status"] == "healthy")
+        if healthy_count >= 3:
+            verdict = "healthy"
+        elif healthy_count >= 1:
+            verdict = "partial"
+        else:
+            verdict = "broken"
+        result.append({
+            "niche_id": niche_id,
+            "verdict": verdict,
+            "platforms": platforms,
+        })
+
+    return api_success(data=result)

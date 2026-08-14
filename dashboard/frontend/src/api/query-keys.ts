@@ -157,6 +157,13 @@ export const queryKeys = {
     latest: (nicheId: string) =>
       ["counterfactual-replay", "latest", nicheId] as const,
   },
+  rewardAudit: {
+    /** Phase 0.C observability (2026-08-14) — reward signal health
+     *  per niche×platform. Backed by learning/reward-audit endpoint.
+     *  Aggregated snapshot; 60s poll matches other Mission Control
+     *  learning cards. */
+    all: () => ["reward-audit", "all"] as const,
+  },
   autoExperiments: {
     /** #9 lifecycle observability (2026-07-23) — per-niche recent
      *  experiments + verdicts. Lifecycle timer fires every 6h; a

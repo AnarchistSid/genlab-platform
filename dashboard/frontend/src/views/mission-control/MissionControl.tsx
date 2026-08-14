@@ -42,6 +42,7 @@ import { EnsembleVotesCard } from "./EnsembleVotesCard";
 import { FlagStateCard } from "./FlagStateCard";
 import { TopCreatorPriorsCard } from "./TopCreatorPriorsCard";
 import { CounterfactualReplayCard } from "./CounterfactualReplayCard";
+import { RewardSignalAuditCard } from "./RewardSignalAuditCard";
 import { AutoExperimentsCard } from "./AutoExperimentsCard";
 import { ProductBanditCard } from "./ProductBanditCard";
 import { TransformationBanditCard } from "./TransformationBanditCard";
@@ -409,6 +410,15 @@ export default function MissionControl() {
                 complements the daily bandit_arms view with a
                 counterfactual overlay. */}
             <CounterfactualReplayCard />
+            {/* Phase 0.C (2026-08-14): reward signal audit — is the
+                bandit actually learning per-platform, or Goodhart-broken?
+                Sibling to CounterfactualReplayCard (both about "what
+                did the bandit learn"). Pre-Phase-0.A prod state:
+                YT/IG/Threads all avg reward ≈ 0 with ~0 stddev → visible
+                as three red "weak" pills per niche. Post-fix expected:
+                distributions spread over 7 days as new reward_48h
+                lands via the fixed percentile targets. */}
+            <RewardSignalAuditCard />
             {/* #9 lifecycle observability (2026-07-23): auto-experiment
                 verdicts + queue depth. Sibling to the strategist card —
                 strategist proposes causal hypotheses; parser queues them;

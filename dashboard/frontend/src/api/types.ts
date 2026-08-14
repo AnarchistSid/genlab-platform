@@ -1429,6 +1429,33 @@ export interface CounterfactualReplayArtifact {
   per_arm: CounterfactualReplayArm[];
 }
 
+// Phase 0.C observability (2026-08-14) — reward signal audit.
+// Backs RewardSignalAuditCard on Mission Control. Shows whether the
+// bandit is actually learning per-platform, or stuck in Goodhart-mode
+// (rewards clustered near zero).
+export type RewardSignalStatus = "healthy" | "weak" | "stale" | "cold";
+export type RewardNicheVerdict = "healthy" | "partial" | "broken";
+
+export interface RewardAuditPlatform {
+  platform: string;
+  n_rewards_7d: number;
+  min: number;
+  max: number;
+  avg: number;
+  stddev: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  hours_since_latest: number;
+  signal_status: RewardSignalStatus;
+}
+
+export interface RewardAuditNiche {
+  niche_id: string;
+  verdict: RewardNicheVerdict;
+  platforms: RewardAuditPlatform[];
+}
+
 // Intervention 2 observability (2026-07-01) — cross-niche transferred priors.
 // Mirrors ``genlab_core.learning.cross_niche_transfer.TransferredPrior``.
 export interface CrossNichePrior {
