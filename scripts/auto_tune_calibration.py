@@ -183,24 +183,21 @@ def _persist_suggestion(
 
 
 def _apply_yaml_rewrite(niche_id: str, new_value: float) -> tuple[bool, str]:
-    """Rewrite auto_publish.min_confidence in publishing.yaml.
+    """Rewrite auto_publish.min_confidence in publishing.yaml
+    preserving comments + layout via ruamel.yaml roundtrip.
+
+    Prior PyYAML implementation stripped ALL comments — a real
+    ops regression on 2026-08-14 when the first auto-apply fire
+    nuked the AUTO #2 rollout-ladder docs in BlackboxBrief +
+    ClutchWire configs. ruamel.yaml is already a genlab-core dep
+    (config_updater uses it).
+
     Returns (ok, diagnostic). Backup created first."""
     path = _publishing_yaml_path(niche_id)
     if path is None:
         return False, "no publishing.yaml found"
-    try:
-        import yaml
-        original_text = path.read_text()
-        data = yaml.safe_load(original_text) or {}
-    except Exception as exc:
-        return False, f"read failed: {exc}"
-    ap = data.get("auto_publish")
-    if not isinstance(ap, dict):
-        return False, "auto_publish key missing or not a dict"
-    prior = ap.get("min_confidence")
-    ap["min_confidence"] = round(new_value, 3)
 
-    # Backup
+    # Backup FIRST so any subsequent failure is recoverable
     ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     backup = path.with_suffix(f".yaml.bak.{ts}")
     try:
@@ -208,18 +205,30 @@ def _apply_yaml_rewrite(niche_id: str, new_value: float) -> tuple[bool, str]:
     except Exception as exc:
         return False, f"backup failed: {exc}"
 
-    # Rewrite (PyYAML — comments will be lost; this is the safety
-    # trade-off. ruamel.yaml would preserve comments but adds a dep.)
     try:
-        path.write_text(yaml.safe_dump(data, sort_keys=False))
+        from ruamel.yaml import YAML
+        yaml = YAML()
+        yaml.preserve_quotes = True
+        # Match existing indent conventions in publishing.yaml
+        # (2-space mapping, 2-space sequence).
+        yaml.indent(mapping=2, sequence=4, offset=2)
+        with path.open("r") as f:
+            data = yaml.load(f) or {}
+        ap = data.get("auto_publish") if hasattr(data, "get") else None
+        if ap is None or not hasattr(ap, "get"):
+            return False, "auto_publish key missing or not a mapping"
+        prior = ap.get("min_confidence")
+        ap["min_confidence"] = round(new_value, 3)
+        with path.open("w") as f:
+            yaml.dump(data, f)
+        return True, f"rewrote min_confidence: {prior} → {round(new_value, 3)}"
     except Exception as exc:
-        # Try to restore
+        # Restore from backup on any write-side failure
         try:
             shutil.copy2(backup, path)
         except Exception:
             pass
         return False, f"write failed: {exc}"
-    return True, f"rewrote min_confidence: {prior} → {new_value}"
 
 
 def _run_niche(

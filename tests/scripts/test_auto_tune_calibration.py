@@ -108,6 +108,35 @@ class TestApplyYamlRewrite:
         assert updated["some_other_key"] == "value"
         assert updated["auto_publish"]["min_confidence"] == 0.75
 
+    def test_preserves_comments(self, tmp_path, monkeypatch):
+        """Comment-preservation via ruamel.yaml roundtrip. This is
+        the fix for the 2026-08-14 ops regression where the first
+        auto-apply fire stripped ALL comments (rollout ladders,
+        prerequisites, operator instructions) from BlackboxBrief
+        + ClutchWire publishing.yaml."""
+        yaml_path = tmp_path / "publishing.yaml"
+        yaml_path.write_text(
+            "# This is a top-level comment\n"
+            "auto_publish:\n"
+            "  # inline comment above enabled\n"
+            "  enabled: true\n"
+            "  min_confidence: 0.70\n"
+            "  # inline comment above rollout\n"
+            "  rollout_pct: 0.5\n"
+        )
+        monkeypatch.setattr(
+            _MOD, "_publishing_yaml_path", lambda n: yaml_path,
+        )
+        ok, _ = _MOD._apply_yaml_rewrite("gaming", 0.75)
+        assert ok is True
+        result_text = yaml_path.read_text()
+        # All three comments survive
+        assert "# This is a top-level comment" in result_text
+        assert "# inline comment above enabled" in result_text
+        assert "# inline comment above rollout" in result_text
+        # And min_confidence updated
+        assert "min_confidence: 0.75" in result_text
+
 
 class TestMainExit:
     def test_missing_dsn_exits_1(self, monkeypatch):
