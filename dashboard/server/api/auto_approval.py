@@ -202,6 +202,14 @@ def calibration_stats_all():
                 "false_negatives": s.false_negatives,
             },
             "ready_for_enforcement": s.ready_for_enforcement,
+            # Phase 1.D (2026-08-14) — rule #22-safe enrollment gate.
+            # ready_for_enforcement above is the legacy heuristic
+            # (samples + agreement% only) kept for backward compat.
+            # enrollment_readiness adds confusion-matrix balance +
+            # FN-rate checks so the 2026-07-17 gaming shape can't
+            # slip through.
+            "enrollment_readiness": s.enrollment_readiness,
+            "enrollment_reason": s.readiness_reason,
         }
 
     return api_success(data={"window_days": window_days, "niches": out})

@@ -125,6 +125,119 @@ class CalibrationStats:
         per-niche overrides may be needed."""
         return self.sample_count >= 30 and self.agreement_rate >= 0.90
 
+    @property
+    def enrollment_readiness(self) -> str:
+        """Phase 1.D (2026-08-14) — rule #22 sibling. Extended
+        enrollment gate that also enforces confusion-matrix balance.
+
+        The 2026-07-17 gaming revert (rule #22) proved that
+        agreement%+sample_count alone is insufficient: a niche where
+        operator NEVER rejects and gate NEVER rejects can show
+        100% agreement with 47 false-negatives hidden because the
+        TN/FN quadrants stay at zero.
+
+        Extended gate:
+          1. sample_count >= 30 (statistical stability)
+          2. agreement_rate >= 0.90 (existing gate)
+          3. Both approval quadrants sampled: TP+FN > 0 AND TN+FP > 0
+             (operator has both approved and rejected content —
+             proves the gate is being exercised in both directions)
+          4. False-negative rate <= 5% (operator hasn't approved
+             things the gate would have wrongly rejected —
+             protects against over-restrictive gate).
+
+        Returns:
+          'ready' — all 4 checks pass; safe to flip auto_publish.enabled
+          'close' — 1-2 checks fail; likely fixable with more data
+          'not_ready' — 3+ checks fail; needs threshold tuning first
+          'unsampled_reject' — rule #22 sentinel: agreement% looks
+            good but reject quadrant never sampled. THIS is the gaming
+            2026-07-17 shape. Reason surfaces on the readiness card so
+            operator knows the "high agreement" is misleading.
+        """
+        # Count how many checks fail; the specific pattern informs the verdict
+        checks_passed = 0
+        checks_failed_reasons = []
+        if self.sample_count >= 30:
+            checks_passed += 1
+        else:
+            checks_failed_reasons.append(
+                f"need {30 - self.sample_count} more samples",
+            )
+        if self.agreement_rate >= 0.90:
+            checks_passed += 1
+        else:
+            checks_failed_reasons.append(
+                f"agreement {self.agreement_rate:.1%} < 90%",
+            )
+        # Rule #22 core: both quadrants must have data. If reject-side
+        # (TN + FP) is empty, agreement% is meaningless because the
+        # gate's rejection behavior was never graded.
+        reject_side_sampled = (self.true_negatives + self.false_positives) > 0
+        approve_side_sampled = (self.true_positives + self.false_negatives) > 0
+        if reject_side_sampled and approve_side_sampled:
+            checks_passed += 1
+        else:
+            # Special case: if agreement% is high but reject-side is
+            # empty, that's the exact 2026-07-17 shape.
+            if (
+                self.agreement_rate >= 0.90
+                and self.sample_count >= 30
+                and not reject_side_sampled
+            ):
+                return "unsampled_reject"
+            checks_failed_reasons.append(
+                "both quadrants need samples (reject-side empty)"
+                if not reject_side_sampled
+                else "both quadrants need samples (approve-side empty)"
+            )
+        fn_rate = (
+            self.false_negatives / self.sample_count
+            if self.sample_count > 0 else 0.0
+        )
+        if fn_rate <= 0.05:
+            checks_passed += 1
+        else:
+            checks_failed_reasons.append(
+                f"FN rate {fn_rate:.1%} > 5% (over-restrictive gate)"
+            )
+        if checks_passed == 4:
+            return "ready"
+        if checks_passed >= 2:
+            return "close"
+        return "not_ready"
+
+    @property
+    def readiness_reason(self) -> str:
+        """Human-readable summary of why the niche is / isn't ready.
+        Consumed by the Mission Control card for at-a-glance triage."""
+        verdict = self.enrollment_readiness
+        if verdict == "ready":
+            return "All 4 checks pass — safe to enroll."
+        if verdict == "unsampled_reject":
+            return (
+                "Rule #22 sentinel: high agreement but operator has "
+                "never rejected. Enrollment would fly blind on "
+                "false-negative detection."
+            )
+        # Reconstruct the failure reasons for close/not_ready
+        reasons = []
+        if self.sample_count < 30:
+            reasons.append(f"need {30 - self.sample_count} more samples")
+        if self.agreement_rate < 0.90 and self.sample_count > 0:
+            reasons.append(f"agreement {self.agreement_rate:.1%} < 90%")
+        if (self.true_negatives + self.false_positives) == 0 and self.sample_count > 0:
+            reasons.append("reject-side quadrant empty")
+        if (self.true_positives + self.false_negatives) == 0 and self.sample_count > 0:
+            reasons.append("approve-side quadrant empty")
+        fn_rate = (
+            self.false_negatives / self.sample_count
+            if self.sample_count > 0 else 0.0
+        )
+        if fn_rate > 0.05:
+            reasons.append(f"FN rate {fn_rate:.1%} > 5%")
+        return "; ".join(reasons) if reasons else "no calibration data yet"
+
 
 def log(
     *,
