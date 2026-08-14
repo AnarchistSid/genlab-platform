@@ -84,6 +84,10 @@ def _compute_percentile_thresholds(
             "[labeler] percentile query failed niche=%s: %s",
             niche_id, exc,
         )
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         return None
     n = row.get("n") if hasattr(row, "get") else row[0]
     p20 = row.get("p20") if hasattr(row, "get") else row[1]
@@ -98,11 +102,18 @@ def _find_labeled_candidates(
     lookback_days: int,
 ):
     """Blueprints in top-20 or bottom-20 reward buckets without a
-    training row. Returns list of dicts."""
+    training row. Returns list of dicts.
+
+    JOIN path (discovered 2026-08-14 during first prod dry-run):
+    pending_feedback has no blueprint_id column — link via post_id
+    → publishing_analytics.post_id → publishing_analytics.blueprint_id.
+    Sibling class-of-bug to
+    ``class-of-bug-join-shape-mismatch-signal-always-empty``.
+    """
     try:
         rows = conn.execute(
             """
-            SELECT pf.blueprint_id::text AS bp_id,
+            SELECT pa.blueprint_id::text AS bp_id,
                    b.story_id,
                    pf.reward_48h,
                    CASE
@@ -110,9 +121,10 @@ def _find_labeled_candidates(
                      ELSE 0
                    END AS label
             FROM pending_feedback pf
-            JOIN blueprints b ON b.id = pf.blueprint_id
+            JOIN publishing_analytics pa ON pa.post_id = pf.post_id
+            JOIN blueprints b ON b.id = pa.blueprint_id
             LEFT JOIN aesthetic_training_data at
-              ON at.blueprint_id = pf.blueprint_id
+              ON at.blueprint_id = pa.blueprint_id
             WHERE pf.niche_id = %s
               AND pf.reward_48h IS NOT NULL
               AND (pf.reward_48h >= %s OR pf.reward_48h <= %s)
@@ -126,6 +138,10 @@ def _find_labeled_candidates(
     except Exception as exc:
         logger.warning("[labeler] candidate query failed niche=%s: %s",
                        niche_id, exc)
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         return []
     return [
         {
