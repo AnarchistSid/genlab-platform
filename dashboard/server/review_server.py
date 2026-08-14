@@ -822,6 +822,7 @@ from server.api.strategist import bp as strategist_bp
 from server.api.token_health import bp as token_health_bp
 from server.api.competitor_deltas import bp as competitor_deltas_bp
 from server.api.content_quality import bp as content_quality_bp
+from server.api.ideation_pool import bp as ideation_pool_bp
 from server.api.sponsorship_pipeline import bp as sponsorship_pipeline_bp
 from server.api.top_creator_priors import bp as top_creator_priors_bp
 from server.api.transformation_bandit import bp as transformation_bandit_bp
@@ -905,6 +906,9 @@ app.register_blueprint(
 app.register_blueprint(
     content_quality_bp
 )  # Phase 4.A session 4 (2026-08-14): /api/v1/content-quality/summary — per-niche joint quality score aggregates
+app.register_blueprint(
+    ideation_pool_bp
+)  # Phase 4.E session 3 (2026-08-14): /api/v1/ideation-pool/summary — per-niche pool depth (pending/consumed/expired)
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)

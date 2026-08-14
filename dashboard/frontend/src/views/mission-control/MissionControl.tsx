@@ -40,6 +40,7 @@ import { CompetitorDeltasCard } from "./CompetitorDeltasCard";
 import { ContentQualityCard } from "./ContentQualityCard";
 import { CrossNichePriorsCard } from "./CrossNichePriorsCard";
 import { DriftSignalCard } from "./DriftSignalCard";
+import { IdeationPoolCard } from "./IdeationPoolCard";
 import { EnsembleVotesCard } from "./EnsembleVotesCard";
 import { FlagStateCard } from "./FlagStateCard";
 import { TopCreatorPriorsCard } from "./TopCreatorPriorsCard";
@@ -396,6 +397,14 @@ export default function MissionControl() {
                 deliberately off until operator eyeballs the score
                 distribution here for ≥1 week. */}
             <ContentQualityCard />
+            {/* Phase 4.E session 3 (2026-08-14): content ideation
+                pool depth. Sibling to ContentQualityCard.
+                observation-only vs active flag pattern; flag flip
+                (GENLAB_IDEATION_POOL_ENABLED + ROLLOUT_PCT) opens
+                a per-niche channel where the promoter fills gaps
+                in daily blueprint cadence from the pool instead of
+                skipping. */}
+            <IdeationPoolCard />
             {/* L11 observability (2026-07-08 audit): all 36
                 catalogued GENLAB_* env flags in one card, grouped
                 by capability. Primary operator value: catches

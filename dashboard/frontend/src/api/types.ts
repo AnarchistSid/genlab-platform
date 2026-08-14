@@ -1588,6 +1588,26 @@ export interface ContentQualitySummary {
 }
 
 // ───────────────────────────────────────────────────────────────
+// Phase 4.E session 3 (2026-08-14) — ideation pool per-niche depth.
+// Reflects GENLAB_IDEATION_POOL_ENABLED + ROLLOUT_PCT.
+// ───────────────────────────────────────────────────────────────
+
+export interface IdeationPoolPerNiche {
+  niche_id: string;
+  pending: number;
+  consumed: number;
+  expired: number;
+  total: number;
+  latest_batch_at: string | null;
+}
+
+export interface IdeationPoolSummary {
+  flag_enabled: boolean;
+  rollout_pct: number;
+  per_niche: IdeationPoolPerNiche[];
+}
+
+// ───────────────────────────────────────────────────────────────
 // #9 auto-experiments observability (2026-07-23) — lifecycle summary.
 // ───────────────────────────────────────────────────────────────
 

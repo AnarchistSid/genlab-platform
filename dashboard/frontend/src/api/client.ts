@@ -1329,6 +1329,17 @@ export const contentQuality = {
     ),
 };
 
+export const ideationPool = {
+  /** Fetch per-niche pool depth + flag/rollout state. Returns
+   *  null on cold-start (no ideas persisted yet). */
+  summary: () =>
+    get<{
+      data: import("./types").IdeationPoolSummary | null;
+    }>("/ideation-pool/summary").then((d) =>
+      unwrapEnvelope<import("./types").IdeationPoolSummary>(d),
+    ),
+};
+
 export const competitorDeltas = {
   /** Fetch top competitor-vs-us deltas filtered by min_ratio.
    *  Returns null when: DB unset OR cold-start OR no rows meet

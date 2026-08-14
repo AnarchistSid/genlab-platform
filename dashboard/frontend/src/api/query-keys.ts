@@ -130,6 +130,12 @@ export const queryKeys = {
      *  render batch. */
     summary: () => ["content-quality", "summary"] as const,
   },
+  ideationPool: {
+    /** Phase 4.E session 3 (2026-08-14) — per-niche ideation pool
+     *  depth. Ideator is weekly Sun 05:30; promoter is every 6h.
+     *  15-min poll near-real-time to see consumption. */
+    summary: () => ["ideation-pool", "summary"] as const,
+  },
   topCreatorPriors: {
     /** B.2 + B.3 observability (2026-07-08) — A+B intelligence
      *  stack cache keys. Two independent artifact sources with
