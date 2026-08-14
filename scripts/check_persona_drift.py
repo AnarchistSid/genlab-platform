@@ -126,9 +126,13 @@ def _emit_alert(
     conn, niche_id: str, blueprint_id: str, drift_score: float,
     reasons: list[str],
 ) -> bool:
-    """Write a WARNING row to pipeline_alerts. Uses stable check_name
-    per niche so repeated hits update the same row rather than
-    proliferate."""
+    """Write a WARNING row to pipeline_alerts. Simple INSERT per
+    the existing pattern (hook_classifier.py, token_health.py).
+    check_name isn't UNIQUE on this table so each drift event gets
+    its own row — operator sees the drift history not a
+    single deduped row. Discovered 2026-08-14 during first prod
+    live-fire that my initial UPSERT schema assumption was wrong.
+    """
     try:
         message = (
             f"persona drift detected — score {drift_score:.2f} < {ALERT_THRESHOLD} "
@@ -138,17 +142,11 @@ def _emit_alert(
         conn.execute(
             """
             INSERT INTO pipeline_alerts
-              (check_name, severity, message, first_seen_at, last_seen_at,
-               occurrence_count, extra)
-            VALUES (%s, 'warning', %s, NOW(), NOW(), 1, %s::jsonb)
-            ON CONFLICT (check_name) DO UPDATE SET
-              severity = 'warning',
-              message = EXCLUDED.message,
-              last_seen_at = NOW(),
-              occurrence_count = pipeline_alerts.occurrence_count + 1,
-              extra = EXCLUDED.extra
+              (niche_id, check_name, severity, message, details)
+            VALUES (%s, %s, 'warning', %s, %s::jsonb)
             """,
             (
+                niche_id,
                 f"persona_drift:{niche_id}",
                 message,
                 json.dumps({
