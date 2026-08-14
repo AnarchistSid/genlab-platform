@@ -1563,6 +1563,27 @@ export interface CompetitorDeltasArtifact {
 }
 
 // ───────────────────────────────────────────────────────────────
+// Phase 4.A session 4 (2026-08-14) — content quality per-niche
+// aggregates. Reflects GENLAB_QUALITY_REWARD_MULTIPLIER_ENABLED.
+// ───────────────────────────────────────────────────────────────
+
+export interface ContentQualityPerNiche {
+  niche_id: string;
+  n_scored: number;
+  avg_joint: number | null;
+  avg_visual: number | null;
+  avg_audio: number | null;
+  min_joint: number | null;
+  max_joint: number | null;
+  last_scored_at: string | null;
+}
+
+export interface ContentQualitySummary {
+  flag_enabled: boolean;
+  per_niche: ContentQualityPerNiche[];
+}
+
+// ───────────────────────────────────────────────────────────────
 // #9 auto-experiments observability (2026-07-23) — lifecycle summary.
 // ───────────────────────────────────────────────────────────────
 

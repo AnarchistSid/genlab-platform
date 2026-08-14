@@ -123,6 +123,13 @@ export const queryKeys = {
     latest: (minRatio?: number, limit?: number) =>
       ["competitor-deltas", "latest", minRatio, limit] as const,
   },
+  contentQuality: {
+    /** Phase 4.A session 4 (2026-08-14) — per-niche joint quality
+     *  score aggregates. Runner fires every 30 min; 30-min poll
+     *  matches so operator sees fresh scores shortly after each
+     *  render batch. */
+    summary: () => ["content-quality", "summary"] as const,
+  },
   topCreatorPriors: {
     /** B.2 + B.3 observability (2026-07-08) — A+B intelligence
      *  stack cache keys. Two independent artifact sources with

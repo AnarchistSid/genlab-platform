@@ -37,6 +37,7 @@ import { TrendAnticipationAccuracyCard } from "./TrendAnticipationAccuracyCard";
 import { BayesianGateStateCard } from "./BayesianGateStateCard";
 import { ConformalRouterStateCard } from "./ConformalRouterStateCard";
 import { CompetitorDeltasCard } from "./CompetitorDeltasCard";
+import { ContentQualityCard } from "./ContentQualityCard";
 import { CrossNichePriorsCard } from "./CrossNichePriorsCard";
 import { DriftSignalCard } from "./DriftSignalCard";
 import { EnsembleVotesCard } from "./EnsembleVotesCard";
@@ -386,6 +387,15 @@ export default function MissionControl() {
                 deltas into strategist state as competitor_context —
                 session 3 ship. */}
             <CompetitorDeltasCard />
+            {/* Phase 4.A session 4 (2026-08-14): multi-modal content
+                quality per-niche aggregates. Same observation-only
+                vs active flag pattern as the sibling intelligence
+                cards. Flag flip
+                (GENLAB_QUALITY_REWARD_MULTIPLIER_ENABLED) wires
+                joint_score into the bandit as a reward multiplier;
+                deliberately off until operator eyeballs the score
+                distribution here for ≥1 week. */}
+            <ContentQualityCard />
             {/* L11 observability (2026-07-08 audit): all 36
                 catalogued GENLAB_* env flags in one card, grouped
                 by capability. Primary operator value: catches

@@ -1317,6 +1317,18 @@ export const crossNicheTransfer = {
 // as crossNicheTransfer.
 // ───────────────────────────────────────────────────────────────
 
+export const contentQuality = {
+  /** Fetch per-niche aggregates from content_quality_scores.
+   *  Returns null on cold-start or DB failure — card shows
+   *  "no scores yet" copy. */
+  summary: () =>
+    get<{
+      data: import("./types").ContentQualitySummary | null;
+    }>("/content-quality/summary").then((d) =>
+      unwrapEnvelope<import("./types").ContentQualitySummary>(d),
+    ),
+};
+
 export const competitorDeltas = {
   /** Fetch top competitor-vs-us deltas filtered by min_ratio.
    *  Returns null when: DB unset OR cold-start OR no rows meet
