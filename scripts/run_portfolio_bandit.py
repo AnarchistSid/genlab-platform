@@ -150,7 +150,7 @@ def _extract_features_for_niche(conn, niche_id: str):
             """
             SELECT
               COUNT(*)::float AS total,
-              COUNT(*) FILTER (WHERE status = 'SUCCESS')::float AS ok
+              COUNT(*) FILTER (WHERE pa.status = 'SUCCESS')::float AS ok
             FROM publishing_analytics pa
             JOIN blueprints b ON b.id = pa.blueprint_id
             WHERE b.niche_id = %s
