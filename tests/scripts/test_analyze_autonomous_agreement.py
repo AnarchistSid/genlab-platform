@@ -34,11 +34,12 @@ class TestAnalyze:
 
     def test_autonomous_share_math(self):
         conn = MagicMock()
-        # First query: volume; second query: quality
         vol_result = MagicMock()
+        # Actual classifier_source values per Phase 1.C:
+        # 'heuristic' + 'llm' + 'manual'.
         vol_result.fetchone.return_value = {
-            "n_auto": 30, "n_llm_accept": 40, "n_llm_reject": 20,
-            "n_operator": 10, "n_total": 100,
+            "n_heuristic": 30, "n_llm": 60,
+            "n_manual": 10, "n_total": 100,
         }
         qual_result = MagicMock()
         qual_result.fetchone.return_value = {
@@ -47,19 +48,17 @@ class TestAnalyze:
         }
         conn.execute.side_effect = [vol_result, qual_result]
         r = _MOD._analyze(conn, 4)
-        # (30+40+20) / 100 = 90%
+        # (30 + 60) / 100 = 90%
         assert r["autonomous_share"] == pytest.approx(90.0)
-        # Auto quality: 45 / (45+15) = 75%
         assert r["quality_auto"] == pytest.approx(75.0)
-        # Operator quality: 6 / (6+2) = 75%
         assert r["quality_operator"] == pytest.approx(75.0)
 
     def test_zero_operator_baseline_quality_none(self):
         conn = MagicMock()
         vol_result = MagicMock()
         vol_result.fetchone.return_value = {
-            "n_auto": 10, "n_llm_accept": 0, "n_llm_reject": 0,
-            "n_operator": 0, "n_total": 10,
+            "n_heuristic": 10, "n_llm": 0,
+            "n_manual": 0, "n_total": 10,
         }
         qual_result = MagicMock()
         qual_result.fetchone.return_value = {

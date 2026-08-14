@@ -46,18 +46,20 @@ def _parse_args(argv=None):
 def _analyze(conn, lookback_weeks: int) -> dict:
     """Compute autonomous vs operator counts + quality signals.
     All fail-open to None fields on any query error."""
+    # classifier_source actual values (per Phase 1.C `_classify_
+    # decision_source` at strategist_actions.py): 'llm' / 'heuristic'
+    # / 'manual'. Autonomous = llm + heuristic; operator = manual.
     try:
         row = conn.execute(
             """
             SELECT
-              COUNT(*) FILTER (WHERE decision_source = 'auto_accept')::int AS n_auto,
-              COUNT(*) FILTER (WHERE decision_source = 'llm_accept')::int AS n_llm_accept,
-              COUNT(*) FILTER (WHERE decision_source = 'llm_reject')::int AS n_llm_reject,
-              COUNT(*) FILTER (WHERE decision_source = 'operator')::int AS n_operator,
+              COUNT(*) FILTER (WHERE classifier_source = 'heuristic')::int AS n_heuristic,
+              COUNT(*) FILTER (WHERE classifier_source = 'llm')::int AS n_llm,
+              COUNT(*) FILTER (WHERE classifier_source = 'manual')::int AS n_manual,
               COUNT(*)::int AS n_total
             FROM strategist_outcome_verification
             WHERE applied_at >= NOW() - (%s || ' weeks')::INTERVAL
-              AND decision_source IS NOT NULL
+              AND classifier_source IS NOT NULL
             """,
             (lookback_weeks,),
         ).fetchone()
@@ -68,41 +70,37 @@ def _analyze(conn, lookback_weeks: int) -> dict:
         except Exception:
             pass
         return {
-            "n_auto": 0, "n_llm_accept": 0, "n_llm_reject": 0,
-            "n_operator": 0, "n_total": 0,
+            "n_heuristic": 0, "n_llm": 0, "n_manual": 0, "n_total": 0,
             "autonomous_share": None,
             "quality_auto": None, "quality_operator": None,
         }
-    n_auto = row["n_auto"] or 0
-    n_llm_accept = row["n_llm_accept"] or 0
-    n_llm_reject = row["n_llm_reject"] or 0
-    n_operator = row["n_operator"] or 0
+    n_heur = row["n_heuristic"] or 0
+    n_llm = row["n_llm"] or 0
+    n_manual = row["n_manual"] or 0
     n_total = row["n_total"] or 0
     autonomous_share = None
     if n_total > 0:
-        autonomous_share = (
-            (n_auto + n_llm_accept + n_llm_reject) / n_total * 100
-        )
+        autonomous_share = ((n_heur + n_llm) / n_total * 100)
 
-    # Quality: outcome=improved rate per source
+    # Quality: outcome=improved rate per source class
     try:
         row = conn.execute(
             """
             SELECT
               COUNT(*) FILTER (
-                WHERE decision_source IN ('auto_accept', 'llm_accept')
+                WHERE classifier_source IN ('heuristic', 'llm')
                   AND verdict = 'improved'
               )::int AS auto_improved,
               COUNT(*) FILTER (
-                WHERE decision_source IN ('auto_accept', 'llm_accept')
+                WHERE classifier_source IN ('heuristic', 'llm')
                   AND verdict = 'regressed'
               )::int AS auto_regressed,
               COUNT(*) FILTER (
-                WHERE decision_source = 'operator'
+                WHERE classifier_source = 'manual'
                   AND verdict = 'improved'
               )::int AS op_improved,
               COUNT(*) FILTER (
-                WHERE decision_source = 'operator'
+                WHERE classifier_source = 'manual'
                   AND verdict = 'regressed'
               )::int AS op_regressed
             FROM strategist_outcome_verification
@@ -113,8 +111,7 @@ def _analyze(conn, lookback_weeks: int) -> dict:
         ).fetchone()
     except Exception:
         return {
-            "n_auto": n_auto, "n_llm_accept": n_llm_accept,
-            "n_llm_reject": n_llm_reject, "n_operator": n_operator,
+            "n_heuristic": n_heur, "n_llm": n_llm, "n_manual": n_manual,
             "n_total": n_total, "autonomous_share": autonomous_share,
             "quality_auto": None, "quality_operator": None,
         }
@@ -123,8 +120,7 @@ def _analyze(conn, lookback_weeks: int) -> dict:
     quality_auto = (ai / (ai + ar) * 100) if (ai + ar) > 0 else None
     quality_op = (oi / (oi + orj) * 100) if (oi + orj) > 0 else None
     return {
-        "n_auto": n_auto, "n_llm_accept": n_llm_accept,
-        "n_llm_reject": n_llm_reject, "n_operator": n_operator,
+        "n_heuristic": n_heur, "n_llm": n_llm, "n_manual": n_manual,
         "n_total": n_total, "autonomous_share": autonomous_share,
         "quality_auto": quality_auto, "quality_operator": quality_op,
     }
@@ -152,10 +148,9 @@ def main(argv=None) -> int:
     with psycopg.connect(dsn, row_factory=dict_row) as conn:
         r = _analyze(conn, args.lookback_weeks)
         print(f"Total verdicts: {r['n_total']}")
-        print(f"  auto_accept  : {r['n_auto']}")
-        print(f"  llm_accept   : {r['n_llm_accept']}")
-        print(f"  llm_reject   : {r['n_llm_reject']}")
-        print(f"  operator     : {r['n_operator']}")
+        print(f"  heuristic (auto_accept):  {r['n_heuristic']}")
+        print(f"  llm (accept/reject via reviewer): {r['n_llm']}")
+        print(f"  manual (operator):       {r['n_manual']}")
         share = f"{r['autonomous_share']:.1f}%" if r["autonomous_share"] is not None else "—"
         qa = f"{r['quality_auto']:.1f}%" if r["quality_auto"] is not None else "—"
         qo = f"{r['quality_operator']:.1f}%" if r["quality_operator"] is not None else "—"
