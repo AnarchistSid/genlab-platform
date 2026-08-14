@@ -1,0 +1,12 @@
+[Unit]
+Description=Fire GenLab CUSUM change-point detector every 12h — surfaces reward shifts before they compound
+Requires=genlab-change-point-detector.service
+
+[Timer]
+OnCalendar=*-*-* 04:45:00 UTC
+OnCalendar=*-*-* 16:45:00 UTC
+Persistent=true
+Unit=genlab-change-point-detector.service
+
+[Install]
+WantedBy=timers.target
