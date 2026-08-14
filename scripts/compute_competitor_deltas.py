@@ -58,11 +58,14 @@ def _parse_args(argv=None):
 
 
 def _artifact_dir() -> Path:
-    """Match A.2 watcher: prefer GENLAB_TMP_ROOT, fallback to
-    cwd/.tmp/top_creators/."""
-    tmp = os.environ.get("GENLAB_TMP_ROOT")
+    """Match A.2 watcher's actual paths exactly to avoid the
+    fetcher-schema-drift class of bug (2026-08-14 discovery: this
+    runner initially read GENLAB_TMP_ROOT + top_creators/ but the
+    watcher writes GENLAB_TMP + top-creator-uploads/, so cold-start
+    on prod showed zero artifacts despite watcher firing 4x/day)."""
+    tmp = os.environ.get("GENLAB_TMP")
     root = Path(tmp) if tmp else Path.cwd() / ".tmp"
-    return root / "top_creators"
+    return root / "top-creator-uploads"
 
 
 def _load_latest_artifact(niche_id: str, lookback_days: int):

@@ -11,6 +11,7 @@ WorkingDirectory=/opt/genlab
 EnvironmentFile=/opt/genlab/.env
 Environment=GENLAB_PROJECT_ROOT=/opt/genlab
 Environment=HOME=/opt/genlab
+Environment=GENLAB_TMP=/opt/genlab/.tmp
 Environment=UV_FROZEN=1
 TimeoutStartSec=10min
 ExecStart=/usr/local/bin/uv run python scripts/compute_competitor_deltas.py
