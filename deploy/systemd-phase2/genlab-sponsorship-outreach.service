@@ -1,0 +1,26 @@
+[Unit]
+Description=GenLab sponsorship outreach draft generator — creates DRAFTED pipeline rows for operator review
+After=network-online.target
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=GENLAB_TMP=/opt/genlab/.tmp
+Environment=UV_FROZEN=1
+Environment=PYTHONPATH=/opt/genlab/dashboard
+TimeoutStartSec=5min
+ExecStart=/usr/local/bin/uv run python scripts/generate_sponsorship_outreach.py
+StandardOutput=journal
+StandardError=journal
+
+MemoryMax=256M
+CPUWeight=20
+
+[Install]
+WantedBy=multi-user.target

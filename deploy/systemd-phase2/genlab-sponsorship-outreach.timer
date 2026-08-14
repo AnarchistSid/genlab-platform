@@ -1,0 +1,11 @@
+[Unit]
+Description=Fire GenLab sponsorship outreach draft generator weekly Monday 11:00 UTC — after strategist Sun 07:30 fires
+Requires=genlab-sponsorship-outreach.service
+
+[Timer]
+OnCalendar=Mon *-*-* 11:00:00 UTC
+Persistent=true
+Unit=genlab-sponsorship-outreach.service
+
+[Install]
+WantedBy=timers.target
