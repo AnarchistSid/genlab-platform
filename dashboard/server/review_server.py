@@ -796,6 +796,7 @@ from server.api.learning import bp as learning_bp
 from server.api.legal import legal_bp
 from server.api.links import bp as links_bp
 from server.api.media_kit import bp as media_kit_bp
+from server.api.cost_budget import bp as cost_budget_bp
 from server.api.metrics import bp as metrics_bp
 from server.api.monetisation import bp as monetisation_bp
 from server.api.slo_forecasts import bp as slo_forecasts_bp
@@ -909,6 +910,7 @@ app.register_blueprint(revenue_bp)
 app.register_blueprint(alerts_bp)
 app.register_blueprint(metrics_bp)
 app.register_blueprint(slo_forecasts_bp)  # Phase 2.C: /api/v1/monitoring/slo-forecasts
+app.register_blueprint(cost_budget_bp)    # Phase 2.D: /api/v1/cost-budget/status
 app.register_blueprint(publishing_health_bp)  # PR B: /api/v1/publishing/per-niche-platform-health
 app.register_blueprint(attribution_health_bp)  # PR #Layer5: /api/v1/attribution-health/stats
 app.register_blueprint(audience_bp)

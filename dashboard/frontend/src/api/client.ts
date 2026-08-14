@@ -1270,6 +1270,18 @@ export const sloForecasts = {
     ),
 };
 
+// 2026-08-14: Phase 2.D — cost budget status.
+export const costBudget = {
+  /** Today's LLM spend + current throttle level. Backs
+   *  CostBudgetCard on Mission Control. */
+  status: () =>
+    get<{
+      data: import("./types").CostBudgetStatus | null;
+    }>("/cost-budget/status").then((d) =>
+      unwrapEnvelope<import("./types").CostBudgetStatus>(d),
+    ),
+};
+
 export const autoExperiments = {
   /** Fetch the lifecycle summary — recent experiments + per-status
    *  counts + last-30d verdict tally. Returns null on any server-side

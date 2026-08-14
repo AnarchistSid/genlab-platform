@@ -105,13 +105,47 @@ class AnthropicStrategistClient:
             return 3.00, 15.00
         return float(rates["input"]), float(rates["output"])
 
-    def generate_report(self, system_prompt: str, user_prompt: str) -> CallResult:
+    def generate_report(
+        self, system_prompt: str, user_prompt: str,
+        *, caller_type: str = "optional",
+    ) -> CallResult:
         """Call the model and return raw text + cost telemetry.
+
+        Phase 2.D (2026-08-14) — cost-budget gate:
+        `caller_type='optional'` (default) short-circuits when today's
+        LLM spend > $10/day. `caller_type='essential'` only stops at
+        $20/day emergency. Bypass via GENLAB_COST_BUDGET_DISABLED=1.
 
         Single retry on transient errors (network / 5xx). Non-transient
         errors (auth, bad request) propagate immediately so the caller can
         decide whether to fail-soft (skip this run) or escalate.
         """
+        # Budget gate check — fail-soft (return zero-cost empty result)
+        # rather than raising, so the caller's existing fail-soft path
+        # (strategist status='llm_call_failed', reviewer verdict=abstain)
+        # kicks in naturally.
+        try:
+            from genlab_core.cost.budget_gate import (
+                get_throttle_level, is_call_allowed,
+            )
+            if not is_call_allowed(caller_type):
+                level = get_throttle_level()
+                logger.warning(
+                    "[anthropic_client] budget gate blocked call "
+                    "caller_type=%s throttle=%s — returning empty result",
+                    caller_type, level.value,
+                )
+                return CallResult(
+                    text="",
+                    input_tokens=0,
+                    output_tokens=0,
+                    cost_usd=0.0,
+                    duration_sec=0.0,
+                )
+        except Exception:
+            # Budget check itself must never block real work
+            pass
+
         client = self._get_client()
         t0 = time.monotonic()
         attempt = 0

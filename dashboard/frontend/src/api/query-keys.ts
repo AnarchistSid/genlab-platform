@@ -175,6 +175,11 @@ export const queryKeys = {
      *  breach forecasts. Runner fires hourly; 5-min poll is plenty. */
     all: () => ["slo-forecasts", "all"] as const,
   },
+  costBudget: {
+    /** Phase 2.D observability (2026-08-14) — today's LLM spend
+     *  + throttle level. 1-min poll matches gate's cache TTL. */
+    status: () => ["cost-budget", "status"] as const,
+  },
   autoExperiments: {
     /** #9 lifecycle observability (2026-07-23) — per-niche recent
      *  experiments + verdicts. Lifecycle timer fires every 6h; a

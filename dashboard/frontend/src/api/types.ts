@@ -1492,6 +1492,21 @@ export interface SloForecast {
   computed_at: string;
 }
 
+// Phase 2.D (2026-08-14) — cost budget throttle.
+export type CostThrottleLevel =
+  | "none"                 // < $5/day
+  | "reduce_50pct"         // ≥ $5
+  | "pause_optional"       // ≥ $10
+  | "emergency_shutoff";   // ≥ $20
+
+export interface CostBudgetStatus {
+  spend_today_usd: number;
+  throttle_level: CostThrottleLevel;
+  reduce_50_threshold: number;   // 5
+  pause_threshold: number;       // 10
+  emergency_threshold: number;   // 20
+}
+
 // Intervention 2 observability (2026-07-01) — cross-niche transferred priors.
 // Mirrors ``genlab_core.learning.cross_niche_transfer.TransferredPrior``.
 export interface CrossNichePrior {

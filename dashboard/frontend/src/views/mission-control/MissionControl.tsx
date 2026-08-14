@@ -45,6 +45,7 @@ import { CounterfactualReplayCard } from "./CounterfactualReplayCard";
 import { RewardSignalAuditCard } from "./RewardSignalAuditCard";
 import { ClassifierQualityCard } from "./ClassifierQualityCard";
 import { SLOForecastCard } from "./SLOForecastCard";
+import { CostBudgetCard } from "./CostBudgetCard";
 import { AutoExperimentsCard } from "./AutoExperimentsCard";
 import { ProductBanditCard } from "./ProductBanditCard";
 import { TransformationBanditCard } from "./TransformationBanditCard";
@@ -435,6 +436,11 @@ export default function MissionControl() {
                 source diversity, strategist 4k truncation) would have
                 surfaced 24h earlier if this had existed then. */}
             <SLOForecastCard />
+            {/* Phase 2.D (2026-08-14): cost budget throttle status.
+                Prevents the class of silent outage that caused the
+                07-13 → 08-09 strategist gap — optional callers auto-
+                throttle as daily LLM spend climbs past $5/$10/$20. */}
+            <CostBudgetCard />
             {/* #9 lifecycle observability (2026-07-23): auto-experiment
                 verdicts + queue depth. Sibling to the strategist card —
                 strategist proposes causal hypotheses; parser queues them;
