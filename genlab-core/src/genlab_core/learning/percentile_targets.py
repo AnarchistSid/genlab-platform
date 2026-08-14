@@ -107,18 +107,42 @@ def get_percentile_target(
         # (belt + suspenders with RLS).
         with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
             with conn.cursor() as cur:
-                # analytics.value carries the metric reading; metric_type
-                # carries the canonical metric name; platform + niche_id
-                # filter for the triple.
+                # Phase 0.A fix (2026-08-14): analytics only writes one row
+                # per post with metric_type='composite'; individual metrics
+                # (views/shares/saves/likes/comments/reach/etc.) live in
+                # the composite row's `extra` JSONB. Pre-fix `get_percentile
+                # _target('views')` queried `metric_type='views'` and got
+                # 0 rows for every triple → percentile always None →
+                # reward shaper fell back to hardcoded absolute targets
+                # (YT views=200 while actual avg=1.67 → reward=0.008).
+                #
+                # Fix: query both paths in one shot via UNION. Direct-row
+                # writes (lifecycle_tracker) still work; extra-JSONB path
+                # unlocks the ~1500 composite rows already in analytics.
                 cur.execute(
                     """
                     SELECT value FROM analytics
                     WHERE niche_id = %s AND platform = %s AND metric_type = %s
                       AND value > 0
-                    ORDER BY collected_at DESC
+                    UNION ALL
+                    SELECT (extra ->> %s)::float AS value
+                    FROM analytics
+                    WHERE niche_id = %s AND platform = %s
+                      AND metric_type = 'composite'
+                      AND extra ? %s
+                      AND (extra ->> %s) ~ '^[0-9]+\\.?[0-9]*$'
+                      AND (extra ->> %s)::float > 0
+                    ORDER BY 1 DESC
                     LIMIT %s
                     """,
-                    (niche_id, platform, metric, _LOOKBACK_OBSERVATIONS),
+                    (
+                        niche_id, platform, metric,        # direct-row path
+                        metric,                              # extra-key extract
+                        niche_id, platform,
+                        metric,                              # extra ? metric
+                        metric, metric,                      # ~regex + > 0
+                        _LOOKBACK_OBSERVATIONS,
+                    ),
                 )
                 values = [float(row[0]) for row in cur.fetchall()]
     except Exception as exc:

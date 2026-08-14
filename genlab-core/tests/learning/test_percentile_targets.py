@@ -106,6 +106,100 @@ class TestGetPercentileTarget:
         assert mock_connect.call_count == 1
 
 
+class TestUnionQueryPath:
+    """Phase 0.A (2026-08-14): the SQL now UNIONs direct-row + extra-
+    JSONB paths. Existing mock returns fetchall values regardless of
+    which SQL fires, so the tests above still pass. Pin the extra-
+    JSONB path shape by asserting the query text contains both
+    branches."""
+
+    def test_query_contains_both_direct_and_extra_paths(self, monkeypatch):
+        monkeypatch.setenv("DATABASE_URL", "postgresql://t")
+        captured_sql = {}
+
+        class _CaptureCursor:
+            def execute(self, sql, params):
+                captured_sql["sql"] = sql
+                captured_sql["params"] = params
+
+            def fetchall(self):
+                return [(v,) for v in range(1, 31)]
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return None
+
+        class _Conn:
+            def cursor(self):
+                return _CaptureCursor()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return None
+
+        # Reset cache so the query actually fires
+        from genlab_core.learning.percentile_targets import reset_cache
+        reset_cache()
+        with patch(
+            "genlab_core.storage.tenant_context.pg_connect",
+            return_value=_Conn(),
+        ):
+            get_percentile_target("gaming", "youtube", "views")
+
+        sql = captured_sql.get("sql", "")
+        assert "metric_type = %s" in sql, "direct-row path missing"
+        assert "metric_type = 'composite'" in sql, "extra-JSONB path missing"
+        assert "extra ? %s" in sql, "extra-JSONB key check missing"
+        assert "UNION ALL" in sql, "UNION combining both paths missing"
+
+    def test_regex_filter_prevents_non_numeric_extra_values(self, monkeypatch):
+        """The extra-JSONB path guards against non-numeric values (e.g.,
+        `extra->>'views' = 'unavailable'`) via a regex. Pin that guard."""
+        monkeypatch.setenv("DATABASE_URL", "postgresql://t")
+        captured_sql = {}
+
+        class _CaptureCursor:
+            def execute(self, sql, params):
+                captured_sql["sql"] = sql
+
+            def fetchall(self):
+                return [(v,) for v in range(1, 31)]
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return None
+
+        class _Conn:
+            def cursor(self):
+                return _CaptureCursor()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return None
+
+        from genlab_core.learning.percentile_targets import reset_cache
+        reset_cache()
+        with patch(
+            "genlab_core.storage.tenant_context.pg_connect",
+            return_value=_Conn(),
+        ):
+            get_percentile_target("gaming", "youtube", "views")
+
+        # Regex must appear in SQL — protects against a stringified
+        # value like 'error' or 'unknown' crashing the ::float cast
+        assert "~ '^[0-9]" in captured_sql.get("sql", ""), (
+            "regex guard against non-numeric extra values missing"
+        )
+
+
 class TestRewardShaperUsesPercentileTarget:
     """End-to-end: RewardShaper with percentile_targets_fn should produce
     higher rewards on signal-rich data than the hardcoded fallback."""
