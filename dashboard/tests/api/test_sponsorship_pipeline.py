@@ -114,3 +114,156 @@ class TestSendingEnabledBadge:
 
         resp = client.get("/api/v1/sponsorship/pipeline")
         assert resp.get_json()["data"]["sending_enabled"] is True
+
+
+# ── Phase 3.C session 2 write-endpoint tests ──────────────────────
+
+
+def _make_conn_ctx(row_dict, execute_side_effect=None):
+    """Build a MagicMock that quacks like a psycopg connection ctx-mgr
+    used by the write endpoints. Every _load_row call returns
+    ``row_dict``; every UPDATE returns a mock with no data."""
+    conn_ctx = MagicMock()
+    conn_ctx.__enter__.return_value = conn_ctx
+    conn_ctx.__exit__.return_value = False
+
+    def _default_execute(sql, *args):
+        result = MagicMock()
+        if "SELECT" in sql and "sp.id" in sql:
+            result.fetchone.return_value = row_dict
+        elif "COUNT" in sql:
+            result.fetchone.return_value = {"n": 0}
+        else:
+            result.fetchone.return_value = None
+        return result
+
+    conn_ctx.execute.side_effect = execute_side_effect or _default_execute
+    return conn_ctx
+
+
+class TestApprove:
+    @patch("psycopg.connect")
+    def test_drafted_becomes_approved(self, mock_connect, client, monkeypatch):
+        monkeypatch.setenv("DATABASE_URL", "postgresql://fake/x")
+        mock_connect.return_value = _make_conn_ctx({
+            "id": "id1", "niche_id": "gaming", "status": "DRAFTED",
+            "subject": "S", "body": "B",
+            "approved_at": None, "sent_at": None,
+            "brand_name": "B", "brand_email": "b@x.com",
+        })
+        resp = client.post("/api/v1/sponsorship/pipeline/id1/approve")
+        assert resp.status_code == 200
+        assert resp.get_json()["data"]["status"] == "APPROVED"
+
+    @patch("psycopg.connect")
+    def test_already_approved_is_idempotent(self, mock_connect, client, monkeypatch):
+        monkeypatch.setenv("DATABASE_URL", "postgresql://fake/x")
+        mock_connect.return_value = _make_conn_ctx({
+            "id": "id1", "niche_id": "gaming", "status": "APPROVED",
+            "subject": "S", "body": "B",
+            "approved_at": "2026-08-14", "sent_at": None,
+            "brand_name": "B", "brand_email": "b@x.com",
+        })
+        resp = client.post("/api/v1/sponsorship/pipeline/id1/approve")
+        assert resp.status_code == 200
+        assert resp.get_json()["data"]["already"] is True
+
+    @patch("psycopg.connect")
+    def test_sent_cannot_be_reapproved(self, mock_connect, client, monkeypatch):
+        monkeypatch.setenv("DATABASE_URL", "postgresql://fake/x")
+        mock_connect.return_value = _make_conn_ctx({
+            "id": "id1", "niche_id": "gaming", "status": "SENT",
+            "subject": "S", "body": "B",
+            "approved_at": "x", "sent_at": "y",
+            "brand_name": "B", "brand_email": "b@x.com",
+        })
+        resp = client.post("/api/v1/sponsorship/pipeline/id1/approve")
+        assert resp.status_code == 409
+
+    @patch("psycopg.connect")
+    def test_not_found_returns_404(self, mock_connect, client, monkeypatch):
+        monkeypatch.setenv("DATABASE_URL", "postgresql://fake/x")
+        conn_ctx = MagicMock()
+        conn_ctx.__enter__.return_value = conn_ctx
+        conn_ctx.__exit__.return_value = False
+        conn_ctx.execute.return_value.fetchone.return_value = None
+        mock_connect.return_value = conn_ctx
+        resp = client.post("/api/v1/sponsorship/pipeline/nope/approve")
+        assert resp.status_code == 404
+
+
+class TestReject:
+    @patch("psycopg.connect")
+    def test_drafted_becomes_rejected(self, mock_connect, client, monkeypatch):
+        monkeypatch.setenv("DATABASE_URL", "postgresql://fake/x")
+        mock_connect.return_value = _make_conn_ctx({
+            "id": "id1", "niche_id": "gaming", "status": "DRAFTED",
+            "subject": "S", "body": "B",
+            "approved_at": None, "sent_at": None,
+            "brand_name": "B", "brand_email": "b@x.com",
+        })
+        resp = client.post(
+            "/api/v1/sponsorship/pipeline/id1/reject",
+            json={"reason": "off-brand"},
+        )
+        assert resp.status_code == 200
+
+    @patch("psycopg.connect")
+    def test_sent_cannot_be_rejected(self, mock_connect, client, monkeypatch):
+        """After the email went out, "reject" makes no sense —
+        operator needs to reply/apologize out-of-band."""
+        monkeypatch.setenv("DATABASE_URL", "postgresql://fake/x")
+        mock_connect.return_value = _make_conn_ctx({
+            "id": "id1", "niche_id": "gaming", "status": "SENT",
+            "subject": "S", "body": "B",
+            "approved_at": "x", "sent_at": "y",
+            "brand_name": "B", "brand_email": "b@x.com",
+        })
+        resp = client.post("/api/v1/sponsorship/pipeline/id1/reject", json={})
+        assert resp.status_code == 409
+
+
+class TestSendGating:
+    def test_send_disabled_returns_503(self, client, monkeypatch):
+        monkeypatch.delenv("GENLAB_SPONSORSHIP_AUTO_SEND_ENABLED", raising=False)
+        resp = client.post("/api/v1/sponsorship/pipeline/any/send")
+        assert resp.status_code == 503
+        assert "off" in resp.get_json()["reason"]
+
+    @patch("psycopg.connect")
+    def test_send_wrong_status_409(self, mock_connect, client, monkeypatch):
+        monkeypatch.setenv("DATABASE_URL", "postgresql://fake/x")
+        monkeypatch.setenv("GENLAB_SPONSORSHIP_AUTO_SEND_ENABLED", "1")
+        mock_connect.return_value = _make_conn_ctx({
+            "id": "id1", "niche_id": "gaming", "status": "DRAFTED",
+            "subject": "S", "body": "B",
+            "approved_at": None, "sent_at": None,
+            "brand_name": "B", "brand_email": "b@x.com",
+        })
+        resp = client.post("/api/v1/sponsorship/pipeline/id1/send")
+        assert resp.status_code == 409
+
+    @patch("psycopg.connect")
+    def test_rate_limit_returns_429(self, mock_connect, client, monkeypatch):
+        monkeypatch.setenv("DATABASE_URL", "postgresql://fake/x")
+        monkeypatch.setenv("GENLAB_SPONSORSHIP_AUTO_SEND_ENABLED", "1")
+        monkeypatch.setenv("GENLAB_SPONSORSHIP_MAX_SENDS_PER_HOUR", "1")
+
+        # Row is APPROVED but rate-limit already hit
+        def _side_effect(sql, *args):
+            result = MagicMock()
+            if "SELECT" in sql and "sp.id" in sql:
+                result.fetchone.return_value = {
+                    "id": "id1", "niche_id": "gaming", "status": "APPROVED",
+                    "subject": "S", "body": "B",
+                    "approved_at": "x", "sent_at": None,
+                    "brand_name": "B", "brand_email": "b@x.com",
+                }
+            elif "COUNT" in sql:
+                result.fetchone.return_value = {"n": 5}  # over the cap
+            return result
+
+        conn_ctx = _make_conn_ctx(None, execute_side_effect=_side_effect)
+        mock_connect.return_value = conn_ctx
+        resp = client.post("/api/v1/sponsorship/pipeline/id1/send")
+        assert resp.status_code == 429
