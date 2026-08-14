@@ -13,7 +13,7 @@ Environment=GENLAB_PROJECT_ROOT=/opt/genlab
 Environment=HOME=/opt/genlab
 Environment=UV_FROZEN=1
 TimeoutStartSec=3min
-ExecStart=/usr/local/bin/uv run python scripts/auto_tune_calibration.py
+ExecStart=/usr/local/bin/uv run python scripts/auto_tune_calibration.py --apply
 StandardOutput=journal
 StandardError=journal
 
