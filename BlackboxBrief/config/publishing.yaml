@@ -128,6 +128,6 @@ auto_publish:
   # If FP rate emerges after this promotion, revert both values
   # OR use kill switch (GENLAB_AUTO_APPROVE_DISABLED=1).
   enabled: true
-  min_confidence: 0.70
+  min_confidence: 0.715
   max_approvals_per_pass: 3
   rollout_pct: 1.0

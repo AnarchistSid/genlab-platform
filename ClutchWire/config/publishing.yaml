@@ -95,6 +95,6 @@ auto_publish:
   # (GENLAB_AUTO_APPROVE_DISABLED=1). Full rationale in
   # BlackboxBrief/config/publishing.yaml auto_publish comment.
   enabled: true
-  min_confidence: 0.70
+  min_confidence: 0.732
   max_approvals_per_pass: 3
   rollout_pct: 1.0
