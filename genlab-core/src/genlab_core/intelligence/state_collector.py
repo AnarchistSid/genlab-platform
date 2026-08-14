@@ -84,23 +84,57 @@ class PostgresStateCollector:
             return None
 
     def _channel_metrics(self, niche_id: str) -> dict[str, Any]:
-        """Aggregate the analytics table by metric_type for follower/engagement/watch.
+        """Aggregate follower/engagement/watch metrics for the strategist.
 
-        The analytics table is EAV-style: each row is one (post_id, platform,
-        metric_type, value, collected_at) tuple. So follower_count etc. are
-        stored as separate rows tagged with metric_type='follower_count', not
-        as columns of the table. This aggregates the last 7 days across all
-        rows of each metric type.
+        Phase 0.B fix (2026-08-14): follower_count lives in the
+        ``audience_snapshots`` table (populated daily by
+        ``scripts.collect_audience_metrics`` via genlab-audience-
+        collector.timer), NOT in ``analytics`` (which stores per-post
+        engagement).
 
-        Returns keys: follower_count, engagement_rate_7d, watch_time_avg_7d,
-        n_publishes_7d. All nullable.
+        Pre-fix: the query looked for ``analytics.metric_type =
+        'follower_count'`` which returned zero rows. Strategist's
+        state always showed ``follower_count=unknown`` even though
+        prod has been recording daily follower snapshots since
+        collect_audience_metrics shipped. The strategist proposed
+        "implement follower baseline instrumentation" 3+ times
+        thinking the infrastructure was missing.
+
+        Sums across platforms per niche because the strategist's
+        ``state.followers`` is a channel-level number (a niche's
+        follower base spans FB + IG + YT + Threads).
+
+        Returns keys: follower_count, engagement_rate_7d,
+        watch_time_avg_7d, n_publishes_7d. All nullable.
         """
-        result = self._safe(
-            "channel_metrics",
+        # Followers: pull the latest per (niche, platform, metric_name in
+        # ('followers','subscribers')), sum across platforms.
+        follower_row = self._safe(
+            "channel_metrics.followers",
+            lambda: self._conn.execute(
+                """
+                SELECT SUM(latest_val)::float AS total_followers
+                FROM (
+                  SELECT DISTINCT ON (platform)
+                    platform,
+                    metric_value AS latest_val
+                  FROM audience_snapshots
+                  WHERE niche_id = %s
+                    AND metric_name IN ('followers', 'subscribers')
+                    AND snapshot_date >= (CURRENT_DATE - INTERVAL '14 days')
+                  ORDER BY platform, snapshot_date DESC
+                ) latest_per_platform
+                """,
+                (niche_id,),
+            ).fetchone(),
+        )
+        # Engagement + watch time + publish count still come from analytics
+        # (per-post metrics, not channel-level snapshots).
+        engagement_row = self._safe(
+            "channel_metrics.engagement",
             lambda: self._conn.execute(
                 """
                 SELECT
-                  MAX(value) FILTER (WHERE metric_type = 'follower_count') AS followers,
                   AVG(value) FILTER (
                     WHERE metric_type = 'engagement_rate'
                       AND collected_at >= NOW() - INTERVAL '7 days'
@@ -118,13 +152,17 @@ class PostgresStateCollector:
                 (niche_id,),
             ).fetchone(),
         )
-        if not result:
-            return {}
+        # Fold both together (either can be None on DB error → all metrics
+        # go to None gracefully).
+        def _get(row, key, idx):
+            if row is None:
+                return None
+            return row.get(key) if hasattr(row, "get") else row[idx]
         return {
-            "follower_count": result.get("followers") if hasattr(result, "get") else result[0],
-            "engagement_rate_7d": result.get("er7d") if hasattr(result, "get") else result[1],
-            "watch_time_avg_7d": result.get("wt7d") if hasattr(result, "get") else result[2],
-            "n_publishes_7d": result.get("n7d") if hasattr(result, "get") else result[3],
+            "follower_count": _get(follower_row, "total_followers", 0),
+            "engagement_rate_7d": _get(engagement_row, "er7d", 0),
+            "watch_time_avg_7d": _get(engagement_row, "wt7d", 1),
+            "n_publishes_7d": _get(engagement_row, "n7d", 2),
         }
 
     def _bandit_state(self, niche_id: str) -> dict[str, Any]:
