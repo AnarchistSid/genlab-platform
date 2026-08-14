@@ -138,10 +138,139 @@ def _append_auto_accepted(conn, report_id: str, indices: list[int]) -> None:
     )
 
 
+def _append_llm_accepted(conn, report_id: str, indices: list[int]) -> None:
+    """Phase 1.B: append LLM-reviewer-driven accepts to proposals_
+    accepted with source-tag in extra so meta-learning (1.C) can
+    distinguish LLM vs heuristic accepts."""
+    conn.execute(
+        """
+        UPDATE strategist_reports
+        SET proposals_accepted = COALESCE(proposals_accepted, '[]'::jsonb)
+              || %s::jsonb,
+            extra = COALESCE(extra, '{}'::jsonb) || jsonb_build_object(
+                'llm_reviewer_accepted_indices',
+                COALESCE(extra->'llm_reviewer_accepted_indices', '[]'::jsonb)
+                    || %s::jsonb,
+                'llm_reviewer_last_run_at', %s::text
+            )
+        WHERE id = %s
+        """,
+        (
+            json.dumps(indices), json.dumps(indices),
+            _now_iso(), report_id,
+        ),
+    )
+
+
+def _append_llm_rejected(conn, report_id: str, indices: list[int]) -> None:
+    """Phase 1.B: append LLM-reviewer-driven rejects to proposals_
+    rejected with source-tag in extra."""
+    conn.execute(
+        """
+        UPDATE strategist_reports
+        SET proposals_rejected = COALESCE(proposals_rejected, '[]'::jsonb)
+              || %s::jsonb,
+            extra = COALESCE(extra, '{}'::jsonb) || jsonb_build_object(
+                'llm_reviewer_rejected_indices',
+                COALESCE(extra->'llm_reviewer_rejected_indices', '[]'::jsonb)
+                    || %s::jsonb,
+                'llm_reviewer_last_run_at', %s::text
+            )
+        WHERE id = %s
+        """,
+        (
+            json.dumps(indices), json.dumps(indices),
+            _now_iso(), report_id,
+        ),
+    )
+
+
+def _now_iso() -> str:
+    from datetime import UTC, datetime
+    return datetime.now(UTC).isoformat()
+
+
 def _proposal_confidence(proposal: dict) -> str:
     # Proposals themselves may carry confidence; fall through to
     # the linked hypothesis if not.
     return str(proposal.get("confidence", "")).strip()
+
+
+# Phase 1.B (2026-08-14): daily Anthropic spend cap for the LLM
+# reviewer path. Bounded blast radius — if the reviewer misbehaves
+# (infinite loop, retry storm, unbounded prompt growth), it can't
+# exceed this cap. Reset per calendar day.
+_LLM_REVIEWER_DAILY_BUDGET_USD: float = 0.50
+
+
+def _daily_llm_spend_usd(conn) -> float:
+    """Query today's Anthropic spend across all callers via
+    llm_run_cost table (populated by cost_persist.py). Returns 0.0
+    on any query error — fail-open so a broken cost table can't
+    silently block auto-accept (worse than exceeding budget)."""
+    try:
+        row = conn.execute(
+            """
+            SELECT COALESCE(SUM(cost_usd), 0)::float AS spend
+            FROM llm_run_cost
+            WHERE created_at >= CURRENT_DATE
+              AND provider = 'anthropic'
+            """,
+        ).fetchone()
+        if not row:
+            return 0.0
+        return float(row.get("spend") if hasattr(row, "get") else row[0])
+    except Exception as exc:
+        logger.debug("[auto_accept] daily spend query failed: %s", exc)
+        return 0.0
+
+
+def _build_state_snapshot(conn, niche_id: str) -> dict:
+    """One-shot context bundle for the LLM reviewer. Minimal — just
+    what's needed to sanity-check a proposal against current state.
+    Kept small because Haiku tokens cost."""
+    snap: dict = {"niche_id": niche_id}
+    try:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) FILTER (WHERE n_plays >= 1)::int AS active_arms,
+                   COUNT(*)::int AS total_arms
+            FROM bandit_arms WHERE niche_id = %s
+            """,
+            (niche_id,),
+        ).fetchone()
+        if row:
+            snap["active_arms"] = (
+                row.get("active_arms") if hasattr(row, "get") else row[0]
+            )
+            snap["total_arms"] = (
+                row.get("total_arms") if hasattr(row, "get") else row[1]
+            )
+    except Exception:
+        pass
+    return snap
+
+
+class _LLMAnthropicClient:
+    """Adapts genlab_core.intelligence.anthropic_client to the LLMClient
+    Protocol expected by Reviewer. Late import so heuristic-only
+    path doesn't pay the SDK import cost."""
+
+    def __init__(self):
+        from genlab_core.intelligence.anthropic_client import (
+            AnthropicStrategistClient,
+        )
+        self._c = AnthropicStrategistClient()
+
+    def review(self, system_prompt: str, user_prompt: str) -> str:
+        # Reuse the strategist client but override max_tokens smaller
+        # for Haiku-cost review calls. The generate_report method
+        # returns a CallResult; we return the text.
+        try:
+            r = self._c.generate_report(system_prompt, user_prompt)
+            return getattr(r, "text", str(r))
+        except Exception as exc:
+            raise RuntimeError(f"anthropic call failed: {exc}") from exc
 
 
 def main() -> int:
@@ -164,7 +293,16 @@ def main() -> int:
         classify_gate_threshold,
         classify_novelty_rate,
         classify_reward_weight,
+        get_max_auto_accepts_per_week,
         is_enabled,
+    )
+    # Phase 1.B (2026-08-14): LLM reviewer imports — lazy so the
+    # heuristic-only mode doesn't pay import cost of Anthropic client.
+    from genlab_core.scheduling.llm_proposal_reviewer import (
+        CONFIDENCE_THRESHOLD_ACCEPT,
+        CONFIDENCE_THRESHOLD_REJECT,
+        Reviewer,
+        is_enabled as llm_reviewer_enabled,
     )
 
     if not is_enabled():
@@ -187,8 +325,42 @@ def main() -> int:
             logger.info("no reports with proposals — exiting cleanly")
             return 0
 
-        classified = {"auto_accept": [], "operator_gate": [], "skip": []}
+        classified = {
+            "auto_accept": [], "operator_gate": [], "skip": [],
+            # Phase 1.B: separate buckets for LLM-reviewer verdicts so
+            # audit can distinguish heuristic vs LLM decisions.
+            "llm_accept": [], "llm_reject": [],
+        }
         by_report: dict[str, list[int]] = {}
+        # Track LLM-driven decisions separately so we can write source
+        # tags on apply.
+        llm_accept_by_report: dict[str, list[int]] = {}
+        llm_reject_by_report: dict[str, list[int]] = {}
+
+        # LLM reviewer state (built once, reused across all proposals)
+        reviewer = None
+        llm_budget_exhausted = False
+        if llm_reviewer_enabled():
+            initial_spend = _daily_llm_spend_usd(conn)
+            if initial_spend >= _LLM_REVIEWER_DAILY_BUDGET_USD:
+                logger.info(
+                    "[llm_reviewer] daily budget exhausted "
+                    "(spend=$%.4f >= cap=$%.2f) — skipping fallback",
+                    initial_spend, _LLM_REVIEWER_DAILY_BUDGET_USD,
+                )
+                llm_budget_exhausted = True
+            else:
+                try:
+                    reviewer = Reviewer(_LLMAnthropicClient())
+                    logger.info(
+                        "[llm_reviewer] enabled — daily spend=$%.4f/$%.2f",
+                        initial_spend, _LLM_REVIEWER_DAILY_BUDGET_USD,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "[llm_reviewer] init failed: %s — falling back "
+                        "to heuristic only", exc,
+                    )
 
         for report in reports:
             report_id = report["id"]
@@ -253,6 +425,62 @@ def main() -> int:
                     )
                     by_report.setdefault(report_id, []).append(idx)
                 elif decision.reason.startswith("operator_gate:"):
+                    # Phase 1.B: heuristic classifier PUNTED — try LLM
+                    # reviewer before dropping to operator gate. Never
+                    # calls Anthropic when reviewer=None (flag off /
+                    # budget exhausted / init failed).
+                    llm_verdict = None
+                    if reviewer is not None:
+                        try:
+                            state_snap = _build_state_snapshot(conn, niche_id)
+                            llm_verdict = reviewer.review(
+                                proposal, niche_id, state_snap,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning(
+                                "[llm_reviewer] review failed niche=%s "
+                                "idx=%d: %s — punting to operator",
+                                niche_id, idx, exc,
+                            )
+                        # Recheck budget after each call — cheap protection
+                        # against unbounded spend if reviewer runs slow.
+                        if _daily_llm_spend_usd(conn) >= _LLM_REVIEWER_DAILY_BUDGET_USD:
+                            logger.info(
+                                "[llm_reviewer] daily budget hit "
+                                "during run — disabling for rest of pass"
+                            )
+                            reviewer = None
+
+                    if llm_verdict is not None:
+                        if (
+                            llm_verdict.decision == "accept"
+                            and llm_verdict.confidence >= CONFIDENCE_THRESHOLD_ACCEPT
+                        ):
+                            classified["llm_accept"].append((
+                                niche_id, idx,
+                                f"llm_accept:conf={llm_verdict.confidence:.2f} "
+                                f"reason={llm_verdict.reason[:80]}",
+                            ))
+                            llm_accept_by_report.setdefault(
+                                report_id, [],
+                            ).append(idx)
+                            # Also count against the aggregate rate limit
+                            by_report.setdefault(report_id, [])
+                            continue
+                        if (
+                            llm_verdict.decision == "reject"
+                            and llm_verdict.confidence >= CONFIDENCE_THRESHOLD_REJECT
+                        ):
+                            classified["llm_reject"].append((
+                                niche_id, idx,
+                                f"llm_reject:conf={llm_verdict.confidence:.2f} "
+                                f"reason={llm_verdict.reason[:80]}",
+                            ))
+                            llm_reject_by_report.setdefault(
+                                report_id, [],
+                            ).append(idx)
+                            continue
+                        # LLM abstain or low-confidence → still operator scope
                     classified["operator_gate"].append(
                         (niche_id, idx, decision.reason)
                     )
@@ -292,9 +520,40 @@ def main() -> int:
                     report_id[:8],
                     exc,
                 )
+
+        # Phase 1.B: LLM-driven decisions. Same SQL primitive as
+        # heuristic path, but tagged differently in extra so audit can
+        # separate "heuristic decided" vs "LLM decided" for meta-
+        # learning (Phase 1.C — track which source actually helped).
+        llm_applied = 0
+        for report_id, indices in llm_accept_by_report.items():
+            try:
+                _append_llm_accepted(conn, report_id, indices)
+                llm_applied += len(indices)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "[llm_reviewer] failed to append LLM-accepts %s to "
+                    "report %s: %s", indices, report_id[:8], exc,
+                )
+
+        llm_rejected = 0
+        for report_id, indices in llm_reject_by_report.items():
+            try:
+                _append_llm_rejected(conn, report_id, indices)
+                llm_rejected += len(indices)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "[llm_reviewer] failed to append LLM-rejects %s to "
+                    "report %s: %s", indices, report_id[:8], exc,
+                )
         conn.commit()
 
-        logger.info("DONE auto_accepted=%d skipped=%d", applied, len(classified["operator_gate"]))
+        logger.info(
+            "DONE heuristic_accepted=%d llm_accepted=%d llm_rejected=%d "
+            "still_operator_gate=%d",
+            applied, llm_applied, llm_rejected,
+            len(classified["operator_gate"]),
+        )
         return 0
 
 
