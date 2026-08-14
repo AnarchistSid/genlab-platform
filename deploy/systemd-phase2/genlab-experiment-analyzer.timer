@@ -1,0 +1,14 @@
+[Unit]
+Description=Fire GenLab experiment analyzer every 6h — enables early-stop before duration expires + futility-stop after
+Requires=genlab-experiment-analyzer.service
+
+[Timer]
+OnCalendar=*-*-* 02:15:00 UTC
+OnCalendar=*-*-* 08:15:00 UTC
+OnCalendar=*-*-* 14:15:00 UTC
+OnCalendar=*-*-* 20:15:00 UTC
+Persistent=true
+Unit=genlab-experiment-analyzer.service
+
+[Install]
+WantedBy=timers.target
