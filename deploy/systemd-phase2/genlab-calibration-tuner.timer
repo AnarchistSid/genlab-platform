@@ -1,0 +1,11 @@
+[Unit]
+Description=Fire GenLab calibration tuner weekly Monday 06:00 UTC — analyze last 4 weeks of calibration data + suggest min_confidence delta
+Requires=genlab-calibration-tuner.service
+
+[Timer]
+OnCalendar=Mon *-*-* 06:00:00 UTC
+Persistent=true
+Unit=genlab-calibration-tuner.service
+
+[Install]
+WantedBy=timers.target

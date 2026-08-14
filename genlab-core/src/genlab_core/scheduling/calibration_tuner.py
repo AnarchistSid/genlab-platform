@@ -1,0 +1,193 @@
+"""Auto-tune calibration thresholds (Phase 5.A).
+
+Reads ``auto_approval_calibration``, computes per-niche confusion
+matrix, suggests ``min_confidence`` delta so the gate self-corrects
+FP-heavy (raise threshold) or FN-heavy (lower threshold) skew.
+
+## Confusion matrix
+
+  operator_action = 'approved' → positive
+  operator_action in ('rejected', 'revised', 'skipped') → negative
+  gate_approved = TRUE → gate says positive
+
+  TP: gate=TRUE  operator=positive  (correct approve)
+  TN: gate=FALSE operator=negative  (correct reject)
+  FP: gate=TRUE  operator=negative  (false approve — bad)
+  FN: gate=FALSE operator=positive  (false reject — missed opportunity)
+
+## Suggestion rule
+
+Both FP and FN cost the operator; the tuner treats them as
+symmetric in the delta calculation:
+
+    imbalance = (fp - fn) / max(1, tp + tn + fp + fn)
+    delta = imbalance × 0.10   # scale to [-0.10, +0.10]
+
+Positive delta → gate approved too eagerly → RAISE min_confidence.
+Negative delta → gate rejected too eagerly → LOWER min_confidence.
+
+## Auto-apply safety window
+
+Only auto-apply when |delta| <= 0.05. Larger deltas require the
+operator to eyeball the confusion matrix before making a bigger
+threshold move. This is the same safety pattern as Phase 2.B
+portfolio_bandit (recommend allocations; operator approves large
+shifts).
+
+## Rule #22 discipline
+
+The tuner must compute the FULL matrix, not just agreement %. The
+2026-07-17 incident (moved enrollment based on broken query
+comparing 'approve' vs actual DB 'approved') is why this task
+exists. Pin test asserts the exact operator_action string set to
+prevent regression.
+"""
+from __future__ import annotations
+
+import logging
+from dataclasses import asdict, dataclass
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+# Rule #22: pin the exact operator_action string set. Prod DB
+# values are 'approved' / 'rejected' / 'revised' / 'skipped'.
+# ANY change here should trigger a re-audit — treating 'approve'
+# as positive when DB has 'approved' silently produces zeros.
+_POSITIVE_OPERATOR_ACTIONS = frozenset({"approved"})
+_NEGATIVE_OPERATOR_ACTIONS = frozenset({"rejected", "revised", "skipped"})
+
+# Safe auto-apply window per roadmap: [-0.05, +0.05].
+AUTO_APPLY_MAX_DELTA = 0.05
+
+# Minimum samples per niche to trust the suggestion. Below this,
+# the confusion matrix noise dominates the signal.
+_MIN_SAMPLES = 15
+
+
+@dataclass(frozen=True)
+class ConfusionMatrix:
+    """Full 2x2 matrix + derived rates. Every task-5 consumer reads
+    from here so no code path derives just agreement % without also
+    checking the FP/FN breakdown."""
+    tp: int
+    tn: int
+    fp: int
+    fn: int
+
+    @property
+    def n(self) -> int:
+        return self.tp + self.tn + self.fp + self.fn
+
+    @property
+    def agreement_pct(self) -> float:
+        if self.n == 0:
+            return 0.0
+        return (self.tp + self.tn) / self.n * 100
+
+    @property
+    def imbalance(self) -> float:
+        """(fp - fn) / n. Positive when gate over-approves; negative
+        when gate over-rejects."""
+        if self.n == 0:
+            return 0.0
+        return (self.fp - self.fn) / self.n
+
+    def to_dict(self) -> dict:
+        return {
+            "tp": self.tp, "tn": self.tn,
+            "fp": self.fp, "fn": self.fn,
+            "n": self.n,
+            "agreement_pct": self.agreement_pct,
+            "imbalance": self.imbalance,
+        }
+
+
+@dataclass(frozen=True)
+class TuningSuggestion:
+    """Complete output for one niche's weekly analysis."""
+    niche_id: str
+    confusion: ConfusionMatrix
+    current_min_confidence: float
+    suggested_delta: float
+    suggested_min_confidence: float
+    within_auto_apply: bool
+    rationale: str
+
+
+def compute_confusion(rows: list[dict]) -> ConfusionMatrix:
+    """Build the confusion matrix from calibration rows. Each row
+    must have keys ``gate_approved`` (bool) + ``operator_action``
+    (str).
+
+    Rows with operator_action outside the pinned positive/negative
+    sets are SKIPPED — better to under-count than double-count on
+    a value drift."""
+    tp = tn = fp = fn = 0
+    for r in rows:
+        action = r.get("operator_action")
+        gate = r.get("gate_approved")
+        if action in _POSITIVE_OPERATOR_ACTIONS:
+            if gate is True:
+                tp += 1
+            elif gate is False:
+                fn += 1
+        elif action in _NEGATIVE_OPERATOR_ACTIONS:
+            if gate is True:
+                fp += 1
+            elif gate is False:
+                tn += 1
+        # skip rows with unknown operator_action or NULL gate_approved
+    return ConfusionMatrix(tp=tp, tn=tn, fp=fp, fn=fn)
+
+
+def suggest_min_confidence(
+    niche_id: str,
+    confusion: ConfusionMatrix,
+    current_min_confidence: float,
+) -> TuningSuggestion:
+    """Compute a suggested min_confidence delta from the confusion
+    matrix. Returns a full TuningSuggestion with rationale.
+
+    Fail-safe: if sample size is below _MIN_SAMPLES OR imbalance
+    is essentially zero, suggests delta=0 with an explicit
+    "insufficient data" or "well-calibrated" rationale."""
+    delta = 0.0
+    rationale = ""
+
+    if confusion.n < _MIN_SAMPLES:
+        rationale = (
+            f"insufficient samples (n={confusion.n} < {_MIN_SAMPLES}) — "
+            f"holding threshold steady"
+        )
+    elif abs(confusion.imbalance) < 0.02:
+        rationale = (
+            f"gate well-calibrated (imbalance={confusion.imbalance:.3f}, "
+            f"n={confusion.n}) — no change suggested"
+        )
+    else:
+        # imbalance × 0.10 → scale to a reasonable threshold move
+        delta = round(confusion.imbalance * 0.10, 3)
+        direction = "raise" if delta > 0 else "lower"
+        cause = "FP > FN (over-approving)" if delta > 0 else "FN > FP (over-rejecting)"
+        rationale = (
+            f"{cause}, TP={confusion.tp} TN={confusion.tn} "
+            f"FP={confusion.fp} FN={confusion.fn} (n={confusion.n}, "
+            f"agreement={confusion.agreement_pct:.1f}%) — "
+            f"{direction} min_confidence by {abs(delta):.3f}"
+        )
+
+    # Clamp suggested value into [0.0, 1.0]
+    suggested = max(0.0, min(1.0, current_min_confidence + delta))
+    within_apply = abs(delta) <= AUTO_APPLY_MAX_DELTA and delta != 0.0
+
+    return TuningSuggestion(
+        niche_id=niche_id,
+        confusion=confusion,
+        current_min_confidence=current_min_confidence,
+        suggested_delta=delta,
+        suggested_min_confidence=suggested,
+        within_auto_apply=within_apply,
+        rationale=rationale,
+    )
