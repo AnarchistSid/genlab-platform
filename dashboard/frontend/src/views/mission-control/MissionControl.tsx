@@ -40,6 +40,7 @@ import { CompetitorDeltasCard } from "./CompetitorDeltasCard";
 import { ContentQualityCard } from "./ContentQualityCard";
 import { CrossNichePriorsCard } from "./CrossNichePriorsCard";
 import { DriftSignalCard } from "./DriftSignalCard";
+import { FlagFlipProposalsCard } from "./FlagFlipProposalsCard";
 import { IdeationPoolCard } from "./IdeationPoolCard";
 import { EnsembleVotesCard } from "./EnsembleVotesCard";
 import { FlagStateCard } from "./FlagStateCard";
@@ -405,6 +406,17 @@ export default function MissionControl() {
                 in daily blueprint cadence from the pool instead of
                 skipping. */}
             <IdeationPoolCard />
+            {/* Phase 5.C session 2 (2026-08-14): pending autonomous
+                flag-flip proposals. Runner writes to
+                flag_flip_proposals table daily; --apply pass writes
+                new values to /opt/genlab/.env after operator
+                override window elapses. Card shows both current
+                queue AND lets operator reject proposals to prevent
+                auto-apply. Sibling of AutoApprovalCalibrationCard
+                (AUTO #1c) and the AutonomousReviewerStatusCard —
+                same active-vs-observation pattern where the flag
+                *is* the subject. */}
+            <FlagFlipProposalsCard />
             {/* L11 observability (2026-07-08 audit): all 36
                 catalogued GENLAB_* env flags in one card, grouped
                 by capability. Primary operator value: catches

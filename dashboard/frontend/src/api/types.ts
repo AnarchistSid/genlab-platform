@@ -1608,6 +1608,30 @@ export interface IdeationPoolSummary {
 }
 
 // ───────────────────────────────────────────────────────────────
+// Phase 5.C session 2 (2026-08-14) — autonomous flag-flip queue.
+// ───────────────────────────────────────────────────────────────
+
+export interface FlagFlipProposal {
+  id: string;
+  flag_name: string;
+  from_state: string;
+  to_state: string;
+  rationale: string;
+  confidence: number;
+  age_hours: number;
+  hours_until_auto_apply: number;
+  auto_apply_eligible: boolean;
+  proposed_at: string | null;
+  evidence: Record<string, unknown>;
+}
+
+export interface FlagFlipProposalsSummary {
+  override_window_hours: number;
+  confidence_threshold: number;
+  rows: FlagFlipProposal[];
+}
+
+// ───────────────────────────────────────────────────────────────
 // #9 auto-experiments observability (2026-07-23) — lifecycle summary.
 // ───────────────────────────────────────────────────────────────
 

@@ -136,6 +136,12 @@ export const queryKeys = {
      *  15-min poll near-real-time to see consumption. */
     summary: () => ["ideation-pool", "summary"] as const,
   },
+  flagFlipProposals: {
+    /** Phase 5.C session 2 (2026-08-14) — pending autonomous flag
+     *  flips. Runner is daily 07:00 UTC; 15-min poll so operator
+     *  sees fresh proposals + apply-eligibility countdown ticking. */
+    pending: () => ["flag-flip-proposals", "pending"] as const,
+  },
   topCreatorPriors: {
     /** B.2 + B.3 observability (2026-07-08) — A+B intelligence
      *  stack cache keys. Two independent artifact sources with

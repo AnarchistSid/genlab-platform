@@ -1340,6 +1340,37 @@ export const ideationPool = {
     ),
 };
 
+export const flagFlipProposals = {
+  /** Phase 5.C session 2: pending autonomous flag-flip proposals.
+   *  Returns null on cold-start (no proposals) or DB failure —
+   *  card renders "no pending flag flips" copy. */
+  pending: () =>
+    get<{
+      data: import("./types").FlagFlipProposalsSummary | null;
+    }>("/flag-flip-proposals/pending").then((d) =>
+      unwrapEnvelope<import("./types").FlagFlipProposalsSummary>(d),
+    ),
+  reject: async (
+    proposalId: string,
+    reason: string,
+  ): Promise<{ ok: boolean }> => {
+    const token = await getCsrfToken();
+    const resp = await fetchWithRetry(
+      `/api/v1/flag-flip-proposals/${proposalId}/reject`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": token,
+        },
+        body: JSON.stringify({ reason }),
+      },
+    );
+    if (!resp.ok) throw new Error(resp.statusText);
+    return unwrapResponse<{ ok: boolean }>(resp);
+  },
+};
+
 export const competitorDeltas = {
   /** Fetch top competitor-vs-us deltas filtered by min_ratio.
    *  Returns null when: DB unset OR cold-start OR no rows meet

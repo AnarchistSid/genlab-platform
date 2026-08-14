@@ -823,6 +823,7 @@ from server.api.token_health import bp as token_health_bp
 from server.api.autonomous_reviewer import bp as autonomous_reviewer_bp
 from server.api.competitor_deltas import bp as competitor_deltas_bp
 from server.api.content_quality import bp as content_quality_bp
+from server.api.flag_flip_proposals import bp as flag_flip_proposals_bp
 from server.api.ideation_pool import bp as ideation_pool_bp
 from server.api.sponsorship_pipeline import bp as sponsorship_pipeline_bp
 from server.api.top_creator_priors import bp as top_creator_priors_bp
@@ -913,6 +914,9 @@ app.register_blueprint(
 app.register_blueprint(
     autonomous_reviewer_bp
 )  # Phase 5.B session 2 (2026-08-14): /api/v1/autonomous-reviewer/status — per-proposal-type outcome history + meta grade
+app.register_blueprint(
+    flag_flip_proposals_bp
+)  # Phase 5.C session 2 (2026-08-14): /api/v1/flag-flip-proposals/pending + POST reject — autonomous flag flip queue
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)
