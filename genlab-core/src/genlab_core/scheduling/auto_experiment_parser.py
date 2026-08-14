@@ -103,8 +103,13 @@ def _build_prompt(
         "If the prediction lacks a specific numeric target OR clear arm "
         "identities, return {\"unparseable\": true, \"reason\": \"one-line why\"}\n\n"
         "Rules:\n"
-        "- Use arm_ids that appear in the existing arms list when possible. "
-        "New arms (mentioned in prediction but not in existing list) are OK.\n"
+        "- STRICT arm requirement: BOTH arms in your response MUST appear "
+        "EXACTLY (case-sensitive) in the existing_arm_ids list below. Do NOT "
+        "invent new arm names, do NOT reference metric names like "
+        "'reward_binary_success' as arms, do NOT append suffixes like "
+        "'__tiktok_instagram' to existing arm names. If the prediction "
+        "requires an arm that doesn't exist, return "
+        "{\"unparseable\": true, \"reason\": \"needs arm X which doesn't exist\"}\n"
         "- expected_metric_shift is the LIFT the prediction targets, not the "
         "absolute value. E.g. 'reward >= 0.20 vs baseline 0.10' → shift 0.10.\n"
         "- duration_days: pick 7 for style/hook experiments, 14 for content_type, "
@@ -112,11 +117,15 @@ def _build_prompt(
         "- Return only JSON, no prose."
     )
 
+    # Pass the FULL arm list (up to 100). Previously capped at [:15]
+    # which hid most real arms — the LLM couldn't tell which
+    # arm_ids actually existed vs which it was inventing.
+    arm_list = existing_arm_ids[:100]
     user = (
         f"testable_prediction: {prediction!r}\n\n"
         f"niche_id: {niche_id}\n\n"
-        f"existing arm_ids (top 15 for context): "
-        f"{existing_arm_ids[:15]}\n\n"
+        f"existing_arm_ids ({len(arm_list)} of {len(existing_arm_ids)} real bandit arms):\n"
+        f"{arm_list}\n\n"
     )
     if hypothesis:
         user += f"parent hypothesis: {hypothesis[:400]!r}\n"
@@ -216,6 +225,28 @@ def parse_testable_prediction(
         duration_days=duration,
         notes=str(parsed.get("notes", ""))[:400],
     )
+
+    # Post-parse validation (2026-08-14 follow-up): reject specs
+    # whose arms aren't in the real bandit arm list. This is the
+    # belt to the prompt's suspenders — even with the tightened
+    # prompt above, LLMs occasionally hallucinate; validation is
+    # the hard stop. Discovered when the Phase 3.D analyzer showed
+    # 30 of 42 running experiments had zero samples because
+    # their arm_ids didn't exist in bandit_arms.
+    #
+    # Skip the check if the caller didn't pass any existing arms
+    # (test / cold-start case) — otherwise we'd reject every spec.
+    if existing_arm_ids:
+        real = frozenset(existing_arm_ids)
+        invalid = [a for a in spec.arms if a not in real]
+        if invalid:
+            logger.warning(
+                "[experiment_parser] LLM invented arm_ids not in bandit: %s "
+                "(niche=%s, spec.arms=%s) — rejecting spec",
+                invalid, niche_id, spec.arms,
+            )
+            return None, f"invalid_arms:{','.join(invalid)[:100]}"
+
     return spec, ""
 
 
