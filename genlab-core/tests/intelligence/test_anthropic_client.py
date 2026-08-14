@@ -121,9 +121,10 @@ class TestModuleConstants:
         assert DEFAULT_TIMEOUT_SEC == 180.0
 
     def test_max_output_tokens_covers_json_payload(self):
-        """~3K JSON + headroom per the source comment. Pinned so a
-        typo like 400 doesn't ship silently."""
-        assert MAX_OUTPUT_TOKENS == 4_000
+        """Bumped 4K → 16K in Phase 2.D (2026-08-14) to accommodate
+        longer strategist proposals + meta-strategist verdicts. Pinned
+        so a typo like 400 doesn't ship silently."""
+        assert MAX_OUTPUT_TOKENS == 16_000
 
 
 # === Construction ==================================================

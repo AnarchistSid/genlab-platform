@@ -119,6 +119,10 @@ COUNTERFACTUAL REPLAY (top DR arms — offline policy eval)
 ---------------------------------------------------------
 {_format_counterfactual_replay(_get("counterfactual_replay", None))}
 
+COMPETITOR CONTEXT (top-tier creators outperforming our reach)
+--------------------------------------------------------------
+{_format_competitor_context(_get("competitor_context", []))}
+
 ---
 
 Generate your weekly report as JSON conforming to this schema (schema_version={schema_version}):
@@ -228,6 +232,39 @@ def _format_counterfactual_replay(replay: dict[str, Any] | None) -> str:
         ips_str = f"{ips:.3f}" if isinstance(ips, (int, float)) else "-"
         dr_str = f"{dr:.3f}" if isinstance(dr, (int, float)) else "-"
         lines.append(f"    {arm_id[:45]:<45} n={n:<4} ips={ips_str:<6} dr={dr_str}")
+    return "\n".join(lines)
+
+
+def _format_competitor_context(rows: list[dict[str, Any]]) -> str:
+    """Phase 3.A session 3 (2026-08-14): render top competitor deltas.
+
+    Cold-start / flag-off returns an explicit missing-signal line so
+    the LLM knows this signal is unavailable (mirrors
+    ``_format_counterfactual_replay``). Rows already excluded the
+    thin-baseline cases in the collector, so any output here is a
+    reasonable comparison the strategist can cite in proposals.
+    """
+    import os
+
+    flag = os.environ.get(
+        "GENLAB_COMPETITOR_CONTEXT_ENABLED", "0",
+    ).strip().lower()
+    if flag not in {"1", "true", "yes"}:
+        return "  (flag disabled — GENLAB_COMPETITOR_CONTEXT_ENABLED=0)"
+    if not rows:
+        return "  (no competitor rows yet — daily runner may not have fired)"
+    lines = [
+        "  Top competitor uploads outperforming our niche-median (last 48h):",
+    ]
+    for r in rows:
+        label = (r.get("competitor_label") or "?")[:20]
+        title = (r.get("title") or "?")[:55]
+        views = r.get("view_count") or 0
+        ratio = r.get("delta_ratio")
+        ratio_str = f"{ratio:.1f}x" if isinstance(ratio, (int, float)) else "?"
+        lines.append(
+            f"    {label:<20} views={views:>10,} delta={ratio_str:<8} — {title}"
+        )
     return "\n".join(lines)
 
 

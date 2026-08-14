@@ -58,6 +58,15 @@ class PostgresStateCollector:
         # no artifact → None → prompt formatter renders explicit "no
         # artifact yet" line so the LLM sees the missing-signal.
         state["counterfactual_replay"] = self._counterfactual_replay(niche_id)
+        # Phase 3.A session 3 (2026-08-14): competitor context — top-N
+        # competitor hooks that outperformed our niche-median reach by
+        # ≥5x over the last 7 days. Gated behind
+        # GENLAB_COMPETITOR_CONTEXT_ENABLED so the operator validates
+        # the card for ≥1 week before flipping. When flag off OR
+        # cold-start: empty list → prompt renders "(flag disabled)"
+        # or "(no rows yet)" — LLM sees explicit missing-signal, same
+        # pattern as counterfactual_replay.
+        state["competitor_context"] = self._competitor_context(niche_id)
         return state
 
     # ----- per-section best-effort queries -----
@@ -358,6 +367,77 @@ class PostgresStateCollector:
             return []
         # Just summarize; full structure is in DB
         return [{"proposal_summary": "see prior report", "operator_action": "see prior report"}]
+
+    def _competitor_context(self, niche_id: str) -> list[dict[str, Any]]:
+        """Phase 3.A session 3 (2026-08-14): top competitor deltas for
+        this niche as inspiration for the strategist.
+
+        Fail-open on every layer:
+          * ``GENLAB_COMPETITOR_CONTEXT_ENABLED`` gate — flag off
+            returns empty list; prompt formatter renders
+            "(flag disabled)" line so LLM sees explicit off-state
+          * table not present / query error → empty list with WARN log
+          * thin-baseline rows (our_reference_view_count < 10) are
+            EXCLUDED — a broken metric collector shouldn't drive
+            strategist proposals with 4-million-x ratios that are
+            math artifacts, not real reach gaps
+
+        Returns up to 5 rows sorted by delta_ratio DESC. Each entry:
+          {competitor_label, video_id, title, view_count, delta_ratio}
+        """
+        import os
+
+        flag = os.environ.get(
+            "GENLAB_COMPETITOR_CONTEXT_ENABLED", "0",
+        ).strip().lower()
+        if flag not in {"1", "true", "yes"}:
+            return []
+
+        rows = self._safe(
+            "competitor_context",
+            lambda: self._conn.execute(
+                """
+                SELECT competitor_channel_label,
+                       competitor_video_id,
+                       competitor_title,
+                       competitor_view_count,
+                       delta_ratio,
+                       our_reference_view_count
+                FROM competitor_content_deltas
+                WHERE niche_id = %s
+                  AND delta_ratio >= 5.0
+                  AND our_reference_view_count >= 10
+                  AND computed_at >= NOW() - INTERVAL '48 hours'
+                ORDER BY delta_ratio DESC
+                LIMIT 5
+                """,
+                (niche_id,),
+            ).fetchall(),
+        )
+        return [
+            {
+                "competitor_label": (
+                    r.get("competitor_channel_label")
+                    if hasattr(r, "get") else r[0]
+                ),
+                "video_id": (
+                    r.get("competitor_video_id") if hasattr(r, "get") else r[1]
+                ),
+                "title": (
+                    r.get("competitor_title") if hasattr(r, "get") else r[2]
+                ),
+                "view_count": (
+                    r.get("competitor_view_count") if hasattr(r, "get") else r[3]
+                ),
+                "delta_ratio": (
+                    r.get("delta_ratio") if hasattr(r, "get") else r[4]
+                ),
+                "our_reference_view_count": (
+                    r.get("our_reference_view_count") if hasattr(r, "get") else r[5]
+                ),
+            }
+            for r in rows or []
+        ]
 
     def _counterfactual_replay(self, niche_id: str) -> dict[str, Any] | None:
         """Intervention 7 (2026-07-02): load the latest DR replay
