@@ -308,6 +308,25 @@ def _on_success(
             platform,
             exc,
         )
+    # Phase 3.E (2026-08-14) — cross-platform amplification. Sits
+    # alongside cross_post_teaser; different routes (YT→Threads root
+    # post, FB→self-comment). Opt-in per niche via publishing.yaml,
+    # same non-blocking contract as teaser. FB self-comment fires
+    # via a separate poller (needs 24h reach data); YT→Threads
+    # amplify fires here in-line since it doesn't need reach data.
+    try:
+        from genlab_core.publishing.cross_post_amplify import (
+            post_youtube_to_threads_amplify,
+        )
+        post_youtube_to_threads_amplify(
+            platform, result.post_url, fields, niche_id,
+        )
+    except Exception as exc:  # noqa: BLE001 — amplify failure must never block publish
+        logger.warning(
+            "[publish] cross_amplify (yt→threads) failed for %s "
+            "(non-blocking): %s",
+            platform, exc,
+        )
     # Persist the per-platform state NOW so a crash between here and the
     # orchestrator's final update doesn't lose the success and re-post on
     # the next run.

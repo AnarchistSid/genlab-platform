@@ -1,0 +1,16 @@
+[Unit]
+Description=Fire GenLab FB self-comment amplifier every 4h — polls high-reach FB posts + posts YT link
+Requires=genlab-fb-self-comment.service
+
+[Timer]
+OnCalendar=*-*-* 03:45:00 UTC
+OnCalendar=*-*-* 07:45:00 UTC
+OnCalendar=*-*-* 11:45:00 UTC
+OnCalendar=*-*-* 15:45:00 UTC
+OnCalendar=*-*-* 19:45:00 UTC
+OnCalendar=*-*-* 23:45:00 UTC
+Persistent=true
+Unit=genlab-fb-self-comment.service
+
+[Install]
+WantedBy=timers.target
