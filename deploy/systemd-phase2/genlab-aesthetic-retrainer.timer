@@ -1,0 +1,11 @@
+[Unit]
+Description=Fire GenLab aesthetic model retrainer monthly (1st @ 05:00 UTC) — after training labeler has caught up
+Requires=genlab-aesthetic-retrainer.service
+
+[Timer]
+OnCalendar=*-*-01 05:00:00 UTC
+Persistent=true
+Unit=genlab-aesthetic-retrainer.service
+
+[Install]
+WantedBy=timers.target
