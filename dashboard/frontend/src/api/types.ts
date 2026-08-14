@@ -1472,6 +1472,26 @@ export interface ClassifierQualityRow {
   accuracy: number | null;
 }
 
+// Phase 2.C (2026-08-14) — SLO forecasts.
+export type SloVerdict =
+  | "stable"
+  | "watch"
+  | "forecast_warning"
+  | "forecast_critical"
+  | "insufficient_data";
+
+export interface SloForecast {
+  check_name: string;
+  niche_id: string | null;   // null = system-wide
+  current_rate: number;       // EWMA-smoothed daily count today
+  forecast_rate: number;      // projected daily count 24h ahead
+  trend_pct: number;          // (forecast - current) / current × 100
+  verdict: SloVerdict;
+  /** Hours until warning threshold breach, null when stable/decreasing. */
+  ttb_hours: number | null;
+  computed_at: string;
+}
+
 // Intervention 2 observability (2026-07-01) — cross-niche transferred priors.
 // Mirrors ``genlab_core.learning.cross_niche_transfer.TransferredPrior``.
 export interface CrossNichePrior {

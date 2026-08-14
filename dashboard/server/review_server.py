@@ -798,6 +798,7 @@ from server.api.links import bp as links_bp
 from server.api.media_kit import bp as media_kit_bp
 from server.api.metrics import bp as metrics_bp
 from server.api.monetisation import bp as monetisation_bp
+from server.api.slo_forecasts import bp as slo_forecasts_bp
 from server.api.niches import bp as niches_bp
 from server.api.outreach_template import bp as outreach_template_bp
 from server.api.overview import bp as overview_bp
@@ -907,6 +908,7 @@ app.register_blueprint(links_bp)
 app.register_blueprint(revenue_bp)
 app.register_blueprint(alerts_bp)
 app.register_blueprint(metrics_bp)
+app.register_blueprint(slo_forecasts_bp)  # Phase 2.C: /api/v1/monitoring/slo-forecasts
 app.register_blueprint(publishing_health_bp)  # PR B: /api/v1/publishing/per-niche-platform-health
 app.register_blueprint(attribution_health_bp)  # PR #Layer5: /api/v1/attribution-health/stats
 app.register_blueprint(audience_bp)

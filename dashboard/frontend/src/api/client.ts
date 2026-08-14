@@ -1259,6 +1259,17 @@ export const classifierQuality = {
     ),
 };
 
+// 2026-08-14: Phase 2.C — SLO forecasts.
+export const sloForecasts = {
+  /** All current forecasts. Backs SLOForecastCard on Mission Control. */
+  fetch: () =>
+    get<{
+      data: import("./types").SloForecast[] | null;
+    }>("/monitoring/slo-forecasts").then((d) =>
+      unwrapEnvelope<import("./types").SloForecast[]>(d),
+    ),
+};
+
 export const autoExperiments = {
   /** Fetch the lifecycle summary — recent experiments + per-status
    *  counts + last-30d verdict tally. Returns null on any server-side

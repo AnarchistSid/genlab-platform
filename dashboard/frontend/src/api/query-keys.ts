@@ -170,6 +170,11 @@ export const queryKeys = {
      *  Slow-moving aggregate; 5-min poll is plenty. */
     all: () => ["classifier-quality", "all"] as const,
   },
+  sloForecasts: {
+    /** Phase 2.C observability (2026-08-14) — 24h-ahead SLO
+     *  breach forecasts. Runner fires hourly; 5-min poll is plenty. */
+    all: () => ["slo-forecasts", "all"] as const,
+  },
   autoExperiments: {
     /** #9 lifecycle observability (2026-07-23) — per-niche recent
      *  experiments + verdicts. Lifecycle timer fires every 6h; a

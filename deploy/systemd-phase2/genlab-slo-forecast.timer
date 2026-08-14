@@ -1,0 +1,11 @@
+[Unit]
+Description=Fire GenLab SLO forecaster hourly
+Requires=genlab-slo-forecast.service
+
+[Timer]
+OnCalendar=*-*-* *:23:00 UTC
+Persistent=true
+Unit=genlab-slo-forecast.service
+
+[Install]
+WantedBy=timers.target

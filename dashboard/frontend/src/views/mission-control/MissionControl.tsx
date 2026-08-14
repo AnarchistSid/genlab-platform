@@ -44,6 +44,7 @@ import { TopCreatorPriorsCard } from "./TopCreatorPriorsCard";
 import { CounterfactualReplayCard } from "./CounterfactualReplayCard";
 import { RewardSignalAuditCard } from "./RewardSignalAuditCard";
 import { ClassifierQualityCard } from "./ClassifierQualityCard";
+import { SLOForecastCard } from "./SLOForecastCard";
 import { AutoExperimentsCard } from "./AutoExperimentsCard";
 import { ProductBanditCard } from "./ProductBanditCard";
 import { TransformationBanditCard } from "./TransformationBanditCard";
@@ -428,6 +429,12 @@ export default function MissionControl() {
                 until Sat 08-16 IST when the first arm_adds from today's
                 08:30 apply worker hit their 48h window. */}
             <ClassifierQualityCard />
+            {/* Phase 2.C (2026-08-14): SLO forecast — EWMA-smoothed
+                pipeline_alerts trends + 24h-ahead breach projection.
+                All this month's reactive fixes (cookies bot-block,
+                source diversity, strategist 4k truncation) would have
+                surfaced 24h earlier if this had existed then. */}
+            <SLOForecastCard />
             {/* #9 lifecycle observability (2026-07-23): auto-experiment
                 verdicts + queue depth. Sibling to the strategist card —
                 strategist proposes causal hypotheses; parser queues them;
