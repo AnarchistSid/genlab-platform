@@ -155,29 +155,43 @@ def fetch_platform_metrics(
         return {}
 
     # 2026-07-17 (Layer 4 foundational): augment with follower_gained /
-    # subscriber_gained from audience_snapshots deltas. Only at the 168h
-    # window — follower growth on shorter windows (24h/48h) is too
-    # noisy to attribute. Prior state: `follower_gained` was declared as
-    # a reward weight in reward_shaper.BASE_WEIGHTS for tiktok since
-    # 2026-05, and `subscriber_gained` for youtube — but NEVER populated
-    # anywhere in the codebase → bandit optimized purely for engagement
-    # with zero follower-growth signal. Now wired.
-    if window == "168h":
+    # subscriber_gained from audience_snapshots deltas. Prior state:
+    # `follower_gained` was declared as a reward weight in
+    # reward_shaper.BASE_WEIGHTS for tiktok since 2026-05, and
+    # `subscriber_gained` for youtube — but NEVER populated anywhere in
+    # the codebase → bandit optimized purely for engagement with zero
+    # follower-growth signal. Wired at 168h 2026-07-17.
+    #
+    # 2026-08-15 extension: also fire at 24h and 48h windows with
+    # proportionally shorter lookback (1d and 2d respectively). The
+    # prior "too noisy" note was correct for absolute magnitude but
+    # missed that the AUTO-approver's outcome_readiness reads reward_48h
+    # exclusively — leaving 48h blind to follower signal meant the
+    # auto-approver's confidence loop had no way to detect that a
+    # gate-approved post grew (or failed to grow) the audience. Even
+    # a coarse 1-2 day delta is > None and unblocks the tuner. See
+    # `[[growth-flywheel-diagnostic-2026-08-15]]` for full rationale.
+    _WINDOW_LOOKBACK_HOURS = {"24h": 24, "48h": 48, "168h": 168}
+    _WINDOW_LOOKBACK_DAYS = {"24h": 1, "48h": 2, "168h": 7}
+    lookback_days = _WINDOW_LOOKBACK_DAYS.get(window)
+    if lookback_days is not None:
         try:
             from genlab_core.learning.metrics.follower_delta import (
                 augment_metrics_with_follower_delta,
             )
 
-            # publish_time isn't a direct arg here; approximate by 7d
-            # ago (168h) — the caller's window intent aligns with this.
-            approx_publish = datetime.now(UTC) - timedelta(hours=168)
+            approx_publish = datetime.now(UTC) - timedelta(
+                hours=_WINDOW_LOOKBACK_HOURS[window],
+            )
             metrics = augment_metrics_with_follower_delta(
-                metrics, niche_id, platform, approx_publish, window_days=7,
+                metrics, niche_id, platform, approx_publish,
+                window_days=lookback_days,
             )
         except Exception as exc:
             logger.debug(
-                "[metric_collector] follower_delta augment failed for %s/%s: %s",
-                niche_id, platform, exc,
+                "[metric_collector] follower_delta augment failed for "
+                "%s/%s window=%s: %s",
+                niche_id, platform, window, exc,
             )
 
     return metrics
