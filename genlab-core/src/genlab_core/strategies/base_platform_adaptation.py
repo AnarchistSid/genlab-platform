@@ -134,14 +134,44 @@ class BasePlatformAdaptationStrategy(PlatformAdaptationStrategy):
             tw["first_reply"] = result.first_comment
 
     def _adapt_facebook(self, content: dict[str, Any]) -> None:
-        """Facebook: strip URLs, remove competitor hashtags, engagement Q."""
+        """Facebook: strip URLs, remove competitor hashtags, engagement Q.
+
+        2026-08-15: appends cross-channel footer via
+        ``publishing.cross_channel_footer.append_footer_if_enabled``.
+        Flag-gated per niche via ``GENLAB_CROSS_CHANNEL_FOOTER_NICHES``.
+        FB is the only funnel-source today because it's the only
+        platform where niches have >100 followers to funnel FROM
+        (ai_creators 10K, movies 8.6K, others 19-53 which is still
+        the largest sibling audience per niche).
+        """
         fb = content.get("facebook", {})
         caption = fb.get("caption", "")
         if not caption:
             return
         hashtags = re.findall(r"#\w+", caption)
         result = enforce_platform_rules("facebook", "", caption, hashtags=hashtags)
-        fb["caption"] = result.caption
+        adapted = result.caption
+
+        try:
+            from genlab_core.publishing.cross_channel_footer import (
+                append_footer_if_enabled,
+            )
+            # blueprint_hash: use a stable per-content signature so
+            # target-platform rotation is idempotent across re-renders.
+            # story_id + platform-specific hash slot both work; caption
+            # is the most stable signal available at this scope.
+            adapted = append_footer_if_enabled(
+                adapted,
+                niche_id=self._niche_id,
+                source_platform="facebook",
+                blueprint_hash=caption[:100],
+            )
+        except Exception as exc:
+            logger.debug(
+                "[%s] cross_channel_footer skipped: %s",
+                self._niche_id, exc,
+            )
+        fb["caption"] = adapted
 
     def _adapt_tiktok(self, content: dict[str, Any]) -> None:
         """TikTok: strip URLs, hook in first 150 chars, hashtags, <=2200 chars."""
