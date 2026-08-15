@@ -69,6 +69,20 @@ class TestAppend:
         out = append_niche_hashtags(cap, "anime", ["#Anime"])
         assert out == cap
 
+    def test_position_number_hash_does_not_trigger_idempotency(self, monkeypatch):
+        """Bug caught 2026-08-15 live probe: '#1' position number
+        in caption body incorrectly triggered the idempotency guard,
+        skipping the augment. Real hashtags start with a letter —
+        '#1' is content, not metadata."""
+        monkeypatch.setenv("GENLAB_THREADS_HASHTAGS_NICHES", "all")
+        cap = "Rust just hit #1 trending on Twitch. Watch this play."
+        out = append_niche_hashtags(cap, "gaming", [])
+        # Fallback tag SHOULD be appended since no REAL hashtag exists
+        assert "#Gaming" in out, (
+            f"'#1' in body must not skip the augment; expected "
+            f"#Gaming appended: got {out!r}"
+        )
+
     def test_max_2_tags(self, monkeypatch):
         monkeypatch.setenv("GENLAB_THREADS_HASHTAGS_NICHES", "all")
         cap = "Body"

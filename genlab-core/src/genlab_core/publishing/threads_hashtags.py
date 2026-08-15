@@ -37,7 +37,12 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Final
+
+# Match real hashtags: # followed by 2+ letters (so "#1" position
+# numbers don't trigger the idempotency guard).
+_REAL_HASHTAG_RE = re.compile(r"#[A-Za-z][A-Za-z0-9_]+")
 
 logger = logging.getLogger(__name__)
 
@@ -103,15 +108,16 @@ def append_niche_hashtags(
     source_hashtags: list[str] | None = None,
 ) -> str:
     """Append 1-2 hashtags to a Threads caption. Idempotent — if
-    the caption already contains any hashtag inline, returns as-is
-    (LLM or upstream augment did their job)."""
+    the caption already contains a REAL hashtag inline (# followed
+    by letters, not "#1" position numbers), returns as-is (LLM or
+    upstream augment did their job)."""
     if not is_enabled_for(niche_id):
         return caption
     if not caption:
         return caption
-    # Idempotent guard: skip if caption has any hashtag already.
-    # Simple check — inline # in the last 200 chars.
-    if "#" in caption[-200:]:
+    # Idempotent guard: skip only when a real hashtag exists. Bare
+    # "#" or "#1" position numbers don't count — those are content.
+    if _REAL_HASHTAG_RE.search(caption):
         return caption
     tags = _pick_tags(source_hashtags or [], niche_id)
     if not tags:
