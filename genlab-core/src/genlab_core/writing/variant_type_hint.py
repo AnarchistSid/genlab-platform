@@ -169,15 +169,33 @@ def pick_variant_type_hint(niche_id: str) -> str | None:
         else:
             variant_arms[variant_name] = (alpha, beta)
 
-    if not variant_arms:
-        return None
+    # 2026-08-15: seed uniform prior for missing non-default variants.
+    # Prior state was a chicken-and-egg loop:
+    #   only single_clip had arms with plays
+    #     → selector returned None
+    #     → writer picked default single_clip
+    #     → non-default variants never got sampled
+    #     → non-default variants never got arms
+    #     → repeat forever
+    # Live audit 2026-08-15 confirmed: 5 niches × 5 non-default
+    # variants = 25 arms should exist; ZERO have plays. Only
+    # single_clip:X (5 arms) has been sampled since Phase Layer 3
+    # ship. Fix: add every VARIANT_TYPES entry to variant_arms with
+    # Beta(1,1) uniform prior when missing, so Thompson sampling
+    # actually explores. Non-default variants will emerge on their
+    # own merit once they get plays.
+    for v in VARIANT_TYPES:
+        variant_arms.setdefault(v, (1.0, 1.0))
 
-    # Skip the hint when ONLY single_clip has data — the hint would
-    # just re-state the pipeline's fallback, wasting prompt tokens
-    # for no signal. Wait for at least one non-default arm to have
-    # observations before steering the writer.
-    non_default_arms = {k: v for k, v in variant_arms.items() if k != DEFAULT_VARIANT}
-    if not non_default_arms:
+    # Skip only when the exploration would be pointless — i.e., the
+    # default has SO much positive data that non-default arms with
+    # uniform prior can't compete. Signal: default alpha > 30 AND
+    # posterior mean > 0.15. Below that, keep exploring.
+    default_a, default_b = variant_arms.get(DEFAULT_VARIANT, (1.0, 1.0))
+    default_mean = default_a / (default_a + default_b) if (default_a + default_b) > 0 else 0.0
+    if default_a > 30 and default_mean > 0.15:
+        # Default is clearly winning; don't inject variant hints
+        # that steer writer away from the proven pattern.
         return None
 
     best_sample = -1.0

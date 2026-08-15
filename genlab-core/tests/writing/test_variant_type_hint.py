@@ -64,13 +64,37 @@ class TestPickVariantTypeHint:
                 },
             ),
         ):
-            assert pick_variant_type_hint("gaming") is None
+            # 2026-08-15 behavior change: cold-start no-variant-arms
+            # case now returns ANY valid VARIANT_TYPES via uniform-
+            # prior Thompson sample. Prior behavior returned None which
+            # created a chicken-and-egg lock — variants never got plays
+            # because selector never suggested them. See
+            # `[[bandit-learning-loop-audit-2026-08-15]]`.
+            # Draw multiple: cold-start uniform sampling should surface
+            # at least 3 distinct variants over 30 draws.
+            import random as _r
+            _r.seed(0)
+            picks = [pick_variant_type_hint("gaming") for _ in range(30)]
+            from genlab_core.variant_types import VARIANT_TYPES
+            for p in picks:
+                assert p in VARIANT_TYPES, (
+                    f"cold-start pick must be a real variant: {p}"
+                )
+            distinct = set(picks)
+            assert len(distinct) >= 3, (
+                f"cold-start uniform sampling should surface at least "
+                f"3 distinct variants; got {distinct}"
+            )
 
-    def test_only_single_clip_arm_returns_none(self) -> None:
-        """Even with real observations, if ONLY single_clip has data,
-        the hint would just say 'prefer single_clip' — redundant with
-        the pipeline's fallback. Wait for a non-default variant to
-        have observations."""
+    def test_only_single_clip_light_data_still_explores_non_default(
+        self,
+    ) -> None:
+        """When single_clip has light data (< 30 plays), Thompson
+        sampling with uniform prior for non-defaults should still
+        occasionally pick a non-default variant. The chicken-and-egg
+        fix removed the 'wait for non-default plays before suggesting
+        non-default' guard because it created a deadlock."""
+        import random as _r
         fake_client = MagicMock()
         fake_client.bandit_arms = MagicMock()
         with (
@@ -85,6 +109,34 @@ class TestPickVariantTypeHint:
                 },
             ),
         ):
+            _r.seed(42)
+            picks = [pick_variant_type_hint("gaming") for _ in range(50)]
+        non_default_picks = [p for p in picks if p and p != "single_clip"]
+        assert len(non_default_picks) > 5, (
+            f"expected non-default exploration; got only "
+            f"{len(non_default_picks)}/50: {set(picks)}"
+        )
+
+    def test_default_dominant_skips_hint(self) -> None:
+        """When single_clip has >30 plays AND posterior mean > 0.15
+        (clearly winning), skip the hint entirely — non-default
+        exploration would steer writer away from proven pattern."""
+        fake_client = MagicMock()
+        fake_client.bandit_arms = MagicMock()
+        with (
+            patch(
+                "genlab_core.http.backlog_client.BacklogClient",
+                return_value=fake_client,
+            ),
+            patch(
+                "genlab_core.learning.arm_loader.load_all_arms",
+                return_value={
+                    # 50 alpha with beta=50 → 0.5 mean, 100 total plays
+                    "variant:gaming:single_clip": (50.0, 50.0),
+                },
+            ),
+        ):
+            # Guard fires because alpha > 30 AND mean > 0.15
             assert pick_variant_type_hint("gaming") is None
 
     def test_non_default_variant_can_be_picked(self) -> None:
@@ -116,8 +168,12 @@ class TestPickVariantTypeHint:
 
     def test_unknown_variant_string_filtered(self) -> None:
         """Guard against typos or stale enum drift (rule #22 sibling).
-        A row like ``variant:gaming:not_a_real_variant`` should be
-        silently skipped, not returned to caller."""
+        A row like ``variant:gaming:not_a_real_variant`` must be
+        silently skipped from consideration. Post 2026-08-15 chicken-
+        and-egg fix: real VARIANT_TYPES get uniform prior even without
+        arm rows, so the fallback picks a REAL variant instead of
+        None. The invariant is that the invalid string never surfaces
+        to the caller."""
         fake_client = MagicMock()
         fake_client.bandit_arms = MagicMock()
         with (
@@ -132,8 +188,11 @@ class TestPickVariantTypeHint:
                 },
             ),
         ):
-            # Only "invalid" arm exists → no valid variants → None
-            assert pick_variant_type_hint("gaming") is None
+            from genlab_core.variant_types import VARIANT_TYPES
+            result = pick_variant_type_hint("gaming")
+            assert result != "not_a_real_variant"
+            # Either None (default-dominant guard) OR a real variant
+            assert result is None or result in VARIANT_TYPES
 
     def test_niche_isolation(self) -> None:
         """variant:{niche}:X arms for OTHER niches must not be
@@ -154,9 +213,28 @@ class TestPickVariantTypeHint:
                 },
             ),
         ):
-            # gaming has only single_clip arm → None
-            # (sports arm should NOT be considered)
-            assert pick_variant_type_hint("gaming") is None
+            # sports arm must NOT surface as gaming's pick. Post
+            # 2026-08-15 fix: gaming with only single_clip data +
+            # uniform priors for other variants will pick SOME real
+            # variant; the pin is that the sports-arm's high alpha
+            # doesn't leak into gaming's choice.
+            from genlab_core.variant_types import VARIANT_TYPES
+            # Run 30 draws; the sports:series_part 100:1 arm would
+            # dominate 100% if there were a leak.
+            import random as _r
+            _r.seed(0)
+            picks = [pick_variant_type_hint("gaming") for _ in range(30)]
+            # All picks must be real variants (or None) — none
+            # cross-contaminated.
+            for p in picks:
+                assert p is None or p in VARIANT_TYPES
+            # If the sports arm leaked, series_part would appear
+            # 100% of the time. Verify variety exists.
+            distinct = {p for p in picks if p is not None}
+            assert len(distinct) >= 2, (
+                f"sports arm leaked into gaming choice: "
+                f"got only {distinct}"
+            )
 
     def test_platform_split_arms_aggregate(self) -> None:
         """Per-platform arms come through as ``variant:{niche}:{v}__{platform}``
