@@ -371,9 +371,13 @@ readiness = ≥30 samples AND ≥90% agreement.
 every 30 min. Kill switches: (a) `GENLAB_AUTO_APPROVE_DISABLED=1`, (b)
 `touch /opt/genlab/.runtime/auto_approve_kill_switch`, (c) `systemctl stop` the timer.
 
-Currently enforces on **ai_creators ONLY** per `BlackboxBrief/config/publishing.yaml`
-at `min_confidence: 0.80`, `rollout_pct: 0.1`. Threshold tuning history + gaming
-enrollment revert lesson: `[[session-2026-07-17-batch-fix-deeper-cuts]]` (rule #22).
+**Live 2026-08-15 state** (was "ai_creators ONLY" pre-Phase-4.C — that note was
+stale by weeks): all 5 niches have `auto_publish.enabled: true` + `rollout_pct:
+1.0`. Current min_confidence per niche (daily-tuned by Phase 5.A calibration
+tuner, threshold floor lowered 15→5 samples on 2026-08-15 `c0a3a806`):
+ai_creators 0.745, sports 0.794, gaming 0.85, movies 0.85, anime 0.85 (pending
++0.06 operator-review suggestion). Threshold tuning history + gaming enrollment
+revert lesson: `[[session-2026-07-17-batch-fix-deeper-cuts]]` (rule #22).
 
 Rollout ladder: Week 1 `0.1` → Week 2 `0.25` → Week 3 `0.5` → Week 4 `1.0`. Dice
 is deterministic per blueprint (`sha256(record_id) % 10000 / 10000`).
