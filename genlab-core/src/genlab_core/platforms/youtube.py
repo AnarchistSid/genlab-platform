@@ -510,6 +510,25 @@ class YouTubeClient:
         if "Shorts" not in tags:
             tags.append("Shorts")
 
+        # 2026-08-15: augment YT snippet.tags with niche-anchor +
+        # discovery tags (similar to IG discovery pattern). Video tags
+        # are a SECONDARY YT signal per Google's own docs but community
+        # consensus is 8-12 well-chosen tags help recommendation
+        # surface area. Small-audience channels (0-9 subs) need every
+        # marginal discovery boost.
+        try:
+            from genlab_core.publishing.youtube_video_tags import (
+                augment_youtube_snippet_tags,
+            )
+            tags = augment_youtube_snippet_tags(
+                tags, niche_id=payload.niche_id,
+            )
+        except Exception as exc:
+            self._log.debug(
+                "YouTube: video-tag augment failed (%s) — using base tags",
+                exc,
+            )
+
         # Quota gate — refuse upload if near daily limit.
         # 2026-06-15 audit T#65: log + return the HARD-STOP ceiling (9800u
         # by default, configurable via HARD_STOP_PCT), not the raw 10K
