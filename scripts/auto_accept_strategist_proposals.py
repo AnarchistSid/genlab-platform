@@ -190,6 +190,43 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _mark_completed_reports(conn) -> int:
+    """Stamp reviewed_at + reviewed_by='auto' on any unreviewed
+    strategist_reports whose proposals have ALL been triaged
+    (every index is in the union of proposals_accepted +
+    proposals_rejected).
+
+    Discovered 2026-08-15: the auto-accepter has been running
+    correctly for weeks but never marks a report reviewed. Every
+    downstream "reviewed_at IS NULL" query (dashboard banner,
+    operator briefing, persister.list_unreviewed) treated fully-
+    triaged reports as still-pending — 17 stale reports piled up
+    before this closer landed.
+
+    Reports with even one un-triaged proposal (usually operator_gate
+    punts) stay NULL — operator still owes those.
+
+    Returns count of newly-closed reports.
+    """
+    result = conn.execute(
+        """
+        UPDATE strategist_reports
+        SET reviewed_at = NOW(),
+            reviewed_by = 'auto'
+        WHERE reviewed_at IS NULL
+          AND jsonb_array_length(proposals) > 0
+          AND (
+            SELECT COUNT(DISTINCT idx)
+            FROM jsonb_array_elements_text(
+              COALESCE(proposals_accepted, '[]'::jsonb)
+              || COALESCE(proposals_rejected, '[]'::jsonb)
+            ) AS t(idx)
+          ) >= jsonb_array_length(proposals)
+        """,
+    )
+    return result.rowcount or 0
+
+
 def _proposal_confidence(proposal: dict) -> str:
     # Proposals themselves may carry confidence; fall through to
     # the linked hypothesis if not.
@@ -621,6 +658,27 @@ def main() -> int:
                     "report %s: %s", indices, report_id[:8], exc,
                 )
         conn.commit()
+
+        # 2026-08-15 fix: stamp reviewed_at on fully-triaged reports.
+        # Runs after commit so any INSERTs above are visible to the
+        # completion check.
+        try:
+            n_closed = _mark_completed_reports(conn)
+            conn.commit()
+            if n_closed:
+                logger.info(
+                    "[auto_accept] marked %d fully-triaged reports "
+                    "as reviewed_by=auto", n_closed,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "[auto_accept] mark-completed failed: %s", exc,
+                exc_info=True,
+            )
+            try:
+                conn.rollback()
+            except Exception:
+                pass
 
         logger.info(
             "DONE heuristic_accepted=%d llm_accepted=%d llm_rejected=%d "
