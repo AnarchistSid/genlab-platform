@@ -60,7 +60,7 @@ class TestCollectState:
               "check_name": "zero_blueprints", "message": "..."}],  # alerts
             [{"flag_name": "F", "from_state": "25", "to_state": "50",
               "confidence": 0.9, "rationale": "r", "age_h": 3.5}],  # flips
-            {"n_reports": 1, "n_proposals": 2},  # strat (fetch_one row)
+            {"n_reports": 1, "n_untriaged": 2},  # strat (fetch_one row)
             [{"niche_id": "ai_creators", "n_samples": 45,
               "agreement_rate": 0.92}],  # cal
             {"total_usd": 1.23, "n_runs": 5, "n_calls": 42},  # cost
@@ -179,7 +179,7 @@ class TestGenerate:
             [], None, [],
             [{"flag_name": "F", "from_state": "1", "to_state": "2",
               "confidence": 0.9, "rationale": "r", "age_h": 1}],  # flips (1)
-            {"n_reports": 2, "n_proposals": 4},  # strat (4)
+            {"n_reports": 2, "n_untriaged": 4},  # strat (4)
             [], None,
         ])
         fake_client = MagicMock()

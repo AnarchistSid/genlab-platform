@@ -191,15 +191,28 @@ def _pending_flag_flips(conn) -> dict[str, Any]:
 
 def _pending_strategist(conn) -> dict[str, Any]:
     """Real schema: strategist_reports stores per-run rows with
-    proposals[] JSONB. "Pending" = reports not yet reviewed
-    (reviewed_at IS NULL) in the last 14 days. Older un-reviewed
-    reports are effectively abandoned — surfacing them only adds
-    noise. There is no separate strategist_proposals table."""
+    proposals[] JSONB. "Pending" = UN-TRIAGED proposals (index not
+    in accepted OR rejected array) inside reports still in review.
+
+    Naive count via `SUM(jsonb_array_length(proposals))` overstates
+    the number because most reports have >90% of proposals already
+    triaged by the auto-accepter — only a small operator_gate tail
+    remains. This computes `n_props - n_triaged` per report and sums.
+
+    There is no separate strategist_proposals table."""
     row = _fetch_one(
         conn,
         """
         SELECT COUNT(*) AS n_reports,
-               SUM(jsonb_array_length(proposals))::int AS n_proposals
+               SUM(
+                 jsonb_array_length(proposals) - (
+                   SELECT COUNT(DISTINCT idx)
+                   FROM jsonb_array_elements_text(
+                     COALESCE(proposals_accepted, '[]'::jsonb)
+                     || COALESCE(proposals_rejected, '[]'::jsonb)
+                   ) AS t(idx)
+                 )
+               )::int AS n_untriaged
         FROM strategist_reports
         WHERE reviewed_at IS NULL
           AND run_at >= NOW() - INTERVAL '14 days'
@@ -208,7 +221,7 @@ def _pending_strategist(conn) -> dict[str, Any]:
     if row is None:
         return {"count": 0, "n_reports": 0}
     return {
-        "count": int(row.get("n_proposals") or 0),
+        "count": max(0, int(row.get("n_untriaged") or 0)),
         "n_reports": int(row.get("n_reports") or 0),
     }
 
