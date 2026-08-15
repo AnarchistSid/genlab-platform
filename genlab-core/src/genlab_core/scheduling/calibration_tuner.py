@@ -61,9 +61,20 @@ _NEGATIVE_OPERATOR_ACTIONS = frozenset({"rejected", "revised", "skipped"})
 # Safe auto-apply window per roadmap: [-0.05, +0.05].
 AUTO_APPLY_MAX_DELTA = 0.05
 
-# Minimum samples per niche to trust the suggestion. Below this,
-# the confusion matrix noise dominates the signal.
-_MIN_SAMPLES = 15
+# Minimum samples per niche to compute a suggestion. Lowered 2026-08-15
+# from 15 → 5. Rationale: outcome_readiness now writes source='outcome'
+# calibration rows for every auto-approved blueprint after 48h. Even
+# with rollout_pct=1.0 the slow-cadence niches (anime, movies) only
+# accumulate ~3-5 rows/week — floor of 15 meant they'd never trigger
+# a suggestion. Small-sample noise is bounded by AUTO_APPLY_MAX_DELTA
+# (0.05) — suggestions with |delta| > 0.05 become MANUAL entries for
+# operator eyeball (surfaced via calibration_tuning_suggestions +
+# operator briefing) rather than silent auto-apply.
+#
+# Live 2026-08-15 state that motivated this:
+#   ai_creators n=46 (tuning), sports n=22 (tuning),
+#   anime n=5 (stuck), movies n=3 (stuck), gaming n=0.
+_MIN_SAMPLES = 5
 
 
 @dataclass(frozen=True)

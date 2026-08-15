@@ -119,7 +119,8 @@ class TestSuggestMinConfidence:
         return ConfusionMatrix(tp=tp, tn=tn, fp=fp, fn=fn)
 
     def test_insufficient_samples_returns_zero_delta(self):
-        s = suggest_min_confidence("gaming", self._cm(3, 3, 2, 1), 0.85)
+        # Floor lowered 2026-08-15 to 5. Use n=4 to stay below.
+        s = suggest_min_confidence("gaming", self._cm(1, 1, 1, 1), 0.85)
         assert s.suggested_delta == 0.0
         assert "insufficient samples" in s.rationale
         assert s.within_auto_apply is False
@@ -148,6 +149,21 @@ class TestSuggestMinConfidence:
         s = suggest_min_confidence("gaming", self._cm(35, 40, 15, 10), 0.85)
         assert 0 < s.suggested_delta <= AUTO_APPLY_MAX_DELTA
         assert s.within_auto_apply is True
+
+    def test_small_sample_fp_heavy_suggests_but_beyond_auto_apply(self):
+        """Anime-shaped case that motivated the 2026-08-15 floor drop.
+        5 outcome rows, all gate-approved (source='outcome' semantic:
+        gate says approve, outcome says whether it was actually good).
+        2 outcomes good (TP=2), 3 outcomes bad (FP=3), no rejections
+        from the gate so FN=TN=0. imbalance = (3-0)/5 = 0.60 →
+        delta = +0.06 which EXCEEDS AUTO_APPLY_MAX_DELTA=0.05, so it
+        becomes a manual suggestion the operator eyeballs rather than
+        silent auto-apply. Small-sample noise is bounded by the cap."""
+        s = suggest_min_confidence("anime", self._cm(2, 0, 3, 0), 0.85)
+        assert s.suggested_delta > 0  # FP-heavy → raise threshold
+        assert abs(s.suggested_delta) > AUTO_APPLY_MAX_DELTA
+        assert s.within_auto_apply is False
+        assert "FP > FN" in s.rationale
 
     def test_outside_auto_apply_when_large_delta(self):
         # Extreme skew: 60 FP vs 0 FN out of 100 → imbalance +0.60, delta +0.06

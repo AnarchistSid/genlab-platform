@@ -1,9 +1,14 @@
 [Unit]
-Description=Fire GenLab calibration tuner weekly Monday 06:00 UTC — analyze last 4 weeks of calibration data + suggest min_confidence delta
+Description=Fire GenLab calibration tuner daily 06:15 UTC — analyze last 4 weeks of calibration data + suggest min_confidence delta
 Requires=genlab-calibration-tuner.service
 
 [Timer]
-OnCalendar=Mon *-*-* 06:00:00 UTC
+# Cadence bumped 2026-08-15 from weekly (Mon) to daily. Outcome-source
+# calibration rows land continuously (~1-3/day/niche) and the floor
+# was lowered to 5 samples — daily runs let slow-cadence niches
+# (anime, movies) start receiving suggestions within ~2 days of
+# hitting the floor instead of waiting up to a week.
+OnCalendar=*-*-* 06:15:00 UTC
 Persistent=true
 Unit=genlab-calibration-tuner.service
 
