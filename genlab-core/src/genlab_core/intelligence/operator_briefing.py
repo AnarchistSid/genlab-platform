@@ -155,12 +155,18 @@ def _top_performer_yesterday(conn) -> dict[str, Any] | None:
 
 
 def _pending_alerts(conn) -> dict[str, Any]:
+    """Only unresolved alerts should reach the briefing — otherwise
+    the LLM keeps suggesting repair actions for things already fixed
+    (observed live 2026-08-15: repair_permissions.sh alert lingered
+    in the briefing hours after the fix ran because the query lacked
+    the resolved_at IS NULL filter)."""
     rows = _fetch_all(
         conn,
         """
         SELECT niche_id, severity, check_name, message
         FROM pipeline_alerts
         WHERE created_at >= NOW() - INTERVAL '24 hours'
+          AND resolved_at IS NULL
         ORDER BY created_at DESC
         LIMIT 5
         """,
