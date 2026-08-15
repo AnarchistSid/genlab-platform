@@ -55,15 +55,15 @@ class TestCollectState:
         conn = _stub_conn_returning([
             [{"niche_id": "gaming", "n": 1}],  # publishes
             {"niche_id": "gaming", "platform": "yt", "post_id": "abc",
-             "views_count": 500, "likes_count": 12},  # top
-            [{"niche_id": "sports", "severity": "HIGH",
+             "views": 500, "likes": 12},  # top (real columns)
+            [{"niche_id": "sports", "severity": "warning",
               "check_name": "zero_blueprints", "message": "..."}],  # alerts
             [{"flag_name": "F", "from_state": "25", "to_state": "50",
               "confidence": 0.9, "rationale": "r", "age_h": 3.5}],  # flips
-            [{"proposal_type": "arm_disable", "n": 2}],  # strat
+            {"n_reports": 1, "n_proposals": 2},  # strat (fetch_one row)
             [{"niche_id": "ai_creators", "n_samples": 45,
               "agreement_rate": 0.92}],  # cal
-            {"total_usd": 1.23, "n_calls": 42},  # cost
+            {"total_usd": 1.23, "n_runs": 5, "n_calls": 42},  # cost
         ])
         state = collect_state(conn)
         assert set(state.keys()) == {
@@ -74,6 +74,7 @@ class TestCollectState:
         assert state["publishes_yesterday"]["total"] == 1
         assert state["pending_flag_flips"]["count"] == 1
         assert state["pending_strategist"]["count"] == 2
+        assert state["top_performer_yesterday"]["views"] == 500
 
     def test_one_collector_error_siblings_still_fill(self, monkeypatch):
         """A failing SQL query must not kill sibling collectors."""
@@ -178,7 +179,7 @@ class TestGenerate:
             [], None, [],
             [{"flag_name": "F", "from_state": "1", "to_state": "2",
               "confidence": 0.9, "rationale": "r", "age_h": 1}],  # flips (1)
-            [{"proposal_type": "T", "n": 4}],  # strat (4)
+            {"n_reports": 2, "n_proposals": 4},  # strat (4)
             [], None,
         ])
         fake_client = MagicMock()
@@ -188,6 +189,120 @@ class TestGenerate:
         result = generate(conn, client=fake_client)
         assert result.n_pending_flag_flips == 1
         assert result.n_pending_strategist_proposals == 4
+
+
+class TestColumnNamesMatchProductionSchema:
+    """Prevention pin for the class-of-bug that broke 4 of the 7
+    collectors on Phase 5.D's first live-fire.
+
+    Each collector's SQL string is inspected for its FROM clause +
+    referenced columns; those column names are cross-checked against
+    a pinned schema snapshot taken from prod 2026-08-15.
+
+    Updating: when a migration lands that renames a column, update
+    the SCHEMA dict below AND fix the query. This test will fail
+    loudly rather than silently render `null` on the card."""
+
+    # Prod schema snapshot 2026-08-15 (from information_schema.columns)
+    _SCHEMA: dict[str, set[str]] = {
+        "publishing_analytics": {
+            "id", "niche_id", "post_id", "platform", "published_at",
+            "status", "views", "likes", "comments", "shares", "saves",
+            "metrics_fetched", "created_at", "updated_at", "extra",
+            "blueprint_id", "error_message",
+        },
+        "pipeline_alerts": {
+            "id", "niche_id", "check_name", "severity", "message",
+            "details", "auto_fix_applied", "auto_fix_result",
+            "resolved_at", "created_at", "notified_at",
+        },
+        "flag_flip_proposals": {
+            "id", "flag_name", "from_state", "to_state", "rationale",
+            "evidence", "confidence", "status", "proposed_at",
+            "applied_at", "applied_by", "rejected_at", "rejection_reason",
+        },
+        "strategist_reports": {
+            "id", "niche_id", "run_at", "week_of", "inputs_json",
+            "detected_phase", "phase_evidence", "proposals",
+            "causal_hypotheses", "universal_playbook_proposals",
+            "weekly_summary", "cost_usd", "input_tokens", "output_tokens",
+            "reviewed_at", "reviewed_by", "proposals_accepted",
+            "proposals_rejected", "operator_notes", "extra",
+        },
+        "auto_approval_calibration": {
+            "id", "blueprint_id", "niche_id", "gate_approved",
+            "gate_confidence", "gate_passed_checks", "gate_failed_checks",
+            "operator_action", "decided_at", "review_duration_ms",
+            "feedback_category", "source",
+        },
+        "pipeline_run_costs": {
+            "id", "run_id", "niche_id", "completed_at", "total_usd",
+            "llm_usd", "image_usd", "tts_usd", "compute_usd",
+            "media_usd", "bandwidth_usd", "by_model", "budget_usd",
+            "budget_remaining_pct", "entry_count",
+        },
+    }
+
+    def _query_for(self, fn) -> str:
+        """Extract the SQL from a collector by running it against a
+        recording MagicMock. Cleaner than parsing the source."""
+        conn = MagicMock()
+        seen = {}
+
+        def _record(sql, params=()):
+            seen["sql"] = sql
+            r = MagicMock()
+            r.fetchone.return_value = None
+            r.fetchall.return_value = []
+            return r
+
+        conn.execute.side_effect = _record
+        fn(conn)
+        return seen.get("sql", "")
+
+    def test_top_performer_columns_exist(self):
+        from genlab_core.intelligence.operator_briefing import (
+            _top_performer_yesterday,
+        )
+        sql = self._query_for(_top_performer_yesterday).lower()
+        assert "publishing_analytics" in sql
+        # Specific rebuttal of the Phase 5.D bug — MUST use `views`,
+        # NOT `views_count`
+        assert "views" in sql
+        assert "views_count" not in sql
+        assert "likes_count" not in sql
+
+    def test_calibration_columns_exist(self):
+        from genlab_core.intelligence.operator_briefing import (
+            _calibration_progress,
+        )
+        sql = self._query_for(_calibration_progress).lower()
+        # Real column is `decided_at`, not `logged_at`
+        assert "decided_at" in sql
+        assert "logged_at" not in sql
+        # Agreement math uses gate_approved BOOL vs operator_action TEXT
+        assert "gate_approved" in sql
+        # Rule #22: operator_action values are 'approved'/'rejected'
+        # not 'approve'/'reject'
+        assert "'approved'" in sql
+        assert "'rejected'" in sql
+
+    def test_strategist_uses_real_table(self):
+        from genlab_core.intelligence.operator_briefing import (
+            _pending_strategist,
+        )
+        sql = self._query_for(_pending_strategist).lower()
+        # Real table is strategist_reports (JSONB proposals array),
+        # NOT the phantom strategist_proposals from Phase 5.D
+        assert "strategist_reports" in sql
+        assert "strategist_proposals" not in sql
+
+    def test_cost_uses_real_table(self):
+        from genlab_core.intelligence.operator_briefing import _cost_today
+        sql = self._query_for(_cost_today).lower()
+        # Real cost table is pipeline_run_costs, NOT llm_call_log
+        assert "pipeline_run_costs" in sql
+        assert "llm_call_log" not in sql
 
 
 class TestBriefingResultToRow:

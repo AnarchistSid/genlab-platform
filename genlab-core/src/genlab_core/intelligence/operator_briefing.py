@@ -85,11 +85,17 @@ class BriefingResult:
 
 def _fetch_one(conn, sql: str, params: tuple = ()) -> dict[str, Any] | None:
     """Small wrapper so every collector fails the same way. Returns
-    a plain dict (not a Row) so callers can json.dumps() freely."""
+    a plain dict (not a Row) so callers can json.dumps() freely.
+
+    Rule #19 discipline: log at WARNING with exc_info=True so column-
+    typo errors (e.g. ``views_count`` when the column is ``views``)
+    surface as stack traces in the journal instead of silent-failing.
+    The Phase 5.D first live-fire ate 4 broken collectors this way —
+    fail-open masked signal — before this elevation."""
     try:
         row = conn.execute(sql, params).fetchone()
     except Exception as exc:
-        logger.warning("[briefing] query failed: %s", exc)
+        logger.warning("[briefing] query failed: %s", exc, exc_info=True)
         try:
             conn.rollback()
         except Exception:
@@ -104,7 +110,7 @@ def _fetch_all(conn, sql: str, params: tuple = ()) -> list[dict[str, Any]]:
     try:
         rows = conn.execute(sql, params).fetchall()
     except Exception as exc:
-        logger.warning("[briefing] query failed: %s", exc)
+        logger.warning("[briefing] query failed: %s", exc, exc_info=True)
         try:
             conn.rollback()
         except Exception:
@@ -129,15 +135,20 @@ def _publishes_yesterday(conn) -> dict[str, Any]:
 
 
 def _top_performer_yesterday(conn) -> dict[str, Any] | None:
+    """Note: real publishing_analytics columns are `views` / `likes`
+    (bigint) — NOT `views_count` / `likes_count`. Phase 5.D first
+    live-fire had the wrong names → fail-open ate the exception →
+    briefing rendered `top_performer: null` on a healthy system.
+    Class-of-bug: signal-loss-through-merged-failure-paths."""
     return _fetch_one(
         conn,
         """
-        SELECT niche_id, platform, post_id, views_count, likes_count
+        SELECT niche_id, platform, post_id, views, likes
         FROM publishing_analytics
         WHERE published_at >= NOW() - INTERVAL '24 hours'
           AND published_at < NOW()
-          AND views_count IS NOT NULL
-        ORDER BY views_count DESC
+          AND views IS NOT NULL
+        ORDER BY views DESC
         LIMIT 1
         """,
     )
@@ -173,31 +184,48 @@ def _pending_flag_flips(conn) -> dict[str, Any]:
 
 
 def _pending_strategist(conn) -> dict[str, Any]:
-    rows = _fetch_all(
+    """Real schema: strategist_reports stores per-run rows with
+    proposals[] JSONB. "Pending" = reports not yet reviewed
+    (reviewed_at IS NULL) in the last 14 days. Older un-reviewed
+    reports are effectively abandoned — surfacing them only adds
+    noise. There is no separate strategist_proposals table."""
+    row = _fetch_one(
         conn,
         """
-        SELECT proposal_type, COUNT(*) AS n
-        FROM strategist_proposals
-        WHERE status = 'pending'
-        GROUP BY proposal_type
-        ORDER BY n DESC
+        SELECT COUNT(*) AS n_reports,
+               SUM(jsonb_array_length(proposals))::int AS n_proposals
+        FROM strategist_reports
+        WHERE reviewed_at IS NULL
+          AND run_at >= NOW() - INTERVAL '14 days'
         """,
     )
-    return {"by_type": rows, "count": sum(int(r.get("n") or 0) for r in rows)}
+    if row is None:
+        return {"count": 0, "n_reports": 0}
+    return {
+        "count": int(row.get("n_proposals") or 0),
+        "n_reports": int(row.get("n_reports") or 0),
+    }
 
 
 def _calibration_progress(conn) -> list[dict[str, Any]]:
-    """Per-niche AUTO-approver sample count. Column names match
-    auto_approval_calibration table shipped in AUTO #1c."""
+    """Per-niche AUTO-approver 7-day sample count + agreement rate.
+    Real schema: `gate_approved` BOOL + `operator_action` TEXT
+    ('approved'/'rejected'); `decided_at` for time. Agreement =
+    both agree in same direction. Rule #22 pinning: operator_action
+    values are lowercase — 2026-08-15 verification query returned
+    {'approved', 'rejected'} only."""
     return _fetch_all(
         conn,
         """
         SELECT niche_id,
                COUNT(*) AS n_samples,
-               SUM(CASE WHEN gate_verdict = operator_action THEN 1 ELSE 0 END)::float
-                 / NULLIF(COUNT(*), 0) AS agreement_rate
+               SUM(CASE
+                     WHEN (gate_approved = TRUE  AND operator_action = 'approved')
+                       OR (gate_approved = FALSE AND operator_action = 'rejected')
+                     THEN 1 ELSE 0
+                   END)::float / NULLIF(COUNT(*), 0) AS agreement_rate
         FROM auto_approval_calibration
-        WHERE logged_at >= NOW() - INTERVAL '7 days'
+        WHERE decided_at >= NOW() - INTERVAL '7 days'
         GROUP BY niche_id
         ORDER BY niche_id
         """,
@@ -205,13 +233,18 @@ def _calibration_progress(conn) -> list[dict[str, Any]]:
 
 
 def _cost_today(conn) -> dict[str, Any] | None:
+    """Real cost table: pipeline_run_costs — per-run row with
+    total_usd. There is no llm_call_log table (the memo I built
+    the query against was based on a design that never shipped).
+    Sum today's runs across niches."""
     return _fetch_one(
         conn,
         """
-        SELECT SUM(cost_usd)::float AS total_usd,
-               COUNT(*) AS n_calls
-        FROM llm_call_log
-        WHERE ts >= DATE_TRUNC('day', NOW())
+        SELECT SUM(total_usd)::float AS total_usd,
+               COUNT(*) AS n_runs,
+               SUM(entry_count)::int AS n_calls
+        FROM pipeline_run_costs
+        WHERE completed_at >= DATE_TRUNC('day', NOW())
         """,
     )
 
@@ -263,7 +296,7 @@ def _fallback_render(state: dict[str, Any]) -> str:
     if isinstance(top, dict) and top.get("post_id"):
         lines.append(
             f"- Top: {top.get('niche_id')}/{top.get('platform')} — "
-            f"{top.get('views_count') or 0} views."
+            f"{top.get('views') or 0} views."
         )
     flips = state.get("pending_flag_flips") or {}
     strat = state.get("pending_strategist") or {}
