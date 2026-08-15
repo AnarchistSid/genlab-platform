@@ -42,6 +42,7 @@ import { CrossNichePriorsCard } from "./CrossNichePriorsCard";
 import { DriftSignalCard } from "./DriftSignalCard";
 import { FlagFlipProposalsCard } from "./FlagFlipProposalsCard";
 import { IdeationPoolCard } from "./IdeationPoolCard";
+import { OperatorBriefingCard } from "./OperatorBriefingCard";
 import { EnsembleVotesCard } from "./EnsembleVotesCard";
 import { FlagStateCard } from "./FlagStateCard";
 import { TopCreatorPriorsCard } from "./TopCreatorPriorsCard";
@@ -227,6 +228,14 @@ export default function MissionControl() {
         <LoadingSkeleton variant="bento" />
       ) : (
         <div className="mc-grid-v2">
+          {/* Row 0 (Phase 5.D, 2026-08-15): Operator daily briefing.
+              Placed above KpiHero so it becomes the operator's
+              first read: 5 lines + "N to review" badge + email
+              status. Runner fires 06:00 UTC via
+              genlab-operator-briefing.timer; card polls hourly. */}
+          <div className="area-kpi">
+            <OperatorBriefingCard />
+          </div>
           {/* Row 1: KPI Hero (full width) */}
           <div className="area-kpi">
             <KpiHero />

@@ -1,0 +1,11 @@
+[Unit]
+Description=Fire GenLab operator daily briefing at 06:00 UTC — Haiku-summary email + dashboard card
+Requires=genlab-operator-briefing.service
+
+[Timer]
+OnCalendar=*-*-* 06:00:00 UTC
+Persistent=true
+Unit=genlab-operator-briefing.service
+
+[Install]
+WantedBy=timers.target

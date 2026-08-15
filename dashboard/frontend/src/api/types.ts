@@ -1632,6 +1632,23 @@ export interface FlagFlipProposalsSummary {
 }
 
 // ───────────────────────────────────────────────────────────────
+// Phase 5.D (2026-08-15) — operator daily briefing.
+// ───────────────────────────────────────────────────────────────
+
+export interface OperatorBriefing {
+  id: string;
+  generated_at: string | null;
+  summary_md: string;
+  structured: Record<string, unknown>;
+  email_sent: boolean;
+  email_recipient: string | null;
+  email_error: string | null;
+  llm_cost_usd: number;
+  n_pending_flag_flips: number;
+  n_pending_strategist_proposals: number;
+}
+
+// ───────────────────────────────────────────────────────────────
 // #9 auto-experiments observability (2026-07-23) — lifecycle summary.
 // ───────────────────────────────────────────────────────────────
 

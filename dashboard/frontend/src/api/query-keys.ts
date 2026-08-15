@@ -142,6 +142,12 @@ export const queryKeys = {
      *  sees fresh proposals + apply-eligibility countdown ticking. */
     pending: () => ["flag-flip-proposals", "pending"] as const,
   },
+  operatorBriefings: {
+    /** Phase 5.D (2026-08-15) — most recent LLM-synthesized briefing.
+     *  Runner fires daily 06:00 UTC; briefing static once written so
+     *  a 1-hour poll is plenty (matches morning-refresh cadence). */
+    latest: () => ["operator-briefings", "latest"] as const,
+  },
   topCreatorPriors: {
     /** B.2 + B.3 observability (2026-07-08) — A+B intelligence
      *  stack cache keys. Two independent artifact sources with

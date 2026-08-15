@@ -825,6 +825,7 @@ from server.api.competitor_deltas import bp as competitor_deltas_bp
 from server.api.content_quality import bp as content_quality_bp
 from server.api.flag_flip_proposals import bp as flag_flip_proposals_bp
 from server.api.ideation_pool import bp as ideation_pool_bp
+from server.api.operator_briefings import bp as operator_briefings_bp
 from server.api.sponsorship_pipeline import bp as sponsorship_pipeline_bp
 from server.api.top_creator_priors import bp as top_creator_priors_bp
 from server.api.transformation_bandit import bp as transformation_bandit_bp
@@ -917,6 +918,9 @@ app.register_blueprint(
 app.register_blueprint(
     flag_flip_proposals_bp
 )  # Phase 5.C session 2 (2026-08-14): /api/v1/flag-flip-proposals/pending + POST reject — autonomous flag flip queue
+app.register_blueprint(
+    operator_briefings_bp
+)  # Phase 5.D (2026-08-15): /api/v1/operator-briefings/latest — LLM-synthesized daily briefing
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)

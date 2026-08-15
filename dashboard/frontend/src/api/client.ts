@@ -1340,6 +1340,17 @@ export const ideationPool = {
     ),
 };
 
+export const operatorBriefings = {
+  /** Phase 5.D (2026-08-15): most recent operator briefing row.
+   *  Returns null on cold-start (never generated yet) or DB failure. */
+  latest: () =>
+    get<{
+      data: import("./types").OperatorBriefing | null;
+    }>("/operator-briefings/latest").then((d) =>
+      unwrapEnvelope<import("./types").OperatorBriefing>(d),
+    ),
+};
+
 export const flagFlipProposals = {
   /** Phase 5.C session 2: pending autonomous flag-flip proposals.
    *  Returns null on cold-start (no proposals) or DB failure —
