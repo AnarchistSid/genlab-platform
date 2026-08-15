@@ -112,6 +112,31 @@ class BasePlatformAdaptationStrategy(PlatformAdaptationStrategy):
                         break
             ig["hashtags"] = hashtags[:5]
 
+        # 2026-08-15: discovery-tag augment. Small-audience IG accounts
+        # (10-165 followers on 4 of 5 niches) grow primarily through
+        # algorithmic discovery. Adding 4 structural tags (#Reels,
+        # #ExplorePage, #Trending, etc) rotating per blueprint puts
+        # posts into more discovery buckets. Flag-gated per niche via
+        # GENLAB_IG_DISCOVERY_HASHTAGS_NICHES. Bumps hashtag ceiling
+        # from 5 to 9 total when active — still well within Meta's
+        # normal-reel range.
+        try:
+            from genlab_core.publishing.ig_discovery_hashtags import (
+                augment_ig_hashtags,
+            )
+            augmented = augment_ig_hashtags(
+                ig.get("hashtags", []) or hashtags,
+                niche_id=self._niche_id,
+                blueprint_seed=caption[:80],
+            )
+            if augmented != (ig.get("hashtags") or hashtags):
+                ig["hashtags"] = augmented[:10]
+        except Exception as exc:
+            logger.debug(
+                "[%s] ig_discovery_hashtags augment skipped: %s",
+                self._niche_id, exc,
+            )
+
     def _adapt_youtube(self, content: dict[str, Any]) -> None:
         """YouTube: question-format title, <=40 chars."""
         yt = content.get("youtube", {})
