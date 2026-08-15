@@ -232,14 +232,53 @@ class BasePlatformAdaptationStrategy(PlatformAdaptationStrategy):
         tk["caption"] = caption
 
     def _adapt_threads(self, content: dict[str, Any]) -> None:
-        """Threads: enforce <=500 chars."""
+        """Threads: enforce <=500 chars.
+
+        2026-08-15: append 1-2 niche-anchor hashtags. Prior state:
+        Threads captions had ZERO hashtags (writer generated hashtags
+        into story-level `hashtags` field, Threads adapter never
+        appended them). Result: Threads posts landed in no discovery
+        stream. avg views 1-56 across niches; Threads algorithm's
+        "For You" surface uses hashtag co-occurrence as one of its
+        discovery signals for tiny-audience accounts (10-11 followers
+        per niche).
+
+        Cap at 2 tags — Threads community norm is 1-3 max; more looks
+        spammy. Different from IG (5-9) because Threads is text-first
+        and hashtag-light by design.
+
+        Flag-gated per niche via GENLAB_THREADS_HASHTAGS_NICHES so
+        the operator can canary + roll back per niche if any Threads
+        account gets flagged.
+        """
         th = content.get("threads", {})
         caption = th.get("caption", "")
         if not caption:
             return
         # Strip URLs (Threads has limited link support)
         caption = _URL_PATTERN.sub("", caption).strip()
-        # Truncate to 500 chars
+
+        # Append niche-anchor hashtags via the shared helper.
+        try:
+            from genlab_core.publishing.threads_hashtags import (
+                append_niche_hashtags,
+            )
+            hashtags = (
+                content.get("hashtags")
+                or content.get("instagram", {}).get("hashtags", [])
+                or []
+            )
+            caption = append_niche_hashtags(
+                caption, niche_id=self._niche_id, source_hashtags=hashtags,
+            )
+        except Exception as exc:
+            logger.debug(
+                "[%s] threads_hashtags augment skipped: %s",
+                self._niche_id, exc,
+            )
+
+        # Truncate to 500 chars (post-augment so hashtags are inside
+        # the budget; caption body stays intact even if tags dropped).
         if len(caption) > 500:
             caption = caption[:497].rsplit(" ", 1)[0] + "..."
         th["caption"] = caption
