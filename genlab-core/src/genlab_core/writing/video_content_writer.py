@@ -530,6 +530,25 @@ def write_video_content(
     except Exception as exc:
         logger.debug("[%s] policy_avoid_hint skipped: %s", niche_id, exc)
 
+    # Phase 4.D bridge (2026-08-15): inject persona.yaml into the writer
+    # system prompt so the writer sees the SAME knobs the drift auditor
+    # will judge against. Prior state: NICHE_VOICE hardcoded above
+    # encoded a DIFFERENT persona than persona.yaml — anime writer used
+    # "peak/mid/goated" vocab while auditor required "sakuga" vocab, so
+    # every anime hook scored drift 0.05-0.35 (well below 0.6 gate).
+    #
+    # Rollout gated by `GENLAB_PERSONA_HINT_NICHES` env — canary on
+    # anime first, expand after 2+ consecutive drift scores >= 0.6.
+    # Fail-open on every path.
+    persona_hint = ""
+    try:
+        from genlab_core.writing.persona_writer_hint import build_hint_for
+        persona_hint = build_hint_for(niche_id)
+        if persona_hint:
+            logger.info("[%s] persona_hint injected", niche_id)
+    except Exception as exc:
+        logger.debug("[%s] persona_hint skipped: %s", niche_id, exc)
+
     # PR Strategist-3: append operator-approved learning findings (top 5)
     # into the system prompt so the writer leans on causal patterns the
     # operator has explicitly validated. Fail-closed: if strategy_phase
@@ -809,6 +828,7 @@ def write_video_content(
         + preference_hint
         + findings_hint
         + policy_avoid_hint
+        + persona_hint
         + series_context_hint
         + question_reveal_hint
         + watch_till_end_hint
