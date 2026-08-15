@@ -114,7 +114,15 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
             "the moment FIRST, explain second. Never sound like a journalist."
         ),
         "audience": "gamers aged 16-30",
+        # 2026-08-15: follow-CTAs added. Prior state — this niche had
+        # ZERO follow-CTAs; writer prompt forces "pick ONE verbatim"
+        # so we were structurally incapable of asking anyone to
+        # follow. YouTube subs=0, IG=13, FB=26 over 30d with +1 growth
+        # confirms the follower-CTA void was load-bearing.
         "ctas": [
+            "Follow for daily gaming W's 🎮",
+            "Follow — tomorrow's clip drops at 12 UTC",
+            "Follow if you saw this in real time",
             "Drop your take below 👇",
             "Who else caught this?",
             "Tag someone who mains this",
@@ -132,7 +140,14 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
             "player names and stats. Never write a headline — write a reaction."
         ),
         "audience": "sports fans aged 18-35",
+        # 2026-08-15: follow-CTAs added. See gaming block for rationale
+        # — sports had ZERO follow-CTAs. YT=9 subs, IG=13, FB=19 over
+        # 30d with +2 growth. FB was the only channel breaking 1000
+        # views on the 2026-08-15 briefing top-performer scan.
         "ctas": [
+            "Follow for tomorrow's highlight drop",
+            "Follow for game-day W's",
+            "Follow — we clip every moment",
             "Comment your hot take 👇",
             "Did you see this live?",
             "Who's your pick?",
@@ -150,7 +165,14 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
             "scenes/actors/directors. Never write a review — write a reaction."
         ),
         "audience": "movie fans aged 18-40",
+        # 2026-08-15: follow-CTAs added. Movies has 8.6K FB followers
+        # (legacy) but only 11 IG and 4 YT subs. FB grew +27 over 30d.
+        # Follow-CTA was absent; every prompt got a "did you see"
+        # comment-CTA that doesn't convert to follows.
         "ctas": [
+            "Follow for daily trailer drops",
+            "Follow — we watch so you don't have to",
+            "Follow if you want tomorrow's release drop",
             "Have you seen this yet?",
             "Watch or skip?",
             "Best film of the year?",
@@ -169,7 +191,14 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
             "Never write a press release — write a fan reaction."
         ),
         "audience": "anime fans aged 16-30",
+        # 2026-08-15: follow-CTAs added + sakuga-voice-consistent
+        # (aligned with persona.yaml vocabulary='sakuga' via the
+        # persona_writer_hint canary from f8b5e75e). Anime has YT=0,
+        # IG=10, FB=53 with 0-2 growth over 30d.
         "ctas": [
+            "Follow for daily sakuga picks",
+            "Follow — we clip every peak cut",
+            "Follow if you called this arc",
             "Are you watching this?",
             "W or L take? 👇",
             "Peak or mid?",
@@ -187,8 +216,14 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
             "specific tools, demos, and capabilities. Never write a press release."
         ),
         "audience": "tech-curious people aged 22-45",
+        # 2026-08-15: ai_creators had 1 follow-CTA in 10 (10% ratio).
+        # Brought up to 3-of-11 (~27%) to match the other niches +
+        # give the bandit meaningful arms to distinguish follow-flavored
+        # from engagement-flavored performance.
         "ctas": [
             "Follow for daily AI drops",
+            "Follow — tomorrow's demo drop at 12 UTC",
+            "Follow if you want to actually keep up",
             "Save this before it blows up",
             "Tag someone who needs to see this",
             "Drop your hot take below",
@@ -197,7 +232,6 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
             "Name a better demo — we'll wait",
             "This changes everything and nobody's talking about it",
             "The future just got weird",
-            "Share your results in the comments",
         ],
         "hashtags": ["#AI", "#ArtificialIntelligence", "#Tech", "#MachineLearning"],
     },
