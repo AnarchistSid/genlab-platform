@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess  # noqa: F401 — tests patch ffmpeg_gaming.subprocess.run
+from pathlib import Path
 from typing import Any
 
 from genlab_core.media.ffmpeg import get_ffmpeg_binary
@@ -47,6 +48,51 @@ _QUALITY_ARGS = [
 ]
 
 logger = logging.getLogger(__name__)
+
+
+def _retag_bt709(video_path: str) -> bool:
+    """Re-tag an h264 mp4 with bt709 color-space metadata WITHOUT
+    re-encoding. Uses the h264_metadata bitstream filter.
+
+    Rationale: `concat()` with `-c copy` inherits source clips'
+    color metadata. When source clips have smpte170m/bt470bg/unknown
+    primaries, the concatenated output inherits it and fails
+    validate_platform_variant()'s bt709 requirement. This re-tag is
+    cheap (~1s, no re-encode) and idempotent.
+
+    Returns True on success, False on any error (caller should
+    still proceed — validation will surface the issue at the next
+    stage)."""
+    ffmpeg = get_ffmpeg_binary()
+    temp_out = str(Path(video_path).with_suffix(".retag.mp4"))
+    try:
+        result = subprocess.run(
+            [
+                ffmpeg, "-y",
+                "-i", video_path,
+                "-c", "copy",
+                "-bsf:v",
+                "h264_metadata=colour_primaries=1:"
+                "transfer_characteristics=1:"
+                "matrix_coefficients=1",
+                temp_out,
+            ],
+            capture_output=True, text=True, timeout=60,
+        )
+        if result.returncode != 0:
+            logger.warning(
+                "[bt709 retag] ffmpeg exit=%d for %s (stderr snip: %s)",
+                result.returncode, video_path, result.stderr[-200:],
+            )
+            Path(temp_out).unlink(missing_ok=True)
+            return False
+        # Atomically replace the original
+        shutil.move(temp_out, video_path)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[bt709 retag] failed for %s: %s", video_path, exc)
+        Path(temp_out).unlink(missing_ok=True)
+        return False
 
 # Gaming-specific transitions (extend the base map)
 # hard_cut = None signals "no xfade filter, just concat"
@@ -161,7 +207,18 @@ def concat_with_transitions(
 
     # If all transitions are hard_cut, use simple concat
     if all(t.get("type") == "hard_cut" or t.get("type") is None for t in transitions):
-        return concat(clip_paths, output_path, temp_dir=temp_dir)
+        ok = concat(clip_paths, output_path, temp_dir=temp_dir)
+        # 2026-08-16 fix: concat uses `-c copy` which inherits source
+        # clips' color-space metadata. When any source clip has
+        # smpte170m / bt470bg / unknown primaries, the output inherits
+        # it → validate_platform_variant() rejects (bt709 required)
+        # → RenderGamingVideo aborts → pipeline crashes. Live
+        # 2026-08-16 gaming pipeline crash root cause. Fix: re-tag
+        # h264 metadata post-concat with bt709 flags. Uses bitstream
+        # filter (no re-encode, ~1s cost).
+        if ok:
+            _retag_bt709(output_path)
+        return ok
 
     # Build xfade filter graph
     ffmpeg = get_ffmpeg_binary()
