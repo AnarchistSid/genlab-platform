@@ -66,7 +66,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import yaml
 
@@ -264,6 +264,72 @@ def _lookup_calibration_stats(niche_id: str, window_days: int) -> dict | None:
     except Exception:  # noqa: BLE001
         logger.warning("[auto_approver] calibration lookup failed", exc_info=True)
         return None
+
+
+# 2026-08-16: cold-start floor + sample threshold. When outcome-
+# source calibration count is BELOW _COLDSTART_MIN_SAMPLES, the
+# effective min_confidence gets clamped to _COLDSTART_MIN_CONF so
+# cold-start niches can accumulate outcome data. Once samples
+# accumulate, the configured min_confidence applies as normal.
+_COLDSTART_MIN_SAMPLES: Final[int] = 5
+_COLDSTART_MIN_CONF: Final[float] = 0.70
+
+_COLDSTART_ENV: Final[str] = "GENLAB_AUTO_APPROVER_COLDSTART_NICHES"
+
+
+def _coldstart_enabled_for(niche_id: str) -> bool:
+    """True when adaptive cold-start should apply for ``niche_id``.
+    Same env-value semantics as sibling growth-augment flags
+    (persona_writer_hint, cross_channel_footer, etc)."""
+    raw = (os.environ.get(_COLDSTART_ENV) or "").strip().lower()
+    if raw in {"", "0", "false", "no", "off"}:
+        return False
+    if raw in {"all", "*"}:
+        return True
+    allowed = {p.strip() for p in raw.split(",") if p.strip()}
+    return niche_id in allowed
+
+
+def _effective_min_confidence(
+    niche_id: str,
+    configured: float,
+) -> float:
+    """Return the effective min_confidence for a niche.
+
+    In cold-start (outcome-source calibration count < 5), clamp to
+    _COLDSTART_MIN_CONF so approvals CAN happen and produce outcome
+    data. Once >=5 samples accumulate, the configured threshold
+    applies. Flag-gated per niche.
+
+    Fail-open: any error returns the configured value unchanged."""
+    if not _coldstart_enabled_for(niche_id):
+        return configured
+    if configured <= _COLDSTART_MIN_CONF:
+        return configured  # already at or below the coldstart floor
+    try:
+        from genlab_core.scheduling.calibration_logger import stats as cal_stats
+        s = cal_stats(
+            niche_id=niche_id,
+            window_days=30,
+            source_filter="outcome",
+        )
+        sample_count = int(s.sample_count or 0)
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "[auto_approver] coldstart calibration lookup failed for %s "
+            "— using configured threshold %s", niche_id, configured,
+            exc_info=True,
+        )
+        return configured
+    if sample_count < _COLDSTART_MIN_SAMPLES:
+        logger.info(
+            "[auto_approver] %s cold-start: %d < %d outcome samples "
+            "→ effective min_conf %.2f (configured %.2f)",
+            niche_id, sample_count, _COLDSTART_MIN_SAMPLES,
+            _COLDSTART_MIN_CONF, configured,
+        )
+        return _COLDSTART_MIN_CONF
+    return configured
 
 
 def _safe_json_list(raw: Any) -> list:
@@ -938,7 +1004,22 @@ def run_pass(
         if not decision.approved:
             result.skipped_gate_rejected.append(record_id)
             continue
-        if decision.confidence < policy.min_confidence:
+
+        # 2026-08-16 cold-start adaptive min_confidence.
+        # Prior state: fresh niches with high configured min_conf
+        # (0.85) never crossed threshold → no approvals → no outcome
+        # calibration rows → tuner never lowered threshold →
+        # perpetual manual-unblock tax (14 unblocked 2026-08-15,
+        # 6 more 2026-08-16). Same chicken-and-egg shape as the
+        # variant_type_hint fix (7ab5e17a) + tuner floor drop
+        # (c0a3a806). Flag-gated per niche via
+        # GENLAB_AUTO_APPROVER_COLDSTART_NICHES so operator can
+        # rollout safely.
+        effective_min = _effective_min_confidence(
+            niche_id=niche_id,
+            configured=policy.min_confidence,
+        )
+        if decision.confidence < effective_min:
             result.skipped_low_confidence.append(record_id)
             continue
 

@@ -419,9 +419,19 @@ class TestPolicyLoading:
         # composite/virality anchor rebalance (auto_approval_gate.py
         # 0.5 → 0.7). Combined effect: passing blueprints now clear
         # the threshold instead of getting stuck at 0.66 borderline.
-        # Load-path pin still holds — 0.70 is NOT the dataclass default
+        # Load-path pin still holds — value is NOT the dataclass default
         # (0.85), so if yaml isn't found this assertion fails.
-        assert policy.min_confidence == 0.70
+        #
+        # 2026-08-16: Phase 5.A calibration tuner auto-adjusts this
+        # value nightly, so the exact fraction drifts (0.70 → 0.715 →
+        # 0.745 etc). Widened assertion to "clearly-not-default"
+        # range 0.60-0.80 — still catches yaml-not-found (which would
+        # produce 0.85) or tuner-runaway (which would push above 0.80).
+        assert 0.60 <= policy.min_confidence <= 0.80, (
+            f"BlackboxBrief min_confidence={policy.min_confidence} "
+            "outside tuner-drift band 0.60-0.80. Either yaml load "
+            "failed (default 0.85) or tuner ran away."
+        )
         assert policy.max_approvals_per_pass == 3
 
 
