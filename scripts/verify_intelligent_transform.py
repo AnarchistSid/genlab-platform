@@ -199,8 +199,14 @@ def print_table(agg: dict[str, dict[str, int]]) -> int:
         print("  " + "  ".join(c.ljust(w) for c, w in zip(row, widths, strict=True)))
 
         # Regression signal: reels published but ZERO core dims applied.
+        # Rule #26 (2026-08-16): exit 0 even on regression detection.
+        # Data-side signals belong in pipeline_alerts (which the
+        # existing WARN in stdout captures via journal → operator
+        # briefing), NOT in systemd exit code (which triggers
+        # OnFailure=genlab-service-failure-alert cascade every fire,
+        # producing daily false-CRITICAL noise). Detection is
+        # preserved — just the exit code no longer pages ops.
         if reels > 0 and all(stats.get(d, 0) == 0 for d in CORE_DIMENSIONS):
-            exit_code = 3
             print(
                 f"    ⚠️  {niche} published {reels} reels with no dimension "
                 f"attributed — flag or config regression suspected."
