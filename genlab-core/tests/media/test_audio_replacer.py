@@ -315,5 +315,38 @@ class TestReplaceAudioForReel:
         assert result is False
 
 
+class TestMusicBedSeedsPresent:
+    """Task #206 (2026-08-18): AI-generated seed music beds tracked
+    in the repo so every deploy has at least one bed per niche.
+    Missing → audio_replacer.find_music_bed_for_mood returns None
+    → render falls back to no-music path. Pin catches accidental
+    deletion during asset cleanup."""
+
+    @pytest.mark.parametrize("niche_root_rel, mood_tag", [
+        ("BlackboxBrief", "upbeat"),
+        ("CriticalRush/niches/gaming", "epic"),
+        ("ClutchWire", "epic"),
+        ("SpliceReel", "cinematic"),
+        ("FrameDrift", "epic_battle"),
+    ])
+    def test_seed_bed_exists(self, niche_root_rel, mood_tag):
+        import pathlib
+        repo_root = pathlib.Path(__file__).resolve().parents[3]
+        seed_path = (
+            repo_root / niche_root_rel / "assets" / "music_beds"
+            / mood_tag / "ai_generated_seed.mp3"
+        )
+        assert seed_path.is_file(), (
+            f"missing seed music bed at {seed_path} — regenerate via "
+            "`elevenlabs/music` and commit (see /tmp/gen_music_seeds.py)"
+        )
+        # Sanity size floor: 200KB minimum (real 30s MP3 is ~470KB;
+        # a truncated download would be tiny).
+        assert seed_path.stat().st_size > 200_000, (
+            f"seed music bed at {seed_path} suspiciously small "
+            f"({seed_path.stat().st_size} bytes) — likely truncated"
+        )
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])
