@@ -637,6 +637,32 @@ Editing imports: either run `ruff check --fix <file>` manually or rely on the ho
     when `GENLAB_SCHEMA_PIN_DSN` is set — catches this at CI time.
     See `[[class-of-bug-column-in-db-not-in-promoted-columns]]`. Backfill
     tool: `scripts/backfill_column_from_extra.py`.
+29. **Env flag flip on VPS MUST be preceded by VPS-HEAD == origin-HEAD
+    verify** — otherwise the flag is set but the code that READS it
+    isn't deployed → silent no-op. Hit 2026-08-18 tonight: 3 canary
+    flags flipped between 12:19-12:24 IST, VPS still at pre-shipping
+    commit `279efdb1` for ~2h while I claimed "canary LIVE". Every
+    pipeline fire in that window ran old code that ignored the flags.
+    Correct sequence: `git push origin main` → `ssh vps "cd /opt/genlab
+    && git pull"` → `ssh vps "git rev-parse HEAD"` verify matches
+    origin → then flip flag → then restart service. GenLab does NOT
+    auto-pull (deploy tooling is `deploy/scripts/deploy.sh` scp-based,
+    kernel-level `git pull` is manual). Detection: any end-of-session
+    audit MUST include the HEAD-drift check as first assertion.
+    See `[[class-of-bug-flag-flip-without-code-deploy-verify]]`.
+30. **Model/asset registry pattern is the canonical way to add
+    inference.sh app diversity** — 2026-08-18 crystallised this
+    across `media/hook_thumbnail_models.py` (image) and
+    `media/pruna_video_client_models.py` (video). Shape: dataclass
+    `ImageModel(model_id, belt_app, build_input, cost_per_X_usd)`
+    + `_REGISTRY: tuple[ImageModel, ...]` + `pick_model(seed_str,
+    niche_id)` deterministic hash + `multi_model_enabled()` env
+    flag gate + `extract_url(output)` shape-tolerant helper. Adding
+    a 7th model family costs <1h because none of subprocess handling,
+    cost telemetry, fail-open cascade, or canary flag scaffolding
+    needs re-designing. Every future integration should follow this
+    template — see `session-2026-08-18-fifteen-commit-inference-sh-arc.md`
+    for the 6 modules that share this shape.
 
 ---
 
