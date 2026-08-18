@@ -17,13 +17,33 @@ logger = logging.getLogger(__name__)
 def build_tts_cascade():
     """Build TTSCascade with all available providers.
 
-    Falls back gracefully: ElevenLabs → OpenAI → Edge-TTS → gTTS.
+    Falls back gracefully:
+      InfshTTS (Inworld TTS-2, canary) → ElevenLabs → OpenAI → Edge-TTS → gTTS.
+
     Always includes at least Edge-TTS + gTTS (free, no API key).
     """
     from genlab_core.tts.cascade import TTSCascade
     from genlab_core.tts.providers import EdgeTTS, GoogleTTS
 
     providers = []
+
+    # 2026-08-18 (task #200): inference.sh Inworld TTS-2 as tier 1
+    # when the canary flag GENLAB_INFSH_TTS_ENABLED is set. Positioned
+    # first because Inworld TTS-2 provides emotion steering via inline
+    # [brackets] which ElevenLabs+OpenAI don't — the key quality lever
+    # for AI-news content. Falls through to the standard cascade on
+    # any belt/network/auth failure. InfshTTS.available already
+    # short-circuits on flag-off, so this block is a no-op when
+    # the operator hasn't flipped the canary.
+    try:
+        from genlab_core.tts.providers import InfshTTS
+
+        infsh_tier = InfshTTS()
+        if infsh_tier.available:
+            providers.append(infsh_tier)
+            logger.debug("TTS: inference.sh Inworld TTS-2 provider added (tier 1)")
+    except Exception as exc:
+        logger.warning("TTS: InfshTTS provider FAILED to construct: %s", exc)
 
     # 2026-07-14 (media audit F9): elevated silent `pass` to WARNING.
     # Prior state: any construction exception (auth error, SDK

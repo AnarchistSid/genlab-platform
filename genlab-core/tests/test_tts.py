@@ -410,3 +410,102 @@ class TestGoogleTTS:
         from genlab_core.tts.providers import GoogleTTS
 
         assert GoogleTTS().estimate_cost("anything") == 0.0
+
+
+class TestInfshTTS:
+    """Pin inference.sh Inworld TTS-2 tier (task #200, 2026-08-18)."""
+
+    def test_name(self):
+        from genlab_core.tts.providers import InfshTTS
+        assert InfshTTS().name == "infsh_inworld"
+
+    def test_estimate_cost_matches_inworld_pricing(self):
+        """$35/M chars — verified via `belt app pricing inworld/text-to-speech-2`."""
+        from genlab_core.tts.providers import InfshTTS
+        p = InfshTTS()
+        cost = p.estimate_cost("a" * 1_000_000)
+        assert abs(cost - 35.0) < 0.01
+
+    def test_available_off_when_flag_unset(self, monkeypatch):
+        monkeypatch.delenv("GENLAB_INFSH_TTS_ENABLED", raising=False)
+        from genlab_core.tts.providers import InfshTTS
+        assert not InfshTTS().available
+
+    def test_available_off_when_flag_zero(self, monkeypatch):
+        monkeypatch.setenv("GENLAB_INFSH_TTS_ENABLED", "0")
+        from genlab_core.tts.providers import InfshTTS
+        assert not InfshTTS().available
+
+    def test_available_true_when_flag_on_and_belt_installed(self, monkeypatch):
+        from unittest.mock import patch
+        monkeypatch.setenv("GENLAB_INFSH_TTS_ENABLED", "1")
+        with patch(
+            "genlab_core.tts.providers.shutil.which", return_value="/opt/belt",
+        ):
+            from genlab_core.tts.providers import InfshTTS
+            assert InfshTTS().available
+
+    def test_available_off_when_belt_missing(self, monkeypatch):
+        from unittest.mock import patch
+        monkeypatch.setenv("GENLAB_INFSH_TTS_ENABLED", "1")
+        with patch(
+            "genlab_core.tts.providers.shutil.which", return_value=None,
+        ):
+            from genlab_core.tts.providers import InfshTTS
+            assert not InfshTTS().available
+
+    def test_synthesize_belt_failure_returns_error(self, tmp_path, monkeypatch):
+        from unittest.mock import MagicMock, patch
+        monkeypatch.setenv("GENLAB_INFSH_TTS_ENABLED", "1")
+        with patch(
+            "genlab_core.integrations.belt_client.run_app",
+            return_value=MagicMock(
+                ok=False, output=None, task_id=None, error="belt down",
+            ),
+        ):
+            from genlab_core.tts.providers import InfshTTS
+            r = InfshTTS().synthesize("hello", tmp_path / "out.mp3")
+        assert not r.success
+        assert "belt run failed" in r.error
+
+    def test_synthesize_missing_url_returns_error(self, tmp_path, monkeypatch):
+        from unittest.mock import MagicMock, patch
+        monkeypatch.setenv("GENLAB_INFSH_TTS_ENABLED", "1")
+        with patch(
+            "genlab_core.integrations.belt_client.run_app",
+            return_value=MagicMock(
+                ok=True, output={"weird_key": "x"}, task_id="t", error=None,
+            ),
+        ):
+            from genlab_core.tts.providers import InfshTTS
+            r = InfshTTS().synthesize("hello", tmp_path / "out.mp3")
+        assert not r.success
+        assert "no audio URL" in r.error
+
+
+class TestFactoryOrdering:
+    """Pin that InfshTTS lands tier-1 when flag is on."""
+
+    def test_infsh_prepended_when_flag_on(self, monkeypatch):
+        from unittest.mock import patch
+        monkeypatch.setenv("GENLAB_INFSH_TTS_ENABLED", "1")
+        monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        with patch(
+            "genlab_core.tts.providers.shutil.which", return_value="/opt/belt",
+        ):
+            from genlab_core.tts.factory import build_tts_cascade
+            cascade = build_tts_cascade()
+        names = [p.name for p in cascade._providers]
+        assert names[0] == "infsh_inworld", (
+            f"InfshTTS must be tier-1 when flag on; got order: {names}"
+        )
+
+    def test_infsh_absent_when_flag_off(self, monkeypatch):
+        monkeypatch.delenv("GENLAB_INFSH_TTS_ENABLED", raising=False)
+        monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        from genlab_core.tts.factory import build_tts_cascade
+        cascade = build_tts_cascade()
+        names = [p.name for p in cascade._providers]
+        assert "infsh_inworld" not in names

@@ -5,6 +5,7 @@ All SDKs are lazy-imported — a missing package means available=False,
 not an import error.
 
 Providers:
+    InfshTTS       — inference.sh Inworld TTS-2 (~$0.014/reel, emotion steering)
     ElevenLabsTTS  — ElevenLabs API ($0.30/1K chars, highest quality)
     OpenAITTS      — OpenAI TTS API ($0.015/1K chars, good quality)
     EdgeTTS        — Microsoft Edge TTS (free, neural voices)
@@ -16,8 +17,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import shutil
 import subprocess
 import time
+import urllib.request
 from pathlib import Path
 
 from genlab_core.interfaces.tts import TTSResult
@@ -27,6 +30,7 @@ logger = logging.getLogger(__name__)
 # Cost constants
 _ELEVENLABS_COST_PER_CHAR = 0.30 / 1000  # $0.30 per 1K chars
 _OPENAI_TTS_COST_PER_CHAR = 0.015 / 1000  # $15 per 1M chars
+_INFSH_INWORLD_COST_PER_CHAR = 35.0 / 1_000_000  # $35/M chars = $0.000035/char
 
 
 def _probe_duration(path: Path) -> float:
@@ -464,4 +468,130 @@ class GoogleTTS:
             elapsed=round(elapsed, 2),
             file_size_mb=_file_size_mb(output_path),
             cost_estimate=0.0,
+        )
+
+
+class InfshTTS:
+    """inference.sh Inworld TTS-2 provider — task #200 (2026-08-18).
+
+    Uses ``belt app run inworld/text-to-speech-2`` via the shared
+    ``genlab_core.integrations.belt_client`` subprocess wrapper.
+    Inworld TTS-2 supports emotion steering via inline ``[brackets]``
+    (``[excited]``, ``[laugh]``, ``[pause]``) and 100+ languages.
+
+    Positioned tier-1 in ``factory.build_tts_cascade`` when the
+    canary flag ``GENLAB_INFSH_TTS_ENABLED`` is set, so it displaces
+    ElevenLabs as the default when belt is authed. Falls through to
+    the standard cascade on any failure.
+
+    Cost: ~$35/M chars via Inworld TTS-2 (verified 2026-08-18
+    ``belt app pricing inworld/text-to-speech-2``). A typical 400-
+    char reel script → $0.014.
+    """
+
+    def __init__(
+        self,
+        voice_id: str = "Ashley",
+        speaking_rate: float = 1.0,
+        delivery_mode: str = "BALANCED",
+    ) -> None:
+        self.voice_id = voice_id
+        self.speaking_rate = speaking_rate
+        self.delivery_mode = delivery_mode
+
+    @property
+    def name(self) -> str:
+        return "infsh_inworld"
+
+    @property
+    def available(self) -> bool:
+        """True when the canary flag is on AND belt is on PATH.
+        Auth state is checked lazily inside synthesize."""
+        if os.environ.get("GENLAB_INFSH_TTS_ENABLED", "").strip().lower() not in (
+            "1", "true", "yes", "on",
+        ):
+            return False
+        return shutil.which("belt") is not None
+
+    def estimate_cost(self, text: str) -> float:
+        return len(text or "") * _INFSH_INWORLD_COST_PER_CHAR
+
+    def synthesize(self, text: str, output_path: Path | str) -> TTSResult:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        start = time.time()
+
+        from genlab_core.integrations.belt_client import run_app
+
+        result = run_app(
+            "inworld/text-to-speech-2",
+            {
+                "text": text,
+                "voice_id": self.voice_id,
+                "speaking_rate": self.speaking_rate,
+                "delivery_mode": self.delivery_mode,
+                "audio_encoding": "MP3",
+                "sample_rate_hertz": 44100,
+                "language": "en-US",
+            },
+            timeout_seconds=90,
+        )
+        elapsed = time.time() - start
+
+        if not result.ok or not result.output:
+            return TTSResult(
+                success=False,
+                provider=self.name,
+                error=f"belt run failed: {result.error}",
+                elapsed=round(elapsed, 2),
+            )
+
+        audio_url = (
+            result.output.get("audio")
+            or result.output.get("audio_output")
+            or result.output.get("output")
+        )
+        if not audio_url or not isinstance(audio_url, str):
+            return TTSResult(
+                success=False,
+                provider=self.name,
+                error=(
+                    f"no audio URL in output; keys={list(result.output.keys())}"
+                ),
+                elapsed=round(elapsed, 2),
+            )
+
+        try:
+            req = urllib.request.Request(
+                audio_url,
+                headers={"User-Agent": "GenLab/1.0 infsh_tts"},
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp, \
+                    open(output_path, "wb") as f:
+                shutil.copyfileobj(resp, f)
+        except Exception as exc:  # noqa: BLE001
+            return TTSResult(
+                success=False,
+                provider=self.name,
+                error=f"audio download failed: {exc}",
+                elapsed=round(elapsed, 2),
+            )
+
+        if not output_path.exists() or output_path.stat().st_size == 0:
+            return TTSResult(
+                success=False,
+                provider=self.name,
+                error="downloaded file empty",
+                elapsed=round(elapsed, 2),
+            )
+
+        duration = _probe_duration(output_path)
+        return TTSResult(
+            success=True,
+            output_path=str(output_path),
+            provider=self.name,
+            duration=duration,
+            elapsed=round(elapsed, 2),
+            file_size_mb=_file_size_mb(output_path),
+            cost_estimate=self.estimate_cost(text),
         )
