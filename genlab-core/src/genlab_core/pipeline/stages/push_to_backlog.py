@@ -2541,8 +2541,20 @@ class PushToBacklog:
                         # and preventing late-binding surprises if this
                         # helper were ever accidentally captured outside
                         # the loop iteration.
+                        #
+                        # 2026-08-18 (F-QB-0708 sibling): idempotence check
+                        # is MARKER-substring, not exact-string. Writer
+                        # often emits partial attribution ("🎬 Original:
+                        # @X — " with no URL); exact-string check missed
+                        # the full-URL version, both stacked into caption.
+                        # Same fix already applied to payload_builder.py.
                         text = text or ""
-                        if not _src_attr or _src_attr in text:
+                        if not _src_attr:
+                            return text
+                        if (
+                            "\U0001f3ac Original:" in text
+                            or "\U0001f3ac Original creator:" in text
+                        ):
                             return text
                         return text.rstrip() + "\n\n" + _src_attr
 

@@ -540,3 +540,80 @@ class TestTrackedUrl:
 
         assert _product_slug("Gaming Mouse Pro!") == "gaming-mouse-pro"
         assert _product_slug("PS5 Console") == "ps5-console"
+
+
+class TestEngagementQuestionPlatformCoverage:
+    """Task #211 (2026-08-18, audience-seeding audit): FB was missing
+    from the engagement-question fallback platform tuple even though
+    FB is the LARGEST audience per niche (ai_creators 10K, movies
+    8.6K, others 19-53). FB client already had first_comment posting
+    wire at facebook.py:282, so the fix is just adding FB to the
+    _PLATFORM_FLAGS tuple in _apply_engagement_question_fallback."""
+
+    def test_facebook_in_platform_flags_tuple(self):
+        """FB must be a supported platform for engagement-question
+        fallback. Ensures the largest-audience surface actually gets
+        the algorithmic signal from pinned engagement questions."""
+        import inspect
+        from genlab_core.monetization import cta_engine
+
+        src = inspect.getsource(cta_engine._apply_engagement_question_fallback)
+        assert "facebook_first_comment" in src, (
+            "FB engagement-question wire missing — cta_engine._apply_"
+            "engagement_question_fallback's _PLATFORM_FLAGS tuple must "
+            "include ('facebook_first_comment', <FB flag env var>)"
+        )
+        assert "GENLAB_FB_ENGAGEMENT_QUESTION_ENABLED" in src, (
+            "FB engagement-question needs its own env flag for "
+            "graduated rollout — GENLAB_FB_ENGAGEMENT_QUESTION_ENABLED"
+        )
+
+
+class TestCreditIdempotenceMarkerCheck:
+    """Task #212 (2026-08-18): push_to_backlog._credit had exact-string
+    idempotence check. When writer emitted partial attribution
+    (e.g. '🎬 Original: @X — ' with no URL), the check missed the
+    full-URL version, both stacked. Same class as F-QB-0708 already
+    fixed in payload_builder.py. Fix: marker substring check.
+
+    Detection: pin the marker check appears in the source. If future
+    refactoring reverts to exact-string, this catches it at CI time.
+    """
+
+    def test_credit_uses_marker_substring_check(self):
+        """The _credit helper inside push_to_backlog must use
+        marker-substring check, NOT exact-string. Both markers
+        ('🎬 Original:' and '🎬 Original creator:') must be checked."""
+        import pathlib
+        src = pathlib.Path(
+            "/Users/anarchistsid/GenLab/genlab-core/src/genlab_core/"
+            "pipeline/stages/push_to_backlog.py"
+        )
+        if not src.is_file():
+            import pytest
+            pytest.skip(f"{src} not in this checkout")
+        text = src.read_text()
+        # Marker substrings must appear in the _credit function.
+        # Both must be checked (writer emits either variant).
+        idx = text.find("def _credit(")
+        assert idx >= 0, "_credit function not found"
+        # Take next chunk large enough to span function body + both
+        # marker checks even after doc comments.
+        body = text[idx:idx + 3000]
+        # File uses the escape-sequence literal `\U0001f3ac` in source,
+        # not the raw emoji. Check for either representation.
+        assert (
+            "\U0001f3ac Original:" in body
+            or "\\U0001f3ac Original:" in body
+            or "🎬 Original:" in body
+        ), "_credit must check the 🎬 Original: marker (post-F-QB-0708 fix)"
+        assert (
+            "\U0001f3ac Original creator:" in body
+            or "\\U0001f3ac Original creator:" in body
+            or "🎬 Original creator:" in body
+        ), "_credit must check both marker variants"
+        # Regression guard: naive exact-string check should NOT be
+        # present (it's the bug we fixed).
+        assert "_src_attr in text:" not in body or (
+            "\U0001f3ac Original:" in body
+        ), "regression: exact-string idempotence check reintroduced"

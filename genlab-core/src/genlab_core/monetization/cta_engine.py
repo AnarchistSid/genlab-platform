@@ -662,6 +662,12 @@ def _apply_engagement_question_fallback(fields: dict) -> None:
         ("youtube_first_comment", "GENLAB_YT_ENGAGEMENT_QUESTION_ENABLED"),
         ("instagram_first_comment", "GENLAB_IG_ENGAGEMENT_QUESTION_ENABLED"),
         ("threads_first_comment", "GENLAB_THREADS_ENGAGEMENT_QUESTION_ENABLED"),
+        # 2026-08-18 (audience-seeding audit): FB is largest audience
+        # per niche (ai_creators 10K, movies 8.6K, others 19-53). No
+        # first-comment engagement question was firing on FB — the
+        # entire large-audience surface was wasted. FB client already
+        # has first_comment posting wire at facebook.py:282.
+        ("facebook_first_comment", "GENLAB_FB_ENGAGEMENT_QUESTION_ENABLED"),
     )
     hook = str(fields.get("hook", "") or "")
     title = str(fields.get("title", "") or "")
