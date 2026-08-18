@@ -127,6 +127,17 @@ def _flag_enabled() -> bool:
     return env_true("GENLAB_INTELLIGENT_TRANSFORM_ENABLED")
 
 
+def _storytime_compositor_enabled() -> bool:
+    """NARR-01 A3 mutex check. Storytime compositor owns the
+    narration render when both variant_type=storytime AND this
+    flag are on — see FrameCompositor.compose_storytime at
+    frame_compositor.py:605. When it wins, NARR-01 skips (routing
+    outcome, not degradation)."""
+    from genlab_core.settings import env_true
+
+    return env_true("GENLAB_STORYTIME_COMPOSITOR_ENABLED")
+
+
 def _trim_video(
     source_path: Path,
     output_path: Path,
@@ -371,6 +382,77 @@ def apply_transformations(
             except (AttributeError, ValueError, TypeError):
                 music_bed_db = -6
 
+            # NARR-01 (2026-08-18): resolve VO wire.
+            #
+            # Priority chain:
+            #   1. Storytime mutex (A3): if variant_type == storytime AND
+            #      STORYTIME_COMPOSITOR_ENABLED, the storytime compositor
+            #      owns the narration (source-audio-muted + TTS-primary).
+            #      NARR-01 skips — routing outcome, not degradation.
+            #      Excluded from degradation-rate aggregation per plan §4.
+            #   2. Upstream degraded (GenerateAudio flagged vo_overrun /
+            #      script_generation_failed / etc.): skip VO, use 2-input.
+            #   3. No VO path OR file missing: skip VO, use 2-input.
+            #   4. All above pass → attempt 3-input NARR-01 mix.
+            #
+            # Every branch keeps the legacy 2-input path as the
+            # fallback (byte-identical to pre-NARR-01 when VO absent).
+            narration_audio_path: Path | None = None
+            narration_vo_db = 0
+            vo_bed_duck_db = -8
+            target_lufs = -14.0
+            ctx = blueprint_context or {}
+            if isinstance(ctx, dict):
+                # Storytime mutex — routing outcome per operator note
+                variant = str(ctx.get("variant_type") or "")
+                if variant == "storytime" and _storytime_compositor_enabled():
+                    logger.info(
+                        "[transformation_orchestrator] narration=storytime "
+                        "mutex fired for niche=%s — NARR-01 skipped "
+                        "(storytime compositor owns narration; routing "
+                        "outcome, excluded from degradation aggregation)",
+                        niche_id,
+                    )
+                    # Set marker for downstream persistence
+                    ctx["narration_degraded"] = True
+                    ctx["narration_degraded_reason"] = "storytime_mutex"
+                elif ctx.get("narration_degraded"):
+                    logger.info(
+                        "[transformation_orchestrator] narration "
+                        "already degraded upstream for niche=%s "
+                        "reason=%s — using legacy 2-input mix",
+                        niche_id,
+                        ctx.get("narration_degraded_reason", "?"),
+                    )
+                else:
+                    candidate = ctx.get("narration_audio_path")
+                    if candidate:
+                        cand_path = Path(str(candidate))
+                        if cand_path.exists():
+                            narration_audio_path = cand_path
+                            # Resolve config knobs via narration_gate
+                            # helper — has sensible defaults on any
+                            # missing key (plan §3.2).
+                            try:
+                                from genlab_core.publishing.narration_gate import (
+                                    get_narration_config,
+                                )
+                                _n_cfg = get_narration_config(
+                                    getattr(config, "raw_niche_yaml", None)
+                                )
+                                narration_vo_db = int(_n_cfg["narration_vo_db"])
+                                vo_bed_duck_db = int(_n_cfg["vo_bed_duck_db"])
+                                target_lufs = float(_n_cfg["target_lufs"])
+                            except Exception:  # noqa: BLE001
+                                pass  # defaults already set
+                            logger.info(
+                                "[transformation_orchestrator] narration "
+                                "engaged for niche=%s vo=%s "
+                                "vo_bed_duck=%ddB target_lufs=%.1f",
+                                niche_id, cand_path.name,
+                                vo_bed_duck_db, target_lufs,
+                            )
+
             next_path = temp_dir / "01_audio.mp4"
             try:
                 from genlab_core.media.audio_replacer import (
@@ -384,6 +466,10 @@ def apply_transformations(
                     mood_tag=music_mood,
                     source_duck_db=duck_db,
                     music_bed_db=music_bed_db,
+                    narration_audio_path=narration_audio_path,
+                    narration_vo_db=narration_vo_db,
+                    vo_bed_duck_db=vo_bed_duck_db,
+                    target_lufs=target_lufs,
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
@@ -391,6 +477,12 @@ def apply_transformations(
                     exc,
                 )
                 success = False
+                # NARR-01: if the 3-input mix threw, mark the mix as
+                # degraded so downstream persistence records the
+                # reason and operator query catches it.
+                if isinstance(ctx, dict) and narration_audio_path is not None:
+                    ctx["narration_degraded"] = True
+                    ctx["narration_degraded_reason"] = "mix_failed"
             # 2026-07-21: pre-concat validation. If audio_replacer
             # returned True but produced a file with no audio stream
             # or 0-duration (the primary music_mood failure mode

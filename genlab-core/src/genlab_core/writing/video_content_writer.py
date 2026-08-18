@@ -23,6 +23,12 @@ logger = logging.getLogger(__name__)
 # instagram_caption is included: to_sentence_case only touches sentence-initial
 # letters, so the trailing CTA (already capitalized) and "#hashtags" are
 # unaffected.
+#
+# narration_script is included because the TTS engine reads it verbatim —
+# all-lowercase / SCREAMING scripts read as artificial by TTS voices.
+# NARR-01 (2026-08-18) — only present in the dict when the writer was
+# called with narration_target_seconds; absent otherwise so this apply
+# is a no-op for the 4 non-canary niches.
 _SENTENCE_CASE_FIELDS = (
     "hook",
     "instagram_caption",
@@ -30,6 +36,7 @@ _SENTENCE_CASE_FIELDS = (
     "youtube_content",
     "facebook_content",
     "threads_content",
+    "narration_script",
 )
 
 
@@ -385,12 +392,44 @@ def _complete_and_parse_json(
         return parsed
 
 
+def _build_narration_hint(target_seconds: float) -> str:
+    """NARR-01 narration prompt block. Injected only when the caller
+    passed a target duration; otherwise the writer's system prompt is
+    byte-identical to pre-NARR-01 output.
+
+    Word-cap derivation: 150 wpm baseline (matches
+    ``narration_validator.project_tts_duration_seconds``) with a 2s
+    tail buffer for the music bed to carry out.
+    """
+    tail_buffer_seconds = 2.0
+    fit_seconds = max(0.0, target_seconds - tail_buffer_seconds)
+    word_cap = int(fit_seconds * 150 / 60)  # 150 wpm
+    return (
+        "NARRATION SCRIPT (voice-over commentary read aloud by TTS):\n"
+        f"  - Target duration: fits into ≈ {fit_seconds:.1f} seconds of clip time\n"
+        f"    (with a 2-second music-bed tail after your voice ends)\n"
+        f"  - HARD word cap: {word_cap} words. Longer will be REJECTED and\n"
+        f"    the reel will publish without narration.\n"
+        "  - 2-4 sentences of ORIGINAL commentary, analysis, or context.\n"
+        "    NOT a summary of what the clip shows — viewers can see the clip.\n"
+        "    Your job is to ADD interpretation the visuals don't provide.\n"
+        "  - Spoken voice: conversational, opinion-forward, first-person plural\n"
+        "    (\"we\", \"our audience\") NOT first-person singular experience claims\n"
+        "    (do NOT say \"I played\", \"I watched\", \"I tried\", \"I built\").\n"
+        "  - NO URLs. NO affiliate CTAs. NO product mentions. NO 'link in bio'.\n"
+        "  - Follow-CTA is permitted if it fits naturally (e.g. \"follow for\n"
+        "    more from this creator\").\n"
+        "\n"
+    )
+
+
 def write_video_content(
     video: dict,
     niche_id: str,
     llm_client: Any,
     existing_hooks: list[str] | None = None,
     extra_instructions: str = "",
+    narration_target_seconds: float | None = None,
 ) -> dict:
     """Generate platform-specific content for a trending video.
 
@@ -402,10 +441,19 @@ def write_video_content(
         existing_hooks: Already-used hooks to avoid duplicates
         extra_instructions: Optional niche-specific instructions (banned phrases,
             tone guidance, examples) appended to the system prompt.
+        narration_target_seconds: NARR-01 (2026-08-18). When set, the writer
+            appends a narration-script instruction block asking for 2-4
+            sentences of original commentary that fits the target duration.
+            The returned dict includes a ``narration_script`` key when the
+            LLM emitted one. When None (default), the prompt + return
+            shape are byte-identical to pre-NARR-01 behavior — the 4
+            non-canary niches always call with None.
 
     Returns:
         Dict with: hook, instagram_caption, twitter_content,
-                   youtube_content, facebook_content, threads_content
+                   youtube_content, facebook_content, threads_content;
+                   plus ``narration_script`` when narration_target_seconds
+                   was set AND the LLM emitted one.
     """
     voice = NICHE_VOICE.get(niche_id, NICHE_VOICE["gaming"])
     existing_hooks_text = "\n".join(f"  - {h}" for h in (existing_hooks or [])[-5:])
@@ -868,6 +916,21 @@ def write_video_content(
         + watch_till_end_hint
         + split_screen_hint
         + storytime_hint
+        + (
+            # NARR-01 (2026-08-18) narration-script instruction block.
+            # Only appended when the caller (base_writing) passed
+            # narration_target_seconds — the 4 non-canary niches call
+            # with None and the prompt is byte-identical to pre-fix.
+            #
+            # Duration budget uses 150 wpm baseline (matches
+            # narration_validator.project_tts_duration_seconds default).
+            # Word cap = target_seconds × 150 / 60. We express it as a
+            # word cap in the prompt because word count is easier for
+            # the LLM to self-check than time.
+            _build_narration_hint(narration_target_seconds)
+            if narration_target_seconds is not None
+            else ""
+        )
         + "OUTPUT FORMAT — strictly enforced:\n"
         "Respond ONLY with valid JSON. ALL SIX KEYS ARE REQUIRED and must\n"
         "have non-empty string values:\n"
@@ -877,6 +940,22 @@ def write_video_content(
         "  - youtube_content\n"
         "  - facebook_content\n"
         "  - threads_content    ← REQUIRED, never empty, never omit\n"
+        + (
+            # NARR-01: narration_script listed as REQUIRED only when the
+            # caller asked for it. Absence in non-canary calls means
+            # non-canary niches never see this line in their prompt.
+            "  - narration_script  ← REQUIRED for narration-enabled niches\n"
+            "                        (2-4 sentences of ORIGINAL commentary/\n"
+            "                        analysis/context that the clip itself does\n"
+            "                        NOT contain. Voice: the channel's editorial\n"
+            "                        voice. No URLs. No first-person 'I played/\n"
+            "                        watched' claims beyond what the source\n"
+            "                        supports. This will be read aloud by TTS\n"
+            "                        as the video's voiceover — write it as\n"
+            "                        spoken commentary, not written copy.)\n"
+            if narration_target_seconds is not None
+            else ""
+        )
         + (
             # Layer 3 S4b (2026-07-17): question_reveal variant requires
             # a 7th field. Renders as a timed on-frame overlay at 8-13s

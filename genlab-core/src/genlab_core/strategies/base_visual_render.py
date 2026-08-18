@@ -362,11 +362,31 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                 )
                 niche_root = self._visuals_yaml_path.parent.parent
                 content = story.get("content") or {}
+                # NARR-01 (2026-08-18): thread narration state through
+                # blueprint_context so the transformation_orchestrator
+                # Stage 1 audio_replacer can invoke the 3-input mix
+                # when a VO landed. All 4 keys are safe when narration
+                # is disabled — every consumer is guarded and defaults
+                # to the 2-input legacy path (byte-identical output).
+                media = story.get("media") or {}
                 blueprint_context = {
                     "hook": hook_text,
                     "caption_segments": content.get("caption_segments"),
                     "title": story.get("title", ""),
                     "summary": story.get("summary", ""),
+                    # NARR-01 fields: only carry meaningful values when
+                    # the writer + GenerateAudio pipeline populated them.
+                    "narration_audio_path": media.get("audio_path"),
+                    "narration_degraded": bool(
+                        content.get("narration_degraded", False)
+                    ),
+                    "narration_degraded_reason": content.get(
+                        "narration_degraded_reason", ""
+                    ),
+                    "variant_type": (
+                        content.get("variant_type")
+                        or story.get("variant_type")
+                    ),
                 }
                 # Task #581 (2026-07-08): apply_post_render_transformations
                 # now returns (path, arm_ids_by_dimension). The dict lets

@@ -54,6 +54,24 @@ class GenerateAudio:
             logger.warning("[GenerateAudio] genlab_core.tts not available, skipping")
             return context
 
+        # NARR-01 (2026-08-18): gate check happens ONCE at the top so
+        # the per-blueprint loop reads narration_script when on. When
+        # off, this stage's behavior is byte-identical to pre-NARR-01
+        # (script built from hook+caption via _build_script).
+        niche_id = config.get("niche_id", "unknown")
+        narration_enabled = False
+        try:
+            from genlab_core.publishing.narration_gate import (
+                is_narration_enabled_for,
+            )
+            narration_enabled = is_narration_enabled_for(niche_id, config)
+        except Exception as exc:  # noqa: BLE001 — fail-open
+            logger.warning(
+                "[GenerateAudio] narration gate check raised: %s "
+                "— falling back to legacy hook+caption script source",
+                exc,
+            )
+
         cascade = build_tts_cascade()
         generated = 0
         skipped = 0
@@ -62,7 +80,30 @@ class GenerateAudio:
         run_dir = self._get_run_dir(context)
 
         for bp in blueprints:
-            script = self._build_script(bp)
+            # NARR-01: when narration enabled AND the writer emitted a
+            # non-empty narration_script, use that as the TTS input
+            # (commentary voice-over). Otherwise fall back to the
+            # legacy hook+caption concat. If narration_enabled but
+            # the writer left narration_script empty, mark the
+            # blueprint as degraded with reason=script_generation_failed
+            # so the operator query in the plan §4 catches it.
+            script = ""
+            content = bp.get("content") if isinstance(bp.get("content"), dict) else {}
+            if narration_enabled:
+                narration_script = str(content.get("narration_script", "")).strip()
+                if narration_script:
+                    script = narration_script
+                else:
+                    content["narration_degraded"] = True
+                    content["narration_degraded_reason"] = "script_generation_failed"
+                    logger.warning(
+                        "[GenerateAudio] narration enabled for %s but "
+                        "writer emitted empty narration_script — "
+                        "degrading to legacy audio path (bp=%s)",
+                        niche_id, bp.get("candidate_id", "?"),
+                    )
+            if not script:
+                script = self._build_script(bp)
             if not script:
                 skipped += 1
                 continue
@@ -129,6 +170,30 @@ class GenerateAudio:
                     except Exception:
                         pass  # Non-fatal — use untrimmed audio
 
+                    # NARR-01 A4 (2026-08-18): post-synth VO duration
+                    # probe. The pre-synth wpm=150 projection is
+                    # baseline-optimistic — Edge-TTS often runs slower
+                    # than 150 wpm on longer phrases. ffprobe the
+                    # actual duration against the clip fit-window and
+                    # mark vo_overrun if it exceeds. Consumer
+                    # (transformation_orchestrator) reads this marker
+                    # and skips the 3-input mix, degrading to legacy
+                    # 2-input path.
+                    if narration_enabled:
+                        try:
+                            self._check_vo_overrun(
+                                out_path=out_path,
+                                bp=bp,
+                                niche_id=niche_id,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning(
+                                "[GenerateAudio] vo_overrun probe raised "
+                                "for %s: %s — narration proceeds (probe "
+                                "failures don't block VO)",
+                                bp.get("candidate_id", "?"), exc,
+                            )
+
                     media["audio_path"] = str(out_path)
                     media["audio_provider"] = getattr(result, "provider", "unknown")
                     generated += 1
@@ -194,6 +259,83 @@ class GenerateAudio:
 
         script = f"{hook}. {body}".strip() if hook else body.strip()
         return script if len(script) > 10 else ""
+
+    @staticmethod
+    def _check_vo_overrun(
+        out_path: Path,
+        bp: dict[str, Any],
+        niche_id: str,
+    ) -> None:
+        """NARR-01 A4 (2026-08-18): probe actual VO duration and set
+        the ``vo_overrun`` degraded marker when it exceeds the clip's
+        fit window.
+
+        Rationale for a post-synth probe on top of the pre-synth
+        validator: the validator projects duration from wpm=150
+        which is a baseline. Actual TTS output can be slower
+        (Edge-TTS averages ~130 wpm on long phrases) or the
+        provider added prosodic pauses the projection didn't
+        account for. This catches those edge cases before the
+        3-input mix is attempted.
+
+        Never raises — non-fatal probe failures leave the blueprint
+        unmarked and the caller (transformation_orchestrator) still
+        attempts the VO mix. Only a definitive overrun sets the
+        degraded marker.
+        """
+        media = bp.get("media", {})
+        clip_duration = None
+        for candidate in (
+            media.get("clip_duration_seconds"),
+            media.get("duration_seconds"),
+            bp.get("duration_seconds"),
+        ):
+            if isinstance(candidate, (int, float)) and candidate > 0:
+                clip_duration = float(candidate)
+                break
+        if clip_duration is None:
+            return  # unknown clip length — can't compare
+
+        # Same 2s tail buffer the validator uses. Kept in sync
+        # deliberately — narration_gate.get_narration_config exposes
+        # the value for callers that need to override it per niche.
+        tail_buffer_seconds = 2.0
+        fit_budget = clip_duration - tail_buffer_seconds
+
+        import subprocess
+
+        from genlab_core.media.ffmpeg import get_ffprobe_binary
+
+        probe = subprocess.run(
+            [
+                get_ffprobe_binary(),
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(out_path),
+            ],
+            capture_output=True, text=True, timeout=15,
+        )
+        raw = (probe.stdout or "").strip()
+        if not raw:
+            return
+        try:
+            actual_seconds = float(raw)
+        except ValueError:
+            return
+
+        if actual_seconds > fit_budget:
+            content = bp.setdefault("content", {})
+            content["narration_degraded"] = True
+            content["narration_degraded_reason"] = "vo_overrun"
+            logger.warning(
+                "[GenerateAudio] vo_overrun for %s niche=%s: actual "
+                "VO=%.2fs > fit_budget=%.2fs (clip=%.2fs, tail=%.1fs). "
+                "Degrading to legacy 2-input mix — narration skipped.",
+                bp.get("candidate_id", "?"), niche_id,
+                actual_seconds, fit_budget, clip_duration,
+                tail_buffer_seconds,
+            )
 
     @staticmethod
     def _get_run_dir(context: dict[str, Any]) -> Path:

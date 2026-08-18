@@ -2605,6 +2605,25 @@ class PushToBacklog:
                         ),
                         "facebook_content": _credit(fb.get("caption", "")),
                         "threads_content": _credit(content.get("threads", {}).get("caption", "")),
+                        # NARR-01 (2026-08-18): persist narration state
+                        # so the operator query in the plan §4 can
+                        # aggregate degradation reasons + surface which
+                        # rule fires most. All three fields land in
+                        # blueprints.extra JSONB (they're not in
+                        # PROMOTED_COLUMNS today per rule #28; adding
+                        # columns is a separate migration).
+                        # storytime_mutex is a ROUTING outcome and must
+                        # be excluded from degradation-rate aggregation
+                        # (see plan §4 "Aggregation rule").
+                        "narration_script": str(
+                            content.get("narration_script", "")
+                        ),
+                        "narration_degraded": bool(
+                            content.get("narration_degraded", False)
+                        ),
+                        "narration_degraded_reason": str(
+                            content.get("narration_degraded_reason", "")
+                        ),
                         "priority_score": _apply_engagement_boost(
                             story.get("final_score")
                             if story.get("final_score") is not None

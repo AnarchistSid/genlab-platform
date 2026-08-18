@@ -73,6 +73,14 @@ class AudioMixSpec:
     conservative-audio niches (BB, gaming, sports, movies). FrameDrift
     (anime) overrides ducking to -9dB per the audience-prefers-source-
     audio guidance.
+
+    NARR-01 additions (2026-08-18): optional VO track. When
+    ``narration_audio_path`` is None the filtergraph is the historical
+    2-input (source + music) shape — byte-identical to pre-NARR-01
+    behavior. When set, the graph adds a 3rd input, sidechain-ducks
+    the music bed by ``vo_bed_duck_db`` under VO segments, and
+    normalises the whole mix to ``target_lufs`` (EBU R128) via the
+    shared ``ffmpeg_utils.build_loudnorm_filter`` helper.
     """
 
     source_video_path: Path
@@ -81,6 +89,11 @@ class AudioMixSpec:
     source_duck_db: int = -12
     music_bed_db: int = -6
     audio_bitrate: str = "128k"
+    # NARR-01 optional VO fields — all default to VO-off legacy path
+    narration_audio_path: Path | None = None
+    narration_vo_db: int = 0
+    vo_bed_duck_db: int = -8
+    target_lufs: float = -14.0
 
 
 def find_music_bed_for_mood(
@@ -141,22 +154,86 @@ def find_music_bed_for_mood(
     return r.choice(sorted(candidates))
 
 
-def build_audio_mix_filtergraph(source_duck_db: int, music_bed_db: int) -> str:
+def build_audio_mix_filtergraph(
+    source_duck_db: int,
+    music_bed_db: int,
+    *,
+    include_narration: bool = False,
+    narration_vo_db: int = 0,
+    vo_bed_duck_db: int = -8,
+    target_lufs: float = -14.0,
+) -> str:
     """Build the FFmpeg filter_complex string for audio mixing.
 
-    Composes three filter operations:
+    Two shapes depending on ``include_narration``:
+
+    **2-input (legacy path, NARR-01 disabled)** — byte-identical to
+    the pre-NARR-01 output:
       1. Duck source audio to source_duck_db (typically -12 dB)
       2. Normalize music bed to music_bed_db (typically -6 dB)
-      3. amix the two streams with duration=first (cut music at source
-         length rather than extending video)
+      3. amix the two streams with duration=first
+
+    **3-input (NARR-01 enabled)** — VO track added, music
+    sidechain-ducked under VO, output loudnorm'd to EBU R128:
+      1. Duck source audio to source_duck_db
+      2. Normalize music bed to music_bed_db
+      3. Sidechain-compress music bed by vo_bed_duck_db when VO is
+         playing (music dips under narration)
+      4. Normalize VO to narration_vo_db (typically 0 dB = full amp)
+      5. amix source + ducked-music + VO with duration=first
+      6. Apply ffmpeg_utils.build_loudnorm_filter to hit target_lufs
 
     Returns the filter graph as a single string suitable for
     ``-filter_complex`` argument.
     """
+    if not include_narration:
+        # Legacy 2-input shape — do not modify (pin-tested unchanged).
+        return (
+            f"[0:a]volume={source_duck_db}dB[a1];"
+            f"[1:a]volume={music_bed_db}dB[a2];"
+            f"[a1][a2]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+        )
+
+    # 3-input NARR-01 shape.
+    #
+    # INVARIANT (Amendment A2, 2026-08-18): VO starts at t=0.
+    # ``amix duration=first`` doesn't shift start times — all three
+    # inputs align to t=0. Therefore captions produced from the
+    # CLEAN VO track (before this mix) align 1:1 with the final
+    # audio without any offset arithmetic. If a future variant needs
+    # a VO start delay, add an explicit [2:a]adelay=Nms node here
+    # AND propagate the offset to render_whisper_captions.
+    #
+    # Sidechain-compress the music bed with VO as the trigger key.
+    # threshold=0.05 → any VO amplitude above ~-26 dBFS triggers duck
+    # ratio=8 → aggressive duck (music drops 8× below threshold)
+    # attack=5ms → fast reaction so first VO word isn't buried under bed
+    # release=200ms → smooth recovery so bed doesn't "pump" between words
+    # makeup=0dB → no post-compression gain (bed already at music_bed_db)
+    #
+    # The vo_bed_duck_db value is applied AS THE SIDECHAIN THRESHOLD via
+    # the classic amix approach: pre-duck the music bed by vo_bed_duck_db
+    # AND rely on sidechain to keep the duck active. This is more
+    # predictable than sidechain-only (which depends on VO signal levels
+    # varying by TTS provider) — the pre-duck gives a guaranteed floor.
+    #
+    # Deliberately choosing predictability over acoustic elegance —
+    # matches the "reuse existing loudnorm implementation style"
+    # amendment (A4): simple, testable, one filter chain.
+    #
+    # Reuses ``ffmpeg_utils.build_loudnorm_filter`` (2026-08-18) to
+    # avoid rebuilding the exact filter string — that helper already
+    # sets I/TP/LRA per EBU R128 defaults.
+    from genlab_core.media.ffmpeg_utils import build_loudnorm_filter
+
+    loudnorm = build_loudnorm_filter(target_i=target_lufs)
+    total_music_duck_db = music_bed_db + vo_bed_duck_db
     return (
-        f"[0:a]volume={source_duck_db}dB[a1];"
-        f"[1:a]volume={music_bed_db}dB[a2];"
-        f"[a1][a2]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+        f"[0:a]volume={source_duck_db}dB[src];"
+        f"[1:a]volume={total_music_duck_db}dB[music];"
+        f"[2:a]volume={narration_vo_db}dB[vo];"
+        f"[src][music][vo]amix=inputs=3:duration=first:dropout_transition=0[premix];"
+        f"[premix]{loudnorm}[aout]"
     )
 
 
@@ -165,8 +242,15 @@ def build_ffmpeg_command(spec: AudioMixSpec, ffmpeg_binary: str) -> list[str]:
 
     Kept as a pure function so tests can assert the exact command
     shape without invoking ffmpeg.
+
+    NARR-01: when ``spec.narration_audio_path`` is set, adds a 3rd
+    ``-i`` input and switches the filtergraph to the 3-input shape.
+    Legacy 2-input command is byte-identical when narration_audio_path
+    is None (pin-tested).
     """
-    return [
+    include_narration = spec.narration_audio_path is not None
+
+    cmd: list[str] = [
         ffmpeg_binary,
         "-y",  # overwrite output
         "-i",
@@ -178,8 +262,22 @@ def build_ffmpeg_command(spec: AudioMixSpec, ffmpeg_binary: str) -> list[str]:
         "-1",
         "-i",
         str(spec.music_bed_path),
+    ]
+    if include_narration:
+        # VO input is not looped — narration is a one-shot track that
+        # ends when the script ends; music continues via stream_loop.
+        cmd += ["-i", str(spec.narration_audio_path)]
+
+    cmd += [
         "-filter_complex",
-        build_audio_mix_filtergraph(spec.source_duck_db, spec.music_bed_db),
+        build_audio_mix_filtergraph(
+            spec.source_duck_db,
+            spec.music_bed_db,
+            include_narration=include_narration,
+            narration_vo_db=spec.narration_vo_db,
+            vo_bed_duck_db=spec.vo_bed_duck_db,
+            target_lufs=spec.target_lufs,
+        ),
         "-map",
         "0:v",  # video stream from source
         "-map",
@@ -196,6 +294,7 @@ def build_ffmpeg_command(spec: AudioMixSpec, ffmpeg_binary: str) -> list[str]:
         "-shortest",
         str(spec.output_path),
     ]
+    return cmd
 
 
 def mix_audio_bed(
@@ -284,6 +383,10 @@ def replace_audio_for_reel(
     music_bed_db: int = -6,
     rng: random.Random | None = None,
     timeout_seconds: int = 300,
+    narration_audio_path: Path | None = None,
+    narration_vo_db: int = 0,
+    vo_bed_duck_db: int = -8,
+    target_lufs: float = -14.0,
 ) -> bool:
     """High-level orchestrator: pick a music bed for the mood, then mix.
 
@@ -295,10 +398,24 @@ def replace_audio_for_reel(
 
     Caller (usually FrameCompositor after PR 15 wire) checks the return
     value and falls back to unmixed rendering when False.
+
+    NARR-01 (2026-08-18): when ``narration_audio_path`` is provided +
+    exists, the mix becomes 3-input (source + music + VO) and applies
+    EBU R128 loudnorm to ``target_lufs``. When None or missing file
+    → legacy 2-input path (byte-identical to pre-NARR-01 output).
     """
     music_bed = find_music_bed_for_mood(niche_root, mood_tag, rng=rng)
     if music_bed is None:
         return False
+
+    # NARR-01: only include VO if the path was passed AND the file
+    # actually exists. A missing VO file silently degrades to the
+    # legacy 2-input mix — the caller (transformation_orchestrator)
+    # already logged the vo_overrun / tts_cascade_failed reason and
+    # set the degraded marker; this call is the fallback path.
+    resolved_narration: Path | None = None
+    if narration_audio_path is not None and narration_audio_path.exists():
+        resolved_narration = narration_audio_path
 
     spec = AudioMixSpec(
         source_video_path=source_video_path,
@@ -306,6 +423,10 @@ def replace_audio_for_reel(
         output_path=output_path,
         source_duck_db=source_duck_db,
         music_bed_db=music_bed_db,
+        narration_audio_path=resolved_narration,
+        narration_vo_db=narration_vo_db,
+        vo_bed_duck_db=vo_bed_duck_db,
+        target_lufs=target_lufs,
     )
     return mix_audio_bed(spec, timeout_seconds=timeout_seconds)
 

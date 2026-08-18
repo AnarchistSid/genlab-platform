@@ -167,6 +167,10 @@ class BaseWritingStrategy(WritingStrategy):
         self._niche_root = niche_root
         self._templates: dict | None = None
         self._writing_cfg: dict | None = None
+        # NARR-01 (2026-08-18): cache niche.yaml so the narration gate
+        # can read narration.enabled without re-loading per blueprint.
+        # Lazy — filled by _ensure_config on first use.
+        self._niche_config: dict | None = None
         logger.info("[%s] %s initialized", self._niche_id, type(self).__name__)
 
     # ------------------------------------------------------------------
@@ -179,6 +183,14 @@ class BaseWritingStrategy(WritingStrategy):
         self._templates = _load_yaml(self._niche_root / "config" / "templates.yaml")
         writing_path = self._niche_root / "config" / "writing.yaml"
         self._writing_cfg = _load_yaml(writing_path) if writing_path.exists() else {}
+        # NARR-01 (2026-08-18): niche.yaml is optional here — it's loaded
+        # upstream by the pipeline runner and passed via context. But the
+        # narration gate needs it at writer time, so we cache a local
+        # copy. Missing file → empty dict (gate returns False, no crash).
+        niche_yaml_path = self._niche_root / "config" / "niche.yaml"
+        self._niche_config = (
+            _load_yaml(niche_yaml_path) if niche_yaml_path.exists() else {}
+        )
 
     def _model_route_key(self) -> str:
         """Return the model-router key for ``get_model()``. Override per niche."""
@@ -426,12 +438,46 @@ class BaseWritingStrategy(WritingStrategy):
         from genlab_core.writing.video_content_writer import write_video_content
 
         video = self._story_to_video_dict(story, clip_index)
+
+        # NARR-01 (2026-08-18): compute narration_target_seconds when
+        # the niche is narration-enabled. This is the only place the
+        # writer learns whether to ask the LLM for a narration_script.
+        # Fail-open: any error in the gate → target stays None →
+        # writer prompt is byte-identical to pre-NARR-01. No exception
+        # bubbles up.
+        narration_target_seconds = None
+        try:
+            from genlab_core.publishing.narration_gate import (
+                is_narration_enabled_for,
+            )
+            if is_narration_enabled_for(self._niche_id, self._niche_config):
+                # Base clip duration = video.duration_seconds. When
+                # missing (older clip metadata shapes), skip narration
+                # for this blueprint — the gate stays open but the
+                # writer defers to the legacy 6-field output.
+                dur = video.get("duration_seconds")
+                if isinstance(dur, (int, float)) and dur > 0:
+                    narration_target_seconds = float(dur)
+                else:
+                    logger.info(
+                        "[%s] narration enabled but clip duration "
+                        "unknown — writer defers to legacy 6-field output",
+                        self._niche_id,
+                    )
+        except Exception as exc:  # noqa: BLE001 — fail-open
+            logger.warning(
+                "[%s] narration gate check raised: %s — falling back to "
+                "legacy writer path (no narration_script)",
+                self._niche_id, exc,
+            )
+
         result = write_video_content(
             video=video,
             niche_id=self._niche_id,
             llm_client=llm_client,
             existing_hooks=existing_hooks,
             extra_instructions=extra_instructions,
+            narration_target_seconds=narration_target_seconds,
         )
 
         # Optional retry on near-dupe hook — turns the observability
