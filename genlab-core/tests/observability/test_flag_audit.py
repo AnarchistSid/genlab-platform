@@ -167,6 +167,25 @@ class TestCanaryFlagNamesMatchReaders:
         assert reader._ROLLOUT_ENV in fa._CANARY_FLAGS
 
 
+class TestNarrationFlagName:
+    """NARR-01 (2026-08-18): the narration gate reader is source of
+    truth for the flag name. Pin here to catch the same class of drift
+    as ig_discovery_hashtags / threads_hashtags (fixed d6d136e3)."""
+
+    def test_narration_flag_name_matches_reader(self):
+        """publishing/narration_gate.py:_ROLLOUT_ENV must equal
+        GENLAB_NARRATION_ENABLED and be present in flag_audit._KNOWN_FLAGS."""
+        from genlab_core.observability import flag_audit as fa
+        from genlab_core.publishing import narration_gate as reader
+        assert reader._ROLLOUT_ENV == "GENLAB_NARRATION_ENABLED"
+        assert reader._ROLLOUT_ENV in fa._KNOWN_FLAGS, (
+            f"flag_audit._KNOWN_FLAGS must contain {reader._ROLLOUT_ENV} "
+            f"— reader is source of truth. Missing this = the audit "
+            f"line silently reports narration off even when the real "
+            f"flag is on. Same class as d6d136e3 IG/Threads drift."
+        )
+
+
 class TestStructuralWires:
     """Guards against the wire being deleted from the call sites."""
 

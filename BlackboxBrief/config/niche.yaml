@@ -98,3 +98,15 @@ pipeline:
   # blocked URLs forever. AI news cycles fast — same tool announcement
   # can legitimately re-blueprint 3 days apart when new features drop.
   url_dedup_ttl_days: 3
+
+# NARR-01 (2026-08-18): narration canary flip. BB is the ONLY niche
+# in the initial canary. When paired with GENLAB_NARRATION_ENABLED=1
+# on the VPS, the writer emits a narration_script and the audio
+# pipeline mixes VO into the final reel (source + music + VO with
+# EBU R128 loudnorm). Rollback = flip either gate to off.
+#
+# Defaults for the tuning knobs (vo_bed_duck_db, target_lufs, wpm,
+# tail_buffer_seconds) live in publishing/narration_gate.py:
+# get_narration_config — override here per-niche when needed.
+narration:
+  enabled: true

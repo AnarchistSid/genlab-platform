@@ -121,6 +121,11 @@ _KNOWN_FLAGS: Final[tuple[str, ...]] = (
     "GENLAB_HOOK_THUMBNAIL_MULTI_MODEL_ENABLED",
     "GENLAB_ANIME_BACKFILL_MULTI_MODEL_ENABLED",
     "GENLAB_INFERENCE_UTILITIES_ENABLED",
+    # 2026-08-18 NARR-01 — narration enablement in published reels.
+    # Master kill-switch across all niches. When on, per-niche
+    # narration.enabled in niche.yaml gates each canary independently.
+    # Reader: publishing/narration_gate.py:_ROLLOUT_ENV (pin-tested).
+    "GENLAB_NARRATION_ENABLED",
 )
 
 
