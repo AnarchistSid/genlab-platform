@@ -105,6 +105,45 @@ def _build_kling_input(
     }
 
 
+def _build_seedance_input(
+    prompt: str, seed: int, duration_s: int,
+    resolution: str, aspect_ratio: str, draft: bool,
+) -> dict[str, Any]:
+    """bytedance/seedance-2-0-fast — action-y ByteDance aesthetic.
+    Uses `ratio=adaptive` for auto aspect matching + seed=-1 for
+    randomness. Sets generate_audio=False so we don't get double-audio
+    when we overlay TTS."""
+    return {
+        "prompt": prompt,
+        "duration": duration_s,
+        "resolution": resolution or "720p",
+        "ratio": "adaptive",
+        "seed": seed if seed >= 0 else -1,
+        "watermark": False,
+        "generate_audio": False,
+    }
+
+
+def _build_veo_input(
+    prompt: str, seed: int, duration_s: int,
+    resolution: str, aspect_ratio: str, draft: bool,
+) -> dict[str, Any]:
+    """google/veo-3 — premium Google Gemini video model. Higher-cost
+    tier ($0.20-0.60/sec) so bandit gates when it materially
+    outperforms cheaper alternatives. Uses `aspect_ratio` (16:9 or
+    9:16 for portrait) + fixed duration=8s."""
+    # Veo only supports fixed durations; clamp to 8s (Reels-friendly)
+    return {
+        "prompt": prompt,
+        "aspect_ratio": aspect_ratio or "9:16",
+        "duration": 8,
+        "resolution": resolution or "720p",
+        "num_videos": 1,
+        "person_generation": "allow_adult",
+        "generate_audio": False,
+    }
+
+
 @dataclass(frozen=True)
 class VideoModel:
     """One registered text-to-video model."""
@@ -132,6 +171,20 @@ _REGISTRY: Final[tuple[VideoModel, ...]] = (
         belt_app="klingai/video-v2-6",
         build_input=_build_kling_input,
         cost_per_5s_usd=0.21,  # low end of $0.21-$1.68/video band
+    ),
+    # 2026-08-18 wide expansion (task #209): 2 additional aesthetics.
+    # Reward wire (task #206) will differentiate at 48h.
+    VideoModel(
+        model_id="seedance-2-0-fast",
+        belt_app="bytedance/seedance-2-0-fast",
+        build_input=_build_seedance_input,
+        cost_per_5s_usd=0.15,  # $0.0056/1K tokens for 720p 5s text-only
+    ),
+    VideoModel(
+        model_id="veo-3",
+        belt_app="google/veo-3",
+        build_input=_build_veo_input,
+        cost_per_5s_usd=1.00,  # $0.20/sec 720p no-audio × 5s
     ),
 )
 

@@ -95,6 +95,49 @@ def _build_grok_input(
     }
 
 
+def _build_seedream_input(
+    prompt: str, seed: int, width: int, height: int,
+) -> dict[str, Any]:
+    """bytedance/seedream-4-5 — cinematic ByteDance aesthetic.
+    Uses `size` (2K default) + `watermark` toggle."""
+    return {
+        "prompt": prompt,
+        "size": "2K",
+        "watermark": False,
+    }
+
+
+def _build_gemini_pro_input(
+    prompt: str, seed: int, width: int, height: int,
+) -> dict[str, Any]:
+    """google/gemini-3-pro-image-preview (nano-banana-2) — premium
+    Google Gemini image. Uses `aspect_ratio` + `resolution` (1K min).
+    Higher-cost tier ($0.134/image) so bandit should learn to only
+    use it when it materially outperforms cheaper alternatives."""
+    return {
+        "prompt": prompt,
+        "aspect_ratio": "9:16",
+        "resolution": "1K",
+        "num_images": 1,
+        "output_format": "png",
+        "safety_tolerance": "BLOCK_NONE",
+        "enable_google_search": False,
+        "retry_count": 2,
+    }
+
+
+def _build_reve_input(
+    prompt: str, seed: int, width: int, height: int,
+) -> dict[str, Any]:
+    """falai/reve — strong text-in-image capability (good for
+    charts / headline overlays). Uses `mode` (auto) + `output_format`."""
+    return {
+        "prompt": prompt,
+        "mode": "auto",
+        "output_format": "png",
+    }
+
+
 @dataclass(frozen=True)
 class ImageModel:
     """One registered background-image model."""
@@ -122,6 +165,27 @@ _REGISTRY: Final[tuple[ImageModel, ...]] = (
         belt_app="xai/grok-imagine-image",
         build_input=_build_grok_input,
         cost_per_image_usd=0.020,
+    ),
+    # 2026-08-18 wide expansion (task #209): 3 additional aesthetics
+    # for the bandit to explore. Bandit reward wire (task #206) will
+    # differentiate their per-model reward at 48h from actual data.
+    ImageModel(
+        model_id="seedream-4-5",
+        belt_app="bytedance/seedream-4-5",
+        build_input=_build_seedream_input,
+        cost_per_image_usd=0.040,
+    ),
+    ImageModel(
+        model_id="gemini-3-pro-image",
+        belt_app="google/gemini-3-pro-image-preview",
+        build_input=_build_gemini_pro_input,
+        cost_per_image_usd=0.134,  # premium tier — bandit gate
+    ),
+    ImageModel(
+        model_id="reve",
+        belt_app="falai/reve",
+        build_input=_build_reve_input,
+        cost_per_image_usd=0.040,
     ),
 )
 

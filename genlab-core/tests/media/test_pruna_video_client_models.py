@@ -42,16 +42,52 @@ class TestRegistry:
         assert _REGISTRY[0].model_id == "pruna-p-video"
         assert _pruna_model().model_id == "pruna-p-video"
 
-    def test_registry_has_expected_three_models(self):
+    def test_registry_has_all_five_models(self):
+        """3 originals + 2 wide-expansion adds (task #209, 2026-08-18)."""
         ids = {m.model_id for m in _REGISTRY}
-        assert ids == {"pruna-p-video", "alibaba-wan-2-7", "kling-v2-6"}
+        assert ids == {
+            "pruna-p-video", "alibaba-wan-2-7", "kling-v2-6",
+            "seedance-2-0-fast", "veo-3",
+        }
 
-    def test_registry_costs_ascending(self):
-        """Diversity math sanity: registered order should NOT put the
-        most expensive model at position 0 (it becomes the fallback
-        baseline when flag off — cheap baseline is safer)."""
-        assert _REGISTRY[0].cost_per_5s_usd <= _REGISTRY[1].cost_per_5s_usd
-        assert _REGISTRY[0].cost_per_5s_usd <= _REGISTRY[2].cost_per_5s_usd
+    def test_registry_baseline_is_cheapest(self):
+        """Diversity math sanity: registered order[0] MUST be the
+        cheapest option (it's the fallback baseline when flag off —
+        cheap-safe by default)."""
+        for m in _REGISTRY[1:]:
+            assert _REGISTRY[0].cost_per_5s_usd <= m.cost_per_5s_usd, (
+                f"baseline {_REGISTRY[0].model_id} more expensive than "
+                f"{m.model_id} — reorder registry"
+            )
+
+    def test_expansion_models_have_valid_input_builders(self):
+        from genlab_core.media.pruna_video_client_models import _REGISTRY
+        expansion_ids = {"seedance-2-0-fast", "veo-3"}
+        for m in _REGISTRY:
+            if m.model_id not in expansion_ids:
+                continue
+            inp = m.build_input(
+                prompt="test", seed=42, duration_s=5,
+                resolution="720p", aspect_ratio="9:16", draft=True,
+            )
+            assert isinstance(inp, dict) and "prompt" in inp
+            assert inp["prompt"] == "test"
+
+    def test_expansion_models_disable_auto_audio(self):
+        """seedance + veo can emit their own audio track. Must be
+        disabled — we overlay our own TTS voice + music beds and
+        double-audio would be jarring."""
+        from genlab_core.media.pruna_video_client_models import _REGISTRY
+        for m in _REGISTRY:
+            if m.model_id not in ("seedance-2-0-fast", "veo-3"):
+                continue
+            inp = m.build_input(
+                prompt="test", seed=42, duration_s=5,
+                resolution="720p", aspect_ratio="9:16", draft=True,
+            )
+            assert inp.get("generate_audio") is False, (
+                f"{m.model_id} must set generate_audio=False"
+            )
 
 
 class TestPickModelFlagOff:

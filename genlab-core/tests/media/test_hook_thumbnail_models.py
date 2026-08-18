@@ -51,9 +51,13 @@ class TestRegistry:
         assert _REGISTRY[0].belt_app == "pruna/flux-dev"
         assert _flux_model().model_id == "flux"
 
-    def test_registry_has_expected_three_models(self):
+    def test_registry_has_all_six_models(self):
+        """3 originals + 3 wide-expansion adds (task #209, 2026-08-18)."""
         ids = {m.model_id for m in _REGISTRY}
-        assert ids == {"flux", "gpt-image-2", "grok-imagine"}
+        assert ids == {
+            "flux", "gpt-image-2", "grok-imagine",
+            "seedream-4-5", "gemini-3-pro-image", "reve",
+        }
 
     def test_registry_costs_match_live_pricing(self):
         """Cost values are documented in module docstring — regression
@@ -62,6 +66,21 @@ class TestRegistry:
         assert cost_by_id["flux"] == 0.005
         assert cost_by_id["gpt-image-2"] == 0.006
         assert cost_by_id["grok-imagine"] == 0.020
+        assert cost_by_id["seedream-4-5"] == 0.040
+        assert cost_by_id["gemini-3-pro-image"] == 0.134
+        assert cost_by_id["reve"] == 0.040
+
+    def test_expansion_models_have_valid_input_builders(self):
+        """Each new model's build_input must produce a non-empty dict
+        with at least `prompt`. Pin catches accidental schema drift."""
+        from genlab_core.media.hook_thumbnail_models import _REGISTRY
+        expansion_ids = {"seedream-4-5", "gemini-3-pro-image", "reve"}
+        for m in _REGISTRY:
+            if m.model_id not in expansion_ids:
+                continue
+            inp = m.build_input("test prompt", 42, 1080, 1920)
+            assert isinstance(inp, dict) and "prompt" in inp
+            assert inp["prompt"] == "test prompt"
 
 
 class TestPickModelFlagOff:
