@@ -94,6 +94,15 @@ pipeline:
 
     phase1_relevance_gate: []
 
+    # Task #192 (2026-08-18): AI-backfill when the post-dedup pool is
+    # dry. Flag-gated OFF by default — operator sets
+    # GENLAB_ANIME_BACKFILL_NICHES=anime + GENLAB_ANIME_BACKFILL_MAX_PER_RUN=1
+    # to enable. Currently OBSERVATION-only wire; the flag stays off
+    # until the dedup fix (a7d1a8bf) is verified insufficient.
+    phase1_post_dedup_backfill:
+      - class: genlab_core.pipeline.stages.fetch_generated_backfill.FetchGeneratedBackfill
+        retries: 0
+
     phase2_writing:
       - class: fd_strategies.writing.AnimeWritingStrategy
         retries: 1

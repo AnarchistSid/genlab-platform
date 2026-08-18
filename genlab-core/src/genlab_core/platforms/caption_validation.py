@@ -66,6 +66,13 @@ import os
 
 _MARKER_ORIGINAL = "\U0001f3ac original:"
 _MARKER_FOOTAGE = "footage:"
+# 2026-08-18 (task #192): AI-generated content backfill marker. When
+# ``pruna_video_client.generate_backfill_clip`` produces a video for the
+# anime dedup canary, there is no external creator to credit — the
+# audience-facing attribution is "we made this with an AI model." This
+# marker enforces that honesty rather than dressing up AI content with
+# a false "🎬 Original:" line pointing at a Gen Lab handle.
+_MARKER_AI_GENERATED = "\U0001f916 ai-generated"
 
 
 def validate_caption_has_attribution(
@@ -81,6 +88,11 @@ def validate_caption_has_attribution(
     audit — Twitch directory URLs were satisfying the old check
     while shipping empty-of-credit captions to users).
 
+    Recognised markers (all case-insensitive substring match):
+      * ``"🎬 Original:"`` — external creator credit
+      * ``"Footage:"``    — YouTube attribution
+      * ``"🤖 AI-generated"`` — AI-generated content (task #192)
+
     error_reason is None on valid; otherwise a short machine-readable
     string suitable for logging into compliance_events.
     """
@@ -93,7 +105,7 @@ def validate_caption_has_attribution(
     # Now require at least ONE non-whitespace character after the
     # marker (handle OR URL). Retains substring compatibility for
     # legit variants like `🎬 Original creator: @X`.
-    for marker in (_MARKER_ORIGINAL, _MARKER_FOOTAGE):
+    for marker in (_MARKER_ORIGINAL, _MARKER_FOOTAGE, _MARKER_AI_GENERATED):
         idx = lowered.find(marker)
         if idx == -1:
             continue

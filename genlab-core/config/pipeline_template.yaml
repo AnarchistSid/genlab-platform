@@ -36,6 +36,13 @@
 # - phase1_scoring             — niche's ScoringStrategy class
 # - phase1_relevance_gate      — optional extra filter stage (BB uses
 #                                RelevanceGate; others leave empty)
+# - phase1_post_dedup_backfill — optional stage inserted AFTER
+#                                PreDownloadDedup and BEFORE
+#                                DownloadTopVideos. Used by the anime
+#                                canary to generate an AI backfill
+#                                clip when the fetch pool comes up dry
+#                                (task #192, 2026-08-18). Empty for
+#                                niches that don't need backfill.
 # - phase2_writing             — niche's WritingStrategy class
 # - phase2_hooks               — niche's HookStrategy class
 # - phase4_visual_render       — niche's VisualRenderStrategy class
@@ -89,6 +96,14 @@ pipeline:
     # confusing 0-blueprints SLO violation 6 minutes later.
     - class: genlab_core.pipeline.stages.pre_download_dedup.PreDownloadDedup
       fail_mode: abort
+
+    # Optional AI-backfill step: when the post-dedup story pool is
+    # empty (or below the niche's threshold), generate a synthetic clip
+    # via pruna/p-video and inject it. Currently used only by anime
+    # (task #192). Niches without a backfill strategy leave this inject
+    # empty — the stage does not run.
+    - inject: phase1_post_dedup_backfill
+
     - class: genlab_core.media.download_top_videos.DownloadTopVideos
       retries: 1
       retry_delay_seconds: 30
