@@ -335,6 +335,70 @@ def _try_requests_fallback() -> list[dict]:
     return _parse_meta_html(response.text)
 
 
+# Heuristic keyword → mood mapping. Used as fallback when the LLM
+# classifier is unavailable (no API key, credit exhausted, network
+# down). Broad matches — many songs won't hit any pattern and get
+# skipped, but the top-20 iTunes chart usually has ENOUGH hits to
+# surface 3-4 trending moods per niche.
+_MOOD_KEYWORD_HINTS: Final[dict[str, tuple[str, ...]]] = {
+    # High-energy / hype
+    "energetic":   ("dance", "party", "energy", "hyped", "banger", "beat drop"),
+    "hype":        ("hype", "lit", "turn up", "trap", "drill", "hip hop", "rap"),
+    "aggressive":  ("hard", "brutal", "savage", "raw", "aggressive", "phonk"),
+    "intense":     ("intense", "epic", "battle", "hardcore", "adrenaline"),
+    "adrenaline":  ("rush", "extreme", "adrenaline", "speed", "chase"),
+    # Cinematic / dramatic
+    "cinematic":   ("cinematic", "score", "theme", "orchestral", "film"),
+    "dramatic":    ("dramatic", "tragedy", "operatic", "symphonic"),
+    "epic":        ("epic", "hero", "warrior", "legend", "titan"),
+    "epic_battle": ("battle", "war", "fight", "combat"),
+    "trailer":     ("trailer", "prelude", "overture"),
+    # Emotional / mellow
+    "emotional":   ("love", "heart", "cry", "tears", "goodbye", "miss you"),
+    "romantic":    ("romantic", "love song", "you and i", "kiss", "forever"),
+    "contemplative": ("acoustic", "piano", "instrumental", "reflection", "solo"),
+    "ambient_tech":  ("ambient", "atmospheric", "chill", "lofi", "downtempo"),
+    "mysterious":  ("mystery", "dark", "shadow", "secret", "enigma"),
+    "ethereal":    ("ethereal", "dream", "cloud", "float", "celestial"),
+    # Genre-driven
+    "electronic":  ("electronic", "edm", "synth", "techno", "house", "dubstep"),
+    "orchestral":  ("orchestra", "symphony", "concerto", "philharmonic"),
+    "tech_hype":   ("tech", "future", "cyber", "digital", "code"),
+    "focused":     ("focus", "study", "concentration", "flow"),
+    "upbeat":      ("upbeat", "happy", "fun", "bright", "cheerful", "sunshine"),
+    "whimsical":   ("whimsy", "playful", "silly", "fairy", "magical"),
+    # Sports-specific
+    "victorious":  ("champion", "victory", "winner", "triumph"),
+    "driving":     ("drive", "power", "engine", "race"),
+    "uplifting":   ("uplift", "rise", "inspire", "hope"),
+    "cinematic_sport": ("sport", "athlete", "game day", "arena"),
+}
+
+
+def _heuristic_classify(name: str, available_moods: list[str]) -> str | None:
+    """Match a track name against keyword hints for each available mood.
+    Returns the mood with the most keyword overlap, or None on no match.
+    Case-insensitive substring match — cheap + zero API cost."""
+    if not name or not available_moods:
+        return None
+    name_lower = name.lower()
+    scores: dict[str, int] = {}
+    for mood in available_moods:
+        hints = _MOOD_KEYWORD_HINTS.get(mood, ())
+        for kw in hints:
+            if kw in name_lower:
+                scores[mood] = scores.get(mood, 0) + 1
+    if not scores:
+        return None
+    # Return highest-scoring mood; ties broken by mood order in
+    # available_moods (stable).
+    best_score = max(scores.values())
+    for mood in available_moods:
+        if scores.get(mood, 0) == best_score:
+            return mood
+    return None
+
+
 def _classify_tracks_to_moods(
     track_names: list[dict],
     available_moods: list[str],
@@ -344,18 +408,65 @@ def _classify_tracks_to_moods(
     Returns list of `{"mood": str, "trend_rank": int, "meta_audio_id": str}`
     dicts ready for cache. Aggregates duplicate moods — if 3 hip-hop
     tracks all classify as "hype", we surface hype once at min-rank.
+
+    2026-08-18: heuristic fallback when LLM unavailable (Anthropic
+    credit exhausted, no API key, network down). Non-LLM keyword
+    matching on track name → mood hints in ``_MOOD_KEYWORD_HINTS``.
+    Data quality lower than Haiku but cache stays fresh instead of
+    empty. Was silent-broken for 2+ days when Anthropic credit ran
+    out — verified 2026-08-18 via live probe returning
+    ``credit_balance_exhausted``.
     """
+    mood_to_rank: dict[str, tuple[int, str]] = {}
+
+    def _apply(name: str, rank: int, meta_id: str, mood: str) -> None:
+        # Keep lowest rank (most-trending) per mood.
+        if mood not in mood_to_rank or rank < mood_to_rank[mood][0]:
+            mood_to_rank[mood] = (rank, meta_id)
+
+    def _finalize() -> list[dict]:
+        return [
+            {"mood": mood, "trend_rank": rank, "meta_audio_id": meta_id}
+            for mood, (rank, meta_id) in sorted(
+                mood_to_rank.items(), key=lambda kv: kv[1][0],
+            )
+        ]
+
+    def _heuristic_fallback(reason: str) -> list[dict]:
+        # Called on any LLM unavailability. Runs the keyword classifier
+        # over all tracks and returns whatever hits. Log at WARNING so
+        # this doesn't silent-fail like the pre-2026-08-18 no-key path
+        # (rule #17 / #19 pattern).
+        hits = 0
+        for track in track_names[:20]:
+            name = str(track.get("name", "")).strip()
+            if not name:
+                continue
+            mood = _heuristic_classify(name, available_moods)
+            if not mood:
+                continue
+            hits += 1
+            _apply(
+                name=name,
+                rank=int(track.get("rank", 999)),
+                meta_id=str(track.get("meta_audio_id", "")),
+                mood=mood,
+            )
+        logger.warning(
+            "[trending_audio_scraper] LLM unavailable (%s) — heuristic "
+            "fallback matched %d/%d tracks into %d moods",
+            reason, hits, len(track_names[:20]), len(mood_to_rank),
+        )
+        return _finalize()
+
     api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
-        logger.debug(
-            "[trending_audio_scraper] no ANTHROPIC_API_KEY — skip classification"
-        )
-        return []
+        return _heuristic_fallback("no ANTHROPIC_API_KEY")
 
     try:
         import anthropic  # type: ignore[import-not-found]
     except ImportError:
-        return []
+        return _heuristic_fallback("anthropic package not installed")
 
     system = (
         "You classify short-form video music tracks into mood labels. "
@@ -368,13 +479,18 @@ def _classify_tracks_to_moods(
     try:
         client = anthropic.Anthropic(api_key=api_key)
     except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "[trending_audio_scraper] anthropic client init failed: %s", exc,
-        )
-        return []
+        return _heuristic_fallback(f"anthropic client init failed: {exc}")
 
-    mood_to_rank: dict[str, tuple[int, str]] = {}
-    for track in track_names[:20]:  # cap to top-20 to bound cost
+    # Detect systemic LLM failure (credit exhausted, quota hit, auth
+    # rejected) and switch to heuristic wholesale instead of paying the
+    # per-track retry cost for 20 tracks in a row.
+    _SYSTEMIC_MARKERS = (
+        "credit balance", "insufficient", "quota", "rate limit",
+        "unauthorized", "invalid api key", "403", "401",
+    )
+    consecutive_failures = 0
+
+    for track in track_names[:20]:
         name = str(track.get("name", "")).strip()
         rank = int(track.get("rank", 999))
         meta_id = str(track.get("meta_audio_id", ""))
@@ -395,6 +511,7 @@ def _classify_tracks_to_moods(
                     ),
                 }],
             )
+            consecutive_failures = 0
             import re
             raw = response.content[0].text.strip() if response.content else ""
             match = re.search(r'"mood"\s*:\s*"([^"]+)"', raw)
@@ -403,22 +520,51 @@ def _classify_tracks_to_moods(
             mood = match.group(1).strip()
             if mood not in available_moods:
                 continue
-            # Keep the lowest rank (most trending) per mood
-            if mood not in mood_to_rank or rank < mood_to_rank[mood][0]:
-                mood_to_rank[mood] = (rank, meta_id)
+            _apply(name=name, rank=rank, meta_id=meta_id, mood=mood)
         except Exception as exc:  # noqa: BLE001
+            err_lower = str(exc).lower()
+            is_systemic = any(m in err_lower for m in _SYSTEMIC_MARKERS)
+            if is_systemic:
+                # Anthropic credit / quota / auth is dead — no point
+                # burning wall-time on 19 more identical failures.
+                # Whatever we already classified stays; heuristic fills
+                # the rest so cache is still populated.
+                logger.warning(
+                    "[trending_audio_scraper] systemic LLM failure: %s "
+                    "— switching to heuristic fallback for remaining tracks",
+                    exc,
+                )
+                # Heuristic-classify any track NOT already covered.
+                classified_meta_ids = {mid for _, mid in mood_to_rank.values()}
+                for t in track_names[:20]:
+                    tid = str(t.get("meta_audio_id", ""))
+                    if tid in classified_meta_ids:
+                        continue
+                    tname = str(t.get("name", "")).strip()
+                    if not tname:
+                        continue
+                    m = _heuristic_classify(tname, available_moods)
+                    if m:
+                        _apply(
+                            name=tname,
+                            rank=int(t.get("rank", 999)),
+                            meta_id=tid,
+                            mood=m,
+                        )
+                return _finalize()
+            consecutive_failures += 1
             logger.debug(
                 "[trending_audio_scraper] classify track=%r failed: %s",
                 name[:40], exc,
             )
-            continue
+            if consecutive_failures >= 3:
+                # Not a credit/quota keyword but 3 in a row = something's
+                # broken. Bail to heuristic rather than burn 20 slow calls.
+                return _heuristic_fallback(
+                    f"3 consecutive LLM errors, last: {exc}"
+                )
 
-    return [
-        {"mood": mood, "trend_rank": rank, "meta_audio_id": meta_id}
-        for mood, (rank, meta_id) in sorted(
-            mood_to_rank.items(), key=lambda kv: kv[1][0],
-        )
-    ]
+    return _finalize()
 
 
 def _write_cache(niche_id: str, moods: list[dict]) -> bool:

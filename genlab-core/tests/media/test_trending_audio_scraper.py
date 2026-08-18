@@ -281,6 +281,127 @@ class TestPlaywrightOptional:
                 sys.modules["playwright"] = original
 
 
+class TestHeuristicClassifier:
+    """Pin the non-LLM keyword classifier that keeps trending audio
+    cache fresh when the Anthropic API is unavailable (credit exhausted,
+    no key, network down). Verified 2026-08-18 during live outage —
+    Anthropic returned HTTP 400 'credit balance too low' and the
+    scraper silent-failed for 2+ days before this fallback shipped.
+    """
+
+    def test_heuristic_matches_energetic_keywords(self):
+        from genlab_core.media.trending_audio_scraper import _heuristic_classify
+
+        # "party" is one of the energetic hints
+        result = _heuristic_classify(
+            "Party Anthem 2026 — DJ X",
+            ["energetic", "cinematic", "emotional"],
+        )
+        assert result == "energetic"
+
+    def test_heuristic_matches_hype_hip_hop_terms(self):
+        from genlab_core.media.trending_audio_scraper import _heuristic_classify
+
+        result = _heuristic_classify(
+            "Trap Kings — Lil Something",
+            ["hype", "chill", "romantic"],
+        )
+        assert result == "hype"
+
+    def test_heuristic_returns_none_on_no_match(self):
+        from genlab_core.media.trending_audio_scraper import _heuristic_classify
+
+        # Track name with no keyword overlap into the mood vocab
+        assert _heuristic_classify(
+            "Silence in Blue — Ambient Solo",
+            ["hype", "aggressive", "victorious"],
+        ) is None
+
+    def test_heuristic_stable_tiebreak_by_mood_order(self):
+        """When two moods tie, the caller's vocab order breaks ties —
+        deterministic behavior that downstream callers can rely on."""
+        from genlab_core.media.trending_audio_scraper import _heuristic_classify
+
+        # 'hero' hits `epic`; if `epic` and something else tied, first
+        # in vocab wins. Here only `epic` hits, so we sanity-check that.
+        result = _heuristic_classify(
+            "Hero of Legend",
+            ["dramatic", "epic", "hype"],
+        )
+        assert result == "epic"
+
+    def test_heuristic_empty_moods_returns_none(self):
+        from genlab_core.media.trending_audio_scraper import _heuristic_classify
+
+        assert _heuristic_classify("Party Time", []) is None
+        assert _heuristic_classify("", ["hype"]) is None
+
+
+class TestClassifierFallbackToHeuristic:
+    """When LLM is unavailable, `_classify_tracks_to_moods` must still
+    return classified tracks via the heuristic fallback. Was the class-
+    of-bug that broke trending_audio for 2+ days pre-2026-08-18.
+    """
+
+    _TRACKS = [
+        {"name": "Party Anthem", "meta_audio_id": "a1", "rank": 1},
+        {"name": "Trap Kings", "meta_audio_id": "a2", "rank": 3},
+        {"name": "Silence in Blue", "meta_audio_id": "a3", "rank": 5},
+    ]
+
+    def test_no_api_key_uses_heuristic(self, monkeypatch, caplog):
+        from genlab_core.media import trending_audio_scraper as mod
+
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        with caplog.at_level(logging.WARNING):
+            result = mod._classify_tracks_to_moods(
+                self._TRACKS,
+                ["energetic", "hype", "chill"],
+            )
+        # Party + Trap should match; Silence should not.
+        moods = {r["mood"] for r in result}
+        assert "energetic" in moods or "hype" in moods
+        # WARNING log required — rule #17/#19 pattern
+        assert any(
+            "LLM unavailable" in r.message for r in caplog.records
+        )
+
+    def test_systemic_credit_error_switches_to_heuristic(
+        self, monkeypatch, caplog,
+    ):
+        """When Anthropic returns 'credit balance too low' (or similar
+        systemic marker), don't retry 19 more times — bail to
+        heuristic for remaining tracks immediately."""
+        from unittest.mock import MagicMock
+
+        from genlab_core.media import trending_audio_scraper as mod
+
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+
+        # Fake anthropic package
+        fake_client = MagicMock()
+        fake_client.messages.create.side_effect = Exception(
+            "Error code: 400 - Your credit balance is too low",
+        )
+        fake_anthropic = MagicMock()
+        fake_anthropic.Anthropic.return_value = fake_client
+        import sys
+        monkeypatch.setitem(sys.modules, "anthropic", fake_anthropic)
+
+        with caplog.at_level(logging.WARNING):
+            result = mod._classify_tracks_to_moods(
+                self._TRACKS,
+                ["energetic", "hype", "chill"],
+            )
+        # Should have called LLM only once — bailed on first systemic err
+        assert fake_client.messages.create.call_count == 1
+        # Heuristic should still surface something for the party track
+        assert any(r["mood"] in ("energetic", "hype") for r in result)
+        assert any(
+            "systemic LLM failure" in r.message for r in caplog.records
+        )
+
+
 class TestConsumerWire:
     def test_trending_audio_meta_read_cache_calls_scraper_read(self):
         """Structural pin: trending_audio_meta._read_cache now delegates
