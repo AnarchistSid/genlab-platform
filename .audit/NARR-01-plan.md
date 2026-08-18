@@ -254,6 +254,35 @@ Session-end summary rule: if publish must wait for tomorrow's slot, items 1, 4, 
 
 ---
 
+## 6b. Publisher pick mechanism (NARR-04 schedule audit)
+
+Measured from `publishing/blueprint_selector.py:37-84` (2026-08-18):
+
+1. Query: `backlog_client.get_blueprints_by_status("VISUAL_READY", niche_id=<niche>)`
+2. Gate: `PublishGatekeeper.evaluate()` — 7 gates including
+   `_schedule_gate` at `platforms/gatekeeper.py:103`.
+   * Schedule gate: `if not scheduled: return GateResult(allowed=True, reason="no schedule")` (line 106).
+   * Scheduled-but-not-yet-due: gate blocks.
+3. Sort: `(scheduled_for ASC with NULL→"9999-12-31", -priority_score)`.
+   Earliest schedule wins; priority breaks ties among same-time siblings.
+4. Return top-1 or None.
+
+**Consequences**:
+* Unscheduled blueprints PASS the gate but sort LAST.
+* Any blueprint with a real `scheduled_for` (even 2036) will be
+  picked over an unscheduled one.
+* To force the publisher to pick a fresh blueprint over an old
+  scheduled one: unschedule the old (`scheduled_for = NULL`) AND
+  ensure the fresh one has a scheduled_for value.
+
+**NARR-04 Pixel unschedule** (2026-08-18): Set `scheduled_for=NULL` on
+`id=6fd00e50-4778-471f-aa55-10ba2404cbfb` (was `2026-08-19 06:30 UTC`).
+Rollback:
+```sql
+UPDATE blueprints SET scheduled_for = '2026-08-19 06:30:00+00'
+WHERE id = '6fd00e50-4778-471f-aa55-10ba2404cbfb';
+```
+
 ## 7. Rollback
 
 **Verified rollback command (NARR-02 + NARR-03 hygiene 2)**:
