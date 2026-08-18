@@ -462,6 +462,80 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                     self._log_prefix, exc,
                 )
 
+            # 2026-08-18 canary wire (task #193): AI-news data-viz
+            # chart intro (~2.5s). Only fires when the hook_thumbnail
+            # wire above did NOT prepend an intro (mutually exclusive:
+            # one intro type per reel to keep first-3s attention on
+            # ONE visual anchor). Flag-gated via
+            # GENLAB_CHART_BROLL_NICHES; fail-open (any error keeps
+            # the base composite unchanged). Extraction cost ~$0.001
+            # via Haiku; ffmpeg render is zero-cost.
+            already_has_intro = composite_path.endswith(
+                "_reel_with_intro.mp4"
+            )
+            try:
+                from genlab_core.media.chart_broll import (
+                    is_enabled_for as chart_broll_is_enabled_for,
+                    render_chart_broll,
+                )
+                from genlab_core.media.chart_data_extract import (
+                    extract_chart_data,
+                )
+                from genlab_core.media.hook_thumbnail import (
+                    prepend_intro_to_composite,
+                )
+
+                if (
+                    chart_broll_is_enabled_for(niche_id)
+                    and not already_has_intro
+                    and (story.get("summary") or "").strip()
+                ):
+                    chart_data = extract_chart_data(
+                        summary=story.get("summary", "") or "",
+                        story_title=story.get("title", "") or "",
+                    )
+                    if chart_data is not None:
+                        composite_dir = Path(composite_path).parent
+                        chart_path = str(
+                            composite_dir / f"{sid[:16]}_chart.mp4"
+                        )
+                        chart_ok = render_chart_broll(
+                            title=chart_data.title,
+                            bars=chart_data.bars,
+                            niche_id=niche_id,
+                            output_path=chart_path,
+                        )
+                        if chart_ok:
+                            merged_path = str(
+                                composite_dir
+                                / f"{sid[:16]}_reel_with_chart.mp4"
+                            )
+                            if prepend_intro_to_composite(
+                                composite_path, chart_path, merged_path,
+                            ):
+                                logger.info(
+                                    "%s chart intro prepended niche=%s "
+                                    "bars=%d title=%r",
+                                    self._log_prefix, niche_id,
+                                    len(chart_data.bars),
+                                    chart_data.title[:60],
+                                )
+                                composite_path = merged_path
+                            else:
+                                logger.warning(
+                                    "%s chart concat failed — keeping base",
+                                    self._log_prefix,
+                                )
+                            try:
+                                Path(chart_path).unlink(missing_ok=True)
+                            except Exception:  # noqa: BLE001
+                                pass
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "%s chart_broll wire raised (%s) — returning base composite",
+                    self._log_prefix, exc,
+                )
+
             return composite_path
         except Exception as e:
             logger.error("%s FrameCompositor failed: %s", self._log_prefix, e)
