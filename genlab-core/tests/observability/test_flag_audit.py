@@ -132,6 +132,41 @@ class TestKnownFlagsAllowlist:
         assert _NEW_TONIGHT.issubset(set(_KNOWN_FLAGS))
 
 
+class TestCanaryFlagNamesMatchReaders:
+    """2026-08-18 (task #217 audit): flag_audit's canary allowlist
+    silently drifted from the actual code-side flag readers for 2
+    entries. The audit line reported the wrong flag name as "off" even
+    when the real flag was actively firing in prod.
+
+    Detection: the reader-side file's ``_ROLLOUT_ENV`` constant is the
+    canonical name. If flag_audit's ``_CANARY_FLAGS`` disagrees, the
+    audit line is dead-lettered. Pin here — matches the class-of-bug
+    for shared contracts with N implementers (rule for observability
+    layer).
+    """
+
+    def test_ig_discovery_hashtags_flag_name_matches_reader(self):
+        from genlab_core.observability import flag_audit as fa
+        from genlab_core.publishing import ig_discovery_hashtags as reader
+        assert reader._ROLLOUT_ENV in fa._CANARY_FLAGS, (
+            f"flag_audit._CANARY_FLAGS must contain {reader._ROLLOUT_ENV} "
+            f"— reader is source of truth. Got: {fa._CANARY_FLAGS}"
+        )
+
+    def test_threads_hashtags_flag_name_matches_reader(self):
+        from genlab_core.observability import flag_audit as fa
+        from genlab_core.publishing import threads_hashtags as reader
+        assert reader._ROLLOUT_ENV in fa._CANARY_FLAGS, (
+            f"flag_audit._CANARY_FLAGS must contain {reader._ROLLOUT_ENV} "
+            f"— reader is source of truth. Got: {fa._CANARY_FLAGS}"
+        )
+
+    def test_cross_channel_footer_flag_name_matches_reader(self):
+        from genlab_core.observability import flag_audit as fa
+        from genlab_core.publishing import cross_channel_footer as reader
+        assert reader._ROLLOUT_ENV in fa._CANARY_FLAGS
+
+
 class TestStructuralWires:
     """Guards against the wire being deleted from the call sites."""
 

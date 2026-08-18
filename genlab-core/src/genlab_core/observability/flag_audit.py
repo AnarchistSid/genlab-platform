@@ -133,8 +133,14 @@ _CANARY_FLAGS: Final[tuple[str, ...]] = (
     "GENLAB_ANIME_BACKFILL_NICHES",
     "GENLAB_PERSONA_HINT_NICHES",
     "GENLAB_CROSS_CHANNEL_FOOTER_NICHES",
-    "GENLAB_IG_DISCOVERY_TAGS_NICHES",
-    "GENLAB_THREADS_HASHTAG_AUGMENT_NICHES",
+    # 2026-08-18 (task #217 canary audit): both names below were drifted
+    # from their actual code-side flag readers. Fixed to match:
+    #   publishing/ig_discovery_hashtags.py:48  → *_HASHTAGS_NICHES
+    #   publishing/threads_hashtags.py:50       → *_HASHTAGS_NICHES
+    # Pre-fix, the audit line silently reported the wrong flag as "off"
+    # even when the real flag was actively firing in prod.
+    "GENLAB_IG_DISCOVERY_HASHTAGS_NICHES",
+    "GENLAB_THREADS_HASHTAGS_NICHES",
 )
 
 
