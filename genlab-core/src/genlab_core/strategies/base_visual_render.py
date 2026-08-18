@@ -399,6 +399,54 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                     self._log_prefix,
                     exc,
                 )
+
+            # 2026-08-18 canary wire: generate a branded first-frame
+            # intro (~0.8s) and prepend to the composite for IG/FB
+            # feed engagement. Flag-gated per-niche via
+            # GENLAB_HOOK_THUMBNAIL_NICHES; fail-open (any error keeps
+            # the base composite unchanged).
+            try:
+                from genlab_core.media.hook_thumbnail import (
+                    generate_hook_thumbnail,
+                    is_enabled_for,
+                    prepend_intro_to_composite,
+                )
+
+                if is_enabled_for(niche_id) and hook_text.strip():
+                    composite_dir = Path(composite_path).parent
+                    intro_path = str(composite_dir / f"{sid[:16]}_intro.mp4")
+                    intro_ok, intro_cost = generate_hook_thumbnail(
+                        hook_text, niche_id, intro_path,
+                    )
+                    if intro_ok:
+                        merged_path = str(
+                            composite_dir / f"{sid[:16]}_reel_with_intro.mp4"
+                        )
+                        if prepend_intro_to_composite(
+                            composite_path, intro_path, merged_path,
+                        ):
+                            logger.info(
+                                "%s intro prepended niche=%s cost=%s",
+                                self._log_prefix, niche_id,
+                                f"${intro_cost:.4f}" if intro_cost else "unknown",
+                            )
+                            composite_path = merged_path
+                        else:
+                            logger.warning(
+                                "%s intro concat failed — keeping base composite",
+                                self._log_prefix,
+                            )
+                        # Best-effort cleanup of the standalone intro
+                        try:
+                            Path(intro_path).unlink(missing_ok=True)
+                        except Exception:  # noqa: BLE001
+                            pass
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "%s hook_thumbnail wire raised (%s) — returning base composite",
+                    self._log_prefix, exc,
+                )
+
             return composite_path
         except Exception as e:
             logger.error("%s FrameCompositor failed: %s", self._log_prefix, e)
