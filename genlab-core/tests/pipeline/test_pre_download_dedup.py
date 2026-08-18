@@ -319,6 +319,34 @@ def test_ttl_excludes_old_blueprint_from_dedup_set() -> None:
     assert ctx["run_stats"]["pre_download_dedup"]["dropped_url"] == 0
 
 
+def test_video_id_dedup_ignores_ttl() -> None:
+    """2026-08-18 fix: video_id dedup must NOT be filtered by
+    url_dedup_ttl_days — that TTL is for sticky-source URLs only
+    (Twitch/Steam directory pages), not globally-unique video_ids.
+    Anime hit an 8-day publish blackout (Aug 10-18, 2026) because
+    the TTL was silently expiring video_id dedup after 3 days,
+    letting duplicates pass PreDownloadDedup then die at PushToBacklog.
+    """
+    stage, _ = _make_stage_with_bps([_aged_bp(days_ago=10)])
+    ctx = {
+        "niche_id": "anime",
+        "niche_config": {"pipeline": {"url_dedup_ttl_days": 3}},
+        "stories": [
+            {
+                "title": "Story with same video_id but different URL",
+                "source_url": "https://different.example/x",
+                "video_id": "ow_id",  # matches _aged_bp video_id
+            },
+        ],
+    }
+    stage.execute(ctx)
+    assert len(ctx["stories"]) == 0, (
+        "video_id must dedup regardless of blueprint age — TTL is URL-only"
+    )
+    assert ctx["run_stats"]["pre_download_dedup"]["dropped_video_id"] == 1
+    assert ctx["run_stats"]["pre_download_dedup"]["dropped_url"] == 0
+
+
 def test_ttl_keeps_recent_blueprint_blocking() -> None:
     """TTL=7 with blueprint 3 days old → fresh URL story still blocked."""
     stage, _ = _make_stage_with_bps([_aged_bp(days_ago=3)])

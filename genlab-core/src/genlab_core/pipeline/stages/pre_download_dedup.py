@@ -135,21 +135,30 @@ class PreDownloadDedup:
             else None
         )
 
-        active_bps = [
-            bp
-            for bp in recent_bps
-            if _blocks_pre_download(bp) and _is_within_url_ttl(bp, _url_dedup_cutoff)
-        ]
+        # 2026-08-18 fix: split URL and video_id dedup so the TTL only
+        # affects URL matching. The TTL rationale (sticky Twitch/Steam/
+        # ScoreBat URLs that recur daily and permanently lock fresh
+        # fetches) does NOT apply to video_ids, which are globally
+        # unique per video. Prior code applied the TTL to the whole
+        # active set — silently expiring video_id dedup after N days
+        # and letting duplicates burn 5-10 min of download+render
+        # before PushToBacklog finally caught them. Anime hit this
+        # hardest (8-day publish blackout Aug 10-18, 4/4 stories per
+        # run dropped at push time on video_id).
+        active_bps = [bp for bp in recent_bps if _blocks_pre_download(bp)]
         seen_url_hashes: set[str] = set()
         seen_video_ids: set[str] = set()
         for bp in active_bps:
             fields = bp.get("fields", bp)
-            url = (fields.get("video_url") or "").strip()
-            if url:
-                seen_url_hashes.add(sha256(url.encode()).hexdigest()[:16])
             vid = (fields.get("video_id") or "").strip()
             if vid:
                 seen_video_ids.add(vid)
+            # URL dedup uses the TTL (sticky-source-URL rationale).
+            if not _is_within_url_ttl(bp, _url_dedup_cutoff):
+                continue
+            url = (fields.get("video_url") or "").strip()
+            if url:
+                seen_url_hashes.add(sha256(url.encode()).hexdigest()[:16])
 
         kept: list[dict[str, Any]] = []
         dropped_url = dropped_vid = 0
