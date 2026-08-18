@@ -147,6 +147,10 @@ genlab-core/config/affiliate_catalog.yaml
 BlackboxBrief/templates/fonts/
 BlackboxBrief/assets/music/
 
+# Exception: 10KB brand stinger SFX shipped with the repo so every
+# deploy has the audio for hook_thumbnail intros (task #202, 2026-08-18).
+!genlab-core/assets/audio/*.mp3
+
 # Generated cleanup scripts and BFG history-rewrite artifacts
 CLEANUP_PLAN.sh
 ..bfg-report/

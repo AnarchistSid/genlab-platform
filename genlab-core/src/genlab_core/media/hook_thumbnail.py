@@ -52,6 +52,17 @@ _ROLLOUT_ENV: Final[str] = "GENLAB_HOOK_THUMBNAIL_NICHES"
 _ALL_TOKENS: Final[set[str]] = {"all", "*"}
 _OFF_TOKENS: Final[set[str]] = {"", "0", "false", "no", "off"}
 
+# 2026-08-18 (task #202): brand stinger for the intro. Pre-generated
+# once via `belt app run elevenlabs/sound-effects` and shipped as a
+# tracked asset (see genlab-core/assets/audio/brand_stinger.mp3, 0.6s
+# 44.1kHz stereo, generated cost $0.0013 one-time). If the file is
+# missing at runtime the intro falls back to pure silence — same
+# behavior as before this stinger existed. Zero regression risk.
+_BRAND_STINGER_PATH: Final[Path] = (
+    Path(__file__).resolve().parents[3]
+    / "assets" / "audio" / "brand_stinger.mp3"
+)
+
 # App choice: pruna/flux-dev is $0.005/image, 100x cheaper than
 # infsh/flux-1-dev ($0.50). Confirmed 2026-08-18 via belt task cost.
 _IMAGE_APP: Final[str] = "pruna/flux-dev"
@@ -186,22 +197,42 @@ def _overlay_text_and_pad(
         + ",".join(drawtext_parts)
     )
 
-    # Include silent AAC audio matching the main reel spec so
-    # subsequent concat with the composite (which has audio) doesn't
-    # error on stream-count mismatch. Spec matches PLATFORM_SPECS in
-    # ffmpeg.py: 48kHz stereo, 192 kbps AAC. Explicit `-map` because
-    # `-vf` + two inputs makes ffmpeg's auto-map drop the audio stream
-    # (verified 2026-08-18: without maps, ffprobe on the output shows
-    # only index=0 video).
+    # Audio track: if the brand stinger asset is present, play it at
+    # t=0 padded to full duration_seconds with silence (retention lever
+    # per industry consensus on first-second SFX). Fall back to pure
+    # silence via lavfi anullsrc when the asset is missing — matches
+    # pre-stinger behavior exactly, zero regression risk.
+    _use_stinger = _BRAND_STINGER_PATH.is_file()
+    if _use_stinger:
+        audio_input = ["-i", str(_BRAND_STINGER_PATH)]
+        # apad pads the stinger with silence up to `duration_seconds`
+        # so the audio track exactly matches the video duration.
+        audio_filter = (
+            f"[1:a]apad=whole_dur={duration_seconds},"
+            "aresample=48000:async=1[aout]"
+        )
+        filter_complex = f"[0:v]{vf}[vout];{audio_filter}"
+        audio_map = ["-map", "[aout]"]
+    else:
+        audio_input = [
+            "-f", "lavfi",
+            "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+        ]
+        filter_complex = f"[0:v]{vf}[vout]"
+        audio_map = ["-map", "1:a"]
+
+    # Explicit `-map` because `-vf` + two inputs makes ffmpeg's auto-
+    # map drop the audio stream (verified 2026-08-18: without maps,
+    # ffprobe on the output shows only index=0 video). Spec matches
+    # PLATFORM_SPECS in ffmpeg.py: 48kHz stereo, 192 kbps AAC.
     cmd = [
         "ffmpeg", "-y",
         "-loop", "1",
         "-i", background_path,
-        "-f", "lavfi",
-        "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
-        "-filter_complex", f"[0:v]{vf}[vout]",
+        *audio_input,
+        "-filter_complex", filter_complex,
         "-map", "[vout]",
-        "-map", "1:a",
+        *audio_map,
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",

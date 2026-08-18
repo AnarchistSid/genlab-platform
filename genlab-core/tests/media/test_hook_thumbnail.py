@@ -185,6 +185,49 @@ class TestGenerateHookThumbnail:
         assert ok is True
 
 
+class TestBrandStinger:
+    """Pin brand-stinger audio behavior (task #202, 2026-08-18).
+
+    The intro used to use pure lavfi silence for its audio track.
+    Now it plays the pre-generated brand_stinger.mp3 asset when
+    present, padded with silence to fill the intro duration. If the
+    asset is missing (fresh clone, dev setup, disk corruption) the
+    intro falls back to silence — same behavior as before this ship.
+    """
+
+    def test_stinger_asset_exists_and_is_readable(self):
+        """The stinger asset must be present in the tracked repo
+        so every deploy has it. Live-fire regenerating it costs
+        $0.0013 via belt but requires belt auth on VPS."""
+        from genlab_core.media.hook_thumbnail import _BRAND_STINGER_PATH
+        assert _BRAND_STINGER_PATH.is_file(), (
+            f"missing brand stinger at {_BRAND_STINGER_PATH} — "
+            "regenerate via `belt app run elevenlabs/sound-effects` "
+            "and commit to assets/audio/"
+        )
+        assert _BRAND_STINGER_PATH.stat().st_size > 1000, (
+            "stinger file suspiciously small — likely truncated"
+        )
+
+    def test_stinger_uses_expected_encoding(self):
+        """Concat with the main reel needs 44.1kHz stereo MP3."""
+        import subprocess
+        from genlab_core.media.hook_thumbnail import _BRAND_STINGER_PATH
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "stream=codec_name,sample_rate,channels",
+                "-of", "default=nk=1:nw=1",
+                str(_BRAND_STINGER_PATH),
+            ],
+            capture_output=True, text=True, timeout=10,
+        )
+        lines = [ln.strip() for ln in result.stdout.strip().splitlines() if ln.strip()]
+        assert "mp3" in lines
+        assert "44100" in lines
+        assert "2" in lines  # stereo
+
+
 class TestPrependIntroToComposite:
     def test_missing_ffmpeg_returns_false(self):
         with patch(
