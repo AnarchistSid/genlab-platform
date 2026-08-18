@@ -58,10 +58,31 @@ _OFF_TOKENS: Final[set[str]] = {"", "0", "false", "no", "off"}
 # 44.1kHz stereo, generated cost $0.0013 one-time). If the file is
 # missing at runtime the intro falls back to pure silence — same
 # behavior as before this stinger existed. Zero regression risk.
-_BRAND_STINGER_PATH: Final[Path] = (
-    Path(__file__).resolve().parents[3]
-    / "assets" / "audio" / "brand_stinger.mp3"
+#
+# 2026-08-18 (task #205): per-niche stinger flavors added alongside
+# the universal fallback. Each niche gets a mood-appropriate SFX
+# (tech swoosh for ai_creators, esports drop for gaming, etc.).
+# _stinger_for_niche picks the niche file if present, falls back to
+# the universal brand_stinger.mp3, then to pure lavfi silence.
+_ASSETS_AUDIO_DIR: Final[Path] = (
+    Path(__file__).resolve().parents[3] / "assets" / "audio"
 )
+_BRAND_STINGER_PATH: Final[Path] = _ASSETS_AUDIO_DIR / "brand_stinger.mp3"
+
+
+def _stinger_for_niche(niche_id: str) -> Path | None:
+    """Return the best stinger asset for this niche, or None when
+    nothing is present. Preference order:
+      1. brand_stinger_{niche_id}.mp3 (niche-flavored)
+      2. brand_stinger.mp3 (universal fallback)
+      3. None (caller falls back to pure silence)
+    """
+    niche_path = _ASSETS_AUDIO_DIR / f"brand_stinger_{niche_id}.mp3"
+    if niche_path.is_file():
+        return niche_path
+    if _BRAND_STINGER_PATH.is_file():
+        return _BRAND_STINGER_PATH
+    return None
 
 # App choice: pruna/flux-dev is $0.005/image, 100x cheaper than
 # infsh/flux-1-dev ($0.50). Confirmed 2026-08-18 via belt task cost.
@@ -139,6 +160,7 @@ def _overlay_text_and_pad(
     hook: str,
     output_path: str,
     duration_seconds: float = 0.8,
+    niche_id: str = "",
 ) -> bool:
     """Composite: (1) scale background to 1080x1920 with cover crop,
     (2) draw hook text bottom-third with readable stroke, (3) hold
@@ -197,14 +219,13 @@ def _overlay_text_and_pad(
         + ",".join(drawtext_parts)
     )
 
-    # Audio track: if the brand stinger asset is present, play it at
-    # t=0 padded to full duration_seconds with silence (retention lever
-    # per industry consensus on first-second SFX). Fall back to pure
-    # silence via lavfi anullsrc when the asset is missing — matches
-    # pre-stinger behavior exactly, zero regression risk.
-    _use_stinger = _BRAND_STINGER_PATH.is_file()
-    if _use_stinger:
-        audio_input = ["-i", str(_BRAND_STINGER_PATH)]
+    # Audio track: use per-niche stinger if present, then universal
+    # stinger, then pure silence. Retention lever per industry
+    # consensus on first-second SFX. Fail-open: missing asset =
+    # silent audio, same as pre-stinger behavior.
+    stinger_path = _stinger_for_niche(niche_id)
+    if stinger_path is not None:
+        audio_input = ["-i", str(stinger_path)]
         # apad pads the stinger with silence up to `duration_seconds`
         # so the audio track exactly matches the video duration.
         audio_filter = (
@@ -417,7 +438,9 @@ def generate_hook_thumbnail(
     if not _download(image_url, tmp_bg):
         return False, None
 
-    ok = _overlay_text_and_pad(tmp_bg, hook, output_path, duration_seconds)
+    ok = _overlay_text_and_pad(
+        tmp_bg, hook, output_path, duration_seconds, niche_id=niche_id,
+    )
     # Best-effort cleanup
     try:
         Path(tmp_bg).unlink(missing_ok=True)

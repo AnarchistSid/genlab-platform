@@ -209,6 +209,56 @@ class TestBrandStinger:
             "stinger file suspiciously small — likely truncated"
         )
 
+    def test_all_5_niche_stingers_present(self):
+        """Task #205 (2026-08-18): 5 niche-flavored stingers pre-
+        generated at $0.0013 each. Missing files silently fall back
+        to the universal stinger, but visibility matters — this pin
+        catches accidental deletion during asset cleanup."""
+        from genlab_core.media.hook_thumbnail import _ASSETS_AUDIO_DIR
+        for niche in ("ai_creators", "gaming", "sports", "movies", "anime"):
+            path = _ASSETS_AUDIO_DIR / f"brand_stinger_{niche}.mp3"
+            assert path.is_file(), (
+                f"missing niche stinger at {path} — regenerate via "
+                "`elevenlabs/sound-effects` and commit"
+            )
+
+    def test_niche_selector_prefers_niche_specific(self, tmp_path, monkeypatch):
+        """`_stinger_for_niche` returns niche path when present."""
+        from genlab_core.media import hook_thumbnail as hkt
+        # Point _ASSETS_AUDIO_DIR at a scratch dir with only one file
+        scratch = tmp_path
+        (scratch / "brand_stinger_gaming.mp3").write_bytes(b"fake")
+        monkeypatch.setattr(hkt, "_ASSETS_AUDIO_DIR", scratch)
+        monkeypatch.setattr(
+            hkt, "_BRAND_STINGER_PATH", scratch / "brand_stinger.mp3",
+        )
+        result = hkt._stinger_for_niche("gaming")
+        assert result == scratch / "brand_stinger_gaming.mp3"
+
+    def test_niche_selector_falls_back_to_universal(self, tmp_path, monkeypatch):
+        """When niche file missing but universal present, use universal."""
+        from genlab_core.media import hook_thumbnail as hkt
+        scratch = tmp_path
+        (scratch / "brand_stinger.mp3").write_bytes(b"fake universal")
+        monkeypatch.setattr(hkt, "_ASSETS_AUDIO_DIR", scratch)
+        monkeypatch.setattr(
+            hkt, "_BRAND_STINGER_PATH", scratch / "brand_stinger.mp3",
+        )
+        result = hkt._stinger_for_niche("gaming")
+        assert result == scratch / "brand_stinger.mp3"
+
+    def test_niche_selector_returns_none_when_all_missing(
+        self, tmp_path, monkeypatch,
+    ):
+        """When nothing present, return None so caller falls back to
+        pure silence via lavfi anullsrc."""
+        from genlab_core.media import hook_thumbnail as hkt
+        monkeypatch.setattr(hkt, "_ASSETS_AUDIO_DIR", tmp_path)
+        monkeypatch.setattr(
+            hkt, "_BRAND_STINGER_PATH", tmp_path / "brand_stinger.mp3",
+        )
+        assert hkt._stinger_for_niche("gaming") is None
+
     def test_stinger_uses_expected_encoding(self):
         """Concat with the main reel needs 44.1kHz stereo MP3."""
         import subprocess
