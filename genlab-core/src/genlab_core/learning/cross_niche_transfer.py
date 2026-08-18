@@ -398,9 +398,35 @@ def compute_transferred_priors(
 def _priors_path() -> Path:
     """``$GENLAB_TMP/cross-niche-transfer/priors.json`` — mirrors
     the .tmp-based artifact convention used by the trend-anticipation
-    and DR modules."""
+    and DR modules.
+
+    2026-08-19: fallback resolution order was silently different
+    between producer + consumer contexts and made the consumer wire
+    dead. Producer service sets ``GENLAB_TMP=/opt/genlab/.tmp`` in
+    its systemd unit → writes to the shared artifact. Consumer
+    services (pipeline-{niche}) set ``GENLAB_PROJECT_ROOT=/opt/genlab``
+    but not ``GENLAB_TMP`` and run from ``WorkingDirectory=/opt/genlab/
+    BlackboxBrief`` → ``Path.cwd() / .tmp`` resolved to
+    ``/opt/genlab/BlackboxBrief/.tmp/cross-niche-transfer/priors.json``
+    which never exists → ``get_transferred_prior`` returned None
+    for every fresh-arm creation across all 5 niches.
+
+    Resolution order now:
+      1. ``GENLAB_TMP`` env (existing behavior — producer + explicit setups)
+      2. ``GENLAB_PROJECT_ROOT / .tmp`` (falls back to the shared root
+         when consumer forgets to set GENLAB_TMP — matches every
+         pipeline service's known env)
+      3. ``Path.cwd() / .tmp`` (last-resort dev fallback)
+
+    Same class-of-bug as producer/consumer schema drift memoed in
+    CLAUDE.md — different implementers see different "the right path."
+    """
     tmp = os.environ.get("GENLAB_TMP")
-    root = Path(tmp) if tmp else Path.cwd() / ".tmp"
+    if tmp:
+        root = Path(tmp)
+    else:
+        project_root = os.environ.get("GENLAB_PROJECT_ROOT")
+        root = Path(project_root) / ".tmp" if project_root else Path.cwd() / ".tmp"
     return root / "cross-niche-transfer" / "priors.json"
 
 
