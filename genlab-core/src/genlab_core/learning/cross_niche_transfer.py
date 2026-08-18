@@ -283,7 +283,7 @@ def _moment_match_beta(mean: float, variance: float) -> tuple[float, float] | No
     """Solve for ``(alpha, beta)`` such that ``Beta(a, b)`` has the
     given mean and variance. Returns None when the math is
     degenerate (variance ≥ mean(1-mean), variance ≤ 0, or
-    effective_n out of the allowed clamp).
+    computed effective_n < lower bound).
 
     Formulas:
 
@@ -295,6 +295,21 @@ def _moment_match_beta(mean: float, variance: float) -> tuple[float, float] | No
     variance a random variable in [0, 1] can have; beyond that,
     no Beta distribution exists. If we ever see it, the cross-
     niche sample is too disparate to justify transfer.
+
+    Effective-N handling (2026-08-19 change, deep-dive gap-audit):
+      * BELOW lo: reject — the sample is too noisy, better to fall
+        back to Beta(1,1) than inject a low-confidence spurious
+        prior.
+      * ABOVE hi: CLAMP DOWN to hi — the cross-niche sample is
+        highly consistent, but we cap the injected pseudo-obs
+        count so a new arm can still shift its posterior within
+        a few weeks of local observations. Pre-fix: this branch
+        rejected the prior entirely, dropping 49 of 51 candidate
+        transfers on 2026-08-19 prod data (5-niche tight-agreement
+        regime — see per-key diagnosis in
+        scripts/diagnose_prior_filters.py or the audit memo).
+        Clamping keeps the mean signal (informative) but rate-
+        limits the confidence (safe).
     """
     if variance <= 0.0 or not (0.0 < mean < 1.0):
         return None
@@ -303,13 +318,12 @@ def _moment_match_beta(mean: float, variance: float) -> tuple[float, float] | No
         return None
     effective_n = max_var / variance - 1.0
     lo, hi = _EFFECTIVE_N_RANGE
-    if effective_n <= 0 or not (lo <= effective_n <= hi):
-        # Explicit clamp instead of silent projection — a transfer
-        # with effective_n=0.5 is a "we barely learned anything"
-        # prior worth skipping to fall back to Beta(1,1), and
-        # effective_n=100 is an over-confident prior that would
-        # drown out the first 50 observations of the new arm.
+    if effective_n < lo:
+        # Below floor: too noisy to justify transfer at all.
         return None
+    # Clamp above hi rather than reject. Preserves the mean signal
+    # while bounding injected pseudo-obs at hi.
+    effective_n = min(effective_n, hi)
     alpha = mean * effective_n
     beta = (1.0 - mean) * effective_n
     return alpha, beta

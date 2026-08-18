@@ -111,11 +111,39 @@ class TestMomentMatchBeta:
         # mean=0.5, variance=0.2 → effective_n = 0.25/0.2 - 1 = 0.25
         assert cnt._moment_match_beta(0.5, 0.2) is None
 
-    def test_effective_n_above_clamp_returns_none(self):
-        """Very low variance → effective_n > 20 → over-confident
-        prior; skip."""
+    def test_effective_n_above_clamp_is_clamped_not_rejected(self):
+        """2026-08-19 change (deep-dive gap-fix): very low variance →
+        effective_n > 20 used to REJECT (return None) as over-
+        confident. Diagnosis found this dropped 49 of 51 candidate
+        priors on prod data (5-niche tight-agreement regime).
+        New behavior: CLAMP effective_n down to the upper bound;
+        preserves the mean signal, bounds the pseudo-obs count."""
         # mean=0.5, variance=0.001 → effective_n = 0.25/0.001 - 1 = 249
-        assert cnt._moment_match_beta(0.5, 0.001) is None
+        # Pre-fix: None. Post-fix: clamped to 20 → α=β=10.
+        result = cnt._moment_match_beta(0.5, 0.001)
+        assert result is not None, (
+            "high effective_n should now clamp, not reject — "
+            "unlocks cross-niche transfer priors in the "
+            "tight-agreement regime"
+        )
+        alpha, beta = result
+        # After clamp to 20: α = mean * 20 = 10, β = (1-mean) * 20 = 10
+        assert abs(alpha - 10.0) < 1e-9, f"α={alpha}, expected 10.0"
+        assert abs(beta - 10.0) < 1e-9, f"β={beta}, expected 10.0"
+        assert abs((alpha + beta) - 20.0) < 1e-9, (
+            "clamped effective_n must equal the upper bound (20)"
+        )
+
+    def test_effective_n_at_upper_bound_exact(self):
+        """Boundary: effective_n exactly 20 stays at 20 (no clamp
+        needed but result matches the clamp path)."""
+        # Solve for variance where eff_n = 20: variance = 0.25 / 21
+        variance = 0.25 / 21.0
+        result = cnt._moment_match_beta(0.5, variance)
+        assert result is not None
+        alpha, beta = result
+        assert abs(alpha - 10.0) < 1e-6
+        assert abs(beta - 10.0) < 1e-6
 
 
 # ── compute_transferred_priors ────────────────────────────────────
