@@ -120,6 +120,98 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
                                 )
                                 if _arm_ids:
                                     story["arm_ids_by_dimension"] = dict(_arm_ids)
+
+                                # 2026-08-18 (class-of-bug follow-up):
+                                # BBVisualRenderStrategy overrides execute
+                                # and does NOT inherit base_visual_render's
+                                # _compose_frame — so the hook_thumbnail +
+                                # chart_broll wires in the base never fire
+                                # for ai_creators. Same shape as the
+                                # gaming/TTS bug caught earlier tonight.
+                                # Mirror the base's post-transform wire
+                                # here. Fail-open at every layer.
+                                try:
+                                    from genlab_core.media.hook_thumbnail import (
+                                        generate_hook_thumbnail,
+                                        is_enabled_for as hook_thumbnail_enabled,
+                                        prepend_intro_to_composite,
+                                    )
+                                    if hook_thumbnail_enabled("ai_creators") and hook_text.strip():
+                                        composite_dir = Path(result).parent
+                                        intro_path = str(composite_dir / f"{sid[:16]}_intro.mp4")
+                                        intro_ok, intro_cost = generate_hook_thumbnail(
+                                            hook_text, "ai_creators", intro_path,
+                                        )
+                                        if intro_ok:
+                                            merged = str(composite_dir / f"{sid[:16]}_reel_with_intro.mp4")
+                                            if prepend_intro_to_composite(result, intro_path, merged):
+                                                logger.info(
+                                                    "[ai_creators] intro prepended cost=%s",
+                                                    f"${intro_cost:.4f}" if intro_cost else "unknown",
+                                                )
+                                                result = merged
+                                            try:
+                                                Path(intro_path).unlink(missing_ok=True)
+                                            except Exception:  # noqa: BLE001
+                                                pass
+                                except Exception as exc:  # noqa: BLE001
+                                    logger.warning(
+                                        "[ai_creators] hook_thumbnail wire raised: %s", exc,
+                                    )
+
+                                # chart_broll intro — mutually exclusive with
+                                # hook_thumbnail (only one intro per reel).
+                                already_has_intro = result.endswith("_reel_with_intro.mp4")
+                                try:
+                                    from genlab_core.media.chart_broll import (
+                                        is_enabled_for as chart_broll_enabled,
+                                        render_chart_broll,
+                                    )
+                                    from genlab_core.media.chart_data_extract import (
+                                        extract_chart_data,
+                                    )
+                                    from genlab_core.media.hook_thumbnail import (
+                                        prepend_intro_to_composite,
+                                    )
+                                    if (
+                                        chart_broll_enabled("ai_creators")
+                                        and not already_has_intro
+                                        and (story.get("summary") or "").strip()
+                                    ):
+                                        chart_data = extract_chart_data(
+                                            summary=story.get("summary", "") or "",
+                                            story_title=story.get("title", "") or "",
+                                        )
+                                        if chart_data is not None:
+                                            composite_dir = Path(result).parent
+                                            chart_path = str(composite_dir / f"{sid[:16]}_chart.mp4")
+                                            if render_chart_broll(
+                                                title=chart_data.title,
+                                                bars=chart_data.bars,
+                                                niche_id="ai_creators",
+                                                output_path=chart_path,
+                                            ):
+                                                merged = str(
+                                                    composite_dir
+                                                    / f"{sid[:16]}_reel_with_chart.mp4"
+                                                )
+                                                if prepend_intro_to_composite(
+                                                    result, chart_path, merged,
+                                                ):
+                                                    logger.info(
+                                                        "[ai_creators] chart intro prepended bars=%d title=%r",
+                                                        len(chart_data.bars), chart_data.title[:60],
+                                                    )
+                                                    result = merged
+                                                try:
+                                                    Path(chart_path).unlink(missing_ok=True)
+                                                except Exception:  # noqa: BLE001
+                                                    pass
+                                except Exception as exc:  # noqa: BLE001
+                                    logger.warning(
+                                        "[ai_creators] chart_broll wire raised: %s", exc,
+                                    )
+
                                 story.setdefault("media", {})["rendered_path"] = result
                                 story["media"]["render_status"] = "video_ready"
                                 story["media"]["compositor"] = "frame_compositor"
