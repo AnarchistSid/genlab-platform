@@ -378,35 +378,38 @@ def generate_hook_thumbnail(
         return False, None
 
     seed = _deterministic_seed(hook, niche_id)
+
+    # 2026-08-18 (task #203): pick from the multi-model registry when
+    # GENLAB_HOOK_THUMBNAIL_MULTI_MODEL_ENABLED is on; falls back to
+    # flux-only otherwise. Deterministic hash so re-renders stay
+    # idempotent; model_id is logged for future bandit reward wire.
+    from genlab_core.media.hook_thumbnail_models import (
+        extract_image_url,
+        pick_model,
+    )
+
+    model = pick_model(hook, niche_id)
+    logger.info(
+        "[hook_thumbnail] niche=%s hook=%r selected_model=%s belt_app=%s",
+        niche_id, hook[:50], model.model_id, model.belt_app,
+    )
     result = run_app(
-        _IMAGE_APP,
-        {
-            "prompt": prompt,
-            "width": 1080,
-            "height": 1920,
-            "num_inference_steps": 20,
-            "seed": seed,
-        },
+        model.belt_app,
+        model.build_input(prompt, seed, 1080, 1920),
         timeout_seconds=120,
     )
     if not result.ok or not result.output:
         logger.warning(
-            "[hook_thumbnail] belt run failed for niche=%s: %s",
-            niche_id, result.error,
+            "[hook_thumbnail] belt run failed for niche=%s model=%s: %s",
+            niche_id, model.model_id, result.error,
         )
         return False, None
 
-    # Pruna returns { "image": "https://..." } — some apps use
-    # "image_output" instead. Try both.
-    image_url = (
-        result.output.get("image")
-        or result.output.get("image_output")
-        or result.output.get("output")
-    )
+    image_url = extract_image_url(result.output)
     if not image_url:
         logger.warning(
-            "[hook_thumbnail] no image URL in output keys=%s",
-            list(result.output.keys()),
+            "[hook_thumbnail] no image URL in output for model=%s keys=%s",
+            model.model_id, list(result.output.keys()),
         )
         return False, None
 
