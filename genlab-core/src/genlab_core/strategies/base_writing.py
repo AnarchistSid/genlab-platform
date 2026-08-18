@@ -451,17 +451,32 @@ class BaseWritingStrategy(WritingStrategy):
                 is_narration_enabled_for,
             )
             if is_narration_enabled_for(self._niche_id, self._niche_config):
-                # Base clip duration = video.duration_seconds. When
-                # missing (older clip metadata shapes), skip narration
-                # for this blueprint — the gate stays open but the
-                # writer defers to the legacy 6-field output.
-                dur = video.get("duration_seconds")
+                # Base clip duration = video.duration_seconds. Try a
+                # few common shapes since the story→video dict path
+                # doesn't always propagate this field.
+                #
+                # NARR-03 (2026-08-18) fix: original code deferred to
+                # legacy output when duration was missing. Prod trigger
+                # at 15:11 UTC showed every BB story had duration_seconds
+                # unpopulated → narration never fired. Change: fall back
+                # to a 30s baseline (typical reel midpoint). The
+                # writer's word cap uses this to size the script; the
+                # post-synth A4 vo_overrun check catches any actual
+                # duration mismatch and degrades cleanly.
+                dur = (
+                    video.get("duration_seconds")
+                    or story.get("duration_seconds")
+                    or (story.get("media") or {}).get("duration_seconds")
+                    or (story.get("media") or {}).get("clip_duration_seconds")
+                )
                 if isinstance(dur, (int, float)) and dur > 0:
                     narration_target_seconds = float(dur)
                 else:
+                    narration_target_seconds = 30.0
                     logger.info(
-                        "[%s] narration enabled but clip duration "
-                        "unknown — writer defers to legacy 6-field output",
+                        "[%s] narration: no duration_seconds in story "
+                        "shape — defaulting to 30s baseline; A4 "
+                        "vo_overrun probe will catch actual mismatch",
                         self._niche_id,
                     )
         except Exception as exc:  # noqa: BLE001 — fail-open
