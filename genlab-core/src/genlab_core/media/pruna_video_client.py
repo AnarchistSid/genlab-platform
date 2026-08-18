@@ -180,43 +180,47 @@ def generate_backfill_clip(
 
     prompt = _build_anime_prompt(topic_title)
     seed = _deterministic_seed(prompt, niche_id)
+
+    # 2026-08-18 (task #204): pick from the video model registry when
+    # GENLAB_ANIME_BACKFILL_MULTI_MODEL_ENABLED is on; falls back to
+    # pruna-only otherwise. Same primitive as hook_thumbnail_models —
+    # deterministic hash, model_id logged for future bandit reward wire.
+    from genlab_core.media.pruna_video_client_models import (
+        extract_video_url,
+        pick_model,
+    )
+
+    model = pick_model(prompt, niche_id)
+    logger.info(
+        "[pruna_video] niche=%s selected_model=%s belt_app=%s",
+        niche_id, model.model_id, model.belt_app,
+    )
     result = run_app(
-        _VIDEO_APP,
-        {
-            "prompt": prompt,
-            "duration": duration_seconds,
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "fps": _DEFAULT_FPS,
-            "draft": draft,
-            "prompt_upsampling": True,
-            "seed": seed,
-            "disable_safety_filter": False,
-        },
+        model.belt_app,
+        model.build_input(
+            prompt=prompt, seed=seed, duration_s=duration_seconds,
+            resolution=resolution, aspect_ratio=aspect_ratio, draft=draft,
+        ),
         # Video gen is slower than image; give it 5 minutes headroom.
         timeout_seconds=300,
     )
     if not result.ok or not result.output:
         logger.warning(
-            "[pruna_video] belt run failed for niche=%s: %s",
-            niche_id, result.error,
+            "[pruna_video] belt run failed for niche=%s model=%s: %s",
+            niche_id, model.model_id, result.error,
         )
         return VideoGenResult(
             ok=False, prompt=prompt,
             task_id=result.task_id, error=result.error,
         )
 
-    # Pruna returns { "video": "https://..." } typically. Some app
-    # variants use "output" or "video_output". Try all three.
-    video_url = (
-        result.output.get("video")
-        or result.output.get("video_output")
-        or result.output.get("output")
-    )
+    # Different models emit different response keys; the shared
+    # extractor handles 4 shapes (video / video_output / output / list-of).
+    video_url = extract_video_url(result.output)
     if not video_url or not isinstance(video_url, str):
         logger.warning(
-            "[pruna_video] no video URL in output keys=%s",
-            list(result.output.keys()),
+            "[pruna_video] no video URL in output for model=%s keys=%s",
+            model.model_id, list(result.output.keys()),
         )
         return VideoGenResult(
             ok=False, prompt=prompt, task_id=result.task_id,

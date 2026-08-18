@@ -118,6 +118,7 @@ _KNOWN_FLAGS: Final[tuple[str, ...]] = (
     # 2026-08-18 inference.sh integrations (tonight)
     "GENLAB_INFSH_TTS_ENABLED",
     "GENLAB_HOOK_THUMBNAIL_MULTI_MODEL_ENABLED",
+    "GENLAB_ANIME_BACKFILL_MULTI_MODEL_ENABLED",
 )
 
 
