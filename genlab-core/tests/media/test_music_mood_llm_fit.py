@@ -195,3 +195,53 @@ class TestLLMCallAndParse:
             available_moods=["dramatic"],
         )
         assert result is None
+
+    def test_missing_api_key_logs_warning_not_silent(
+        self, monkeypatch, caplog,
+    ):
+        """2026-08-18 (task #214): the no-key path used to `return None`
+        silently. Rule #19: elevate to WARN so operator sees credit-
+        exhaustion in journalctl."""
+        import logging as _logging
+
+        from genlab_core.media.music_mood_llm_fit import suggest_mood
+
+        monkeypatch.setenv("GENLAB_MUSIC_MOOD_LLM_FIT_ENABLED", "1")
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+        with caplog.at_level(_logging.WARNING):
+            suggest_mood(
+                "anime", "hook", "title", "summary",
+                available_moods=["dramatic"],
+            )
+        assert any(
+            "no ANTHROPIC_API_KEY" in r.message for r in caplog.records
+        ), f"expected WARN log; got: {[r.message for r in caplog.records]}"
+
+
+class TestOpenAIFallbackWire:
+    """2026-08-18 (task #214): pin that suggest_mood goes through
+    AnthropicLLMClient, so it inherits the 2026-07-21 OpenAI GPT-4o-
+    mini fallback. Previously called `anthropic.Anthropic()` directly
+    and silent-failed when Anthropic credit was exhausted even when
+    OPENAI_API_KEY was configured.
+    """
+
+    def test_suggest_mood_uses_anthropic_llm_client(self):
+        """Structural pin — code imports AnthropicLLMClient not
+        `import anthropic` at module level."""
+        import pathlib
+
+        src = (
+            pathlib.Path(__file__).parents[2]
+            / "src" / "genlab_core" / "media" / "music_mood_llm_fit.py"
+        ).read_text()
+        # Must call the wrapper (which has OpenAI fallback)
+        assert "AnthropicLLMClient" in src, (
+            "music_mood_llm_fit must route via AnthropicLLMClient "
+            "to inherit OpenAI fallback (class-of-bug: LLM as SPOF "
+            "for producer pipeline)"
+        )
+        assert "client.complete(" in src, (
+            "AnthropicLLMClient.complete is the wrapper's entrypoint"
+        )

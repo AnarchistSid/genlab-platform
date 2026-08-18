@@ -171,13 +171,14 @@ def suggest_mood(
 
     api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
-        return None
-
-    try:
-        import anthropic  # type: ignore[import-not-found]
-    except ImportError:
-        logger.debug("[music_mood_llm_fit] anthropic package not installed")
-        return None
+        # 2026-08-18: elevated from silent-return to WARN per rule #19.
+        # `AnthropicLLMClient` also gracefully returns "" when its own
+        # key check fails, so still route through it in case OPENAI_API_
+        # KEY is set (fallback path).
+        logger.warning(
+            "[music_mood_llm_fit] no ANTHROPIC_API_KEY — degrading to "
+            "bandit-only mood pick (OpenAI fallback if key set)",
+        )
 
     trending_line = ""
     if trending_context:
@@ -198,37 +199,35 @@ def suggest_mood(
         "Pick the best-fit mood."
     )
 
+    # 2026-08-18: route via AnthropicLLMClient so we inherit the
+    # 2026-07-21 OpenAI GPT-4o-mini fallback for free. Previously called
+    # `anthropic.Anthropic()` directly, which meant Anthropic-exhausted
+    # runs silent-degraded even when OPENAI_API_KEY was set. Circuit
+    # breaker + retry semantics also come along for free.
     try:
-        try:
-            from genlab_core.llm.cache import with_prompt_cache
-        except ImportError:
-            def with_prompt_cache(x: str) -> str:  # type: ignore[misc]
-                return x
-
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model=_HAIKU_MODEL,
+        from genlab_core.writing.llm_client import AnthropicLLMClient
+        client = AnthropicLLMClient(api_key=api_key, model=_HAIKU_MODEL)
+        raw = client.complete(
+            system=_SYSTEM_PROMPT,
+            user=user_prompt,
             max_tokens=150,
             temperature=0.0,
-            system=with_prompt_cache(_SYSTEM_PROMPT),
-            messages=[{"role": "user", "content": user_prompt}],
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning(
-            "[music_mood_llm_fit] Anthropic call failed for niche=%s: %s",
+            "[music_mood_llm_fit] LLM call failed for niche=%s: %s "
+            "(Anthropic + OpenAI fallback both unavailable)",
             niche_id, exc,
         )
         return None
 
-    try:
-        from genlab_core.intelligence.cost_accumulator import (
-            record_anthropic_usage,
-        )
-        record_anthropic_usage(_HAIKU_MODEL, response)
-    except Exception:
-        pass
+    if not raw:
+        # Empty string = both providers unavailable OR OpenAI returned
+        # empty. Consumer (transformation_selector) degrades to bandit
+        # pick — no cache goes stale, no output disappears.
+        return None
 
-    raw = response.content[0].text.strip() if response.content else ""
+    raw = raw.strip()
     parsed = _extract_json_object(raw)
     if not parsed:
         logger.warning(
