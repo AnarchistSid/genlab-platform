@@ -156,6 +156,7 @@ def generate_backfill_clip(
     resolution: str = _DEFAULT_RESOLUTION,
     aspect_ratio: str = _DEFAULT_ASPECT_RATIO,
     draft: bool = True,
+    blueprint_context: dict | None = None,
 ) -> VideoGenResult:
     """End-to-end: build prompt → belt run pruna/p-video → download.
 
@@ -186,6 +187,7 @@ def generate_backfill_clip(
     # pruna-only otherwise. Same primitive as hook_thumbnail_models —
     # deterministic hash, model_id logged for future bandit reward wire.
     from genlab_core.media.pruna_video_client_models import (
+        arm_id_for,
         extract_video_url,
         pick_model,
     )
@@ -240,6 +242,12 @@ def generate_backfill_clip(
         f"${cost:.4f}" if cost else "unknown",
         result.task_id, output_path,
     )
+    # Bandit attribution: write arm_id into caller-provided dict so
+    # caller can persist to story["arm_ids_by_dimension"] and the
+    # existing reward router auto-updates the arm at 48h. Same
+    # pattern as hook_thumbnail (task #206, 2026-08-18).
+    if blueprint_context is not None:
+        blueprint_context["_video_backfill_arm_id"] = arm_id_for(model)
     return VideoGenResult(
         ok=True, prompt=prompt,
         video_url=video_url,

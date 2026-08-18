@@ -159,6 +159,22 @@ def pick_model(hook: str, niche_id: str) -> ImageModel:
     return _REGISTRY[idx]
 
 
+def arm_id_for(model: ImageModel) -> str:
+    """Bandit arm_id encoding for this model — matches the
+    ``transform__<dim>__<value>`` convention used by
+    transformation_selector so the shared route_dimension_reward
+    can update the arm's Beta posterior automatically.
+
+    Example: ``hook_thumbnail_model__flux`` — the reward router
+    at ``transformation_reward_router.route_dimension_reward``
+    picks this up from ``blueprint.arm_ids_by_dimension`` at
+    48h reward collection and calls ``bandit_updater(niche, arm,
+    platform, reward, ctx)`` — same code path already used for
+    the 11 transformation dimensions.
+    """
+    return f"hook_thumbnail_model__{model.model_id}"
+
+
 def extract_image_url(output: dict[str, Any]) -> str | None:
     """Model-agnostic image-URL extraction. Different apps use
     different response key conventions."""

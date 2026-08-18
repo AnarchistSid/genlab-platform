@@ -166,6 +166,17 @@ def pick_model(prompt: str, niche_id: str) -> VideoModel:
     return _REGISTRY[idx]
 
 
+def arm_id_for(model: VideoModel) -> str:
+    """Bandit arm_id encoding for this model — matches the
+    ``transform__<dim>__<value>`` convention used by
+    transformation_selector so route_dimension_reward picks it up
+    at 48h collection.
+
+    Example: ``video_backfill_model__pruna-p-video``.
+    """
+    return f"video_backfill_model__{model.model_id}"
+
+
 def extract_video_url(output: dict[str, Any]) -> str | None:
     """Model-agnostic video-URL extraction. Different apps use
     different response key conventions."""

@@ -374,14 +374,24 @@ def generate_hook_thumbnail(
     *,
     duration_seconds: float = 0.8,
     prompt_override: str | None = None,
+    blueprint_context: dict | None = None,
 ) -> tuple[bool, float | None]:
-    """End-to-end: (1) belt run pruna/flux-dev → background image,
+    """End-to-end: (1) belt run image model → background image,
     (2) ffmpeg overlay hook text + pad to N-second mp4 intro,
     (3) return (success, cost_usd).
 
     Returns (False, None) on any failure. Caller falls back to
     legacy behavior (skip intro, use original video's first frame
     as thumbnail).
+
+    2026-08-18: when ``blueprint_context`` is provided, on
+    successful generation we mutate it with
+    ``_hook_thumbnail_arm_id`` = ``hook_thumbnail_model__<model_id>``
+    so the caller can persist to ``story["arm_ids_by_dimension"]``.
+    From there the existing ``transformation_reward_router`` picks
+    it up at 48h reward collection and updates the arm's Beta
+    posterior automatically. Same path used by the 11 transformation
+    dimensions since PR 5 (#669).
     """
     if not is_enabled_for(niche_id):
         return False, None
@@ -405,6 +415,7 @@ def generate_hook_thumbnail(
     # flux-only otherwise. Deterministic hash so re-renders stay
     # idempotent; model_id is logged for future bandit reward wire.
     from genlab_core.media.hook_thumbnail_models import (
+        arm_id_for,
         extract_image_url,
         pick_model,
     )
@@ -456,4 +467,9 @@ def generate_hook_thumbnail(
         niche_id, f"${cost:.4f}" if cost else "unknown",
         result.task_id, output_path,
     )
+    # Bandit attribution: write arm_id into caller-provided dict so
+    # the caller can persist to story["arm_ids_by_dimension"] and the
+    # existing reward router auto-updates the arm's posterior at 48h.
+    if blueprint_context is not None:
+        blueprint_context["_hook_thumbnail_arm_id"] = arm_id_for(model)
     return True, cost

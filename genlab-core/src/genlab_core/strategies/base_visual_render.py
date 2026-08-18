@@ -388,8 +388,14 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                 # `fields["arm_ids_by_dimension"]`. Empty dict is normal
                 # (flag off, no arms picked, or transformation rejected)
                 # and stays out of pending_feedback naturally.
+                # 2026-08-18: MERGE not overwrite — upstream stages
+                # (e.g. fetch_generated_backfill) may have already
+                # populated arm_ids (video_backfill_model). Naive
+                # overwrite would clobber those and lose attribution.
                 if _arm_ids:
-                    story["arm_ids_by_dimension"] = dict(_arm_ids)
+                    story.setdefault(
+                        "arm_ids_by_dimension", {},
+                    ).update(dict(_arm_ids))
                 # 2026-08-18: persist the reject-reason set by
                 # apply_post_render_transformations (mutated into
                 # blueprint_context) so post-hoc audits can grep
@@ -430,10 +436,23 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                 if is_enabled_for(niche_id) and hook_text.strip():
                     composite_dir = Path(composite_path).parent
                     intro_path = str(composite_dir / f"{sid[:16]}_intro.mp4")
+                    # Fresh dict per call — arm_id gets written on success.
+                    _bandit_ctx: dict = {}
                     intro_ok, intro_cost = generate_hook_thumbnail(
                         hook_text, niche_id, intro_path,
+                        blueprint_context=_bandit_ctx,
                     )
                     if intro_ok:
+                        # Bandit attribution: persist arm_id onto story so
+                        # push_to_backlog serializes into blueprint's
+                        # arm_ids_by_dimension. Reward router at 48h picks
+                        # it up automatically (see transformation_reward_
+                        # router.route_dimension_reward).
+                        _arm_id = _bandit_ctx.get("_hook_thumbnail_arm_id")
+                        if _arm_id:
+                            story.setdefault(
+                                "arm_ids_by_dimension", {},
+                            )["hook_thumbnail_model"] = _arm_id
                         merged_path = str(
                             composite_dir / f"{sid[:16]}_reel_with_intro.mp4"
                         )

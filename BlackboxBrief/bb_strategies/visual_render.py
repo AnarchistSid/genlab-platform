@@ -119,7 +119,11 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
                                     video_duration_s=55.0,
                                 )
                                 if _arm_ids:
-                                    story["arm_ids_by_dimension"] = dict(_arm_ids)
+                                    # MERGE — see base_visual_render for rationale
+                                    # (2026-08-18 bandit-attribution wire).
+                                    story.setdefault(
+                                        "arm_ids_by_dimension", {},
+                                    ).update(dict(_arm_ids))
 
                                 # 2026-08-18 (class-of-bug follow-up):
                                 # BBVisualRenderStrategy overrides execute
@@ -139,10 +143,19 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
                                     if hook_thumbnail_enabled("ai_creators") and hook_text.strip():
                                         composite_dir = Path(result).parent
                                         intro_path = str(composite_dir / f"{sid[:16]}_intro.mp4")
+                                        _bandit_ctx: dict = {}
                                         intro_ok, intro_cost = generate_hook_thumbnail(
                                             hook_text, "ai_creators", intro_path,
+                                            blueprint_context=_bandit_ctx,
                                         )
                                         if intro_ok:
+                                            _arm_id = _bandit_ctx.get(
+                                                "_hook_thumbnail_arm_id"
+                                            )
+                                            if _arm_id:
+                                                story.setdefault(
+                                                    "arm_ids_by_dimension", {},
+                                                )["hook_thumbnail_model"] = _arm_id
                                             merged = str(composite_dir / f"{sid[:16]}_reel_with_intro.mp4")
                                             if prepend_intro_to_composite(result, intro_path, merged):
                                                 logger.info(

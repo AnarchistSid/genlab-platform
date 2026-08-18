@@ -170,10 +170,12 @@ class FetchGeneratedBackfill(FetcherStage):
         for i in range(max_gen):
             # Unique output path per-generation-per-run.
             out_path = str(Path(run_dir) / f"backfill_{niche_id}_{i}.mp4")
+            _bandit_ctx: dict = {}
             result = generate_backfill_clip(
                 topic_title=topic,
                 niche_id=niche_id,
                 output_path=out_path,
+                blueprint_context=_bandit_ctx,
             )
             if not result.ok:
                 logger.warning(
@@ -234,6 +236,15 @@ class FetchGeneratedBackfill(FetcherStage):
                 "backfill_task_id": result.task_id,
                 "backfill_cost_usd": result.cost_usd,
             }
+            # Bandit attribution: arm_id from the video model registry.
+            # Persisted onto story so push_to_backlog serializes into
+            # blueprint.arm_ids_by_dimension → route_dimension_reward
+            # auto-updates the Beta posterior at 48h.
+            _arm_id = _bandit_ctx.get("_video_backfill_arm_id")
+            if _arm_id:
+                story.setdefault(
+                    "arm_ids_by_dimension", {},
+                )["video_backfill_model"] = _arm_id
             new_stories.append(story)
 
         if new_stories:
