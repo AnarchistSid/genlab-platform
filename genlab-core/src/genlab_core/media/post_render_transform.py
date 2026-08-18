@@ -267,11 +267,24 @@ def _apply_post_render_transformations_impl(
     # picks arms, orchestrator accepts, post_render silently rejects).
     from genlab_core.settings import env_true
 
+    # 2026-08-18: observability for empty-arm returns. Every fail-open
+    # path below now records _why_ via the caller-provided
+    # blueprint_context dict (mutated in place). base_visual_render
+    # copies the reason onto the story so push_to_backlog persists it
+    # to the blueprint — closes the loop on gaming's Aug 16 "0/4
+    # dimension attribution" incident where all 4 platform copies of
+    # a single blueprint shipped with arm_ids_by_dimension={} and
+    # the operator had no way to diagnose which fail-open path fired.
+    def _record_reject(reason: str | None) -> None:
+        if blueprint_context is not None and reason is not None:
+            blueprint_context["_transform_reject_reason"] = reason
+
     if not env_true("GENLAB_INTELLIGENT_TRANSFORM_ENABLED"):
         logger.debug(
             "[%s] GENLAB_INTELLIGENT_TRANSFORM_ENABLED off — post_render_transform skipping",
             niche_id,
         )
+        _record_reject("flag_off")
         return rendered_path, {}
 
     try:
@@ -291,6 +304,7 @@ def _apply_post_render_transformations_impl(
             niche_id,
             exc,
         )
+        _record_reject(f"dep_import_error:{type(exc).__name__}")
         return rendered_path, {}
 
     try:
@@ -303,6 +317,7 @@ def _apply_post_render_transformations_impl(
             niche_id,
             exc,
         )
+        _record_reject(f"config_parse_error:{type(exc).__name__}")
         return rendered_path, {}
 
     if not getattr(cfg, "enabled", False):
@@ -311,6 +326,7 @@ def _apply_post_render_transformations_impl(
             "post_render_transform skipping",
             niche_id,
         )
+        _record_reject("config_disabled")
         return rendered_path, {}
 
     # Write transformed output alongside the composite. On success we
@@ -337,6 +353,7 @@ def _apply_post_render_transformations_impl(
             niche_id,
             exc,
         )
+        _record_reject(f"orchestrator_exception:{type(exc).__name__}")
         return rendered_path, {}
 
     # Any stages actually applied? Verify the file exists + has bytes.
@@ -365,6 +382,7 @@ def _apply_post_render_transformations_impl(
                 niche_id,
                 exc,
             )
+            _record_reject(f"probe_failed:{type(exc).__name__}")
             return rendered_path, {}
         if probe_dur is not None and probe_dur < _SPEC_MIN_DURATION_S:
             logger.warning(
@@ -383,6 +401,7 @@ def _apply_post_render_transformations_impl(
             # rejected the output, so no reward should be attributed
             # (would train the bandit on a bad experience it didn't
             # actually cause).
+            _record_reject(f"duration_below_15s:{probe_dur:.2f}")
             return rendered_path, {}
 
         # Replace the composite in-place so downstream sees the
@@ -417,4 +436,8 @@ def _apply_post_render_transformations_impl(
     # Orchestrator ran but every stage skipped (no music library, no
     # intro/outro assets, etc.). No transformation applied → no arm
     # attribution. Empty dict is correct here.
+    _record_reject(
+        f"no_output:stages_applied={len(result.stages_applied)},"
+        f"skipped={len(result.stages_skipped)}"
+    )
     return rendered_path, {}

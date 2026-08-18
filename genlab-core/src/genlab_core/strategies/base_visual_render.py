@@ -390,6 +390,21 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                 # and stays out of pending_feedback naturally.
                 if _arm_ids:
                     story["arm_ids_by_dimension"] = dict(_arm_ids)
+                # 2026-08-18: persist the reject-reason set by
+                # apply_post_render_transformations (mutated into
+                # blueprint_context) so post-hoc audits can grep
+                # `extra.transform_reject_reason` on any blueprint
+                # with empty arm_ids_by_dimension and know why. Gaming
+                # Aug 16 incident: 4 platform copies shipped with
+                # arm_ids={} and no marker survived; had to run the
+                # run-report → journal → source-code chase to guess.
+                reject_reason = blueprint_context.get(
+                    "_transform_reject_reason"
+                )
+                if reject_reason:
+                    story.setdefault("media", {})[
+                        "transform_reject_reason"
+                    ] = reject_reason
             except Exception as exc:
                 # Extra defense: apply_post_render_transformations
                 # promises no-raise, but if some import path breaks,

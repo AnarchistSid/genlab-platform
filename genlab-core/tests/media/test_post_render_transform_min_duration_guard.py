@@ -204,3 +204,142 @@ class TestMinDurationGuard:
         # None doesn't trigger the guard — transformed replaces base
         assert out == str(composite)
         assert composite.read_bytes() == b"transformed-unknowable"
+
+
+class TestRejectReasonAttribution:
+    """2026-08-18: every fail-open return path from
+    apply_post_render_transformations must set
+    ``blueprint_context['_transform_reject_reason']`` to a short slug
+    identifying WHY the arms are empty. Motivated by gaming Aug 16
+    incident (0/4 dimension attribution) where operator had no post-hoc
+    signal about which fail-open branch fired.
+    """
+
+    def test_flag_off_sets_reason(self, monkeypatch, tmp_path, _visuals_yaml):
+        from genlab_core.media import post_render_transform as prt
+
+        monkeypatch.delenv(
+            "GENLAB_INTELLIGENT_TRANSFORM_ENABLED", raising=False,
+        )
+        composite = tmp_path / "reel.mp4"
+        composite.write_bytes(b"base")
+        ctx: dict = {}
+        prt.apply_post_render_transformations(
+            str(composite),
+            niche_id="gaming",
+            niche_root=tmp_path,
+            visuals_yaml_path=str(_visuals_yaml),
+            blueprint_context=ctx,
+            video_duration_s=20.0,
+        )
+        assert ctx.get("_transform_reject_reason") == "flag_off"
+
+    def test_config_disabled_sets_reason(
+        self, monkeypatch, tmp_path,
+    ):
+        from genlab_core.media import post_render_transform as prt
+
+        yaml_path = tmp_path / "visuals.yaml"
+        yaml_path.write_text(
+            "intelligent_transform:\n  enabled: false\n"
+        )
+        monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
+        composite = tmp_path / "reel.mp4"
+        composite.write_bytes(b"base")
+        ctx: dict = {}
+        prt.apply_post_render_transformations(
+            str(composite),
+            niche_id="gaming",
+            niche_root=tmp_path,
+            visuals_yaml_path=str(yaml_path),
+            blueprint_context=ctx,
+            video_duration_s=20.0,
+        )
+        assert ctx.get("_transform_reject_reason") == "config_disabled"
+
+    @patch("genlab_core.media.post_render_transform._probe_duration_seconds")
+    @patch("genlab_core.media.transformation_orchestrator.apply_transformations")
+    def test_duration_guard_records_dur(
+        self, mock_apply, mock_probe, tmp_path, monkeypatch, _visuals_yaml,
+    ):
+        from genlab_core.media import post_render_transform as prt
+
+        monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
+        composite = tmp_path / "reel.mp4"
+        composite.write_bytes(b"base")
+        transformed = tmp_path / "reel_transformed.mp4"
+
+        def _fake_apply(**kwargs):
+            transformed.write_bytes(b"short")
+            return _make_stub_result()
+
+        mock_apply.side_effect = _fake_apply
+        mock_probe.return_value = 13.056
+
+        ctx: dict = {}
+        prt.apply_post_render_transformations(
+            str(composite),
+            niche_id="gaming",
+            niche_root=tmp_path,
+            visuals_yaml_path=str(_visuals_yaml),
+            blueprint_context=ctx,
+            video_duration_s=28.0,
+        )
+        reason = ctx.get("_transform_reject_reason") or ""
+        assert reason.startswith("duration_below_15s:")
+        assert "13.06" in reason
+
+    @patch("genlab_core.media.post_render_transform._probe_duration_seconds")
+    @patch("genlab_core.media.transformation_orchestrator.apply_transformations")
+    def test_success_does_not_set_reason(
+        self, mock_apply, mock_probe, tmp_path, monkeypatch, _visuals_yaml,
+    ):
+        """Successful transformation leaves the reject-reason field unset."""
+        from genlab_core.media import post_render_transform as prt
+
+        monkeypatch.setenv("GENLAB_INTELLIGENT_TRANSFORM_ENABLED", "1")
+        composite = tmp_path / "reel.mp4"
+        composite.write_bytes(b"base")
+        transformed = tmp_path / "reel_transformed.mp4"
+
+        def _fake_apply(**kwargs):
+            transformed.write_bytes(b"transformed-ok")
+            return _make_stub_result()
+
+        mock_apply.side_effect = _fake_apply
+        mock_probe.return_value = 18.0
+
+        ctx: dict = {"other_key": "preserved"}
+        prt.apply_post_render_transformations(
+            str(composite),
+            niche_id="gaming",
+            niche_root=tmp_path,
+            visuals_yaml_path=str(_visuals_yaml),
+            blueprint_context=ctx,
+            video_duration_s=28.0,
+        )
+        assert "_transform_reject_reason" not in ctx
+        # Existing context keys must be preserved (mutation is additive)
+        assert ctx["other_key"] == "preserved"
+
+    def test_none_blueprint_context_does_not_raise(
+        self, monkeypatch, tmp_path, _visuals_yaml,
+    ):
+        """Callers that pass blueprint_context=None must not trip AttributeError."""
+        from genlab_core.media import post_render_transform as prt
+
+        monkeypatch.delenv(
+            "GENLAB_INTELLIGENT_TRANSFORM_ENABLED", raising=False,
+        )
+        composite = tmp_path / "reel.mp4"
+        composite.write_bytes(b"base")
+        out, arms = prt.apply_post_render_transformations(
+            str(composite),
+            niche_id="gaming",
+            niche_root=tmp_path,
+            visuals_yaml_path=str(_visuals_yaml),
+            blueprint_context=None,
+            video_duration_s=20.0,
+        )
+        assert out == str(composite)
+        assert arms == {}

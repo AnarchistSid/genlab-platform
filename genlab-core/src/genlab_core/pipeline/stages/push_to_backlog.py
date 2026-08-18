@@ -2738,6 +2738,19 @@ class PushToBacklog:
                     if arm_ids_by_dim:
                         fields["arm_ids_by_dimension"] = json.dumps(arm_ids_by_dim)
 
+                    # 2026-08-18: when arm_ids_by_dimension is empty, persist
+                    # the fail-open reason so audits can grep it directly on
+                    # the blueprint (via extra JSONB). Reasons include
+                    # `flag_off`, `config_disabled`, `duration_below_15s:14.20`,
+                    # `orchestrator_exception:X`, etc. See
+                    # post_render_transform.py `_record_reject`.
+                    media = story.get("media") or {}
+                    _transform_reject_reason = media.get("transform_reject_reason")
+                    if _transform_reject_reason:
+                        fields["transform_reject_reason"] = str(
+                            _transform_reject_reason
+                        )[:200]
+
                     # Persist urgency classification for express lane publishing
                     urgency = story.get("urgency_classification", {})
                     if urgency:
