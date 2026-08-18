@@ -115,6 +115,22 @@ _KNOWN_FLAGS: Final[tuple[str, ...]] = (
     "GENLAB_ANTICIPATION_YT_ENABLED",
     # LLM infra
     "GENLAB_LLM_FALLBACK_ENABLED",
+    # 2026-08-18 inference.sh integrations (tonight)
+    "GENLAB_INFSH_TTS_ENABLED",
+)
+
+
+# Canary-list flags — value is a comma-separated niche list or 'all'
+# rather than a boolean. Reported separately with their value so
+# operators can see which niches are canary-active.
+_CANARY_FLAGS: Final[tuple[str, ...]] = (
+    "GENLAB_HOOK_THUMBNAIL_NICHES",
+    "GENLAB_CHART_BROLL_NICHES",
+    "GENLAB_ANIME_BACKFILL_NICHES",
+    "GENLAB_PERSONA_HINT_NICHES",
+    "GENLAB_CROSS_CHANNEL_FOOTER_NICHES",
+    "GENLAB_IG_DISCOVERY_TAGS_NICHES",
+    "GENLAB_THREADS_HASHTAG_AUGMENT_NICHES",
 )
 
 
@@ -122,6 +138,16 @@ def _is_flag_on(name: str) -> bool:
     """Match the `env_true` truthiness semantics from settings.py."""
     val = os.environ.get(name, "").strip().lower()
     return val in ("1", "true", "yes", "on")
+
+
+def _canary_flag_value(name: str) -> str | None:
+    """Return the non-empty value of a canary-list flag, or None
+    when unset / off. Off tokens match the is_enabled_for semantics
+    shared across hook_thumbnail / chart_broll / pruna_video_client."""
+    raw = (os.environ.get(name) or "").strip().lower()
+    if raw in ("", "0", "false", "no", "off"):
+        return None
+    return raw
 
 
 def log_active_flags(*, context: str) -> None:
@@ -143,6 +169,22 @@ def log_active_flags(*, context: str) -> None:
             len(_KNOWN_FLAGS),
             active,
         )
+        # Separately report canary-list flags (value-carrying, not boolean).
+        # Emit only when at least one is active so we don't spam a second
+        # empty log line every fire.
+        canaries = {
+            name: _canary_flag_value(name)
+            for name in _CANARY_FLAGS
+            if _canary_flag_value(name)
+        }
+        if canaries:
+            logger.info(
+                "[flag_audit] context=%s canaries=%d/%d values=%s",
+                context,
+                len(canaries),
+                len(_CANARY_FLAGS),
+                canaries,
+            )
     except Exception as exc:  # noqa: BLE001
         # Never break the caller for observability
         logger.debug("[flag_audit] emit failed context=%s: %s", context, exc)
@@ -151,4 +193,5 @@ def log_active_flags(*, context: str) -> None:
 __all__ = [
     "log_active_flags",
     "_KNOWN_FLAGS",  # exported for tests + operator visibility
+    "_CANARY_FLAGS",
 ]

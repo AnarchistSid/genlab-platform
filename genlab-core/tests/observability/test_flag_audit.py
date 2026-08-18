@@ -179,3 +179,76 @@ class TestStructuralWires:
         assert "from genlab_core.observability.flag_audit import log_active_flags" in src
         assert "log_active_flags(context=f" in src
         assert "engagement_poller_" in src
+
+
+class TestCanaryFlags:
+    """2026-08-18 (task #200 hygiene): canary-list flags carry a value
+    (e.g. 'ai_creators' or 'all') rather than a boolean. flag_audit
+    reports them separately so operators can see per-canary state
+    alongside the boolean allowlist."""
+
+    def test_canary_flags_registered(self):
+        from genlab_core.observability.flag_audit import _CANARY_FLAGS
+        # Tonight's 3 canary flips
+        assert "GENLAB_HOOK_THUMBNAIL_NICHES" in _CANARY_FLAGS
+        assert "GENLAB_CHART_BROLL_NICHES" in _CANARY_FLAGS
+        assert "GENLAB_ANIME_BACKFILL_NICHES" in _CANARY_FLAGS
+
+    def test_canary_flag_value_reports_niche_list(self, monkeypatch):
+        from genlab_core.observability.flag_audit import _canary_flag_value
+        monkeypatch.setenv("GENLAB_HOOK_THUMBNAIL_NICHES", "ai_creators")
+        assert _canary_flag_value("GENLAB_HOOK_THUMBNAIL_NICHES") == "ai_creators"
+
+    def test_canary_flag_value_off_tokens_return_none(self, monkeypatch):
+        from genlab_core.observability.flag_audit import _canary_flag_value
+        for val in ("", "0", "false", "no", "off"):
+            monkeypatch.setenv("GENLAB_HOOK_THUMBNAIL_NICHES", val)
+            assert _canary_flag_value("GENLAB_HOOK_THUMBNAIL_NICHES") is None
+
+    def test_canary_flag_value_unset_returns_none(self, monkeypatch):
+        from genlab_core.observability.flag_audit import _canary_flag_value
+        monkeypatch.delenv("GENLAB_HOOK_THUMBNAIL_NICHES", raising=False)
+        assert _canary_flag_value("GENLAB_HOOK_THUMBNAIL_NICHES") is None
+
+    def test_canary_flag_value_wildcard(self, monkeypatch):
+        from genlab_core.observability.flag_audit import _canary_flag_value
+        monkeypatch.setenv("GENLAB_CHART_BROLL_NICHES", "all")
+        assert _canary_flag_value("GENLAB_CHART_BROLL_NICHES") == "all"
+
+    def test_log_emits_canary_line_when_any_active(self, monkeypatch, caplog):
+        """When at least one canary flag has a value, a second log
+        line reports the {name: value} map. Silent when all off."""
+        import logging
+        from genlab_core.observability.flag_audit import log_active_flags
+
+        monkeypatch.setenv("GENLAB_HOOK_THUMBNAIL_NICHES", "ai_creators")
+        monkeypatch.setenv("GENLAB_CHART_BROLL_NICHES", "ai_creators")
+        with caplog.at_level(logging.INFO, logger="genlab_core.observability.flag_audit"):
+            log_active_flags(context="test")
+        canary_lines = [r for r in caplog.records if "canaries=" in r.getMessage()]
+        assert len(canary_lines) == 1
+        msg = canary_lines[0].getMessage()
+        assert "GENLAB_HOOK_THUMBNAIL_NICHES" in msg
+        assert "ai_creators" in msg
+
+    def test_log_no_canary_line_when_all_off(self, monkeypatch, caplog):
+        """When all canary flags are off, no second log line — avoids
+        spamming an empty line every pipeline fire."""
+        import logging
+        from genlab_core.observability.flag_audit import (
+            _CANARY_FLAGS, log_active_flags,
+        )
+        for name in _CANARY_FLAGS:
+            monkeypatch.delenv(name, raising=False)
+        with caplog.at_level(logging.INFO, logger="genlab_core.observability.flag_audit"):
+            log_active_flags(context="test")
+        canary_lines = [r for r in caplog.records if "canaries=" in r.getMessage()]
+        assert len(canary_lines) == 0
+
+
+class TestInfshTTSFlagListed:
+    """2026-08-18 (task #200): boolean flag registered."""
+
+    def test_infsh_tts_in_known_flags(self):
+        from genlab_core.observability.flag_audit import _KNOWN_FLAGS
+        assert "GENLAB_INFSH_TTS_ENABLED" in _KNOWN_FLAGS
