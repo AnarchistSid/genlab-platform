@@ -168,6 +168,23 @@ def _build_filter_graph(
     gap = 30
     bar_w = max(30, (_PLOT_W - gap * (n - 1)) // n)
 
+    # Adaptive label sizing to prevent overlap at 5+ bars.
+    # Sample-review 2026-08-18: 5-bar chart with long labels
+    # ("Anthropic", "Perplexity") ran the two labels together with
+    # zero visible gap at fontsize=36. Reduce font + truncate long
+    # labels when bar count crowds the 1080px width.
+    if n >= 5:
+        label_fontsize = 26
+        label_max_chars = max(6, (bar_w + gap) // 20)
+    else:
+        label_fontsize = 36
+        label_max_chars = 30
+
+    def _fit_label(text: str) -> str:
+        if len(text) <= label_max_chars:
+            return text
+        return text[: max(1, label_max_chars - 1)] + "…"
+
     parts: list[str] = []
     # Title: 60px font, white, centered horizontally near the top.
     esc_title = _escape_drawtext(title)
@@ -196,11 +213,11 @@ def _build_filter_graph(
             f"fontcolor=white:fontsize=42:borderw=3:bordercolor=black@0.9:"
             f"x={x + bar_w // 2}-text_w/2:y={y - 60}"
         )
-        # Label under the bar
-        esc_lbl = _escape_drawtext(label)
+        # Label under the bar (adaptive size + truncation for crowded charts)
+        esc_lbl = _escape_drawtext(_fit_label(label))
         parts.append(
             f"drawtext=text='{esc_lbl}':"
-            f"fontcolor=white:fontsize=36:borderw=3:bordercolor=black@0.9:"
+            f"fontcolor=white:fontsize={label_fontsize}:borderw=3:bordercolor=black@0.9:"
             f"x={x + bar_w // 2}-text_w/2:y={_PLOT_Y_BOTTOM + 30}"
         )
     return ",".join(parts)

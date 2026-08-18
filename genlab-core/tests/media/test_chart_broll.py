@@ -115,6 +115,35 @@ class TestFilterGraphBuilder:
         with pytest.raises(ValueError):
             _build_filter_graph("T", [], "ai_creators")
 
+    def test_label_fontsize_smaller_at_5plus_bars(self):
+        """Sample-review 2026-08-18: 5-bar chart with long labels
+        ('Anthropic', 'Perplexity') collapsed into 'AnthropicPerplexity'
+        at fontsize=36. Verify 5+ bars use the smaller 26px label size."""
+        four_bar = _build_filter_graph(
+            "T", [("A", 1), ("B", 2), ("C", 3), ("D", 4)], "ai_creators",
+        )
+        five_bar = _build_filter_graph(
+            "T",
+            [("A", 1), ("B", 2), ("C", 3), ("D", 4), ("E", 5)],
+            "ai_creators",
+        )
+        # 4 bars uses fontsize=36 for labels
+        assert "fontsize=36" in four_bar
+        # 5 bars drops label fontsize to 26 (values stay at 42)
+        assert "fontsize=26" in five_bar
+        assert "fontsize=36" not in five_bar
+
+    def test_long_labels_truncated_at_5plus_bars(self):
+        """Long labels get an ellipsis when the width is crowded."""
+        five_bar = _build_filter_graph(
+            "T",
+            [("Anthropic", 1), ("Perplexity", 2), ("OpenAI", 3),
+             ("xAI", 4), ("Mistral", 5)],
+            "ai_creators",
+        )
+        # Truncation ellipsis should appear
+        assert "…" in five_bar
+
 
 class TestRenderChartBroll:
     def test_missing_ffmpeg_returns_false(self):
