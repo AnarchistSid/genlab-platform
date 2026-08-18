@@ -180,18 +180,26 @@ WHERE created_at > NOW() - INTERVAL '1 day'
 GROUP BY niche_id;
 ```
 
-**Query for operator observability**:
+**Query for operator observability** (corrected NARR-03 Step 6 —
+COALESCE handles the NULL-semantics case where successful
+non-degraded rows have NULL reason and were being excluded from
+narr01_eligible by the previous form):
+
 ```sql
 SELECT niche_id,
-       COUNT(*) FILTER (WHERE extra->>'narration_degraded' = 'true') AS degraded,
-       COUNT(*) AS total,
-       extra->>'narration_degraded_reason' AS reason
+  COUNT(*) FILTER (WHERE extra->>'narration_degraded'='true'
+                     AND COALESCE(extra->>'narration_degraded_reason','')
+                         != 'storytime_mutex') AS degraded,
+  COUNT(*) FILTER (WHERE COALESCE(extra->>'narration_degraded_reason','')
+                         != 'storytime_mutex') AS narr01_eligible
 FROM blueprints
 WHERE created_at > NOW() - INTERVAL '1 day'
-  AND niche_id = 'ai_creators'
-GROUP BY niche_id, reason
-ORDER BY degraded DESC;
+GROUP BY niche_id;
 ```
+
+`storytime_mutex` is excluded per the routing-outcome rule (§4
+above). Divide `degraded` by `narr01_eligible` for the true
+degradation rate.
 
 ---
 
@@ -248,22 +256,49 @@ Session-end summary rule: if publish must wait for tomorrow's slot, items 1, 4, 
 
 ## 7. Rollback
 
-**Single config change reverts everything at runtime**:
+**Verified rollback command (NARR-02 + NARR-03 hygiene 2)**:
 
 ```bash
-# On VPS, remove or set to 0:
-sed -i 's/^GENLAB_NARRATION_ENABLED=.*/GENLAB_NARRATION_ENABLED=0/' /opt/genlab/.env
-# Next pipeline fire produces byte-identical audio to today.
+# On VPS as root or any sudo-capable user:
+sudo -u genlab sed -i 's/^GENLAB_NARRATION_ENABLED=.*/GENLAB_NARRATION_ENABLED=0/' /opt/genlab/.env
+# No systemctl restart needed FOR THE NARRATION FLAG SPECIFICALLY —
+# `narration_gate` is imported only by 5 files consumed exclusively
+# by Type=oneshot services (genlab-pipeline-*, generate_audio stage,
+# transformation_orchestrator stage, base_writing stage, flag_audit).
+# Each oneshot service start re-reads EnvironmentFile=/opt/genlab/.env
+# → next pipeline fire produces byte-identical audio to today.
 ```
 
-Alternative (BB-only, keep env flag on):
+**Hygiene-2 amendment (2026-08-18 NARR-03)**: the "no reload needed"
+claim applies to flags consumed ONLY by oneshot services. Five
+`Type=exec` long-running services also consume `/opt/genlab/.env`:
+`genlab-dashboard` (gunicorn), `genlab-engagement-poller`,
+`genlab-engagement-worker` (dramatiq), `genlab-quota-monitor`
+(quota_daemon), `genlab-webhook` (uvicorn). For any flag those
+services read (verified via `grep -rlE 'GENLAB_YOUR_FLAG' /opt/genlab/`),
+add `sudo systemctl restart <svc>` to the rollback. `narration_gate`
+is NOT read by any of them → narration rollback is a one-liner.
+
+**Hygiene-1 (2026-08-18)**: NARR-02 Step 2 toggled the live .env
+0→1→0 in a ~5-second window at 14:23:40 UTC. journalctl scan of
+14:20-14:25 UTC showed only `Deactivated` events (services had
+started before the toggle, captured pre-flag env, were finishing).
+Zero services read narration=1 during the toggle window. Standing
+rule for future canary audits: flag-toggle tests use
+`systemd-run --property=Environment=...` overrides OR a file copy —
+never the live .env — to eliminate the artifact-window class.
+
+**Alternative (BB-only, keep env flag on)**:
 ```yaml
 # In BlackboxBrief/config/niche.yaml, change:
 narration:
   enabled: false
 ```
 
-Both are runtime rollbacks. No code rollback needed unless a validator false-positive is blocking legitimate content — in which case the writer's fail-open path (empty narration_script → skip VO, degraded=True) still produces publishable reels.
+Both are runtime rollbacks. No code rollback needed unless a
+validator false-positive is blocking legitimate content — in which
+case the writer's fail-open path (empty narration_script → skip VO,
+degraded=True) still produces publishable reels.
 
 ---
 
