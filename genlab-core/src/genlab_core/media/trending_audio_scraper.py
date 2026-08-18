@@ -536,6 +536,8 @@ def _classify_tracks_to_moods(
                 )
                 # Heuristic-classify any track NOT already covered.
                 classified_meta_ids = {mid for _, mid in mood_to_rank.values()}
+                heuristic_hits = 0
+                heuristic_tried = 0
                 for t in track_names[:20]:
                     tid = str(t.get("meta_audio_id", ""))
                     if tid in classified_meta_ids:
@@ -543,14 +545,24 @@ def _classify_tracks_to_moods(
                     tname = str(t.get("name", "")).strip()
                     if not tname:
                         continue
+                    heuristic_tried += 1
                     m = _heuristic_classify(tname, available_moods)
                     if m:
+                        heuristic_hits += 1
                         _apply(
                             name=tname,
                             rank=int(t.get("rank", 999)),
                             meta_id=tid,
                             mood=m,
                         )
+                logger.warning(
+                    "[trending_audio_scraper] heuristic fallback: "
+                    "matched %d/%d remaining tracks; total moods=%d "
+                    "vocab=%s",
+                    heuristic_hits, heuristic_tried,
+                    len(mood_to_rank),
+                    ",".join(available_moods),
+                )
                 return _finalize()
             consecutive_failures += 1
             logger.debug(
