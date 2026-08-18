@@ -148,6 +148,30 @@ class TestAppendFooterIfEnabled:
         assert out.startswith(cap)
         assert len(out) > len(cap)
 
+    def test_append_logs_info_on_success(self, monkeypatch, caplog):
+        """2026-08-18 (task #212 audit): silent-success made DB
+        archaeology necessary to verify the footer was firing. Now
+        emits INFO log so `journalctl -u genlab-pipeline-* | grep
+        cross_channel_footer` proves the code path fires per blueprint.
+        Rule #19 pattern — never silent-DEBUG a canary-observability
+        surface."""
+        import logging as _logging
+        monkeypatch.setenv("GENLAB_CROSS_CHANNEL_FOOTER_NICHES", "all")
+        with caplog.at_level(_logging.INFO):
+            append_footer_if_enabled(
+                "Original caption body",
+                niche_id="ai_creators",
+                source_platform="facebook",
+                blueprint_hash="seed_x",
+            )
+        assert any(
+            "cross_channel_footer" in r.message and "appended" in r.message
+            for r in caplog.records
+        ), (
+            "expected INFO log line on successful footer append; "
+            f"got: {[r.message for r in caplog.records]}"
+        )
+
     def test_no_double_stack_when_marker_present(self, monkeypatch):
         """Idempotency: re-running append doesn't add a second footer."""
         monkeypatch.setenv("GENLAB_CROSS_CHANNEL_FOOTER_NICHES", "all")

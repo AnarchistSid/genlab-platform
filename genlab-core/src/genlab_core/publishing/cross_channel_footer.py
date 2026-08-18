@@ -179,4 +179,17 @@ def append_footer_if_enabled(
                    "🧵 Follow the takes"):
         if marker in caption:
             return caption
+    # 2026-08-18: log at INFO on successful append so future audits can
+    # grep journalctl instead of DB-archaeology. Rule #19 pattern —
+    # silent success is invisible on rotation and rot. Trimmed to the
+    # target platform + niche keeps the line grep-friendly.
+    logger.info(
+        "[cross_channel_footer] appended niche=%s source=%s target_platform=%s",
+        niche_id, source_platform,
+        # Extract target platform from footer marker for observability.
+        "instagram" if "Also on Instagram" in footer
+        else "youtube" if "More on YouTube" in footer
+        else "threads" if "Follow the takes" in footer
+        else "unknown",
+    )
     return caption + footer
