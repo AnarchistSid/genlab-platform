@@ -117,6 +117,7 @@ _KNOWN_FLAGS: Final[tuple[str, ...]] = (
     "GENLAB_LLM_FALLBACK_ENABLED",
     # 2026-08-18 inference.sh integrations (tonight)
     "GENLAB_INFSH_TTS_ENABLED",
+    "GENLAB_HOOK_THUMBNAIL_MULTI_MODEL_ENABLED",
 )
 
 
