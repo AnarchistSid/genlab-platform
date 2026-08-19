@@ -771,3 +771,52 @@ the baseline set**.
 
 Commits: `5422fcc4`, `4ec634dd`, `a6ee8a2e`.
 Revert set: `git revert a6ee8a2e 4ec634dd 5422fcc4`.
+
+---
+
+## 16. NARR-09 Phase 0 — intake (2026-08-19 19:22 IST)
+
+### 16.1 #218 evidence record — listen verdict slots
+
+| # | Subject | File | Verdict | Recorded |
+|---|---|---|---|---|
+| 1 | Round-2 pre-verification (story_0, not published) | `/opt/genlab/.tmp/narr08_preverify2/PREVERIFY2_narrated.mp4` | **PENDING** | — |
+| 2 | Thursday publish candidate | (not yet produced) | **PENDING** | — |
+
+Verdict 1 is the first human review of GenLab narration. It has not been
+given. Per NARR-09 Phase 0.1 the evidence run stops here until it is.
+
+### 16.2 Memo line (verbatim)
+
+> **A pin test locks current behavior, bugs included. Every pin authored
+> during an incident must state what correct behavior it asserts, not merely
+> freeze what exists.**
+
+Earned by `test_clutchwire_real_niche_yaml_matches_pre_p4_stages`, which
+pinned ClutchWire's stage list to the pre-P4 order to prove the template
+refactor was behaviour-preserving. That order placed the VO producer two
+stages after its only consumer. The pin faithfully preserved the ordering bug
+and would have failed anyone who fixed it — the test defended the defect.
+
+Sibling: `test_base_writing_narration_duration` greped for
+`video.get("duration_seconds")`, a branch `_story_to_video_dict` never
+populated. The pin asserted the presence of dead code.
+
+### 16.3 Task filed — `tests/deploy` xdist flake
+
+A different test in `tests/deploy/test_backup_restore_dry_run.py` fails on each
+parallel run; all pass in isolation. Classic shared test state (fixture files
+or a module-level path reused across workers). It cost real time during the
+NARR-08 ship gate by appearing in the with-changes failure set and not the
+baseline, and it will eventually eat a ship gate for real. Next cycle.
+
+### 16.4 Why the evidence run cannot start
+
+1. **No listen verdict** on the round-2 file (§16.1).
+2. **The fire has not happened.** It is Wednesday 2026-08-19 19:22 IST; the
+   BB fire is Thursday 2026-08-20 02:30 UTC = 08:00 IST, ~12.5 h out.
+   Running A.1 now returns zero rows for `created_at > 2026-08-20 02:00`, and
+   the "zero blueprints → VideoGate day" branch would be a **false
+   diagnosis** — the honest reading is "the run has not fired yet."
+
+Parity at intake: VPS HEAD `5f4e9ca4` == origin/main.
