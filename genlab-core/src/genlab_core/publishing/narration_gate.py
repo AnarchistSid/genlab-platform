@@ -87,6 +87,34 @@ def is_narration_enabled_for(
         return False
 
 
+def get_tts_rate_wpm(niche_config: dict[str, Any] | None) -> int:
+    """Speaking rate (wpm) for the tier expected to synthesise this reel.
+
+    NARR-11 (2026-08-20). The writer must project duration BEFORE the TTS
+    cascade runs, so the tier is not yet known. Resolution:
+
+    * When ``GENLAB_INFSH_TTS_ENABLED`` is on, Inworld TTS-2 is the primary
+      tier and its measured rate is used.
+    * Otherwise the ``default`` rate applies.
+
+    Deliberately biased slow: under-predicting the rate produces a script that
+    is too long and gets rejected late, after paying for synthesis. Over-
+    predicting merely produces a slightly short script, which costs nothing.
+
+    Never raises; falls back to 150 on any malformed config.
+    """
+    try:
+        rates = get_narration_config(niche_config).get("tts_rates") or {}
+        if not isinstance(rates, dict):
+            return 150
+        infsh_on = (os.environ.get("GENLAB_INFSH_TTS_ENABLED") or "").strip().lower() in _ON_TOKENS
+        tier = "inworld" if infsh_on else "default"
+        value = rates.get(tier, rates.get("default", 150))
+        return int(value) if int(value) > 0 else 150
+    except Exception:  # noqa: BLE001 — fail to the safe baseline
+        return 150
+
+
 def get_narration_config(niche_config: dict[str, Any] | None) -> dict[str, Any]:
     """Return the narration sub-config with sensible defaults for any
     missing key. Never raises; returns defaults on any error.
@@ -105,6 +133,20 @@ def get_narration_config(niche_config: dict[str, Any] | None) -> dict[str, Any]:
         "wpm": 150,
         "tail_buffer_seconds": 2.0,
         "narration_vo_db": 0,
+        # NARR-11 (2026-08-20): per-TTS-tier speaking rates. A blanket wpm
+        # under-predicts for slower providers and wastes synthesis on scripts
+        # the mix then rejects.
+        #
+        # inworld=141 measured 2026-08-20 from two full-chain runs on story_0:
+        # predicted 16.0s at wpm=150, actual 16.98s and 16.88s -> ~6% slower.
+        # Other tiers stay at 150 until measured; do not guess them.
+        #
+        # Follow-up task (not NARR-11): auto-fit these from the logged A4
+        # (predicted, actual) triples instead of hand-measuring.
+        "tts_rates": {"inworld": 141, "default": 150},
+        # One regeneration at this fraction of the original budget when the
+        # script overruns, before degrading (NARR-11 ruling).
+        "retry_budget_factor": 0.85,
     }
     if not isinstance(niche_config, dict):
         return defaults

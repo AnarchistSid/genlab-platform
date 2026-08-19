@@ -24,12 +24,28 @@ class TestNarrationPropagation:
     """The break point that caused the NARR-01 → NARR-05 regression."""
 
     def test_narration_script_propagation_line_present(self):
-        """Structural pin: _write_story_llm MUST assign
-        content['narration_script'] from result.get('narration_script')."""
+        """Structural pin: _write_story_llm MUST land the writer's
+        narration_script into the content dict.
+
+        NARR-11 (2026-08-20) loosened the *shape* of this assertion, not its
+        intent. The original pinned the literal
+        ``content["narration_script"] = result.get("narration_script"...)``.
+        The script now passes through validate-and-retry before landing, so
+        the right-hand side is a validated local — pinning the old RHS would
+        forbid ever validating the script, which is the opposite of what this
+        file is protecting.
+
+        What still must hold, and is what actually regressed twice: the
+        writer's narration_script reaches ``content``.
+        """
         src = inspect.getsource(base_writing.BaseWritingStrategy._write_story_llm)
-        assert 'content["narration_script"] = result.get("narration_script"' in src, (
+        assert 'content["narration_script"] =' in src, (
             "narration_script propagation missing from _write_story_llm — "
             "the exact NARR-01→NARR-05 regression will recur"
+        )
+        assert 'result.get("narration_script"' in src, (
+            "the writer's narration_script is never read — the value landing "
+            "in content must originate from the LLM result"
         )
 
     def test_propagator_sits_between_content_seed_and_return(self):
@@ -38,7 +54,7 @@ class TestNarrationPropagation:
         function that seeds `content = story.setdefault('content', {})`."""
         src = inspect.getsource(base_writing.BaseWritingStrategy._write_story_llm)
         content_seed_idx = src.find('content = story.setdefault("content", {})')
-        prop_idx = src.find('content["narration_script"] = result.get("narration_script"')
+        prop_idx = src.find('content["narration_script"] =')
         assert content_seed_idx >= 0
         assert prop_idx > content_seed_idx, (
             "narration_script propagation must appear AFTER content = story.setdefault"

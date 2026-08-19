@@ -564,6 +564,133 @@ class BaseWritingStrategy(WritingStrategy):
         except Exception:  # noqa: BLE001 — probe failures are not fatal
             return None
 
+    # Compliance rejections get a corrective instruction; a fit rejection
+    # gets a tighter budget. Both retry exactly once (NARR-11 ruling).
+    _NARRATION_CORRECTIONS: dict[str, str] = {
+        "script_contained_urls": (
+            "The narration_script must contain NO URLs, domains, or web "
+            "addresses of any kind — it is spoken aloud, where a URL is both "
+            "unreadable and a policy risk. Rewrite it without them."
+        ),
+        "script_contained_affiliate_cta": (
+            "The narration_script must contain NO affiliate or purchase "
+            "call-to-action (no 'link in bio', 'buy', 'discount code', "
+            "'check out the link'). Spoken affiliate prompts carry disclosure "
+            "obligations this path does not satisfy. Rewrite it without them."
+        ),
+        "script_first_person_claim": (
+            "The narration_script must not make unsupported first-person "
+            "claims about having personally used, tested, or verified the "
+            "subject. Report what the source shows instead."
+        ),
+    }
+
+    def _validate_narration_with_retry(
+        self,
+        *,
+        script: str,
+        target_seconds: float,
+        video: dict,
+        llm_client: Any,
+        existing_hooks: list[str],
+        extra_instructions: str,
+    ) -> tuple[str, str]:
+        """Validate a narration script, retrying once before degrading.
+
+        Returns ``(script, "")`` on pass, or ``("", reason_slug)`` when the
+        script fails twice. The reason slugs are the NARR-01 plan's documented
+        enum — this wire is what makes ``script_too_long``,
+        ``script_contained_urls``, ``script_contained_affiliate_cta`` and
+        ``script_first_person_claim`` reachable for the first time.
+
+        Never raises: any internal error returns the original script
+        unvalidated, because a broken validator must not cost a reel. The
+        mix-time guard still catches oversized VO downstream.
+        """
+        from genlab_core.writing.narration_validator import (
+            validate_narration_script,
+        )
+        from genlab_core.writing.video_content_writer import write_video_content
+
+        try:
+            from genlab_core.publishing.narration_gate import (
+                get_narration_config,
+                get_tts_rate_wpm,
+            )
+
+            cfg = get_narration_config(self._niche_config)
+            wpm = get_tts_rate_wpm(self._niche_config)
+            tail = float(cfg.get("tail_buffer_seconds", 2.0))
+            factor = float(cfg.get("retry_budget_factor", 0.85))
+        except Exception:  # noqa: BLE001
+            wpm, tail, factor = 150, 2.0, 0.85
+
+        ok, reason = validate_narration_script(script, target_seconds, wpm, tail)
+        if ok:
+            return script, ""
+
+        if reason == "script_generation_failed":
+            # Nothing to correct — the LLM produced no usable script.
+            logger.warning(
+                "[%s] narration: script empty/too short — degrading",
+                self._niche_id,
+            )
+            return "", reason
+
+        retry_target = target_seconds
+        correction = self._NARRATION_CORRECTIONS.get(reason, "")
+        if reason == "script_too_long":
+            retry_target = target_seconds * factor
+            logger.warning(
+                "[%s] narration attempt 1 rejected (%s) at wpm=%d — "
+                "regenerating with budget %.1fs (%.0f%% of %.1fs)",
+                self._niche_id, reason, wpm, retry_target, factor * 100,
+                target_seconds,
+            )
+        else:
+            logger.warning(
+                "[%s] narration attempt 1 rejected (%s) — regenerating with "
+                "a corrective instruction",
+                self._niche_id, reason,
+            )
+
+        try:
+            retry = write_video_content(
+                video=video,
+                niche_id=self._niche_id,
+                llm_client=llm_client,
+                existing_hooks=existing_hooks,
+                extra_instructions=(
+                    f"{extra_instructions}\n{correction}" if correction
+                    else extra_instructions
+                ),
+                narration_target_seconds=retry_target,
+            )
+            candidate = (retry.get("narration_script") or "").strip()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "[%s] narration retry raised (%s) — degrading with %s",
+                self._niche_id, exc, reason,
+            )
+            return "", reason
+
+        ok2, reason2 = validate_narration_script(
+            candidate, retry_target, wpm, tail,
+        )
+        if ok2:
+            logger.info(
+                "[%s] narration attempt 2 passed after %s",
+                self._niche_id, reason,
+            )
+            return candidate, ""
+
+        logger.warning(
+            "[%s] narration attempt 2 also rejected (%s) — degrading; "
+            "this reel publishes without narration",
+            self._niche_id, reason2,
+        )
+        return "", reason2
+
     def _write_story_llm(
         self,
         story: dict,
@@ -671,7 +798,31 @@ class BaseWritingStrategy(WritingStrategy):
         # Same class-of-bug as source_attribution Bug C (line ~555):
         # writer emits a field, propagator forgets it, downstream
         # consumer sees empty. Fix pattern: explicit assignment here.
-        content["narration_script"] = result.get("narration_script", "")
+        # NARR-11 (2026-08-20): validate BEFORE the script lands in content.
+        #
+        # narration_validator implements the fit check plus three compliance
+        # checks and shipped with 20 pin tests and ZERO production callers —
+        # the fifth built-never-wired bug of this arc. Until now nothing
+        # length-checked a narration script: the writer emitted 16.0s against
+        # a 14.0s budget on two consecutive runs and the only thing that
+        # objected was the mix-time guard, after synthesis had been paid for.
+        #
+        # Validator early and cheap; the mix-time guard stays as the late,
+        # authoritative backstop. Both, not either.
+        _narr_script = result.get("narration_script", "") or ""
+        if narration_target_seconds is not None and _narr_script.strip():
+            _narr_script, _narr_reason = self._validate_narration_with_retry(
+                script=_narr_script,
+                target_seconds=narration_target_seconds,
+                video=video,
+                llm_client=llm_client,
+                existing_hooks=existing_hooks,
+                extra_instructions=extra_instructions,
+            )
+            if _narr_reason:
+                content["narration_degraded"] = True
+                content["narration_degraded_reason"] = _narr_reason
+        content["narration_script"] = _narr_script
 
         # Observability: log when the LLM's FINAL hook (post-retry if
         # retry fired) is still near-dupe to a recent one.
