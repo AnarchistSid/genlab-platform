@@ -985,3 +985,75 @@ actual 16.88–16.98s), so even a correctly-validated script needs headroom.
 * #218 round-2 verdict recorded: **FAIL on mix — "too much overlapped audio."**
 
 Out of NARR-10 scope (mix graph / docs / tests / outro bed) → filed, not fixed.
+
+---
+
+## 19. NARR-11 (2026-08-20) — validator wired; round 3 rendered; one spec miss
+
+### 19.1 Shipped
+
+| commit | change |
+|---|---|
+| `90963a0f` | `validate_narration_script` wired into `base_writing` with retry-then-degrade; per-tier TTS rates (Inworld 141); reachability test |
+| `fb364def` | prompt word cap fed from the validator's rate — a divergence `90963a0f` itself created |
+
+The fifth built-never-wired bug is closed. All four documented degradation
+reasons are reachable for the first time, three of which are compliance rules
+(spoken URLs, spoken affiliate CTAs, unsupported first-person claims).
+
+**Self-inflicted regression, caught and fixed in-session**: calibrating the
+validator to 141 wpm while `_build_narration_hint` still computed the prompt's
+word cap at 150 guaranteed rejection of every compliant script — cap 35 words
+projects 14.89s against a 14.0s budget. Two implementers of one contract, now
+fed from one value and pinned.
+
+### 19.2 Round-3 pre-verification — 5 of 6 pass
+
+| # | item | result |
+|---|---|---|
+| 1 | Writer | 221 chars / 32 words, projected **13.62s** @141wpm, budget 14.0s — **validator PASSED first try**, no retry needed |
+| 2 | TTS | `infsh_inworld`; predicted 13.62s, **actual 14.52s**, fits the 16.07s reel |
+| 3 | Mix | `narration engaged` + `outro bed engaged` (first live firing); 48 kHz stereo; **audio 18.562s == video 18.562s**; **zero silence gaps anywhere** |
+| 4 | Loudness | LRA **5.70** (up from 2.6 — dynamics restored) · **LUFS −15.51 ✗ outside −14 ±1** |
+| 5 | Intelligibility probe | **PASS** — commentary present verbatim, **0 six-word source runs** |
+| 6 | Ducking spot check | not cleanly measurable post-mix without stems — see note |
+
+### 19.3 The intelligibility probe, first live run
+
+Final-mix transcript, complete:
+
+```
+[ 0.00-> 3.68] ChatGPT plugins launched as a feature nobody used,
+[ 3.68-> 7.52] but the latest batch actually changed together for real workflows,
+[ 7.52->10.32] research, writing, data synthesis.
+[10.32->14.16] We're seeing the plugin ecosystem finally deliver on what it promised.
+```
+
+Raw source, for comparison: *"ChatGPT just looked at my schedule, my calendar,
+found the best opening and added a 30 minute break…"* — **none of it appears.**
+
+Round 2's transcript ended with a fifth segment that was source speech, not
+commentary. That segment is gone. The automated ear confirms the retune.
+
+### 19.4 The miss — integrated loudness −15.51 LUFS
+
+Outside the −14 ±1 spec by 0.51 LU. Per the NARR-11 rule (any step failing →
+STOP, no fix-forward), **not fixed**.
+
+Hypothesis, INFERRED not measured: the outro bed now carries audio where there
+was digital silence, and `loudnorm` runs downstream of the compositor, so the
+2.5s bed segment pulls the integrated measurement down. Round 2, with a silent
+outro, measured −14.33. Testable by rendering the same assets with the bed
+disabled; not run.
+
+### 19.5 Notes for follow-up
+
+* **TTS rate still under-predicts.** Actual 14.52s vs predicted 13.62s = +6.6%.
+  Effective rate on this script is ~132 wpm, not 141 — and 141 came from a
+  different script measuring ~141. Rate varies with content, which is the
+  argument for the logged-triples auto-fit task rather than another hand-tune.
+* **Ducking spot check** could not isolate source from VO in the same band
+  post-mix without stems. The fixture test (17.1 dB VO-above-source, validated
+  by inversion) and the intelligibility probe are the real evidence.
+* **Standing pattern recorded**: bed levels are specified in LUFS relative to
+  programme, never raw dB offsets.
