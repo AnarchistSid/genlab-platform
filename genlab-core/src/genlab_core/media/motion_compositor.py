@@ -63,6 +63,21 @@ class MotionCompositeSpec:
     crf: int = 20
     preset: str = "fast"
     audio_bitrate: str = "128k"
+    # NARR-10 (2026-08-20): when set, the OUTRO segment's audio is replaced by
+    # this music bed instead of the asset's own track. Outro assets are
+    # designed as silent CTA cards (comment.mp4 measures -91.0 dB), so
+    # concatenating them appends dead air — 2.517s on an 18.6s reel, ~13% of
+    # duration, right where completion is decided. Narration path only for
+    # now; production-wide rollout is a separate decision (register item).
+    outro_bed_path: Path | None = None
+    # Target LOUDNESS for the outro bed, not a raw dB offset. The main
+    # content reaches this compositor already normalised to -14 LUFS by the
+    # audio-mix stage, so a raw "-28 dB" attenuation is measured against the
+    # bed asset's own arbitrary level and lands ~38 LU under the programme —
+    # inaudible. Measured on a fixture: raw -28 dB put the outro at -52.1 dB
+    # against a -24.1 dB main segment. Normalising instead makes the bed sit a
+    # predictable ~10 LU under the programme regardless of the asset.
+    outro_bed_lufs: float = -24.0
 
 
 def _resolve_asset_path(
@@ -110,7 +125,37 @@ def _normalize_segment_label(index: int) -> str:
     return f"v{index}"
 
 
-def build_concat_filtergraph(n_segments: int, width: int, height: int) -> str:
+def _probe_duration_seconds(path: Path) -> float | None:
+    """ffprobe a media file's duration. None on any failure — never raises."""
+    try:
+        import subprocess
+
+        from genlab_core.media.ffmpeg import get_ffprobe_binary
+
+        probe = subprocess.run(
+            [
+                get_ffprobe_binary(), "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", str(path),
+            ],
+            capture_output=True, text=True, timeout=15,
+        )
+        raw = (probe.stdout or "").strip()
+        return float(raw) if raw else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def build_concat_filtergraph(
+    n_segments: int,
+    width: int,
+    height: int,
+    *,
+    bed_segment_index: int | None = None,
+    bed_input_index: int | None = None,
+    bed_lufs: float = -24.0,
+    bed_duration_s: float | None = None,
+) -> str:
     """Build the FFmpeg filter_complex string for concat with normalization.
 
     Each input's video is scaled + padded to (width, height) so mismatched
@@ -148,8 +193,26 @@ def build_concat_filtergraph(n_segments: int, width: int, height: int) -> str:
     # spec so concat has homogeneous inputs. Regression here reproduces
     # the exit=-22 failure from 2026-07-06.
     aformat_expr = "aformat=sample_rates=48000:channel_layouts=stereo"
+    substitute_bed = (
+        bed_segment_index is not None
+        and bed_input_index is not None
+        and bed_duration_s is not None
+    )
     for i in range(n_segments):
-        parts.append(f"[{i}:a]{aformat_expr}[a{i}]")
+        if substitute_bed and i == bed_segment_index:
+            # NARR-10: take this segment's audio from the looped music bed
+            # rather than the asset's silent track. atrim bounds the infinite
+            # -stream_loop input to the segment length; asetpts rebases
+            # timestamps so concat sees a clean stream (omitting it reproduces
+            # the -22 EINVAL class documented for this compositor).
+            parts.append(
+                f"[{bed_input_index}:a]"
+                f"atrim=duration={bed_duration_s:.3f},asetpts=N/SR/TB,"
+                f"loudnorm=I={bed_lufs}:TP=-1.5:LRA=11,"
+                f"{aformat_expr}[a{i}]"
+            )
+        else:
+            parts.append(f"[{i}:a]{aformat_expr}[a{i}]")
 
     # Compose the concat inputs — interleaved [vN][aN] pairs.
     concat_inputs = "".join(f"[v{i}][a{i}]" for i in range(n_segments))
@@ -169,7 +232,35 @@ def build_ffmpeg_command(
     for seg in segments:
         cmd.extend(["-i", str(seg)])
 
-    filtergraph = build_concat_filtergraph(len(segments), spec.target_width, spec.target_height)
+    # NARR-10: optional music bed for the outro segment. Appended as the last
+    # input so existing segment indices are untouched. -stream_loop -1 covers
+    # beds shorter than the outro; atrim in the filtergraph bounds it.
+    bed_segment_index: int | None = None
+    bed_input_index: int | None = None
+    bed_duration_s: float | None = None
+    if spec.outro_bed_path is not None and spec.outro_path is not None:
+        bed_duration_s = _probe_duration_seconds(spec.outro_path)
+        if bed_duration_s and bed_duration_s > 0:
+            bed_segment_index = len(segments) - 1  # outro is always last
+            bed_input_index = len(segments)
+            cmd.extend(["-stream_loop", "-1", "-i", str(spec.outro_bed_path)])
+        else:
+            logger.warning(
+                "[motion_compositor] outro bed requested but outro duration "
+                "could not be probed (%s) — falling back to the asset's own "
+                "audio track (silent tail persists)",
+                spec.outro_path,
+            )
+
+    filtergraph = build_concat_filtergraph(
+        len(segments),
+        spec.target_width,
+        spec.target_height,
+        bed_segment_index=bed_segment_index,
+        bed_input_index=bed_input_index,
+        bed_lufs=spec.outro_bed_lufs,
+        bed_duration_s=bed_duration_s,
+    )
     cmd.extend(
         [
             "-filter_complex",
@@ -497,6 +588,8 @@ def composite_for_reel(
     target_width: int = 1080,
     target_height: int = 1920,
     timeout_seconds: int = 300,
+    outro_bed_path: Path | None = None,
+    outro_bed_lufs: float = -24.0,
 ) -> bool:
     """High-level entry point matching audio_replacer.replace_audio_for_reel.
 
@@ -511,6 +604,8 @@ def composite_for_reel(
         outro_path=choice.resolve_outro(),
         target_width=target_width,
         target_height=target_height,
+        outro_bed_path=outro_bed_path,
+        outro_bed_lufs=outro_bed_lufs,
     )
     return composite_motion_graphics(spec, timeout_seconds=timeout_seconds)
 

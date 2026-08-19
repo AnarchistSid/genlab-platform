@@ -511,6 +511,13 @@ def apply_transformations(
                 # no ffmpeg pass needed.
                 result.stages_applied.append("highlight_moment")
 
+        # NARR-10 (2026-08-20): declared at function scope, not inside the
+        # music_mood branch. Stage 4 reads it to decide whether to extend the
+        # bed across the outro, and music_mood is not always selected — the
+        # branch-local declaration raised UnboundLocalError on those renders.
+        narration_audio_path: Path | None = None
+        music_mood: str = ""
+
         # ── Stage 1: audio replacement ─────────────────────────
         if "music_mood" in choices.choices:
             music_mood = choices.choices["music_mood"].dimension_value
@@ -535,7 +542,6 @@ def apply_transformations(
             #
             # Every branch keeps the legacy 2-input path as the
             # fallback (byte-identical to pre-NARR-01 when VO absent).
-            narration_audio_path: Path | None = None
             narration_vo_db = 0
             vo_bed_duck_db = -8
             target_lufs = -14.0
@@ -880,7 +886,38 @@ def apply_transformations(
                     outro_template=(outro_choice.dimension_value if outro_choice else ""),
                     outro_asset_dir=outro_dir,
                 )
-                success = composite_for_reel(asset_choice, current_path, next_path)
+                # NARR-10 (2026-08-20): extend the music bed across the outro
+                # so the CTA card is not 2.5s of digital silence. Gated on
+                # narration being ENGAGED this render — production-wide
+                # rollout is a separate decision, so non-narration reels keep
+                # today's behaviour exactly.
+                _outro_bed: Path | None = None
+                if narration_audio_path is not None:
+                    try:
+                        from genlab_core.media.audio_replacer import (
+                            find_music_bed_for_mood,
+                        )
+
+                        _outro_bed = find_music_bed_for_mood(
+                            niche_root, music_mood,
+                        )
+                        if _outro_bed is not None:
+                            logger.info(
+                                "[transformation_orchestrator] outro bed "
+                                "engaged for niche=%s bed=%s",
+                                niche_id, _outro_bed.name,
+                            )
+                    except Exception as exc:  # noqa: BLE001 — fail-open
+                        logger.warning(
+                            "[transformation_orchestrator] outro bed lookup "
+                            "raised (%s) — outro keeps its silent track",
+                            exc,
+                        )
+
+                success = composite_for_reel(
+                    asset_choice, current_path, next_path,
+                    outro_bed_path=_outro_bed,
+                )
 
                 # #620 retry — see stage-4 header comment for rationale.
                 if not success and intro_choice is not None:
