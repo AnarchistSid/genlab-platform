@@ -288,6 +288,22 @@ def build_ffmpeg_command(spec: AudioMixSpec, ffmpeg_binary: str) -> list[str]:
         "aac",
         "-b:a",
         spec.audio_bitrate,
+    ]
+    if include_narration:
+        # NARR-05 (2026-08-19): pin the output sample rate to 48 kHz.
+        #
+        # ``loudnorm`` resamples internally (192 kHz) and propagates a
+        # non-48k rate to the encoder — a pre-verification render of a
+        # real BB reel came out at **96 kHz**, violating the "AAC 48kHz
+        # stereo" line in CLAUDE.md STRICT VIDEO REQUIREMENTS that every
+        # platform spec assumes.
+        #
+        # Only applied on the narration branch: the legacy 2-input path
+        # has no loudnorm, already emits 48 kHz, and is pinned
+        # byte-identical by test_legacy_ffmpeg_argv_shape.
+        cmd += ["-ar", "48000"]
+
+    cmd += [
         # -shortest hedges against amix duration edge cases — if the
         # filter's duration=first ever gets confused, this hard-limits
         # output to the shortest input length.

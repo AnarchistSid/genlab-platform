@@ -64,6 +64,7 @@ class GenerateAudio:
             from genlab_core.publishing.narration_gate import (
                 is_narration_enabled_for,
             )
+
             narration_enabled = is_narration_enabled_for(niche_id, config)
         except Exception as exc:  # noqa: BLE001 — fail-open
             logger.warning(
@@ -90,6 +91,17 @@ class GenerateAudio:
             script = ""
             content = bp.get("content") if isinstance(bp.get("content"), dict) else {}
             if narration_enabled:
+                # NARR-05 (2026-08-19): stamp the gate result onto the
+                # story so downstream consumers can tell "this reel was
+                # SUPPOSED to have narration" from "this niche never
+                # wanted narration". ``transformation_orchestrator``
+                # uses it to decide whether a missing VO at mix time is
+                # an anomaly worth a WARN or just a non-canary niche.
+                #
+                # This is only reachable because GenerateAudio now runs
+                # BEFORE phase4_visual_render — under the old ordering
+                # the render had already finished by the time this ran.
+                content["narration_expected"] = True
                 narration_script = str(content.get("narration_script", "")).strip()
                 if narration_script:
                     script = narration_script
@@ -100,7 +112,8 @@ class GenerateAudio:
                         "[GenerateAudio] narration enabled for %s but "
                         "writer emitted empty narration_script — "
                         "degrading to legacy audio path (bp=%s)",
-                        niche_id, bp.get("candidate_id", "?"),
+                        niche_id,
+                        bp.get("candidate_id", "?"),
                     )
             if not script:
                 script = self._build_script(bp)
@@ -115,7 +128,7 @@ class GenerateAudio:
                 continue
 
             try:
-                out_path = run_dir / f"{bp.get('candidate_id', 'unknown')}_audio.mp3"
+                out_path = run_dir / f"{self._audio_stem(bp)}_audio.mp3"
 
                 # 2026-06-14: dropped the ``voice=voice`` kwarg.
                 # TTSCascade.synthesize(text, output_path, clean=True) has no
@@ -191,7 +204,8 @@ class GenerateAudio:
                                 "[GenerateAudio] vo_overrun probe raised "
                                 "for %s: %s — narration proceeds (probe "
                                 "failures don't block VO)",
-                                bp.get("candidate_id", "?"), exc,
+                                bp.get("candidate_id", "?"),
+                                exc,
                             )
 
                     media["audio_path"] = str(out_path)
@@ -309,12 +323,17 @@ class GenerateAudio:
         probe = subprocess.run(
             [
                 get_ffprobe_binary(),
-                "-v", "error",
-                "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
                 str(out_path),
             ],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         raw = (probe.stdout or "").strip()
         if not raw:
@@ -332,18 +351,61 @@ class GenerateAudio:
                 "[GenerateAudio] vo_overrun for %s niche=%s: actual "
                 "VO=%.2fs > fit_budget=%.2fs (clip=%.2fs, tail=%.1fs). "
                 "Degrading to legacy 2-input mix — narration skipped.",
-                bp.get("candidate_id", "?"), niche_id,
-                actual_seconds, fit_budget, clip_duration,
+                bp.get("candidate_id", "?"),
+                niche_id,
+                actual_seconds,
+                fit_budget,
+                clip_duration,
                 tail_buffer_seconds,
             )
+
+    @staticmethod
+    def _audio_stem(bp: dict[str, Any]) -> str:
+        """Stable per-story filename stem for the VO artifact.
+
+        NARR-05 (2026-08-19). The original stem was
+        ``bp.get("candidate_id", "unknown")`` — but ``story["candidate_id"]``
+        is first assigned in :mod:`push_to_backlog` (push_to_backlog.py:2310),
+        which runs FOUR stages after this one. The key therefore never
+        existed at synthesis time and every blueprint in every run wrote to
+        the literal path ``unknown_audio.mp3``.
+
+        That was inert while nothing consumed ``media["audio_path"]``. Once
+        GenerateAudio moved above ``phase4_visual_render`` so the NARR-01
+        3-input mix can read the VO, the collision became audience-facing:
+        on a multi-story run, story N's voice-over would be mixed into
+        story N-1's reel.
+
+        ``story_id`` is assigned by the ingestion fetchers (stage 2-3, e.g.
+        fetch_tmdb_trailers.py:167) and is the same key
+        ``base_visual_render.py:151`` uses to name composite artifacts, so
+        VO and video artifacts now share one identity.
+        """
+        for key in ("story_id", "candidate_id"):
+            value = bp.get(key)
+            if value:
+                # Filesystem-safe + bounded: story_ids are 64-char hex, the
+                # renderer truncates to 16 for its own artifacts.
+                stem = "".join(ch for ch in str(value) if ch.isalnum() or ch in "-_")[:32]
+                if stem:
+                    return stem
+        return "unknown"
 
     @staticmethod
     def _get_run_dir(context: dict[str, Any]) -> Path:
         """Resolve or create run directory for audio artifacts."""
         niche_config = context.get("niche_config", {})
         niche_id = niche_config.get("niche_id", "unknown")
+        # NARR-05 (2026-08-19): read run_id from ``context["run_id"]`` —
+        # where ``pipeline_runner`` actually writes it (pipeline_runner.py:358).
+        # The previous lookup went to ``context["run_stats"]["run_id"]``, a key
+        # no stage ever sets, so EVERY run for a niche resolved to the same
+        # ``{niche}_manual`` directory. Combined with the candidate_id defect
+        # below that produced exactly one ``unknown_audio.mp3`` per niche —
+        # ever — silently overwritten on each run. ``run_stats`` is kept as a
+        # fallback so any caller that does populate it keeps working.
         run_stats = context.get("run_stats", {})
-        run_id = run_stats.get("run_id", "manual")
+        run_id = context.get("run_id") or run_stats.get("run_id") or "manual"
 
         run_dir = Path(tempfile.gettempdir()) / "genlab_audio" / f"{niche_id}_{run_id}"
         run_dir.mkdir(parents=True, exist_ok=True)

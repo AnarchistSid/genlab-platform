@@ -320,9 +320,18 @@ def test_clutchwire_real_niche_yaml_matches_pre_p4_stages() -> None:
         "genlab_core.monetization.affiliate_matcher.AffiliateMatch",
         "genlab_core.pipeline.stages.qc_gates.QCGates",
         "genlab_core.pipeline.stages.virality_scoring.ViralityScoring",
+        # NARR-08 (2026-08-19): GenerateAudio moved ABOVE the render.
+        #
+        # This list was pinned to the pre-P4 hand-written ClutchWire order
+        # to prove the template refactor was behaviour-preserving. That
+        # pre-P4 order placed the VO producer two stages AFTER its only
+        # consumer, so the NARR-01 3-input mix read None every time and
+        # silently fell back to the 2-input path — the ordering bug this
+        # pin was faithfully preserving. Updated deliberately: the template
+        # is no longer expected to match pre-P4 here.
+        "genlab_core.pipeline.stages.generate_audio.GenerateAudio",
         "cw_strategies.visual_render.SportVisualRenderStrategy",
         "genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays",
-        "genlab_core.pipeline.stages.generate_audio.GenerateAudio",
         "genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions",
         "genlab_core.pipeline.stages.validate_videos.ValidateVideos",
         "cw_strategies.platform_adaptation.SportPlatformAdaptationStrategy",

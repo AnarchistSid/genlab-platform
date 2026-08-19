@@ -149,6 +149,27 @@ pipeline:
       fail_mode: abort
     - class: genlab_core.pipeline.stages.virality_scoring.ViralityScoring
 
+    # Phase 3b: Voice-over synthesis (PRE-render) — NARR-08 (2026-08-19).
+    # Mirrors the backbone template hoist. ``RenderGamingVideo`` calls
+    # ``apply_post_render_transformations`` (render_gaming_video.py:417),
+    # whose Stage 1 audio_replacer is the only consumer of
+    # ``media["audio_path"]`` — so the producer has to precede it here for
+    # the same reason it does in pipeline_template.yaml. Gaming keeps its
+    # own stage list, so the backbone edit does NOT reach it; without this
+    # the hoist would silently apply to 4 niches of 5.
+    #
+    # Dependency check for THIS niche (not inherited from BB's): the reads
+    # are stories / niche_config / content caption+hook / media durations.
+    # GamingWritingStrategy (#13) and GamingHookStrategy (#14) both precede
+    # this position, and nothing here is written by RenderGamingVideo or
+    # RenderTextOverlays.
+    #
+    # NOTE: gaming cannot actually produce narration yet — its
+    # ``blueprint_context`` at render_gaming_video.py:410 omits the four
+    # NARR-01 keys that base_visual_render passes. Filed separately; this
+    # edit fixes the ORDER so the wire works when it lands.
+    - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio
+
     # Phase 4: Rendering
     - class: niches.gaming.stages.render_gaming_video.RenderGamingVideo
       sandbox: true
@@ -160,8 +181,13 @@ pipeline:
       fail_mode: abort
     - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
       parallel_group: post_render
-    - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio
-      parallel_group: post_render
+    # GenerateGamingAudio stays HERE, after the render, deliberately:
+    # it reads ``media["rendered_path"]``
+    # (generate_gaming_audio.py:113) and skips any story lacking one.
+    # Hoisting it with the generic GenerateAudio would make it skip
+    # every story silently — zero commentary, no error. It writes
+    # ``commentary_audio_path``, a different key from the generic
+    # stage's ``media["audio_path"]``, so the two never collide.
     - class: niches.gaming.stages.generate_gaming_audio.GenerateGamingAudio
       parallel_group: post_render
     - class: genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions

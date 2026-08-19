@@ -265,6 +265,7 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
             # generic A/B when not present. Any exception or
             # missing-flag path falls through to the default compose().
             import os as _os
+
             _variant_type = (story.get("variant_type") or "").lower()
             _split_flag = _os.environ.get("GENLAB_SPLIT_SCREEN_COMPOSITOR_ENABLED", "0") == "1"
             _storytime_flag = _os.environ.get("GENLAB_STORYTIME_COMPOSITOR_ENABLED", "0") == "1"
@@ -377,16 +378,15 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                     # NARR-01 fields: only carry meaningful values when
                     # the writer + GenerateAudio pipeline populated them.
                     "narration_audio_path": media.get("audio_path"),
-                    "narration_degraded": bool(
-                        content.get("narration_degraded", False)
-                    ),
-                    "narration_degraded_reason": content.get(
-                        "narration_degraded_reason", ""
-                    ),
-                    "variant_type": (
-                        content.get("variant_type")
-                        or story.get("variant_type")
-                    ),
+                    # NARR-05 (2026-08-19): did the gate actually ask for
+                    # narration on this story? Stamped by GenerateAudio,
+                    # which now runs upstream of this render. Lets the
+                    # orchestrator WARN on a missing VO for a canary niche
+                    # without spamming the four non-canary niches.
+                    "narration_expected": bool(content.get("narration_expected", False)),
+                    "narration_degraded": bool(content.get("narration_degraded", False)),
+                    "narration_degraded_reason": content.get("narration_degraded_reason", ""),
+                    "variant_type": (content.get("variant_type") or story.get("variant_type")),
                 }
                 # Task #581 (2026-07-08): apply_post_render_transformations
                 # now returns (path, arm_ids_by_dimension). The dict lets
@@ -414,7 +414,8 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                 # overwrite would clobber those and lose attribution.
                 if _arm_ids:
                     story.setdefault(
-                        "arm_ids_by_dimension", {},
+                        "arm_ids_by_dimension",
+                        {},
                     ).update(dict(_arm_ids))
                 # 2026-08-18: persist the reject-reason set by
                 # apply_post_render_transformations (mutated into
@@ -424,13 +425,9 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                 # Aug 16 incident: 4 platform copies shipped with
                 # arm_ids={} and no marker survived; had to run the
                 # run-report → journal → source-code chase to guess.
-                reject_reason = blueprint_context.get(
-                    "_transform_reject_reason"
-                )
+                reject_reason = blueprint_context.get("_transform_reject_reason")
                 if reject_reason:
-                    story.setdefault("media", {})[
-                        "transform_reject_reason"
-                    ] = reject_reason
+                    story.setdefault("media", {})["transform_reject_reason"] = reject_reason
             except Exception as exc:
                 # Extra defense: apply_post_render_transformations
                 # promises no-raise, but if some import path breaks,
@@ -459,7 +456,9 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                     # Fresh dict per call — arm_id gets written on success.
                     _bandit_ctx: dict = {}
                     intro_ok, intro_cost = generate_hook_thumbnail(
-                        hook_text, niche_id, intro_path,
+                        hook_text,
+                        niche_id,
+                        intro_path,
                         blueprint_context=_bandit_ctx,
                     )
                     if intro_ok:
@@ -471,17 +470,19 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                         _arm_id = _bandit_ctx.get("_hook_thumbnail_arm_id")
                         if _arm_id:
                             story.setdefault(
-                                "arm_ids_by_dimension", {},
+                                "arm_ids_by_dimension",
+                                {},
                             )["hook_thumbnail_model"] = _arm_id
-                        merged_path = str(
-                            composite_dir / f"{sid[:16]}_reel_with_intro.mp4"
-                        )
+                        merged_path = str(composite_dir / f"{sid[:16]}_reel_with_intro.mp4")
                         if prepend_intro_to_composite(
-                            composite_path, intro_path, merged_path,
+                            composite_path,
+                            intro_path,
+                            merged_path,
                         ):
                             logger.info(
                                 "%s intro prepended niche=%s cost=%s",
-                                self._log_prefix, niche_id,
+                                self._log_prefix,
+                                niche_id,
                                 f"${intro_cost:.4f}" if intro_cost else "unknown",
                             )
                             composite_path = merged_path
@@ -498,7 +499,8 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "%s hook_thumbnail wire raised (%s) — returning base composite",
-                    self._log_prefix, exc,
+                    self._log_prefix,
+                    exc,
                 )
 
             # 2026-08-18 canary wire (task #193): AI-news data-viz
@@ -509,12 +511,12 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
             # GENLAB_CHART_BROLL_NICHES; fail-open (any error keeps
             # the base composite unchanged). Extraction cost ~$0.001
             # via Haiku; ffmpeg render is zero-cost.
-            already_has_intro = composite_path.endswith(
-                "_reel_with_intro.mp4"
-            )
+            already_has_intro = composite_path.endswith("_reel_with_intro.mp4")
             try:
                 from genlab_core.media.chart_broll import (
                     is_enabled_for as chart_broll_is_enabled_for,
+                )
+                from genlab_core.media.chart_broll import (
                     render_chart_broll,
                 )
                 from genlab_core.media.chart_data_extract import (
@@ -535,9 +537,7 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                     )
                     if chart_data is not None:
                         composite_dir = Path(composite_path).parent
-                        chart_path = str(
-                            composite_dir / f"{sid[:16]}_chart.mp4"
-                        )
+                        chart_path = str(composite_dir / f"{sid[:16]}_chart.mp4")
                         chart_ok = render_chart_broll(
                             title=chart_data.title,
                             bars=chart_data.bars,
@@ -545,17 +545,16 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                             output_path=chart_path,
                         )
                         if chart_ok:
-                            merged_path = str(
-                                composite_dir
-                                / f"{sid[:16]}_reel_with_chart.mp4"
-                            )
+                            merged_path = str(composite_dir / f"{sid[:16]}_reel_with_chart.mp4")
                             if prepend_intro_to_composite(
-                                composite_path, chart_path, merged_path,
+                                composite_path,
+                                chart_path,
+                                merged_path,
                             ):
                                 logger.info(
-                                    "%s chart intro prepended niche=%s "
-                                    "bars=%d title=%r",
-                                    self._log_prefix, niche_id,
+                                    "%s chart intro prepended niche=%s bars=%d title=%r",
+                                    self._log_prefix,
+                                    niche_id,
                                     len(chart_data.bars),
                                     chart_data.title[:60],
                                 )
@@ -572,7 +571,8 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "%s chart_broll wire raised (%s) — returning base composite",
-                    self._log_prefix, exc,
+                    self._log_prefix,
+                    exc,
                 )
 
             return composite_path
