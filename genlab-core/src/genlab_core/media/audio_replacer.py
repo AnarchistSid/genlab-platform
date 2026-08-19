@@ -65,6 +65,27 @@ logger = logging.getLogger(__name__)
 _MUSIC_EXTENSIONS = (".mp3", ".m4a", ".wav", ".ogg", ".opus")
 
 
+# NARR-10 (2026-08-20): source-audio level on the NARRATION path only.
+#
+# Overrides the caller's ``source_duck_db`` (which carries the
+# ``audio_ducking`` bandit arm, typically -9/-12/-15 dB) whenever a VO is
+# present. At -9 dB the source clip's own dialogue sat ~35% of VO amplitude
+# and was plainly intelligible — the operator listen on round 2 failed the
+# render for exactly this ("too much overlapped audio"), and
+# QB-DIAG-AUDIO-01 measured two simultaneous speech layers.
+#
+# -20 dB puts source dialogue below the intelligibility floor under speech
+# while keeping it audible as ambience, which is the point of using real
+# footage at all.
+#
+# CONSEQUENCE, recorded deliberately: the audio_ducking bandit arm is inert
+# on the narration path. That arm is one of the transform families measured
+# as statistically unlearnable at current volume, so no learning signal is
+# lost — but it is a real behavioural override and should not be discovered
+# by surprise later.
+_NARRATION_SOURCE_DUCK_DB: int = -20
+
+
 @dataclass
 class AudioMixSpec:
     """Parameters for a single audio-mix render.
@@ -77,10 +98,15 @@ class AudioMixSpec:
     NARR-01 additions (2026-08-18): optional VO track. When
     ``narration_audio_path`` is None the filtergraph is the historical
     2-input (source + music) shape — byte-identical to pre-NARR-01
-    behavior. When set, the graph adds a 3rd input, sidechain-ducks
-    the music bed by ``vo_bed_duck_db`` under VO segments, and
-    normalises the whole mix to ``target_lufs`` (EBU R128) via the
-    shared ``ffmpeg_utils.build_loudnorm_filter`` helper.
+    behavior. When set, the graph adds a 3rd input and STATICALLY deep-
+    ducks both non-VO layers beneath it: source to
+    ``_NARRATION_SOURCE_DUCK_DB`` (-20 dB, NARR-10) and bed to
+    ``music_bed_db + vo_bed_duck_db``. No sidechain — see the constant's
+    comment for why, and for the re-entry condition. The whole mix is then
+    normalised to ``target_lufs`` (EBU R128) via the shared
+    ``ffmpeg_utils.build_loudnorm_filter`` helper.
+
+    NOTE: ``source_duck_db`` is IGNORED on the narration path.
     """
 
     source_video_path: Path
@@ -173,15 +199,19 @@ def build_audio_mix_filtergraph(
       2. Normalize music bed to music_bed_db (typically -6 dB)
       3. amix the two streams with duration=first
 
-    **3-input (NARR-01 enabled)** — VO track added, music
-    sidechain-ducked under VO, output loudnorm'd to EBU R128:
-      1. Duck source audio to source_duck_db
-      2. Normalize music bed to music_bed_db
-      3. Sidechain-compress music bed by vo_bed_duck_db when VO is
-         playing (music dips under narration)
-      4. Normalize VO to narration_vo_db (typically 0 dB = full amp)
-      5. amix source + ducked-music + VO with duration=first
-      6. Apply ffmpeg_utils.build_loudnorm_filter to hit target_lufs
+    **3-input (NARR-01 enabled)** — VO track added, source and bed
+    both STATICALLY deep-ducked beneath it, output loudnorm'd:
+      1. Duck source audio to ``_NARRATION_SOURCE_DUCK_DB`` (-20 dB),
+         overriding the caller's ``source_duck_db``. See NARR-10 note.
+      2. Duck music bed to ``music_bed_db + vo_bed_duck_db``
+      3. Normalize VO to narration_vo_db (typically 0 dB = full amp)
+      4. amix source + bed + VO with duration=first
+      5. Apply ffmpeg_utils.build_loudnorm_filter to hit target_lufs
+
+    There is NO sidechain compressor. The §3.2 spec called for one and
+    it was never implemented; NARR-10 (2026-08-20) formally retired the
+    idea rather than leaving docs describing absent behaviour. Rationale
+    and the re-entry condition are in the constant's comment below.
 
     Returns the filter graph as a single string suitable for
     ``-filter_complex`` argument.
@@ -204,22 +234,23 @@ def build_audio_mix_filtergraph(
     # a VO start delay, add an explicit [2:a]adelay=Nms node here
     # AND propagate the offset to render_whisper_captions.
     #
-    # Sidechain-compress the music bed with VO as the trigger key.
-    # threshold=0.05 → any VO amplitude above ~-26 dBFS triggers duck
-    # ratio=8 → aggressive duck (music drops 8× below threshold)
-    # attack=5ms → fast reaction so first VO word isn't buried under bed
-    # release=200ms → smooth recovery so bed doesn't "pump" between words
-    # makeup=0dB → no post-compression gain (bed already at music_bed_db)
+    # STATIC DEEP DUCK — no sidechain. (NARR-10, 2026-08-20)
     #
-    # The vo_bed_duck_db value is applied AS THE SIDECHAIN THRESHOLD via
-    # the classic amix approach: pre-duck the music bed by vo_bed_duck_db
-    # AND rely on sidechain to keep the duck active. This is more
-    # predictable than sidechain-only (which depends on VO signal levels
-    # varying by TTS provider) — the pre-duck gives a guaranteed floor.
+    # Both non-VO layers are attenuated by a fixed amount for the whole
+    # reel. The source drops to _NARRATION_SOURCE_DUCK_DB so its dialogue
+    # reads as ambience rather than a second voice; the bed drops to
+    # music_bed_db + vo_bed_duck_db.
     #
-    # Deliberately choosing predictability over acoustic elegance —
-    # matches the "reuse existing loudnorm implementation style"
-    # amendment (A4): simple, testable, one filter chain.
+    # Why not a sidechain: a VO-keyed compressor only earns its keep when
+    # the key signal has gaps to recover into. Measured on the round-2
+    # render, narration is wall-to-wall — silencedetect at -30 dB found
+    # zero gaps across 0-15.9 s. Against a continuous key the compressor
+    # degenerates to a constant duck with added pumping risk at word
+    # boundaries, which is strictly worse than setting the level directly.
+    #
+    # RE-ENTRY CONDITION: revisit only if narration scripts gain
+    # deliberate pauses (e.g. a "let the clip breathe" variant). At that
+    # point the key has structure and a sidechain becomes meaningful.
     #
     # Reuses ``ffmpeg_utils.build_loudnorm_filter`` (2026-08-18) to
     # avoid rebuilding the exact filter string — that helper already
@@ -229,7 +260,7 @@ def build_audio_mix_filtergraph(
     loudnorm = build_loudnorm_filter(target_i=target_lufs)
     total_music_duck_db = music_bed_db + vo_bed_duck_db
     return (
-        f"[0:a]volume={source_duck_db}dB[src];"
+        f"[0:a]volume={_NARRATION_SOURCE_DUCK_DB}dB[src];"
         f"[1:a]volume={total_music_duck_db}dB[music];"
         f"[2:a]volume={narration_vo_db}dB[vo];"
         f"[src][music][vo]amix=inputs=3:duration=first:dropout_transition=0[premix];"
