@@ -694,3 +694,80 @@ Both directions are pinned.
   without `faster_whisper`, which is absent from the VPS venv. Verify against
   the caption path's actual package per the four-step canary heuristic before
   claiming a regression. Next cycle.
+
+---
+
+## 15. PRE-VERIFICATION round 2 — PASS (2026-08-19, story_0)
+
+Deployed code, VPS HEAD `a6ee8a2e` == origin/main. Evidence only: no blueprint
+push, no publish. story_0 = `03348d8f9e0e30d0`, video_id `cqYLBYenBA0`,
+"ChatGPT Plugins Finally Work!" (357 s source → 16 s window → 18.56 s reel).
+
+| # | Item | Result |
+|---|---|---|
+| 1 | Writer | resolved_duration **16.0 s** (not 30), budget 14.0 s, script 240 chars |
+| 2 | TTS | tier `infsh_inworld`; predicted 15.20 s, **actual 14.79 s**, budget 14.0 s — fits the 18.56 s reel |
+| 3 | Mix | `narration engaged for niche=ai_creators vo=03348d8f…_audio.mp3 vo_bed_duck=-8dB target_lufs=-14.0`; ffprobe `aac 48000 Hz stereo`, 18.564 s |
+| 4 | Loudness | **−14.33 LUFS** (target −14 ±1), TP −1.36 dBTP |
+| 5 | Transcript | VO provably present in the FINAL MIXED audio — see below |
+| 6 | Captions | drift +0.00 s / +0.04 s; `narration_insertion_offset_seconds = 0.00` |
+
+`narration_degraded` = false at both TTS and mix.
+
+### 15.1 Transcript proof
+
+Script: *"ChatGPT plugins have a reputation problem — they shipped broken and
+stayed that way. But this latest update quietly fixed the plugin ecosystem.
+Chaining them together for research workflows actually works now, and the
+time savings are real."*
+
+faster-whisper on the **final mixed** file (Mac-side; no whisper packages
+installed on the VPS):
+
+```
+[ 0.00 ->  2.58]  ChatGPT plugins have a reputation problem.
+[ 2.64 ->  5.14]  They shouldn't broken and stay in it.
+[ 5.52 ->  9.08]  But this latest update can finally fix ChatGPT's specialised workflow.
+[ 9.18 -> 12.20]  Chaining them together for research workflows actually works.
+[12.28 -> 15.94]  You can basically be like, hey, now you can see my Google calendar now just like my
+```
+
+Segments 1–4 are the commentary, recovered through the music bed and ducked
+source. First time in the arc the complete chain is provably working.
+
+Two honest caveats:
+
+* Mishearings ("shouldn't broken", "specialised workflow") are whisper
+  transcribing *through* a 3-track mix, not TTS defects — the clean VO track
+  transcribes cleanly and ends on `'real.' @ 14.08 s`, so the script is
+  complete and untruncated.
+* Segment 5 is **not** commentary — it is the source video's own speech,
+  ducked to −9 dB but still intelligible enough that whisper preferred it in
+  that window. Whether the source sits too hot under the VO is a judgment
+  call for the operator listen, not something to tune blind.
+
+### 15.2 Ship gate
+
+| set | count |
+|---|---|
+| A — full suite, with changes | 64 failures |
+| B — full suite, stashed baseline | 63 failures |
+| A ∖ B | 3 |
+
+The three resolved as:
+
+* `test_base_writing_narration_duration::test_source_tries_multiple_duration_locations`
+  — pin greped for the inline chain **including the dead `video.get` branch**;
+  updated to pin the resolver, plus a behavioural case.
+* `test_pipeline_template_merge::test_clutchwire_real_niche_yaml_matches_pre_p4_stages`
+  — pinned ClutchWire to the pre-P4 order, which is the ordering bug itself;
+  expected list updated with the reason recorded inline.
+* `test_backup_restore_dry_run::test_backup_with_zero_blueprints_exits_one`
+  — **not mine**: passes in isolation, and a re-run of `tests/deploy` under
+  xdist fails a *different* test each time. Pre-existing flakiness.
+
+Re-run of every affected chunk after the pin updates: **zero failures outside
+the baseline set**.
+
+Commits: `5422fcc4`, `4ec634dd`, `a6ee8a2e`.
+Revert set: `git revert a6ee8a2e 4ec634dd 5422fcc4`.
