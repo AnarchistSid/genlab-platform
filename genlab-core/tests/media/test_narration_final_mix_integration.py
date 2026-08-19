@@ -263,3 +263,103 @@ class TestFinalMixContainsVO:
             "the control is not clean, so the presence assertion would be "
             "measuring leakage instead of narration"
         )
+
+
+class TestDuckingDynamics:
+    """NARR-10 (2026-08-20) — the gap that let a duck-less graph ship.
+
+    ``TestFinalMixContainsVO`` asserts the voice-over ARRIVES. It passed
+    unchanged on a graph with no ducking of any kind, which is exactly how a
+    render with two simultaneous speech layers reached the operator listen and
+    failed there ("too much overlapped audio").
+
+    Lesson, recorded: **a presence test passes on a graph with no dynamics.
+    Assert the behaviour, not the ingredient.**
+
+    Method note — why this measures WITHIN one render rather than across two:
+    the obvious test is "source is quieter in the VO-on render than the VO-off
+    render." That does not work. ``loudnorm`` runs only on the narration
+    branch, so it lifts the whole mix toward -14 LUFS and the source band
+    measures ~4.5 dB *louder* in the VO-on render despite being ducked 11 dB
+    harder. Measured, not assumed. The intelligibility-relevant quantity is how
+    far the source sits below the voice in the single file a listener hears.
+    """
+
+    def test_voice_sits_well_above_source_in_final_mix(self, tmp_path: Path):
+        """VO must dominate the source clip's own audio.
+
+        Threshold derived by measurement on this exact fixture, not invented:
+
+            source at  -9 dB (pre-NARR-10)  ->  VO above source =  8.30 dB
+            source at -20 dB (NARR-10)      ->  VO above source = 17.10 dB
+
+        15 dB sits between them — it fails the graph that shipped the defect
+        and passes the fix with ~2 dB of headroom.
+        """
+        ffmpeg = _ffmpeg()
+
+        source = tmp_path / "source.mp4"
+        music = tmp_path / "music.mp3"
+        vo = tmp_path / "vo.mp3"
+        out = tmp_path / "narrated.mp4"
+
+        _make_source_video(ffmpeg, source)   # source audio = 200 Hz
+        _make_tone(ffmpeg, music, 440)
+        _make_tone(ffmpeg, vo, _VO_HZ)       # 1800 Hz
+        _run(build_ffmpeg_command(
+            AudioMixSpec(
+                source_video_path=source,
+                music_bed_path=music,
+                output_path=out,
+                # Deliberately pass the pre-NARR-10 value: the narration branch
+                # must override it. If the override regresses, this fails.
+                source_duck_db=-9,
+                narration_audio_path=vo,
+            ),
+            ffmpeg,
+        ))
+
+        source_db = _band_energy_db(ffmpeg, out, 200)
+        vo_db = _band_energy_db(ffmpeg, out, _VO_HZ)
+        margin = vo_db - source_db
+
+        assert margin >= 15.0, (
+            f"source clip audio is only {margin:.1f} dB below the voice-over "
+            f"(source={source_db:.1f} dB, VO={vo_db:.1f} dB). Below ~15 dB the "
+            "source's own dialogue stays intelligible and the reel carries two "
+            "competing speech layers — the exact defect that failed the "
+            "operator listen on 2026-08-19."
+        )
+
+    def test_caller_source_duck_is_overridden_on_narration_path(self):
+        """The narration branch ignores the audio_ducking bandit arm.
+
+        Pinned because it is a real behavioural override: whatever
+        ``source_duck_db`` the caller supplies, the narrated graph emits the
+        fixed deep duck. Discovering this by surprise later would be worse than
+        the override itself.
+        """
+        from genlab_core.media.audio_replacer import (
+            _NARRATION_SOURCE_DUCK_DB,
+            build_audio_mix_filtergraph,
+        )
+
+        for caller_value in (-9, -12, -15):
+            graph = build_audio_mix_filtergraph(
+                caller_value, -6, include_narration=True,
+            )
+            assert f"volume={_NARRATION_SOURCE_DUCK_DB}dB[src]" in graph
+            assert f"volume={caller_value}dB[src]" not in graph
+
+    def test_no_sidechain_in_shipped_graph(self):
+        """Spec, code and docs reconciled to one truth (NARR-10).
+
+        The §3.2 spec called for ``sidechaincompress``; it was never
+        implemented while the docstring described it for two days. The spec is
+        retired, so assert the absence deliberately rather than leaving the
+        discrepancy available to drift back.
+        """
+        from genlab_core.media.audio_replacer import build_audio_mix_filtergraph
+
+        graph = build_audio_mix_filtergraph(-9, -6, include_narration=True)
+        assert "sidechaincompress" not in graph
