@@ -517,6 +517,23 @@ class BaseWritingStrategy(WritingStrategy):
         content["written"] = True
         content["written_by"] = "llm"
 
+        # NARR-06 fix (2026-08-19): propagate narration_script from the
+        # writer result into the content dict. Prior to this line, the
+        # LLM was emitting narration_script (verified via standalone
+        # reproduction — response JSON contained 350+ chars of legit
+        # on-topic commentary), but this cherry-pick propagator only
+        # copied hook + instagram_caption. narration_script fell on
+        # the floor, GenerateAudio saw empty content["narration_script"],
+        # marked the blueprint narration_degraded=true with reason
+        # script_generation_failed. Two real-fire recurrences over 2
+        # days (NARR-04 manual + NARR-05 02:30 UTC) traced to this
+        # missing line.
+        #
+        # Same class-of-bug as source_attribution Bug C (line ~555):
+        # writer emits a field, propagator forgets it, downstream
+        # consumer sees empty. Fix pattern: explicit assignment here.
+        content["narration_script"] = result.get("narration_script", "")
+
         # Observability: log when the LLM's FINAL hook (post-retry if
         # retry fired) is still near-dupe to a recent one.
         # push_to_backlog.py:2408 drops such hooks at persist time
