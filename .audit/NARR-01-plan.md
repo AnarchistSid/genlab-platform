@@ -376,3 +376,321 @@ CLAUDE.md's "STRICT VIDEO REQUIREMENTS" section (bt709, 1080×1920, H.264, 15-60
 | **TOTAL** | | **~555** |
 
 No changes to base classes, no cross-niche fanout beyond BB. Every non-canary niche continues with narration.enabled=false default → byte-identical audio to today.
+
+---
+
+## 12. NARR-05 (2026-08-19) — the VO never reached the mix
+
+### 12.1 Root cause: producer scheduled after its only consumer
+
+`GenerateAudio` ran at **stage 17**; its only consumer,
+`phase4_visual_render` → `apply_post_render_transformations` →
+`audio_replacer`, ran at **stage 15**. `media["audio_path"]` was therefore
+always `None` at mix time and `transformation_orchestrator` fell through to
+the legacy 2-input path. Every NARR-01 component was individually correct;
+only the assembled order was wrong.
+
+Confirming production output — `journalctl`, ai_creators run
+`ai_creators_20260819_072015` (07:20 UTC / 12:50 IST):
+
+```
+13:02:42  [audio_replacer] mixing: source=00_trim.mp4
+          music=technology__tech_technology_484304.mp3 (duck=-9 music_bed=-20)
+13:03:08  [transformation_orchestrator] ai_creators complete
+13:03:45  [Pipeline] Running 2 stages in parallel: ['RenderTextOverlays','GenerateAudio']
+13:03:56  [GenerateAudio] 1 generated, 0 skipped, 0 errors
+```
+
+The mix ran **74 s before the VO existed**, with two inputs, and no
+`narration engaged` line anywhere in the journal.
+
+### 12.2 Why it stayed invisible
+
+`transformation_orchestrator`'s "no VO path" branch logged **nothing**.
+The storytime-mutex and already-degraded branches logged; the branch that
+actually fired every single time did not. Meanwhile the run report said
+`[GenerateAudio] 1 generated, 0 skipped, 0 errors`. Same shape as rule #19.
+
+### 12.3 Changes shipped
+
+| File | Change |
+|---|---|
+| `config/pipeline_template.yaml` | `GenerateAudio` hoisted above `phase4_visual_render`, after `ViralityScoring`; left the `post_render` parallel group |
+| `pipeline/stages/generate_audio.py` | VO filename keyed on `story_id` (`candidate_id` is assigned at stage 21); `run_id` read from `context["run_id"]`; stamps `content["narration_expected"]` |
+| `strategies/base_visual_render.py` | forwards `narration_expected` into `blueprint_context` |
+| `media/transformation_orchestrator.py` | WARN on both no-VO branches, gated on `narration_expected` |
+| `media/audio_replacer.py` | `-ar 48000` on the narration branch — `loudnorm` was emitting 96 kHz |
+| `tests/pipeline/test_narration_stage_order.py` | order pin + VO-filename pins (7 cases) |
+| `tests/media/test_narration_final_mix_integration.py` | real-ffmpeg final-mix-contains-VO + 48 kHz + control-cleanliness (3 cases) |
+
+### 12.4 Dependency evidence for the hoist
+
+`GenerateAudio`'s entire read-set resolves at or before stage 11:
+`narration_script` + `caption` from the writer (`base_writing.py:238,526`),
+`hook` from the hook strategy, clip duration from
+`download_top_videos.py:720`. Stages 15–16 write only `media["render_error"]`,
+`story["arm_ids_by_dimension"]`, `media["transform_reject_reason"]`,
+`media["overlaid_path"]`, `media["rendered_path"]` — zero intersection.
+
+### 12.5 The `unknown_audio.mp3` collision
+
+`out_path` was keyed on `bp["candidate_id"]`, first assigned at
+`push_to_backlog.py:2310` — four stages downstream. The key never existed at
+synthesis time, so prod held exactly **one file per niche, ever**:
+`/tmp/genlab_audio/{niche}_manual/unknown_audio.mp3`. `_manual` came from a
+second defect: `run_id` was read from `context["run_stats"]["run_id"]`, which
+no stage sets (the runner writes `context["run_id"]`,
+`pipeline_runner.py:358`).
+
+Inert while nothing consumed the path. Hoisting `GenerateAudio` above the
+render makes the mix consume it, at which point a multi-story run would mix
+story N's VO into story N−1's reel. Fixed as part of the hoist, not after it.
+
+### 12.6 PRE-VERIFICATION (2026-08-19, story_0 = `03348d8f9e0e30d0`)
+
+Real assets from the 07:20 UTC scheduled run. Not a natural fire — the VO
+path was supplied explicitly to reproduce the post-fix wiring.
+
+```
+control (2-input, = what prod ships today) : /opt/genlab/.tmp/narr05_preverify/PREVERIFY_control_no_vo.mp4
+narrated (3-input, = post-fix)             : /opt/genlab/.tmp/narr05_preverify/PREVERIFY_narrated.mp4
+```
+
+| speech band 1.0–3.4 kHz | control | narrated |
+|---|---|---|
+| mean_volume | −40.6 dB | **−27.7 dB** |
+| max_volume | −20.3 dB | **−7.7 dB** |
+
+### 12.7 OPEN RISK — VO overruns the clip by 38%
+
+**Not fixed. Gates the value of Thursday's evidence run.**
+
+* VO duration **29.86 s**; rendered reel **18.60 s**.
+* The writer sized the script to the **30 s default** from `e1f508e9`
+  (`base_writing.py:470-480`) because the story shape carried no
+  `duration_seconds` — 29.86 s lands exactly on that default.
+* `_check_vo_overrun` (A4) does **not** rescue this: it returns early when no
+  clip duration is resolvable (`generate_audio.py:296`), which is the same
+  condition that triggered the 30 s default. No `vo_overrun` marker is set.
+* `amix duration=first` therefore truncates the VO at the clip length.
+
+Measured on the real VO — the truncated tail is speech, not silence:
+
+| VO segment | mean | max |
+|---|---|---|
+| 0 → 18.5 s (survives) | −35.1 dB | −12.2 dB |
+| 18.5 → 29.86 s (**cut**) | −37.2 dB | −13.7 dB |
+
+**Expected Thursday outcome without a fix**: a reel that *does* carry
+narration, cut off mid-sentence ~11.4 s early, with no degradation marker
+and no WARN. The A4 probe was designed to catch exactly this and cannot,
+because its guard shares a root cause with the defect it guards.
+
+Fix direction (task, not shipped): resolve the fit window from the **rendered
+reel length**, not the source video / 30 s default — and make `_check_vo_overrun`
+treat "no resolvable duration" as a degrade signal rather than a silent return.
+
+### 12.8 Option C
+
+Queued to **#222** as the eventual structural shape. Its definition is not
+reproduced here — it was not available in this session and is deliberately
+not paraphrased. Paste it in and it will be written up under this heading.
+
+---
+
+## 13. Propagator structural fix — queued, next structural cycle
+
+Not under deadline. Written up here so the reasoning survives the session.
+
+### 13.1 The propagator is a chain of four gates, not one
+
+Framing this as "base_writing's propagator eats fields" understates it. A new
+writer output field must be manually added at **four** sequential
+explicit-assignment gates before it reaches an audience:
+
+| # | Gate | Site | Failure if forgotten |
+|---|---|---|---|
+| 1 | writer result → `story["content"]` | `base_writing._write_story_llm:514-602` | field never leaves the writer |
+| 2 | `content` → blueprint record | `push_to_backlog.py:2578-2581` (explicit pick, **not** a splat) | field lives in `content`, absent from the blueprint |
+| 3 | blueprint dict → DB column | `PROMOTED_COLUMNS` (`storage/postgres.py:158`) | value silently lands in `extra` JSONB, every `WHERE column = X` misses it |
+| 4 | consumer read | e.g. `GenerateAudio` reading `content["narration_script"]` | reads empty, degrades |
+
+The three eaten fields died at gate 1. Rule #28's four columns
+(`action_taken_source`, `hook_classifier_score`, `variant_type`,
+`variant_payload`) died at gate 3. Same class, different hop.
+
+**This is why option (a) alone is the wrong pick.** Default-propagating into
+`content` fixes gate 1 and leaves 2–4 untouched — and it makes the *next*
+failure harder to diagnose, because the field would now appear correctly in
+`content` and vanish silently later. Fixing one gate of four buys false
+confidence, which is worse than the current honest breakage.
+
+### 13.2 Why these three fields specifically
+
+`source_attribution`, `narration_script`, `hook_style`, `caption_segments`
+share one property: they are **pass-through** — no rename, no restructure, no
+truncation.
+
+The fields that have *never* been eaten are the transformed ones:
+`instagram_caption` → `content["caption"]`; `twitter_content` →
+`content["x_twitter"]["tweet"][:280]`. A transformed field has a destination
+someone had to write code for. A pass-through field looks like it needs no
+code, which is exactly why the code gets forgotten.
+
+That also rules out a naive `content.update(result)` for option (a) — the
+propagator transforms, so a blind update would leave `instagram_caption` and
+`twitter_content` sitting in `content` as raw duplicates of already-transformed
+values, in a second shape, persisted.
+
+### 13.3 Step 0 — there are already three partial declarations
+
+Before adding any list, collapse the ones that exist. None is canonical and
+they have already drifted:
+
+* `_SENTENCE_CASE_FIELDS` — 7 keys (`video_content_writer.py:32`)
+* `_REQUIRED_LLM_FIELDS` — 6 keys (`:286`)
+* the prompt's `"Return JSON with keys: …"` string — 6 keys (`:988`), and it
+  **omits `narration_script`**, which is appended conditionally at `:947`
+
+None includes `hook_style`, `caption_segments`, or `source_attribution` — two
+of the fields that actually died. Adding a DROPLIST (a) or a schema fixture
+(b) as a *fourth* hand-maintained list is itself
+`[[class-of-bug-shared-contract-n-implementers-silent-divergence]]`.
+
+Step 0: one canonical declaration of the writer's output surface; derive the
+sentence-case set, the required set, and the prompt text from it.
+
+### 13.4 Recommendation — (b), scoped end-to-end, with (a) at gate 1 only
+
+**(b) is the load-bearing half.** A contract test asserting a field survives
+*to the consumer*, not just to `content`, is the only form that covers all
+four gates and fails at authorship time. Scope it: for every key in the
+canonical declaration, assert it is reachable at the blueprint record, and
+that anything DB-bound appears in `PROMOTED_COLUMNS` — which also subsumes the
+existing rule #28 schema pin.
+
+**(a) is worth doing at gate 1, narrowly.** Persistence risk was checked and
+is low: `push_to_backlog` picks explicitly rather than splatting `content`
+(`:2578-2581`), so a new pass-through key cannot collide with a promoted
+column name. Invert the default so pass-through survives, and derive the
+droplist from the transformed-destination set that already exists implicitly
+in `_write_story_llm` — do not hand-maintain it.
+
+Net effect: a new writer field survives gate 1 by default, and if it is
+DB-bound and the author forgot gates 2–3, CI says so before merge.
+
+### 13.5 Option C (#224) folds in here
+
+**Extract `audio_replacer` from the visual-render orchestrator into its own
+post-`GenerateAudio` stage.**
+
+Same root shape as the propagator problem: a producer/consumer contract held
+together by something nothing enforces. NARR-05's hoist made the ordering
+correct but left it **positional** — a line's index in a YAML list is the only
+thing keeping it true, and `test_narration_stage_order.py` guards exactly that
+one instance. Any new stage inserted between #15 and #16, or a niche that
+writes its own `pipeline.stages` (gaming does), reopens it.
+
+Extraction makes the audio mix a stage with declared inputs, so the dependency
+becomes structural rather than positional — the pipeline can refuse to run a
+mix stage whose VO input is unsatisfied, instead of silently mixing two tracks
+and logging nothing.
+
+Sequencing: extraction should land **after** the canonical-declaration work in
+§13.3, because a stage with declared inputs needs a declaration to point at.
+
+**Tracker ruling (operator, 2026-08-19)**: **#222** is the whole §13
+structural program — Step-0 canonicalization → gate-1 inversion with derived
+droplist → contract-to-consumer test → audio-stage extraction, sequenced per
+§13. **#224** is the NARR-08 tactical set (§14), closing on pre-verification
+round 2. The earlier "Option C from #224" attribution was operator error;
+#222 is correct.
+
+---
+
+## 14. NARR-08 (2026-08-19) — tactical set (#224)
+
+Four bugs, one arc, all in stage connective tissue, none visible to a
+component test:
+
+| # | Bug | Status |
+|---|---|---|
+| 1 | propagator drop (`narration_script` never left the writer) | fixed `ae76e975` |
+| 2 | stage-order inversion (producer 4 stages after consumer) | NARR-08 |
+| 3 | filename collision (`unknown_audio.mp3`, one per niche ever) | NARR-08 |
+| 4 | VO truncation (38% of script cut, silently) | NARR-08 |
+
+### 14.1 The lesson, stated once
+
+> **Pass-through fields die; transformed fields survive, because
+> transformation forces a destination to be written. When adding any field
+> that "needs no code," that is the signal it needs a test.**
+
+> **The mix ran 74 seconds before the voice-over existed.**
+
+### 14.2 Addition A — the truncation pair
+
+**A.1 — writer sizes to the render, not the file.** The natural fix (ffprobe
+the downloaded clip) would have been *worse than the bug*: story_0's clip on
+disk is **356.6 s**, so the budget would have gone 30 s → 354 s. The renderer
+trims to `highlight_moment.window_seconds` (`visuals.yaml:129`, BB = 16 s)
+before anything ships — 16 s + a ~2.6 s outro is the 18.60 s reel observed.
+
+Resolution now models the renderer: trim window (clamped by a shorter clip) →
+explicit metadata → ffprobe of the clip → 30 s, now a WARN and no longer
+load-bearing. Sized to `window_seconds` and **not** window+outro on purpose:
+the config comment at `visuals.yaml:118-123` records that `motion_compositor`
+silently skips intro/outro on many renders, landing the reel at exactly
+`window_seconds`. Verified: story_0 resolves **16.0 s**.
+
+**A.2 — mix-time hard guard.** `vo_overruns_reel()` probes the trimmed reel
+and the VO at the mix callsite and degrades with `vo_overrun` when the VO
+exceeds the reel by more than **0.5 s**.
+
+Tolerance is 0.5 s, not the writer's 2.0 s `tail_buffer_seconds`, because the
+two answer different questions: the buffer asks "is there comfortable room
+for the music to carry out?" before synthesis; this asks "will a listener
+hear a sentence get cut off?" after, on measured durations. TTS routinely
+carries 200–400 ms of trailing silence, and clipping that costs nothing.
+
+It is independent of the A4 probe **by construction**: A4 returns early when
+no clip duration resolves — the same condition that makes the writer fall
+back to 30 s and oversize the script. A4's guard fails on exactly the inputs
+that need guarding. `vo_overruns_reel` takes only file paths, and a test pins
+that signature so metadata can never creep back in.
+
+**A.3 — the missing log line.** Both no-VO fall-through branches now WARN,
+gated on `narration_expected`.
+
+### 14.3 Addition B — the hoist is positional, so verify per niche
+
+Four niches inherit the backbone; **gaming writes its own `pipeline.stages`
+and does not pick up template edits**. Resolved through the real loader for
+all five:
+
+| niche | GenerateAudio | render | before? |
+|---|---|---|---|
+| ai_creators | #15 | #16 | yes |
+| sports | #15 | #16 | yes |
+| movies | #15 | #16 | yes |
+| anime | #16 | #17 | yes |
+| gaming | ~~#21~~ → **#19** | #20 | fixed here |
+
+Gaming needed care rather than the same edit. `GenerateGamingAudio` reads
+`media["rendered_path"]` (`generate_gaming_audio.py:113`) and skips any story
+without one — hoisting it alongside the generic stage would have produced
+zero commentary, silently, with no failing test. It stays after the render;
+it writes `commentary_audio_path`, a different key, so the two never collide.
+Both directions are pinned.
+
+### 14.4 Out of scope, filed
+
+* **Gaming cannot produce narration at all** — `render_gaming_video.py:410`
+  builds a `blueprint_context` omitting all four NARR-01 keys that
+  `base_visual_render` passes. Order is fixed here so the wire works when it
+  lands; the wire itself is a separate task. Instance of "N implementers,
+  wire only in one".
+* **`whisper_sync` canary dependency** — `transcribe_words` returns `None`
+  without `faster_whisper`, which is absent from the VPS venv. Verify against
+  the caption path's actual package per the four-step canary heuristic before
+  claiming a regression. Next cycle.
