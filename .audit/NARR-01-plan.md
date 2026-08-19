@@ -820,3 +820,86 @@ baseline, and it will eventually eat a ship gate for real. Next cycle.
    diagnosis** — the honest reading is "the run has not fired yet."
 
 Parity at intake: VPS HEAD `5f4e9ca4` == origin/main.
+
+---
+
+## 17. NARR-09 Phase 0.4 / 0.5 — LUFS finding RETRACTED (2026-08-19)
+
+### 17.1 Retraction
+
+The −28.79 LUFS claim was a **harness artifact, not a pipeline defect**.
+
+It was measured on exactly one file — `PREVERIFY_control_no_vo.mp4` — which I
+constructed during round-1 pre-verification by calling `replace_audio_for_reel()`
+directly. That bypasses `apply_post_render_transformations()`, and the loudness
+pass lives in that wrapper:
+
+```
+post_render_transform.py:202   _normalize_loudness_in_place(Path(result_path), niche_id=niche_id)
+```
+
+Unconditional, outside every narration branch, added QB-FIX-01 F3a 2026-08-06.
+Its docstring records the placement as deliberate — after `music_mood` +
+`audio_ducking` so ducking cannot undo it. The legacy path normalizes in
+production; my harness skipped the stage that does it.
+
+### 17.2 The measurement set (stands in the record)
+
+Production renders, 5 niches, 2026-08-11 → 08-19, 18 files:
+
+| niche | measured LUFS |
+|---|---|
+| ai_creators | −14.95, −14.97, −15.01, −13.68, −13.77 |
+| movies | −13.16, −13.97, −14.30, −14.90 |
+| sports | −14.08, −14.10 |
+| anime | −15.75, −15.78 |
+
+Live published asset, fetched Mac-side via yt-dlp — YouTube `hZTTDpQPe2w`,
+ai_creators, published 2026-08-19 06:36 UTC:
+
+```
+−13.79 LUFS   TP −0.95 dBTP   aac 48000 Hz stereo   18.65 s
+```
+
+**Target −14; live −13.79; renders −13.2 to −15.8. No gap.**
+
+### 17.3 Consequences
+
+* **0.5 does not apply.** Its premise ("if 0.4 confirms on live assets") is
+  false. No confound note enters #219 — narrated and non-narrated reels both
+  publish near −14, so the watch's treatment is narration alone and
+  attribution stays clean.
+* **No legacy loudnorm fix enters the next-cycle queue.** There is nothing to
+  fix. The legacy path stays frozen because it works, not as a precaution.
+
+### 17.4 A.3 / B.2 branch note — calibration baseline
+
+Local ai_creators render **−14.95** vs same-day live YouTube asset **−13.79**:
+platform transcode moved it ~1.2 dB. Thursday's narrated live asset landing
+within ~1–1.5 dB of its local render is normal processing, not a pipeline
+finding.
+
+### 17.5 Filed into #222 (operator wording, verbatim)
+
+> final-asset gate — one loudness/TP/sample-rate/duration assertion on the
+> file as-published, catching the append-after-normalize class regardless of
+> future stage order; audio sibling of the integration smoke test.
+
+Origin: `03348d8f9e0e30d0_reel_with_intro.mp4` measured **TP +3.42 dBTP**,
+above 0 dBFS and well over the −1.5 target, while its siblings sat at −0.39
+and −1.14. The hook_thumbnail intro concat runs *after*
+`_normalize_loudness_in_place`, so a prepended segment can push true peak
+positive with nothing downstream to catch it. Observation, not urgent — one
+sample, intro-prepended variant only, and the live asset measured −0.95.
+
+### 17.6 #218 verdict slots — still open
+
+| # | Subject | Verdict |
+|---|---|---|
+| 1 | Round-2 pre-verification (`PREVERIFY2_narrated.mp4`) | **PENDING** |
+| 2 | Thursday publish candidate | **PENDING** (not yet produced) |
+
+The final re-invocation arrived as the **unfilled template**: all three
+mutually exclusive verdict lines present, `[your exact words]` and
+`[what's wrong]` still literal placeholders. No verdict has been given, so
+A.1 onward remains blocked per Phase 0.1.
