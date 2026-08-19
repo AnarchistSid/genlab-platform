@@ -665,6 +665,7 @@ class BaseWritingStrategy(WritingStrategy):
                     else extra_instructions
                 ),
                 narration_target_seconds=retry_target,
+                narration_wpm=wpm,
             )
             candidate = (retry.get("narration_script") or "").strip()
         except Exception as exc:  # noqa: BLE001
@@ -711,6 +712,14 @@ class BaseWritingStrategy(WritingStrategy):
         # writer prompt is byte-identical to pre-NARR-01. No exception
         # bubbles up.
         narration_target_seconds = None
+        # Same rate the validator will check against — see
+        # _build_narration_hint's NARR-11 note on why these must not drift.
+        try:
+            from genlab_core.publishing.narration_gate import get_tts_rate_wpm
+
+            _narration_wpm = get_tts_rate_wpm(self._niche_config)
+        except Exception:  # noqa: BLE001
+            _narration_wpm = 150
         try:
             from genlab_core.publishing.narration_gate import (
                 is_narration_enabled_for,
@@ -759,6 +768,7 @@ class BaseWritingStrategy(WritingStrategy):
             existing_hooks=existing_hooks,
             extra_instructions=extra_instructions,
             narration_target_seconds=narration_target_seconds,
+            narration_wpm=_narration_wpm,
         )
 
         # Optional retry on near-dupe hook — turns the observability

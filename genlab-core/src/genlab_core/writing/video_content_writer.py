@@ -392,18 +392,24 @@ def _complete_and_parse_json(
         return parsed
 
 
-def _build_narration_hint(target_seconds: float) -> str:
+def _build_narration_hint(target_seconds: float, wpm: int = 150) -> str:
     """NARR-01 narration prompt block. Injected only when the caller
     passed a target duration; otherwise the writer's system prompt is
     byte-identical to pre-NARR-01 output.
 
-    Word-cap derivation: 150 wpm baseline (matches
-    ``narration_validator.project_tts_duration_seconds``) with a 2s
-    tail buffer for the music bed to carry out.
+    Word-cap derivation: ``wpm`` MUST be the same rate the validator will
+    check against, with a 2s tail buffer for the music bed to carry out.
+
+    NARR-11 (2026-08-20): ``wpm`` became a parameter because it had drifted.
+    The cap was hardcoded at 150 while the validator moved to a measured
+    per-tier rate (Inworld 141). A script obeying a 150-wpm cap of 35 words
+    projects to 14.9s at 141 wpm against a 14.0s budget — so every compliant
+    script was rejected, and so was every retry, which inherits the same
+    mismatch. Two implementers of one contract; keep them fed from one value.
     """
     tail_buffer_seconds = 2.0
     fit_seconds = max(0.0, target_seconds - tail_buffer_seconds)
-    word_cap = int(fit_seconds * 150 / 60)  # 150 wpm
+    word_cap = int(fit_seconds * wpm / 60)
     return (
         "NARRATION SCRIPT (voice-over commentary read aloud by TTS):\n"
         f"  - Target duration: fits into ≈ {fit_seconds:.1f} seconds of clip time\n"
@@ -430,6 +436,7 @@ def write_video_content(
     existing_hooks: list[str] | None = None,
     extra_instructions: str = "",
     narration_target_seconds: float | None = None,
+    narration_wpm: int = 150,
 ) -> dict:
     """Generate platform-specific content for a trending video.
 
@@ -927,7 +934,7 @@ def write_video_content(
             # Word cap = target_seconds × 150 / 60. We express it as a
             # word cap in the prompt because word count is easier for
             # the LLM to self-check than time.
-            _build_narration_hint(narration_target_seconds)
+            _build_narration_hint(narration_target_seconds, narration_wpm)
             if narration_target_seconds is not None
             else ""
         )

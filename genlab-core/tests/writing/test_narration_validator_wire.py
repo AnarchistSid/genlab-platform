@@ -188,3 +188,54 @@ class TestRateConfig:
         )
         monkeypatch.setenv("GENLAB_INFSH_TTS_ENABLED", "0")
         assert get_tts_rate_wpm(None) == 150
+
+
+class TestPromptCapMatchesValidatorRate:
+    """The prompt's word cap and the validator's rate are one contract.
+
+    NARR-11 created this divergence and it blocked round 3 entirely: the cap
+    was hardcoded at 150 wpm while the validator moved to a measured 141, so
+    every compliant script projected over budget and was rejected — including
+    every retry, which inherits the mismatch.
+    """
+
+    def test_cap_computed_at_the_validator_rate_fits_the_budget(self):
+        import re
+
+        from genlab_core.writing.narration_validator import (
+            project_tts_duration_seconds,
+            validate_narration_script,
+        )
+        from genlab_core.writing.video_content_writer import _build_narration_hint
+
+        target, wpm, tail = 16.0, 141, 2.0
+        hint = _build_narration_hint(target, wpm)
+        cap = int(re.search(r"HARD word cap: (\d+)", hint).group(1))
+
+        at_cap = " ".join(["word"] * cap)
+        projected = project_tts_duration_seconds(at_cap, wpm)
+        assert projected <= target - tail, (
+            f"a script at the prompt's own cap ({cap} words) projects "
+            f"{projected:.2f}s against a {target - tail:.1f}s budget — the "
+            "prompt is asking for something the validator will always reject"
+        )
+
+        ok, reason = validate_narration_script(at_cap, target, wpm, tail)
+        assert ok, f"script at the advertised cap was rejected: {reason}"
+
+    def test_mismatched_rate_is_what_breaks_it(self):
+        """Characterise the defect so the fix above is anchored."""
+        import re
+
+        from genlab_core.writing.narration_validator import (
+            project_tts_duration_seconds,
+        )
+        from genlab_core.writing.video_content_writer import _build_narration_hint
+
+        cap_150 = int(
+            re.search(r"HARD word cap: (\d+)", _build_narration_hint(16.0, 150)).group(1)
+        )
+        assert project_tts_duration_seconds(" ".join(["w"] * cap_150), 141) > 14.0, (
+            "the 150-wpm cap must overrun a 141-wpm budget — if this stops "
+            "holding, the rates have converged and this test is obsolete"
+        )
