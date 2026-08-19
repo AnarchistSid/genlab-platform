@@ -903,3 +903,85 @@ The final re-invocation arrived as the **unfilled template**: all three
 mutually exclusive verdict lines present, `[your exact words]` and
 `[what's wrong]` still literal placeholders. No verdict has been given, so
 A.1 onward remains blocked per Phase 0.1.
+
+---
+
+## 18. NARR-10 (2026-08-20) — mix retune shipped; round 3 BLOCKED
+
+### 18.1 Shipped
+
+| commit | change |
+|---|---|
+| `6a1dc447` | source −9dB → **−20dB** on the narration path; §3.2 sidechain formally retired; spec/code/docs reconciled |
+| `2a85564f` | ducking-dynamics tests — VO-above-source ≥15 dB, override pin, sidechain-absent pin |
+| `818d3354` | outro music bed replaces the silent CTA card (narration path only) |
+
+Measured on an identical fixture: source −9dB → VO **8.30 dB** above source;
+source −20dB → VO **17.10 dB** above source. The new test was validated by
+inversion — reverting the constant reproduces `8.3 >= 15.0` failure.
+
+Deviation recorded: the directive specified the outro bed "at −28dB". A raw
+offset does not work because `loudnorm` runs upstream, so −28 dB is measured
+against the bed asset's arbitrary level — it landed at −52.1 dB against a
+−24.1 dB programme, still scored as silence. Implemented as a **LUFS target
+(−24.0)** instead, which places the bed a predictable ~10 LU under a −14 LUFS
+programme regardless of asset.
+
+### 18.2 Round 3 could not produce a narrated artifact
+
+Two consecutive full-chain runs on story_0 both degraded:
+
+```
+run A: script 265 chars · predicted 16.0s · actual VO 16.98s · reel 16.07s → vo_overrun
+run B: script 271 chars · predicted 16.0s · actual VO 16.88s · reel 16.07s → vo_overrun
+```
+
+Both correctly degraded to the legacy 2-input mix. **This is the first live
+firing of the NARR-08 mix-time guard** — the confirming output that
+`4ec634dd` said it was waiting for. The guard works.
+
+### 18.3 ROOT CAUSE — the NARR-01 script validator was never wired
+
+`writing/narration_validator.py` implements the 5-rule validator, including:
+
+```python
+projected_seconds = project_tts_duration_seconds(stripped, wpm)
+fit_budget = clip_duration_seconds - tail_buffer_seconds
+if projected_seconds > fit_budget:
+    return False, "script_too_long"
+```
+
+**`validate_narration_script` has zero production callers.** Repo-wide grep
+returns only its own test file (20 pin tests) and two comment references in
+`video_content_writer.py`. It is never invoked by `base_writing`, the writer,
+or any stage.
+
+Consequences:
+
+* No narration script is length-checked before synthesis. The writer produced
+  **16.0s projected against a 14.0s budget** in both runs and nothing objected.
+* Four documented degradation reasons are **unreachable**: `script_too_long`,
+  `script_contained_urls`, `script_contained_affiliate_cta`,
+  `script_first_person_claim`.
+* URLs, affiliate CTAs and unsupported first-person claims in narration are
+  never rejected — a compliance surface, not just a fit one.
+* TTS spend is incurred producing oversized VO that the mix then discards.
+* The NARR-08 mix-time guard is doing work the validator should have done
+  earlier and cheaper — it is the only thing standing between an oversized
+  script and a truncated reel.
+
+Same class as `inference_utilities` (built, zero callers) and the propagator
+gates: **built, tested, never wired.**
+
+Secondary: TTS runs ~6% slower than the `wpm=150` model (predicted 16.0s →
+actual 16.88–16.98s), so even a correctly-validated script needs headroom.
+
+### 18.4 Status
+
+* NARR-10 Steps 1–3: **complete, shipped, deployed** (VPS parity `818d3354`).
+* Step 4 round-3 pre-verification: **BLOCKED** — no narrated artifact can be
+  produced until the validator is wired and the writer respects its budget.
+* Step 5 operator listen: **not reached**.
+* #218 round-2 verdict recorded: **FAIL on mix — "too much overlapped audio."**
+
+Out of NARR-10 scope (mix graph / docs / tests / outro bed) → filed, not fixed.
