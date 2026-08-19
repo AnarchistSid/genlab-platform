@@ -217,6 +217,144 @@ def _get_source_duck_db(config, choices) -> int:
         return -12
 
 
+# NARR-08 (2026-08-19): how much longer than the reel a voice-over may run
+# before the mix refuses it.
+#
+# 0.5s and not 0: TTS output routinely carries 200-400ms of trailing silence
+# after the final word, and ``amix duration=first`` clipping that silence
+# costs nothing audible. Past ~0.5s the cut lands inside speech — measured on
+# story_0, where the truncated tail carried the same speech energy as the
+# surviving audio (-37.2 dB mean vs -35.1 dB), i.e. words, not silence.
+#
+# Deliberately NOT the 2.0s ``tail_buffer_seconds`` the writer and the A4
+# probe use. That buffer answers "is there comfortable room for the music to
+# carry out?" — a fit-quality question asked BEFORE synthesis. This constant
+# answers "will a listener hear a sentence get cut off?" — a correctness
+# question asked AFTER, on measured durations. Using the comfort margin here
+# would reject mixes that are merely tight but perfectly audible.
+_VO_FIT_TOLERANCE_S: float = 0.5
+
+
+def _probe_duration_seconds(path: Path) -> float | None:
+    """ffprobe a media file's duration. None on any failure — never raises."""
+    try:
+        import subprocess
+
+        from genlab_core.media.ffmpeg import get_ffprobe_binary
+
+        probe = subprocess.run(
+            [
+                get_ffprobe_binary(),
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        raw = (probe.stdout or "").strip()
+        return float(raw) if raw else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def vo_overruns_reel(
+    narration_audio_path: Path,
+    reel_path: Path,
+    ctx: dict,
+    niche_id: str,
+) -> bool:
+    """True when the voice-over is too long for the reel to carry it.
+
+    NARR-08 (2026-08-19). Sets ``narration_degraded`` +
+    ``narration_degraded_reason='vo_overrun'`` on ``ctx`` and WARNs with the
+    (vo, reel, tolerance) triple when it returns True.
+
+    Independent of the A4 probe in ``GenerateAudio`` by construction. A4
+    compares the VO against ``media["clip_duration_seconds"]`` and returns
+    early when no duration resolves — but "no duration in the story shape"
+    is the SAME condition that makes the writer fall back to its 30s
+    baseline and oversize the script. A4's guard therefore fails on exactly
+    the inputs that need guarding. This function never consults metadata: it
+    probes the reel that is about to be mixed.
+
+    Observed 2026-08-19 story_0: VO 29.86s against an 18.60s reel, no A4
+    marker, 11.4s of real speech (measured, not trailing silence) cut
+    mid-sentence by ``amix duration=first``.
+
+    Fails OPEN — an unprobeable file returns False and the mix proceeds, so
+    a probe outage degrades to today's behaviour rather than muting reels.
+    """
+    vo_s = _probe_duration_seconds(narration_audio_path)
+    reel_s = _probe_duration_seconds(reel_path)
+    if vo_s is None or reel_s is None:
+        return False
+    if vo_s <= reel_s + _VO_FIT_TOLERANCE_S:
+        return False
+
+    logger.warning(
+        "[transformation_orchestrator] vo_overrun for niche=%s: vo=%.2fs "
+        "reel=%.2fs tolerance=%.2fs — %.2fs would be cut mid-speech by "
+        "amix duration=first. Degrading to the legacy 2-input mix; this "
+        "reel publishes WITHOUT narration.",
+        niche_id,
+        vo_s,
+        reel_s,
+        _VO_FIT_TOLERANCE_S,
+        vo_s - reel_s,
+    )
+    if isinstance(ctx, dict):
+        ctx["narration_degraded"] = True
+        ctx["narration_degraded_reason"] = "vo_overrun"
+    return True
+
+
+def _warn_narration_absent(
+    ctx: dict,
+    niche_id: str,
+    reason: str,
+    detail: str,
+) -> None:
+    """Emit a WARN when a story that EXPECTED narration reaches the mix
+    with no voice-over.
+
+    NARR-05 (2026-08-19). Gated on ``ctx["narration_expected"]`` — stamped
+    by :class:`GenerateAudio` from the authoritative
+    ``is_narration_enabled_for`` check — so the four non-canary niches,
+    which legitimately have no voice-over, stay silent.
+
+    Deliberately NOT gated by re-calling ``is_narration_enabled_for`` here:
+    the only niche config reachable at this layer is
+    ``getattr(config, "raw_niche_yaml", None)``, an attribute that is read
+    at line ~469 and **assigned nowhere in the codebase**. A gate built on
+    it would evaluate False forever and this WARN would be dead code — the
+    same shape of always-quiet observability that let the ordering bug run
+    unnoticed in the first place.
+
+    Never raises: an observability helper that can break a render is worse
+    than the gap it closes.
+    """
+    try:
+        if not ctx.get("narration_expected"):
+            return
+        logger.warning(
+            "[transformation_orchestrator] narration EXPECTED for niche=%s "
+            "but no voice-over reached the mix (reason=%s): %s. Falling "
+            "back to the legacy 2-input mix — this reel would publish "
+            "WITHOUT narration.",
+            niche_id,
+            reason,
+            detail,
+        )
+    except Exception:  # noqa: BLE001 — never let logging break the render
+        return
+
+
 def apply_transformations(
     source_video_path: Path,
     output_path: Path,
@@ -437,6 +575,7 @@ def apply_transformations(
                                 from genlab_core.publishing.narration_gate import (
                                     get_narration_config,
                                 )
+
                                 _n_cfg = get_narration_config(
                                     getattr(config, "raw_niche_yaml", None)
                                 )
@@ -445,13 +584,80 @@ def apply_transformations(
                                 target_lufs = float(_n_cfg["target_lufs"])
                             except Exception:  # noqa: BLE001
                                 pass  # defaults already set
-                            logger.info(
-                                "[transformation_orchestrator] narration "
-                                "engaged for niche=%s vo=%s "
-                                "vo_bed_duck=%ddB target_lufs=%.1f",
-                                niche_id, cand_path.name,
-                                vo_bed_duck_db, target_lufs,
+                            # NARR-08 (2026-08-19): mix-time hard guard.
+                            #
+                            # ``current_path`` here is already TRIMMED
+                            # (highlight_moment runs before this stage —
+                            # prod logs show ``mixing: source=00_trim.mp4``),
+                            # so the reel duration is a MEASURED fact at
+                            # this point, not metadata.
+                            #
+                            # That is what makes this guard independent of
+                            # the A4 probe in GenerateAudio. A4 compares the
+                            # VO against ``media["clip_duration_seconds"]``
+                            # and returns early when no duration resolves —
+                            # but "no duration in the story shape" is the
+                            # SAME condition that makes the writer fall back
+                            # to its 30s baseline and oversize the script.
+                            # A4's guard therefore fails on exactly the
+                            # inputs that need guarding. This one cannot:
+                            # it never consults metadata.
+                            #
+                            # Observed 2026-08-19 story_0: VO 29.86s against
+                            # an 18.60s reel, no A4 marker, 11.4s of real
+                            # speech (not trailing silence — measured) cut
+                            # mid-sentence by ``amix duration=first``.
+                            if vo_overruns_reel(
+                                narration_audio_path,
+                                current_path,
+                                ctx,
+                                niche_id,
+                            ):
+                                narration_audio_path = None
+
+                            if narration_audio_path is not None:
+                                logger.info(
+                                    "[transformation_orchestrator] narration "
+                                    "engaged for niche=%s vo=%s "
+                                    "vo_bed_duck=%ddB target_lufs=%.1f",
+                                    niche_id,
+                                    cand_path.name,
+                                    vo_bed_duck_db,
+                                    target_lufs,
+                                )
+                        else:
+                            _warn_narration_absent(
+                                ctx,
+                                niche_id,
+                                "vo_path_missing_on_disk",
+                                f"narration_audio_path={cand_path} does not exist",
                             )
+                    else:
+                        # NARR-05 (2026-08-19): this branch is why the
+                        # NARR-01 canary looked healthy for its whole
+                        # life. GenerateAudio sat FOUR stages after
+                        # this consumer, so ``narration_audio_path``
+                        # was always None and control landed here —
+                        # which logged NOTHING and silently used the
+                        # 2-input mix. Meanwhile the run report said
+                        # "[GenerateAudio] 1 generated, 0 skipped,
+                        # 0 errors" and every published reel was mute.
+                        #
+                        # Plan §4 forbids silent degrade; rule #19
+                        # forbids swallowing observability at DEBUG.
+                        # The stage order is fixed, but the WARN stays
+                        # so any future re-ordering, config change, or
+                        # new caller that breaks the wire announces
+                        # itself on the first render instead of after
+                        # weeks of mute reels.
+                        _warn_narration_absent(
+                            ctx,
+                            niche_id,
+                            "vo_path_absent",
+                            "blueprint_context carried no "
+                            "narration_audio_path — GenerateAudio "
+                            "must run BEFORE phase4_visual_render",
+                        )
 
             next_path = temp_dir / "01_audio.mp4"
             try:
@@ -647,9 +853,7 @@ def apply_transformations(
         # bandit-picked arm is marked SKIPPED (not applied) so it
         # doesn't accumulate reward for something that didn't render.
         _force_none = bool(getattr(config.dimensions.intro_animation, "force_none", False))
-        if intro_choice and (
-            _force_none or intro_choice.dimension_value == "none"
-        ):
+        if intro_choice and (_force_none or intro_choice.dimension_value == "none"):
             logger.info(
                 "[transformation_orchestrator] intro skipped for niche=%s "
                 "(force_none=%s, bandit_pick=%r)",

@@ -188,9 +188,7 @@ class BaseWritingStrategy(WritingStrategy):
         # narration gate needs it at writer time, so we cache a local
         # copy. Missing file → empty dict (gate returns False, no crash).
         niche_yaml_path = self._niche_root / "config" / "niche.yaml"
-        self._niche_config = (
-            _load_yaml(niche_yaml_path) if niche_yaml_path.exists() else {}
-        )
+        self._niche_config = _load_yaml(niche_yaml_path) if niche_yaml_path.exists() else {}
 
     def _model_route_key(self) -> str:
         """Return the model-router key for ``get_model()``. Override per niche."""
@@ -426,6 +424,146 @@ class BaseWritingStrategy(WritingStrategy):
     # LLM-based story writing
     # ------------------------------------------------------------------
 
+    def _resolve_render_duration_seconds(
+        self,
+        story: dict,
+        clip_index: dict | None = None,
+    ) -> float | None:
+        """Resolve how long the RENDERED REEL will be, in seconds.
+
+        NARR-08 (2026-08-19). The writer sizes ``narration_script`` to this
+        number, so it must model what the renderer produces — not what the
+        source metadata says.
+
+        Measured on story_0 (``03348d8f9e0e30d0``, 2026-08-19 07:20 UTC run),
+        the three candidate numbers were wildly different:
+
+        =========================================  ==========
+        downloaded clip on disk                     356.59 s
+        ``clip_index`` ``duration_seconds``          (source length)
+        **rendered reel**                          **18.60 s**
+        =========================================  ==========
+
+        So ffprobing the downloaded file — the obvious fallback — would have
+        produced a ~354 s budget, far worse than the 30 s default it replaced.
+
+        Resolution order, modelling the renderer:
+
+        1. ``highlight_moment.window_seconds`` from the niche's
+           ``visuals.yaml``. When that transform is enabled the renderer
+           trims to exactly this window (``transformation_orchestrator``
+           ``_trim_video`` on ``window.end_s - window.start_s``), so it IS
+           the reel length and it overrides any source metadata. BB's is
+           16 s; 16 s + a ~2.6 s outro is the 18.60 s reel observed.
+
+           Deliberately sized to the window and NOT window+outro: the
+           config comment at ``BlackboxBrief/config/visuals.yaml:118-123``
+           records that ``motion_compositor`` silently skips intro/outro on
+           many renders, landing the reel at *exactly* ``window_seconds``.
+           Sizing to the larger number would overrun on precisely those runs.
+
+           Clamped by the source clip when that is shorter — you cannot trim
+           a 10 s clip to a 16 s window.
+
+        2. Explicit story metadata, as before.
+
+        3. ffprobe of the downloaded clip, located via ``clip_index`` →
+           ``story["local_path"]`` → ``story["media"]["clip"]["file_path"]``.
+           Only meaningful when trimming is off, in which case the reel is
+           the clip.
+
+        Returns None when nothing resolves, leaving the caller to fall back.
+        Never raises.
+        """
+        clip_seconds = self._probe_clip_seconds(story, clip_index)
+
+        # 1. renderer's trim target
+        try:
+            visuals = _load_yaml(self._niche_root / "config" / "visuals.yaml") or {}
+            hm = (
+                visuals.get("intelligent_transform", {})
+                .get("dimensions", {})
+                .get("highlight_moment", {})
+            )
+            if hm.get("enabled") and isinstance(hm.get("window_seconds"), (int, float)):
+                window = float(hm["window_seconds"])
+                if window > 0:
+                    if clip_seconds and clip_seconds < window:
+                        return clip_seconds
+                    return window
+        except Exception:  # noqa: BLE001 — fail through to metadata
+            pass
+
+        # 2. explicit metadata
+        media = story.get("media") or {}
+        for candidate in (
+            story.get("duration_seconds"),
+            media.get("duration_seconds"),
+            media.get("clip_duration_seconds"),
+        ):
+            if isinstance(candidate, (int, float)) and candidate > 0:
+                return float(candidate)
+
+        # 3. the clip itself
+        return clip_seconds
+
+    @staticmethod
+    def _probe_clip_seconds(
+        story: dict,
+        clip_index: dict | None = None,
+    ) -> float | None:
+        """Duration of the downloaded clip, or None.
+
+        Prefers the duration ``DownloadTopVideos`` already recorded in
+        ``clip_index`` (``download_top_videos.py:717-720``) over spawning an
+        ffprobe — same number, no subprocess. Falls back to probing the file,
+        located at ``clip_index["clips"][story_id]["clip_path"]``, or
+        ``story["local_path"]`` / ``story["media"]["clip"]["file_path"]``
+        (the two shapes ``video_gate.py:137-155`` recognises).
+        """
+        story_id = story.get("story_id") or ""
+        entry = {}
+        if clip_index and story_id:
+            entry = (clip_index.get("clips") or {}).get(story_id, {}) or {}
+
+        recorded = entry.get("duration_seconds")
+        if isinstance(recorded, (int, float)) and recorded > 0:
+            return float(recorded)
+
+        path = (
+            entry.get("clip_path")
+            or story.get("local_path")
+            or ((story.get("media") or {}).get("clip") or {}).get("file_path")
+            or ""
+        )
+        if not path:
+            return None
+
+        try:
+            import subprocess
+
+            from genlab_core.media.ffmpeg import get_ffprobe_binary
+
+            probe = subprocess.run(
+                [
+                    get_ffprobe_binary(),
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    str(path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            raw = (probe.stdout or "").strip()
+            return float(raw) if raw else None
+        except Exception:  # noqa: BLE001 — probe failures are not fatal
+            return None
+
     def _write_story_llm(
         self,
         story: dict,
@@ -450,6 +588,7 @@ class BaseWritingStrategy(WritingStrategy):
             from genlab_core.publishing.narration_gate import (
                 is_narration_enabled_for,
             )
+
             if is_narration_enabled_for(self._niche_id, self._niche_config):
                 # Base clip duration = video.duration_seconds. Try a
                 # few common shapes since the story→video dict path
@@ -463,27 +602,27 @@ class BaseWritingStrategy(WritingStrategy):
                 # writer's word cap uses this to size the script; the
                 # post-synth A4 vo_overrun check catches any actual
                 # duration mismatch and degrades cleanly.
-                dur = (
-                    video.get("duration_seconds")
-                    or story.get("duration_seconds")
-                    or (story.get("media") or {}).get("duration_seconds")
-                    or (story.get("media") or {}).get("clip_duration_seconds")
-                )
-                if isinstance(dur, (int, float)) and dur > 0:
+                dur = self._resolve_render_duration_seconds(story, clip_index)
+                if dur is not None:
                     narration_target_seconds = float(dur)
                 else:
                     narration_target_seconds = 30.0
-                    logger.info(
-                        "[%s] narration: no duration_seconds in story "
-                        "shape — defaulting to 30s baseline; A4 "
-                        "vo_overrun probe will catch actual mismatch",
+                    logger.warning(
+                        "[%s] narration: could not resolve the render "
+                        "duration from visuals.yaml, story metadata, or "
+                        "the downloaded clip — falling back to the 30s "
+                        "baseline. This baseline is NO LONGER load-"
+                        "bearing (NARR-08): the mix-time guard in "
+                        "transformation_orchestrator degrades on overrun "
+                        "regardless of what the writer was sized to.",
                         self._niche_id,
                     )
         except Exception as exc:  # noqa: BLE001 — fail-open
             logger.warning(
                 "[%s] narration gate check raised: %s — falling back to "
                 "legacy writer path (no narration_script)",
-                self._niche_id, exc,
+                self._niche_id,
+                exc,
             )
 
         result = write_video_content(
@@ -547,6 +686,7 @@ class BaseWritingStrategy(WritingStrategy):
                 from genlab_core.writing.hook_similarity import (
                     log_similarity_signal,
                 )
+
                 log_similarity_signal(
                     emitted_hook,
                     existing_hooks,
@@ -788,7 +928,8 @@ class BaseWritingStrategy(WritingStrategy):
                 return first_result
         except Exception as exc:
             logger.debug(
-                "[hook_similarity] retry-precheck raised (falling back): %s", exc,
+                "[hook_similarity] retry-precheck raised (falling back): %s",
+                exc,
             )
             return first_result
 
@@ -806,6 +947,7 @@ class BaseWritingStrategy(WritingStrategy):
         )
         try:
             from genlab_core.writing.video_content_writer import write_video_content
+
             retry_result = write_video_content(
                 video=video,
                 niche_id=self._niche_id,
@@ -830,16 +972,17 @@ class BaseWritingStrategy(WritingStrategy):
 
         try:
             from genlab_core.writing.hook_similarity import find_most_similar
-            retry_match = find_most_similar(
-                retry_hook, list(existing_hooks) + [first_hook]
-            )
+
+            retry_match = find_most_similar(retry_hook, list(existing_hooks) + [first_hook])
         except Exception:
             retry_match = None
 
         if retry_match is None:
             logger.info(
                 "[hook_similarity] RETRY_SUCCESS niche=%s original=%r retry=%r",
-                self._niche_id, first_hook[:60], retry_hook[:60],
+                self._niche_id,
+                first_hook[:60],
+                retry_hook[:60],
             )
             return retry_result
 

@@ -35,8 +35,50 @@ class TestDurationFallback:
         )
 
     def test_source_tries_multiple_duration_locations(self):
-        src = inspect.getsource(base_writing.BaseWritingStrategy._write_story_llm)
-        # We look in at least 3 places: video dict, story dict, media dict
-        assert 'video.get("duration_seconds")' in src
+        """NARR-08 (2026-08-19): the chain moved out of ``_write_story_llm``
+        into ``_resolve_render_duration_seconds`` and gained a first source.
+
+        Two changes to what this pin asserts:
+
+        * ``video.get("duration_seconds")`` is GONE and its removal is not a
+          loss. ``_story_to_video_dict`` never emitted that key, so the
+          branch was dead from the day it was written — which is precisely
+          why every BB story fell through to the 30s default this file was
+          created to pin.
+        * The renderer's trim window is now consulted FIRST. It has to
+          outrank story metadata: when ``highlight_moment`` is enabled the
+          renderer trims to that window, so it IS the reel length no matter
+          what the source says. On 2026-08-19 story_0 the source clip was
+          356.6s and the reel was 18.60s.
+        """
+        src = inspect.getsource(
+            base_writing.BaseWritingStrategy._resolve_render_duration_seconds
+        )
+        assert "window_seconds" in src, (
+            "must consult the renderer's trim target — sizing to the source "
+            "clip produced a ~354s budget for story_0"
+        )
         assert 'story.get("duration_seconds")' in src
-        assert '"clip_duration_seconds"' in src or '"duration_seconds"' in src
+        assert '"clip_duration_seconds"' in src
+
+    def test_render_window_outranks_source_metadata(self):
+        """Behavioural companion to the structural pin above.
+
+        A 356s source clip against BB's 16s ``window_seconds`` must resolve
+        16 — not 30 (the old default) and not 356 (the file on disk).
+        """
+        from pathlib import Path
+
+        repo = Path(__file__).resolve().parents[3]
+
+        class _S(base_writing.BaseWritingStrategy):
+            def _model_route_key(self) -> str:
+                return "test"
+
+        resolved = _S("ai_creators", repo / "BlackboxBrief")._resolve_render_duration_seconds(
+            {"story_id": "s0"},
+            {"clips": {"s0": {"duration_seconds": 356.588844}}},
+        )
+        assert resolved == 16.0, (
+            f"expected the 16s render window, got {resolved}"
+        )
