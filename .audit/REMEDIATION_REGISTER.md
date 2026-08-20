@@ -162,3 +162,42 @@ switches into git; keep secrets in `.env`.
 Both silently revert if the VPS is rebuilt from the repo. Backups:
 `affiliate_catalog.yaml.bak.20260820T081823Z` (pre-enable) and
 `.bak.20260820T094834Z` (pre-evergreen-move).
+
+## AFF-01 — affiliate from slot machine to system (authorized 2026-08-20)
+
+Four phases, sequentially gated. The gating is the point: each phase's
+authorization is conditional on the *previous phase producing evidence*, not on
+the previous phase merely completing.
+
+| Phase | What | Gate to enter |
+|---|---|---|
+| **1 — Inventory + health** | Read-only. Catalogue what exists, probe every link, geo-check, map niche→product fit. Findings only, no writes. | **Authorized. Runs Friday 2026-08-21 after the four non-BB niches fire (03:30–06:00 UTC).** Read-only, so it runs parallel to the pipeline. |
+| **2 — Attribution** | Prove a click can be joined back to the blueprint that produced it. | Phase 1 findings reviewed + #218 closed. |
+| **3 — Selection** | Arm the product bandit on real signal. | **Explicitly gated on Phase 2's click-join proof.** |
+| **4 — Scale** | Inventory expansion into what Phase 3 shows converts. | Phase 3 showing measured lift. |
+
+### Attribution-before-arming — adopted 2026-08-20
+
+Phase 3 does not begin until Phase 2 demonstrates a click joining back to its
+originating blueprint. This is the same shape as the transform-arms lesson: 255
+`transform__*` arms were created and updated for months against a reward signal
+too sparse to distinguish them from noise, making them arithmetically
+unlearnable (~18 years to converge at current volume). An arm that cannot
+receive attributable reward is not a learning system — it is a random number
+generator with a persistence layer.
+
+The product bandit has 108 arms. If clicks cannot be joined to blueprints, those
+108 arms are in exactly the position the 255 transform arms were in, and
+arming them would manufacture the same false impression of a learning loop.
+Hence: prove the join first, arm second.
+
+### Standing constraints on all four phases
+
+* **Never fabricate affiliate URLs or enroll in programmes.** Inventory
+  additions use only networks with live credentials
+  (`AMAZON_IN_AFFILIATE_TAG`, `AMAZON_US_AFFILIATE_TAG` confirmed set), and
+  every added link is health-probed before enable.
+* **Compliance is frozen as shipped.** `#ad` head-position enforcement
+  (first 100 chars, `e790334c`) is untouched by any phase.
+* ai_creators stays `cta_injection_enabled: false` until on/after
+  **2026-08-29** — unchanged, since the fire never moved.
