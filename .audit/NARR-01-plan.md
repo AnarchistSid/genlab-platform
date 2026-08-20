@@ -1114,11 +1114,33 @@ UPDATE blueprints SET scheduled_for = NULL
 WHERE id::text LIKE '1cdda3d2%' AND niche_id = 'ai_creators';
 ```
 
-Note: `79bee628` (ARCHIVED 2026-08-19) still carries `scheduled_for =
-Mon 24 Aug 06:30`. Left deliberately — `ARCHIVED` short-circuits
-`is_blocking`, and keeping the value makes the rollback exact. It appears in
-schedule listings but the publisher only queries `VISUAL_READY`, so it cannot
-be picked. Mon 24 Aug therefore shows two rows; only `d94bd9b1` is live.
+### 19.8b `79bee628` scheduled_for cleared (2026-08-20)
+
+`79bee628` (ARCHIVED 2026-08-19) retained `scheduled_for = Mon 24 Aug 06:30`,
+so schedule listings showed two rows for that slot even though the publisher
+only queries `VISUAL_READY` and could never have picked it. Operator chose the
+clean listing over the exact-rollback property; cleared on their instruction.
+
+**Captured before the write, for rollback:**
+
+```
+id             79bee628-c9c4-427b-bd94-e79a3632d2e6
+niche_id       ai_creators
+status         ARCHIVED
+scheduled_for  2026-08-24 06:30:00+00
+```
+
+```sql
+-- rollback
+UPDATE blueprints SET scheduled_for = '2026-08-24 06:30:00+00'
+WHERE id = '79bee628-c9c4-427b-bd94-e79a3632d2e6'
+  AND niche_id = 'ai_creators';
+```
+
+The write carried `AND status = 'ARCHIVED'` alongside the id and niche_id
+predicates, so it could not have touched a live blueprint even if the id
+prefix had matched more than one row. Result was `UPDATE 1`. Mon 24 Aug now
+shows only `d94bd9b1`.
 
 ### 19.9 Schedule-change finding RETRACTED (2026-08-20)
 
