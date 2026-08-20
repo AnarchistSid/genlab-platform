@@ -55,7 +55,44 @@ _DEFAULT_LOUDNESS_RANGE = 7.0  # LRA target — matches EBU R128 broadcast norm
 _DEFAULT_TRUE_PEAK_DBTP = -1.5  # headroom for lossy transcoders
 
 
-def _normalize_loudness_in_place(video_path: Path, *, niche_id: str) -> None:
+def _measure_loudness(
+    video_path: Path, target_lufs: float, lra: float, tp: float
+) -> dict | None:
+    """Analysis pass for two-pass loudnorm. None on any failure."""
+    import json
+    import re
+    import subprocess
+
+    try:
+        from genlab_core.media.ffmpeg import get_ffmpeg_binary
+
+        proc = subprocess.run(
+            [
+                get_ffmpeg_binary(), "-hide_banner", "-nostats",
+                "-i", str(video_path),
+                "-af",
+                f"loudnorm=I={target_lufs}:LRA={lra}:TP={tp}:print_format=json",
+                "-f", "null", "-",
+            ],
+            capture_output=True, text=True, timeout=180,
+        )
+        match = re.search(r"\{[^{}]*input_i[^{}]*\}", proc.stderr or "", re.S)
+        if not match:
+            return None
+        data = json.loads(match.group(0))
+        required = (
+            "input_i", "input_tp", "input_lra", "input_thresh", "target_offset",
+        )
+        if not all(k in data for k in required):
+            return None
+        return data
+    except Exception:  # noqa: BLE001 — analysis failure must not lose the reel
+        return None
+
+
+def _normalize_loudness_in_place(
+    video_path: Path, *, niche_id: str, two_pass: bool = False
+) -> None:
     """Apply EBU R128 loudnorm to ``video_path`` in-place. Fail-open.
 
     Uses ffmpeg `-af loudnorm=I=-14:LRA=7:TP=-1.5`. Runs single-pass (dynamic
@@ -84,6 +121,24 @@ def _normalize_loudness_in_place(video_path: Path, *, niche_id: str) -> None:
 
     normalized = video_path.with_suffix(video_path.suffix + ".loudnorm.tmp.mp4")
     filter_spec = f"loudnorm=I={target_lufs}:LRA={lra}:TP={tp}"
+    if two_pass:
+        measured = _measure_loudness(video_path, target_lufs, lra, tp)
+        if measured:
+            filter_spec = (
+                f"loudnorm=I={target_lufs}:LRA={lra}:TP={tp}"
+                f":measured_I={measured['input_i']}"
+                f":measured_TP={measured['input_tp']}"
+                f":measured_LRA={measured['input_lra']}"
+                f":measured_thresh={measured['input_thresh']}"
+                f":offset={measured['target_offset']}"
+                ":linear=true:print_format=summary"
+            )
+        else:
+            logger.warning(
+                "[%s] loudnorm analysis pass failed — falling back to "
+                "single-pass (target may miss by >1 LU)",
+                niche_id,
+            )
     cmd = [
         "ffmpeg", "-y",
         "-i", str(video_path),
@@ -199,7 +254,34 @@ def apply_post_render_transformations(
     # returned (base composite OR transformed side-file). Fail-open so a
     # loudnorm failure never loses the reel — worst case is the un-normalised
     # artifact still publishes.
-    _normalize_loudness_in_place(Path(result_path), niche_id=niche_id)
+    # NARR-11 (2026-08-20): two-pass on the narration path.
+    #
+    # Placement was already correct — this runs AFTER the impl, which contains
+    # the outro concat, so the append-after-normalize class does NOT apply to
+    # the outro. (It does still apply to the hook_thumbnail intro prepend,
+    # which happens downstream in base_visual_render — that is the TP +3.42
+    # dBTP finding's lineage and remains open as the register's final-asset
+    # gate.)
+    #
+    # The miss was accuracy, not ordering. This function's docstring claimed
+    # single-pass lands "within +/-1 LU of target"; the NARR-01 plan deferred
+    # verifying that to Phase 4 evidence. Measured across four renders of the
+    # same assets: -14.33, -14.78, -14.85, -15.51 — a 1.18 LU spread with one
+    # sample 1.51 LU off target, i.e. outside the claim. A controlled A/B with
+    # the outro bed on vs off differed by only 0.07 LU, so the bed is
+    # exonerated and the variance is single-pass dynamic normalisation itself.
+    #
+    # Two-pass measures then applies, which is deterministic. Cost is one extra
+    # analysis pass over ~18s of audio. Narration path only for now.
+    _narration_engaged = False
+    if isinstance(blueprint_context, dict):
+        _narration_engaged = bool(
+            blueprint_context.get("narration_audio_path")
+            and not blueprint_context.get("narration_degraded")
+        )
+    _normalize_loudness_in_place(
+        Path(result_path), niche_id=niche_id, two_pass=_narration_engaged
+    )
     return result_path, arms
 
 
