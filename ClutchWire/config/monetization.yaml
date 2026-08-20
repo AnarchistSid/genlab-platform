@@ -3,7 +3,15 @@
 # QB-FIX-01 F1 (2026-08-06): disabled pending disclosure-position rebuild.
 # When true, push_to_backlog copies affiliate_* fields to the blueprint and
 # calls cta_engine.inject_cta(). When false, both are skipped. Default off.
-cta_injection_enabled: false
+# NARR/MONETIZATION (2026-08-20): re-enabled. The disable at 4dd2ebb6
+# (2026-08-06) was explicitly "pending disclosure-position rebuild";
+# that rebuild shipped as e790334c (2026-08-12, FTC disclosure at caption
+# head — first 100 chars) and its enforcement is covered by
+# tests/monetization/test_cta_disclosure_head_position.py (85 tests green
+# at flip time: prepends when absent from the head, no-ops on existing
+# #ad/#affiliate/sponsored/paid-partnership, idempotent, and rejects
+# markers beyond 100 chars). The blocking condition is satisfied.
+cta_injection_enabled: true
 
 affiliate_programs:
   - name: "DraftKings"

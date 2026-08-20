@@ -1,0 +1,19 @@
+# CriticalRush (gaming) monetization config
+#
+# Created 2026-08-20. Gaming was the only niche with no monetization.yaml at
+# all, and `cta_engine.is_cta_injection_enabled` defaults to False when the
+# file is absent — so gaming's affiliate CTA injection was off by omission
+# rather than by decision, and nothing surfaced that fact.
+#
+# Deliberately minimal: `cta_engine` is the sole reader of this file, and it
+# reads only `cta_injection_enabled`. The affiliate_programs / link_in_bio
+# blocks the other niches carry are documentation for the operator, not
+# consumed by code — add them when there is real gaming affiliate inventory
+# to describe rather than inventing placeholders now.
+
+# Re-enabled alongside the other four niches. The 2026-08-06 disable
+# (4dd2ebb6) was explicitly "pending disclosure-position rebuild"; that
+# rebuild shipped as e790334c (2026-08-12, FTC disclosure at caption head —
+# first 100 chars), enforced by tests/monetization/
+# test_cta_disclosure_head_position.py (85 tests green at flip time).
+cta_injection_enabled: true
