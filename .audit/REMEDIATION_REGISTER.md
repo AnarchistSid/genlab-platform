@@ -95,3 +95,70 @@ the narration bug.
   aspirehub-volume hypothesis is untested — Step 1.2 is the right test.
 * **#23**: `:5432` = docker `genlab-postgres` (GenLab's, 66 MB, per
   `DATABASE_URL`); `:5433` = host PostgreSQL 18. Bare `psql` hits 5433.
+
+---
+
+## Monetization additions (2026-08-20)
+
+### Shipped today
+
+| change | scope | tracked? |
+|---|---|---|
+| `affiliate_enabled: false → true` × 4 niches | gaming, sports, anime, ai_creators | **NO — prod-only, gitignored catalog** |
+| `cta_injection_enabled: false → true` × 5 niches (`70af24f5`) | all | yes |
+| `cta_injection_enabled → false` for ai_creators (`b5b47c5f`) | BB only, dated defer | yes |
+| `evergreen_default` moved Claude Pro → Ring Light (ai_creators) | ai_creators | **NO — prod-only, gitignored catalog** |
+
+The headline finding: `cta_injection_enabled` was disabled 2026-08-06
+(`4dd2ebb6`) explicitly "pending disclosure-position rebuild". That rebuild
+shipped 2026-08-12 (`e790334c`). **The flag was never flipped back**, and no
+commit since ever set it true. 540 blueprints carried affiliate links
+historically; the last was movies on 2026-08-05, the day before the disable.
+Zero since, across every niche.
+
+### #M1 — Selection-loss diagnostic (findings only)
+
+Linked blueprints publish at roughly **¼** the rate of unlinked ones: movies
+generated 16 linked blueprints in 30 days and published **2**, where a
+link-blind selector would have published ~7–8. Find where the
+selector/gatekeeper penalizes link-bearing inventory — auto-approval
+confidence, priority score, schedule ordering, or the affiliate daily cap
+interacting with slot assignment. **Findings only, no fix.** This multiplier
+matters more than any further enablement: four more niches now feed a funnel
+that loses ~75% of what enters it.
+
+### #M2 — Cuelinks / EarnKaro SaaS inventory for ai_creators
+
+Every AI-software product in the ai_creators catalog is unusable:
+
+```
+Claude Pro Subscription  enabled=True   networks=['direct']  0% + probes healthy=False
+ChatGPT Plus             enabled=False  networks=NONE
+Midjourney Subscription  enabled=False  networks=NONE
+```
+
+So AI-tool stories can never keyword-match a monetizable product and always
+fall through to the evergreen — currently a ring light. OpenAI, Anthropic and
+Midjourney have no consumer affiliate programmes, so no URL can fix these;
+inventing one would be worse than the gap. `CUELINKS_EMAIL`,
+`CUELINKS_PUBLISHER_ID`, `EARNKARO_EMAIL` are already in `.env`. Source real
+SaaS offers through those networks so the highest-CPM niche sells software
+rather than lighting.
+
+### #M3 — Catalog versioning (executes in OPS-01)
+
+`affiliate_catalog.yaml` and `affiliate_seasonal.yaml` are **gitignored**
+(`.gitignore:141`). They hold the kill switches, 82 product URLs, commission
+rates and the evergreen defaults, and exist on one box with no history — which
+is why `git log -S"affiliate_enabled: false"` returns nothing and there is no
+record of who disabled four niches or when. The affiliate tags are already env
+vars, so nothing sensitive lives in the file. Split product data + kill
+switches into git; keep secrets in `.env`.
+
+**Named revert-on-rebuild risks until #M3 lands:**
+1. `affiliate_enabled: true` × 4 niches
+2. `evergreen_default` Ring Light promotion (ai_creators)
+
+Both silently revert if the VPS is rebuilt from the repo. Backups:
+`affiliate_catalog.yaml.bak.20260820T081823Z` (pre-enable) and
+`.bak.20260820T094834Z` (pre-evergreen-move).
