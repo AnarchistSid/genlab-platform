@@ -1091,15 +1091,54 @@ file as published, regardless of future stage order).
 ### 19.8 Friday standing state (NARR-09, dates +1)
 
 * Query filter: `created_at > '2026-08-21 02:00:00+00'`
-* **Friday 06:30 UTC slot holder: `bb716d20-5e48-442a-a4bd-dd1630c269ca`**
-  (VISUAL_READY, *"What phrase got Hank Green accused of us…"*)
+* **CORRECTED 2026-08-20.** The line below originally named `bb716d20` as
+  Friday's holder. It is **Saturday's**. The query behind it used the window
+  `2026-08-22 00:00 → 2026-08-23 00:00`, which is Saturday, and the result was
+  written up as Friday.
+
+| slot (UTC) | blueprint | hook |
+|---|---|---|
+| **Fri 21 Aug 06:30** | **`1cdda3d2`** | *MIT's robot labs vs. The hype reels* |
+| Sat 22 Aug 06:30 | `bb716d20` | *What phrase got Hank Green accused of using…* |
+| Sun 23 Aug 06:30 | `92e463ce` | *How Base44 Uses GPT-5.6…* |
+
+* **A.2 displacement target: `1cdda3d2`** (Friday's 06:30 holder)
 * A.2 capture-first SQL, ready:
 
 ```sql
+-- capture first
 SELECT id, scheduled_for FROM blueprints
-WHERE id = 'bb716d20-5e48-442a-a4bd-dd1630c269ca';
+WHERE id::text LIKE '1cdda3d2%' AND niche_id = 'ai_creators';
+-- then displace
 UPDATE blueprints SET scheduled_for = NULL
-WHERE id = 'bb716d20-5e48-442a-a4bd-dd1630c269ca';
+WHERE id::text LIKE '1cdda3d2%' AND niche_id = 'ai_creators';
 ```
+
+Note: `79bee628` (ARCHIVED 2026-08-19) still carries `scheduled_for =
+Mon 24 Aug 06:30`. Left deliberately — `ARCHIVED` short-circuits
+`is_blocking`, and keeping the value makes the rollback exact. It appears in
+schedule listings but the publisher only queries `VISUAL_READY`, so it cannot
+be picked. Mon 24 Aug therefore shows two rows; only `d94bd9b1` is live.
+
+### 19.9 Schedule-change finding RETRACTED (2026-08-20)
+
+I reported that the ai_creators fire had moved from 02:30 to 08:00 UTC and
+flagged it as possible config drift. **It had not moved.**
+
+```
+OnCalendar=*-*-* 02:30:00 UTC     live unit, IDENTICAL to the repo copy
+systemctl list-timers (default)   Fri 2026-08-21 08:00:00 IST
+systemctl list-timers (TZ=UTC)    Fri 2026-08-21 02:30:00 UTC
+```
+
+`list-timers` renders in local time and the VPS is `Asia/Kolkata`; 08:00 IST
+is 02:30 UTC. All five pipeline timers match the documented schedule exactly
+(ai 02:30, movies 03:30, gaming 04:00, sports 05:00, anime 06:00 UTC).
+
+Consequence: the NARR-09 restructure predicated on an 08:00 UTC fire is void.
+NARR-09 stands as originally written, with the corrected displacement target
+above. No date-dependent marker shifts — BB affiliate re-entry stays
+≥2026-08-29 and #219's start is unchanged.
+
 
 Rollback: restore the captured `scheduled_for` value.
