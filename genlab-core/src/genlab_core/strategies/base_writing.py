@@ -622,10 +622,13 @@ class BaseWritingStrategy(WritingStrategy):
             wpm = get_tts_rate_wpm(self._niche_config)
             tail = float(cfg.get("tail_buffer_seconds", 2.0))
             factor = float(cfg.get("retry_budget_factor", 0.85))
+            margin = float(cfg.get("fit_margin", 0.05))
         except Exception:  # noqa: BLE001
-            wpm, tail, factor = 150, 2.0, 0.85
+            wpm, tail, factor, margin = 150, 2.0, 0.85, 0.05
 
-        ok, reason = validate_narration_script(script, target_seconds, wpm, tail)
+        ok, reason = validate_narration_script(
+            script, target_seconds, wpm, tail, margin
+        )
         if ok:
             return script, ""
 
@@ -666,6 +669,7 @@ class BaseWritingStrategy(WritingStrategy):
                 ),
                 narration_target_seconds=retry_target,
                 narration_wpm=wpm,
+                narration_fit_margin=margin,
             )
             candidate = (retry.get("narration_script") or "").strip()
         except Exception as exc:  # noqa: BLE001
@@ -676,7 +680,7 @@ class BaseWritingStrategy(WritingStrategy):
             return "", reason
 
         ok2, reason2 = validate_narration_script(
-            candidate, retry_target, wpm, tail,
+            candidate, retry_target, wpm, tail, margin,
         )
         if ok2:
             logger.info(
@@ -718,8 +722,13 @@ class BaseWritingStrategy(WritingStrategy):
             from genlab_core.publishing.narration_gate import get_tts_rate_wpm
 
             _narration_wpm = get_tts_rate_wpm(self._niche_config)
+            from genlab_core.publishing.narration_gate import get_narration_config
+
+            _narration_margin = float(
+                get_narration_config(self._niche_config).get("fit_margin", 0.05)
+            )
         except Exception:  # noqa: BLE001
-            _narration_wpm = 150
+            _narration_wpm, _narration_margin = 150, 0.05
         try:
             from genlab_core.publishing.narration_gate import (
                 is_narration_enabled_for,
@@ -769,6 +778,7 @@ class BaseWritingStrategy(WritingStrategy):
             extra_instructions=extra_instructions,
             narration_target_seconds=narration_target_seconds,
             narration_wpm=_narration_wpm,
+            narration_fit_margin=_narration_margin,
         )
 
         # Optional retry on near-dupe hook — turns the observability

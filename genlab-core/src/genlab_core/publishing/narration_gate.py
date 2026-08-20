@@ -147,6 +147,21 @@ def get_narration_config(niche_config: dict[str, Any] | None) -> dict[str, Any]:
         # One regeneration at this fraction of the original budget when the
         # script overruns, before degrading (NARR-11 ruling).
         "retry_budget_factor": 0.85,
+        # NARR-12 (2026-08-20): safety margin on the fit check. A script whose
+        # PROJECTED duration lands within this fraction of the budget is sent
+        # to the retry path rather than passed.
+        #
+        # Why: projection is a model, not a measurement. Inworld ran 6.6%
+        # slower than predicted on the round-3 script (13.62s projected,
+        # 14.52s actual). A script projecting at 99% of budget is therefore
+        # odds-on to overrun in reality, and the failure lands late — after
+        # synthesis is paid for, at the mix-time guard, costing the reel its
+        # narration. Retrying at 85% costs one LLM call.
+        #
+        # NOTE: this margin has TWO implementers — the validator's check and
+        # the prompt's HARD word cap. Both read this value. Changing one alone
+        # is the NARR-11 defect.
+        "fit_margin": 0.05,
     }
     if not isinstance(niche_config, dict):
         return defaults

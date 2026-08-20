@@ -108,6 +108,7 @@ def validate_narration_script(
     clip_duration_seconds: float,
     wpm: int = 150,
     tail_buffer_seconds: float = 2.0,
+    fit_margin: float = 0.0,
 ) -> tuple[bool, str]:
     """Validate a candidate narration script.
 
@@ -132,7 +133,11 @@ def validate_narration_script(
     # Rule 2: duration fits (predictive)
     projected_seconds = project_tts_duration_seconds(stripped, wpm)
     fit_budget = clip_duration_seconds - tail_buffer_seconds
-    if projected_seconds > fit_budget:
+    # NARR-12: reject inside a safety margin, not just past the budget.
+    # Projection is a model; measured TTS ran 6.6% slow on round 3. Default
+    # 0.0 preserves the original behaviour for callers that don't opt in.
+    effective_budget = fit_budget * (1.0 - max(0.0, min(fit_margin, 0.9)))
+    if projected_seconds > effective_budget:
         return False, "script_too_long"
 
     # Rule 3: no URLs

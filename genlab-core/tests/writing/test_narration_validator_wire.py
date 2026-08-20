@@ -239,3 +239,97 @@ class TestPromptCapMatchesValidatorRate:
             "the 150-wpm cap must overrun a 141-wpm budget — if this stops "
             "holding, the rates have converged and this test is obsolete"
         )
+
+
+class TestFitMargin:
+    """NARR-12 (2026-08-20) — reject inside a safety margin, not just past it.
+
+    Projection is a model, not a measurement. Inworld ran 6.6% slower than
+    predicted on the round-3 script (13.62s projected, 14.52s actual), so a
+    script projecting at 99% of budget is odds-on to overrun in reality — and
+    that failure lands late, after synthesis is paid for, at the mix-time
+    guard, costing the reel its narration. One extra LLM call is cheaper.
+    """
+
+    BUDGET_S = 14.0      # 16.0s target minus the 2s tail buffer
+    TARGET_S = 16.0
+    WPM = 141
+    MARGIN = 0.05
+
+    def _script_at(self, fraction: float) -> str:
+        """A script whose PROJECTED duration is ~fraction of the budget."""
+        words = round(self.BUDGET_S * fraction * self.WPM / 60)
+        return " ".join(["word"] * words)
+
+    def test_ninety_six_percent_of_budget_triggers_retry(self):
+        from genlab_core.writing.narration_validator import (
+            validate_narration_script,
+        )
+
+        ok, reason = validate_narration_script(
+            self._script_at(0.96), self.TARGET_S, self.WPM, 2.0, self.MARGIN,
+        )
+        assert ok is False
+        assert reason == "script_too_long", (
+            "a script projecting at 96% of budget must go to the fit-retry "
+            "path — it is inside the 5% margin and the measured TTS variance "
+            "is larger than that"
+        )
+
+    def test_ninety_percent_of_budget_passes(self):
+        from genlab_core.writing.narration_validator import (
+            validate_narration_script,
+        )
+
+        ok, reason = validate_narration_script(
+            self._script_at(0.90), self.TARGET_S, self.WPM, 2.0, self.MARGIN,
+        )
+        assert ok is True, f"90% of budget should pass, got {reason}"
+
+    def test_default_margin_preserves_original_behaviour(self):
+        """The 20 pre-existing validator pins don't pass a margin.
+
+        Default 0.0 means they keep asserting exactly what they always did.
+        """
+        from genlab_core.writing.narration_validator import (
+            validate_narration_script,
+        )
+
+        at_96 = self._script_at(0.96)
+        assert validate_narration_script(at_96, self.TARGET_S, self.WPM, 2.0)[0]
+
+    def test_prompt_cap_targets_the_same_effective_budget(self):
+        """The margin's second implementer.
+
+        NARR-11 shipped a rate change to the validator without the prompt and
+        every compliant script was rejected. The margin has the same two
+        implementers; this asserts they agree.
+        """
+        import re
+
+        from genlab_core.writing.narration_validator import (
+            validate_narration_script,
+        )
+        from genlab_core.writing.video_content_writer import _build_narration_hint
+
+        hint = _build_narration_hint(self.TARGET_S, self.WPM, self.MARGIN)
+        cap = int(re.search(r"HARD word cap: (\d+)", hint).group(1))
+        at_cap = " ".join(["word"] * cap)
+
+        ok, reason = validate_narration_script(
+            at_cap, self.TARGET_S, self.WPM, 2.0, self.MARGIN,
+        )
+        assert ok, (
+            f"a script at the prompt's advertised cap ({cap} words) is "
+            f"rejected as {reason} — the margin's two implementers disagree, "
+            "which is the NARR-11 defect one layer down"
+        )
+
+    def test_margin_is_config_driven_with_a_safe_default(self):
+        from genlab_core.publishing.narration_gate import get_narration_config
+
+        assert get_narration_config(None)["fit_margin"] == 0.05
+        assert (
+            get_narration_config({"narration": {"fit_margin": 0.12}})["fit_margin"]
+            == 0.12
+        )

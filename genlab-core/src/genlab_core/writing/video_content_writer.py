@@ -392,7 +392,9 @@ def _complete_and_parse_json(
         return parsed
 
 
-def _build_narration_hint(target_seconds: float, wpm: int = 150) -> str:
+def _build_narration_hint(
+    target_seconds: float, wpm: int = 150, fit_margin: float = 0.0
+) -> str:
     """NARR-01 narration prompt block. Injected only when the caller
     passed a target duration; otherwise the writer's system prompt is
     byte-identical to pre-NARR-01 output.
@@ -409,6 +411,10 @@ def _build_narration_hint(target_seconds: float, wpm: int = 150) -> str:
     """
     tail_buffer_seconds = 2.0
     fit_seconds = max(0.0, target_seconds - tail_buffer_seconds)
+    # NARR-12: the cap must target the SAME effective budget the validator
+    # checks against, or every compliant script is rejected — the NARR-11
+    # defect, one layer down.
+    fit_seconds *= 1.0 - max(0.0, min(fit_margin, 0.9))
     word_cap = int(fit_seconds * wpm / 60)
     return (
         "NARRATION SCRIPT (voice-over commentary read aloud by TTS):\n"
@@ -437,6 +443,7 @@ def write_video_content(
     extra_instructions: str = "",
     narration_target_seconds: float | None = None,
     narration_wpm: int = 150,
+    narration_fit_margin: float = 0.0,
 ) -> dict:
     """Generate platform-specific content for a trending video.
 
@@ -934,7 +941,9 @@ def write_video_content(
             # Word cap = target_seconds × 150 / 60. We express it as a
             # word cap in the prompt because word count is easier for
             # the LLM to self-check than time.
-            _build_narration_hint(narration_target_seconds, narration_wpm)
+            _build_narration_hint(
+                narration_target_seconds, narration_wpm, narration_fit_margin
+            )
             if narration_target_seconds is not None
             else ""
         )
