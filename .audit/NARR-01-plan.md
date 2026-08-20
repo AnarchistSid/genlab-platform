@@ -1057,3 +1057,49 @@ disabled; not run.
   by inversion) and the intelligibility probe are the real evidence.
 * **Standing pattern recorded**: bed levels are specified in LUFS relative to
   programme, never raw dB offsets.
+
+### 19.6 Round 3b — two-pass loudnorm, both probes GREEN
+
+Same VO, same assets, two-pass the only change. Mix balance identical to
+PREVERIFY3, so the round-3 listen still applies to this content.
+
+| probe | value | spec |
+|---|---|---|
+| integrated loudness | **−14.45 LUFS** | −14 ±1 ✓ |
+| true peak | **−1.45 dBTP** | ≤ −1.0 ✓ |
+| LRA | 6.60 | (was 2.6 pre-retune) |
+| audio vs video duration | 18.564s == 18.564s | ✓ |
+| audio format | aac 48000 Hz stereo | ✓ |
+| silence gaps | one 0.69s mid-content | < 1.0s threshold ✓ |
+
+The single 0.69s gap is a VO pause the source no longer fills — expected and
+explicitly not a failure per the NARR-11 ruling.
+
+Single-pass → two-pass on the same inputs: −14.78 → −14.45, and deterministic
+rather than adaptive.
+
+### 19.7 Open: the real append-after-normalize instance
+
+The outro is NOT an instance — loudnorm already runs after the concat. The
+**hook_thumbnail intro prepend** is: it happens in `base_visual_render` AFTER
+`apply_post_render_transformations` returns, downstream of the loudness pass.
+That is the lineage of the TP **+3.42 dBTP** measurement on
+`03348d8f9e0e30d0_reel_with_intro.mp4` and it remains open as the register's
+**final-asset gate** (loudness / TP / sample-rate / duration asserted on the
+file as published, regardless of future stage order).
+
+### 19.8 Friday standing state (NARR-09, dates +1)
+
+* Query filter: `created_at > '2026-08-21 02:00:00+00'`
+* **Friday 06:30 UTC slot holder: `bb716d20-5e48-442a-a4bd-dd1630c269ca`**
+  (VISUAL_READY, *"What phrase got Hank Green accused of us…"*)
+* A.2 capture-first SQL, ready:
+
+```sql
+SELECT id, scheduled_for FROM blueprints
+WHERE id = 'bb716d20-5e48-442a-a4bd-dd1630c269ca';
+UPDATE blueprints SET scheduled_for = NULL
+WHERE id = 'bb716d20-5e48-442a-a4bd-dd1630c269ca';
+```
+
+Rollback: restore the captured `scheduled_for` value.
