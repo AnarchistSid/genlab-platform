@@ -12,15 +12,30 @@
 # QB-FIX-01 F1 (2026-08-06): disabled pending disclosure-position rebuild.
 # When true, push_to_backlog copies affiliate_* fields to the blueprint and
 # calls cta_engine.inject_cta(). When false, both are skipped. Default off.
-# NARR/MONETIZATION (2026-08-20): re-enabled. The disable at 4dd2ebb6
-# (2026-08-06) was explicitly "pending disclosure-position rebuild";
-# that rebuild shipped as e790334c (2026-08-12, FTC disclosure at caption
-# head — first 100 chars) and its enforcement is covered by
-# tests/monetization/test_cta_disclosure_head_position.py (85 tests green
-# at flip time: prepends when absent from the head, no-ops on existing
-# #ad/#affiliate/sponsored/paid-partnership, idempotent, and rejects
-# markers beyond 100 chars). The blocking condition is satisfied.
-cta_injection_enabled: true
+# NARR/MONETIZATION (2026-08-20): re-enabled, then DEFERRED for ai_creators only.
+#
+# The 2026-08-06 disable (4dd2ebb6) was "pending disclosure-position rebuild";
+# that rebuild shipped as e790334c (2026-08-12, FTC disclosure at caption head
+# — first 100 chars) and is enforced by
+# tests/monetization/test_cta_disclosure_head_position.py. That blocking
+# condition IS satisfied, and the other four niches went live on it today.
+#
+# ai_creators is held back for a different reason: BB is the narration canary
+# and the subject of the #219 retention watch. Injecting affiliate CTAs into
+# BB captions now would put a second treatment into the same window as the
+# narrated launch, and #219 could not attribute retention movement to
+# narration alone.
+#
+# DEFERRED: deferred until #218 closes + 7 days of narration-only #219
+# baseline; re-enable condition: dated, per today's expiry-marker rule —
+# practice what we just adopted.
+#
+# RE-ENABLE ON OR AFTER: 2026-08-29 (assumes #218 closes on the 2026-08-22
+#   fire; if #218 slips, this date slips with it — the condition is
+#   "#218 closed AND 7 clear days of narration-only baseline", not the
+#   calendar date alone).
+# COST OF WAITING: ~zero. BB's last affiliate-linked blueprint was 2026-05-19.
+cta_injection_enabled: false
 
 version: "2026.03"
 
