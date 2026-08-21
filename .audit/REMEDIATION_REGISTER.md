@@ -483,3 +483,58 @@ precondition matters again.
 Its state file `/opt/genlab/.runtime/ratchet_state.json` does not exist yet.
 When first written it must be `genlab:genlab` per rule #15 — the retro-credit
 state file lost 6h of progress to exactly that mistake.
+
+### Narrowed for the evidence fire (2026-08-21, same evening)
+
+Six entries reverted to **UNSET** (line removed, not set to `0` — unset is the
+documented default and what the flag audit compares against), so the 02:30 fire
+carries as few new variables as possible alongside the `fit_margin: 0.0` revert.
+
+| flag | state for the fire |
+|---|---|
+| `FIRST_FRAME_AUTOFIX_ENABLED` | reverted |
+| `HOOK_NEAR_DUPE_RETRY_ENABLED` | reverted |
+| `COMPETITOR_CONTEXT_ENABLED` | reverted |
+| `IDEATION_POOL_ENABLED` (+ `_ROLLOUT_PCT`) | reverted |
+| `AUTONOMOUS_REVIEWER_ENABLED` | reverted |
+| `FIRST_FRAME_VALIDATOR_ENABLED` | **stays on — log-only** |
+| `QUALITY_REWARD_MULTIPLIER_ENABLED` | stays on |
+| `PORTFOLIO_BANDIT_ENABLED` | stays on |
+| `AUTO_ADVANCE_ROLLOUT_ENABLED` | stays on (inert — every `rollout_pct` is 1.0) |
+
+**The validator is genuinely log-only without the autofix.** Verified in source
+rather than assumed: `facebook.py:236` calls `log_first_frame_signal()` whenever
+the validator flag is set, and the brightener is reached only inside
+`if not quality.passed and ... and env_true("GENLAB_FIRST_FRAME_AUTOFIX_ENABLED")`.
+With autofix unset it measures and logs; no file is modified. Same shape in
+`youtube.py`, `instagram.py`, `threads.py`.
+
+**Its verdict on tomorrow's narrated reel goes into A.3's evidence** alongside
+the LUFS / true-peak / duration / silence-gap probes.
+
+VPS HEAD `86e308ed` == origin at narrow time (rule #29). All nine verified
+through `env_true()`, not by reading `.env`. Dashboard restarted;
+`post-deploy-verify` **ALL CHECKS PASSED** at 14:57:55Z.
+
+### Restore, after #218 closes
+
+Restore all five (with `IDEATION_POOL_ROLLOUT_PCT=10` riding with the pool
+flag) **in one commit**, from tonight's pre-narrow backup:
+
+```
+/opt/genlab/.env.bak.20260821T145714Z      ← pre-narrow: all nine set
+/opt/genlab/.env.bak.20260821T145028Z      ← pre-flip:   all nine unset
+```
+
+The first backup is the restore source. Do not restore piecemeal — the point of
+one commit is that the five re-enter together and are attributable as a single
+change against post-#218 output.
+
+### Process note
+
+This narrowing was the operator's correction, not mine. The collision between
+"turn on all flags" and their own "the freeze holds for the 02:30 fire" was
+mentioned in my reply but not named as a collision, and the two timing options
+were offered as symmetric when one of them broke a standing gate. Recorded as
+`[[feedback-name-the-collision-before-executing]]`: compliance after flagging,
+never compliance instead of it.
