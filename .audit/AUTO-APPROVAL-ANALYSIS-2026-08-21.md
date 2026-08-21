@@ -126,6 +126,55 @@ This is the same family as the transform-arms lesson and the affiliate
 attribution gap: a learning mechanism whose feedback signal is disconnected
 from its action.
 
+### 5b. And it is worse than that: the tuner can only ever raise
+
+Verified in prod after shipping the ceiling. `auto_approval_calibration`:
+
+```
+gate_approved = false : 164 rows, newest 2026-06-29   ← stopped ~8 weeks ago
+gate_approved = true  : 389 rows, newest 2026-08-21   ← still flowing
+```
+
+Within the tuner's 4-week lookback there are **zero** `gate_approved = false`
+rows. `compute_confusion` can therefore only ever produce TP and FP; `TN` and
+`FN` are structurally 0. Every dry-run confirms it:
+
+```
+ai_creators  TP=95 TN=0 FP=20 FN=0
+anime        TP=13 TN=0 FP=7  FN=0
+movies       TP=10 TN=0 FP=7  FN=0
+sports       TP=62 TN=0 FP=29 FN=0
+```
+
+With `fn = 0`, `imbalance = (fp - fn) / n = fp / n ≥ 0` — always non-negative.
+The delta is `imbalance × 0.10`, so **the delta can never be negative**. The
+tuner is a one-way ratchet by construction: it is mathematically incapable of
+lowering a threshold, whatever the operator does.
+
+This is why the ceiling was necessary rather than merely prudent. Without it
+the only stop was 1.0; with it the only stop is the achievable p90. Either way
+the tuner will sit at its ceiling, because nothing can push it back down.
+
+**Why the false rows stopped is worth chasing.** 2026-06-29 is the exact start
+date of the `calibration_logger` incident recorded in rule #19 —
+`review_server.py:1443` swallowed logger failures at DEBUG from 2026-06-29
+until the fix on 2026-07-16. The `gate_approved = true` path resumed after that
+fix; the `false` path never did. That looks like a partial recovery from a
+known incident rather than a second, independent cause.
+
+`calibration_logger` itself does not filter — it writes
+`gate_approved = decision.approved` verbatim. So the gap is upstream: the
+operator only ever acts on gate-approved blueprints. Note this is not "the
+operator never rejects" — there are 65 rejections in the window (they are the
+FP column). Every one of them is a rejection of a blueprint the gate had
+*approved*. Nothing gate-rejected reaches the review surface at all.
+
+**Consequence for the fix:** the ceiling makes the ratchet safe but does not
+make the tuner informative. Until gate-rejected blueprints appear in the
+operator's review surface, the confusion matrix has two of its four cells
+permanently empty, and "agreement %" computed from it is meaningless — the
+exact trap rule #22 was written for, one layer deeper.
+
 ### Shipped
 
 * `_HARD_CEILING = 0.95` — above this a threshold is indistinguishable from
