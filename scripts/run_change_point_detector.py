@@ -77,6 +77,28 @@ def _daily_reward_series(conn, niche_id: str, platform: str) -> list[float]:
     ]
 
 
+def _row_severity(row) -> str | None:
+    """Extract `severity` from a psycopg row of either shape.
+
+    main() connects with row_factory=dict_row, so rows arrive as dicts; the
+    unit-test fakes and any tuple-factory caller hand back sequences. Indexing
+    a dict positionally raises KeyError(1), which the caller's fail-open
+    handler swallowed into a bare "alert emit failed: 1" — every emit silently
+    stopped working while the logs looked merely noisy.
+
+    Caught in production output, not in tests: the fixtures returned tuples, so
+    they agreed with each other and not with prod.
+    """
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return row.get("severity")
+    try:
+        return row[1]
+    except (IndexError, KeyError, TypeError):
+        return None
+
+
 def _resolve_alert(conn, niche_id: str, platform: str) -> None:
     """Close any open alert for this niche/platform — the shift is gone.
 
@@ -149,7 +171,7 @@ def _emit_alert(conn, niche_id: str, platform: str, cp) -> None:
             # An open alert at a DIFFERENT severity is superseded, not a
             # duplicate: resolve it and write the corrected row. Same-severity
             # re-detection is still a genuine duplicate and still returns.
-            existing_severity = existing[1] if len(existing) > 1 else None
+            existing_severity = _row_severity(existing)
             if existing_severity == severity:
                 return
             conn.execute(

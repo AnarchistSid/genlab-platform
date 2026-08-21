@@ -211,3 +211,55 @@ class TestResolveWhenShiftIsGone:
             "main() no longer resolves when detect_change_point returns None; "
             "alerts will outlive the condition that produced them again"
         )
+
+
+class TestRowShapeTolerance:
+    """2026-08-21: the supersede check indexed the dedup row positionally
+    (`existing[1]`). main() connects with row_factory=dict_row, so rows are
+    DICTS — the index raised KeyError(1), which _emit_alert's fail-open handler
+    turned into a bare 'alert emit failed: 1'. Every emit stopped working while
+    the logs looked merely noisy.
+
+    The unit fakes returned tuples, so they agreed with each other and not with
+    production. These pin BOTH shapes.
+    """
+
+    def test_dict_row(self):
+        mod = _load()
+        assert mod._row_severity({"?column?": 1, "severity": "critical"}) == "critical"
+
+    def test_tuple_row(self):
+        mod = _load()
+        assert mod._row_severity((1, "warning")) == "warning"
+
+    def test_none_and_malformed_rows_do_not_raise(self):
+        mod = _load()
+        assert mod._row_severity(None) is None
+        assert mod._row_severity((1,)) is None
+        assert mod._row_severity({}) is None
+
+    def test_supersede_works_with_dict_rows_end_to_end(self):
+        """The failure was only visible end-to-end — pin it there too."""
+        mod = _load()
+
+        class DictRowConn(FakeConnWithExisting):
+            def execute(self, sql, params=None):
+                if "SELECT 1, severity FROM pipeline_alerts" in sql:
+                    return _DictRow(self.existing_severity)
+                return super().execute(sql, params)
+
+        conn = DictRowConn("critical")
+        mod._emit_alert(conn, "movies", "instagram", FakeCP("up", 0.98))
+        assert conn.resolved == 1, "supersede did not fire against dict rows"
+        assert conn.severity == "warning"
+
+
+class _DictRow:
+    def __init__(self, severity):
+        self.severity = severity
+
+    def fetchone(self):
+        return None if self.severity is None else {"?column?": 1, "severity": self.severity}
+
+    def fetchall(self):
+        return []
