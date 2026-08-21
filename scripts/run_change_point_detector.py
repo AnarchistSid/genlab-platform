@@ -60,8 +60,15 @@ def _daily_reward_series(conn, niche_id: str, platform: str) -> list[float]:
             (niche_id, platform),
         ).fetchall()
     except Exception as exc:
-        logger.debug("[change_point] query failed for %s/%s: %s",
-                     niche_id, platform, exc)
+        # 2026-08-21: was logger.debug. A failed reward-series query returns []
+        # below, which detect_change_point reads as "no shift" — identical to a
+        # healthy flat series. So a broken query and stable reward were the same
+        # observable, and the debug level meant nobody would ever see which.
+        # Rule #19. exc_info because the bare message showed the exception's
+        # args and not its type (the 'alert emit failed: 1' problem).
+        logger.warning("[change_point] reward-series query failed for %s/%s "
+                       "— treating as no-data, NOT as a stable series: %s",
+                       niche_id, platform, exc, exc_info=True)
         try:
             conn.rollback()
         except Exception:
