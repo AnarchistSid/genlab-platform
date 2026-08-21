@@ -77,6 +77,32 @@ def _daily_reward_series(conn, niche_id: str, platform: str) -> list[float]:
     ]
 
 
+def _resolve_alert(conn, niche_id: str, platform: str) -> None:
+    """Close any open alert for this niche/platform — the shift is gone.
+
+    Best-effort and never raises: failing to resolve is strictly better than
+    aborting the scan, and the 24h sweep remains as a backstop.
+    """
+    check_name = f"platform_reward_shift:{platform}"
+    try:
+        cur = conn.execute(
+            """
+            UPDATE pipeline_alerts
+            SET resolved_at = now()
+            WHERE check_name = %s AND niche_id = %s AND resolved_at IS NULL
+            """,
+            (check_name, niche_id),
+        )
+        if getattr(cur, "rowcount", 0) > 0:
+            logger.info(
+                "[change_point] resolved %d stale alert(s) for %s/%s "
+                "— shift no longer present in the 30d series",
+                cur.rowcount, niche_id, platform,
+            )
+    except Exception as exc:
+        logger.warning("[change_point] alert resolve failed: %s", exc)
+
+
 def _emit_alert(conn, niche_id: str, platform: str, cp) -> None:
     check_name = f"platform_reward_shift:{platform}"
     direction_label = "UP" if cp.direction == "up" else "DOWN"
@@ -107,7 +133,7 @@ def _emit_alert(conn, niche_id: str, platform: str, cp) -> None:
     try:
         existing = conn.execute(
             """
-            SELECT 1 FROM pipeline_alerts
+            SELECT 1, severity FROM pipeline_alerts
             WHERE check_name = %s AND niche_id = %s
               AND resolved_at IS NULL
             LIMIT 1
@@ -115,7 +141,29 @@ def _emit_alert(conn, niche_id: str, platform: str, cp) -> None:
             (check_name, niche_id),
         ).fetchone()
         if existing:
-            return
+            # 2026-08-21: dedup used to be unconditional, which meant a row
+            # written under OLD severity rules could never be corrected — the
+            # stale alert blocked its own replacement indefinitely, and only
+            # the 24h blanket sweep in health_monitor could clear it.
+            #
+            # An open alert at a DIFFERENT severity is superseded, not a
+            # duplicate: resolve it and write the corrected row. Same-severity
+            # re-detection is still a genuine duplicate and still returns.
+            existing_severity = existing[1] if len(existing) > 1 else None
+            if existing_severity == severity:
+                return
+            conn.execute(
+                """
+                UPDATE pipeline_alerts
+                SET resolved_at = now()
+                WHERE check_name = %s AND niche_id = %s AND resolved_at IS NULL
+                """,
+                (check_name, niche_id),
+            )
+            logger.info(
+                "[change_point] superseded %s → %s alert for %s/%s",
+                existing_severity, severity, niche_id, platform,
+            )
         conn.execute(
             """
             INSERT INTO pipeline_alerts
@@ -164,6 +212,15 @@ def main(argv=None) -> int:
                 series = _daily_reward_series(conn, niche, platform)
                 cp = detect_change_point(series)
                 if cp is None:
+                    # 2026-08-21: previously a bare `continue`, so an alert
+                    # outlived the condition that produced it. A CUSUM shift
+                    # that is no longer present in the trailing 30d series is
+                    # over; leaving the row open makes the operator's CRITICAL
+                    # banner a record of history rather than a description of
+                    # now, and the only thing that ever cleared it was the 24h
+                    # blanket sweep.
+                    if not args.dry_run:
+                        _resolve_alert(conn, niche, platform)
                     continue
                 counts[f"detected_{cp.direction}"] += 1
                 if args.dry_run:

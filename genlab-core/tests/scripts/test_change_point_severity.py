@@ -113,3 +113,101 @@ class TestDownShiftStillEscalates:
     def test_confidence_threshold_unchanged_for_down(self, confidence, expected):
         """Pins the 0.9 boundary so the direction fix didn't shift it."""
         assert _emit("down", confidence).severity == expected
+
+
+class FakeConnWithExisting(FakeConn):
+    """A connection where an alert is ALREADY open at `existing_severity`."""
+
+    def __init__(self, existing_severity: str | None):
+        super().__init__()
+        self.existing_severity = existing_severity
+        self.resolved = 0
+
+    def execute(self, sql, params=None):
+        if "SELECT 1, severity FROM pipeline_alerts" in sql:
+            return _Row(self.existing_severity)
+        if "UPDATE pipeline_alerts" in sql and "resolved_at = now()" in sql:
+            self.resolved += 1
+            return _Updated(1)
+        if "INSERT INTO pipeline_alerts" in sql:
+            self.severity = params[2]
+            self.message = params[3]
+        return _Empty()
+
+
+class _Row:
+    def __init__(self, severity):
+        self.severity = severity
+
+    def fetchone(self):
+        return None if self.severity is None else (1, self.severity)
+
+    def fetchall(self):
+        return []
+
+
+class _Updated:
+    def __init__(self, rowcount):
+        self.rowcount = rowcount
+
+    def fetchone(self):
+        return None
+
+    def fetchall(self):
+        return []
+
+
+class TestStaleAlertsGetCorrected:
+    """2026-08-21: a row written under the OLD severity rules could never be
+    corrected — unconditional dedup made the stale alert block its own
+    replacement, so a CRITICAL 'reward improved' sat on the operator's banner
+    until the 24h blanket sweep. The operator saw it and reported the errors
+    as still present."""
+
+    def test_open_alert_at_different_severity_is_superseded(self):
+        mod = _load()
+        conn = FakeConnWithExisting("critical")
+        mod._emit_alert(conn, "movies", "instagram", FakeCP("up", 0.98))
+        assert conn.resolved == 1, (
+            "an open CRITICAL was not resolved when the corrected severity is "
+            "warning — the stale row would outlive the rule that produced it"
+        )
+        assert conn.severity == "warning"
+
+    def test_same_severity_is_still_deduped(self):
+        """Re-detecting the same thing must not churn the table."""
+        mod = _load()
+        conn = FakeConnWithExisting("warning")
+        mod._emit_alert(conn, "movies", "instagram", FakeCP("up", 0.98))
+        assert conn.resolved == 0
+        assert conn.severity is None, "a duplicate should not be re-inserted"
+
+
+class TestResolveWhenShiftIsGone:
+    def test_resolver_closes_open_alerts(self):
+        mod = _load()
+        conn = FakeConnWithExisting("critical")
+        mod._resolve_alert(conn, "movies", "instagram")
+        assert conn.resolved == 1
+
+    def test_resolver_never_raises(self):
+        """A failed resolve must not abort the scan — the 24h sweep is the
+        backstop, but the remaining niches still need checking."""
+        mod = _load()
+
+        class Boom:
+            def execute(self, *a, **k):
+                raise RuntimeError("db gone")
+
+        mod._resolve_alert(Boom(), "movies", "instagram")  # must not raise
+
+    def test_undetected_pair_is_resolved_in_main_loop(self):
+        """The `cp is None` branch must resolve rather than bare-continue."""
+        import inspect
+
+        mod = _load()
+        src = inspect.getsource(mod.main)
+        assert "_resolve_alert(conn, niche, platform)" in src, (
+            "main() no longer resolves when detect_change_point returns None; "
+            "alerts will outlive the condition that produced them again"
+        )
