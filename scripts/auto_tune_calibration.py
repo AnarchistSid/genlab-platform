@@ -231,6 +231,90 @@ def _apply_yaml_rewrite(niche_id: str, new_value: float) -> tuple[bool, str]:
         return False, f"write failed: {exc}"
 
 
+def _achievable_ceiling(conn, niche_id: str) -> float | None:
+    """Highest min_confidence this niche could ever actually meet.
+
+    Returns the p90 of gate-approved confidence over the last 30 days,
+    deduplicated to the latest examination per blueprint — the worker
+    re-evaluates the same backlog every 30 minutes, so raw percentiles are
+    weighted by how many passes a blueprint happened to sit through rather
+    than by how many blueprints there are.
+
+    p90 rather than max: the maximum is a single lucky blueprint, and pinning
+    the threshold to it would auto-approve roughly nothing while still
+    technically being "achievable".
+
+    None when there is not enough data to say — the caller then falls back to
+    the hard ceiling alone, which is the conservative direction.
+    """
+    try:
+        cur = conn.execute(
+            """
+            WITH latest AS (
+                SELECT DISTINCT ON (blueprint_id)
+                       blueprint_id, confidence, approved
+                FROM gate_examinations
+                WHERE niche_id = %s
+                  AND examined_at > now() - interval '30 days'
+                ORDER BY blueprint_id, examined_at DESC
+            )
+            SELECT COUNT(*) FILTER (WHERE approved) AS n,
+                   percentile_cont(0.90) WITHIN GROUP (ORDER BY confidence)
+                     FILTER (WHERE approved) AS p90
+            FROM latest
+            """,
+            (niche_id,),
+        )
+        row = cur.fetchone()
+    except Exception as exc:  # noqa: BLE001 — advisory input, never fatal
+        print(f"    [WARN] achievable-ceiling query failed: {exc}")
+        return None
+    if not row:
+        return None
+    n = row["n"] if isinstance(row, dict) else row[0]
+    p90 = row["p90"] if isinstance(row, dict) else row[1]
+    if not n or n < 5 or p90 is None:
+        return None
+    return float(p90)
+
+
+def _check_zero_approval_rate(conn, niche_id: str) -> None:
+    """Warn when a niche has gate approvals but zero auto-approvals.
+
+    The condition the ceiling exists to prevent, observed directly rather
+    than inferred from the threshold. If the gate is saying yes and nothing
+    is being auto-approved, the threshold is not being selective — it is off.
+    """
+    try:
+        cur = conn.execute(
+            """
+            SELECT
+              (SELECT COUNT(*) FROM gate_examinations
+                WHERE niche_id = %s AND approved
+                  AND examined_at > now() - interval '48 hours') AS gate_yes,
+              (SELECT COUNT(*) FROM blueprints
+                WHERE niche_id = %s
+                  AND action_taken_source = 'auto_approver_v1'
+                  AND created_at > now() - interval '48 hours') AS auto_approved
+            """,
+            (niche_id, niche_id),
+        )
+        row = cur.fetchone()
+    except Exception as exc:  # noqa: BLE001
+        print(f"    [WARN] zero-rate check failed: {exc}")
+        return
+    if not row:
+        return
+    gate_yes = row["gate_yes"] if isinstance(row, dict) else row[0]
+    auto = row["auto_approved"] if isinstance(row, dict) else row[1]
+    if gate_yes and not auto:
+        print(
+            f"    [ALERT] {niche_id}: gate approved {gate_yes} blueprint(s) in "
+            f"48h but auto_approver_v1 approved 0 — the threshold is acting as "
+            f"an off switch, not a filter"
+        )
+
+
 def _run_niche(
     conn, niche_id: str, week_of: date,
     apply_yaml: bool, dry_run: bool,
@@ -247,7 +331,13 @@ def _run_niche(
     counts["analyzed"] = len(rows)
     confusion = compute_confusion(rows)
     current = _current_min_confidence(niche_id)
-    suggestion = suggest_min_confidence(niche_id, confusion, current)
+    ceiling = _achievable_ceiling(conn, niche_id)
+    if ceiling is not None:
+        print(f"    achievable ceiling (p90 of gate-approved confidence, 30d): {ceiling:.3f}")
+    _check_zero_approval_rate(conn, niche_id)
+    suggestion = suggest_min_confidence(
+        niche_id, confusion, current, achievable_ceiling=ceiling
+    )
 
     print(
         f"  {niche_id} n={confusion.n} "

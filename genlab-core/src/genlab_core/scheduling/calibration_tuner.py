@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, Final
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +127,14 @@ class TuningSuggestion:
     rationale: str
 
 
+# 2026-08-21: absolute ceiling for an auto-tuned min_confidence.
+# Above this the threshold is indistinguishable from "auto-approval
+# disabled" — and disabling must be an explicit operator act
+# (auto_publish.enabled: false), not an emergent property of a tuner
+# integrating an error signal its own output cannot influence.
+_HARD_CEILING: Final[float] = 0.95
+
+
 def compute_confusion(rows: list[dict]) -> ConfusionMatrix:
     """Build the confusion matrix from calibration rows. Each row
     must have keys ``gate_approved`` (bool) + ``operator_action``
@@ -157,6 +165,7 @@ def suggest_min_confidence(
     niche_id: str,
     confusion: ConfusionMatrix,
     current_min_confidence: float,
+    achievable_ceiling: float | None = None,
 ) -> TuningSuggestion:
     """Compute a suggested min_confidence delta from the confusion
     matrix. Returns a full TuningSuggestion with rationale.
@@ -189,8 +198,50 @@ def suggest_min_confidence(
             f"{direction} min_confidence by {abs(delta):.3f}"
         )
 
-    # Clamp suggested value into [0.0, 1.0]
-    suggested = max(0.0, min(1.0, current_min_confidence + delta))
+    # ── Clamp ────────────────────────────────────────────────────────
+    # 2026-08-21: the only clamp used to be the mathematical [0.0, 1.0],
+    # which is a bound on the NUMBER, not on anything operational. Two
+    # ceilings now apply on top of it.
+    #
+    # Why this was needed. `compute_confusion` compares the gate's
+    # 5-check verdict (`gate_approved`) against `operator_action`.
+    # `min_confidence` is NOT an input to it — the threshold is a
+    # separate downstream filter that decides whether to ACT on a gate
+    # approval, and it cannot change whether the gate approves. So when
+    # FP > FN persists, raising min_confidence does not move the signal
+    # that caused the raise, and the next run sees the same imbalance
+    # and raises again. An open loop wearing the costume of a closed
+    # one: it ratchets to the numeric ceiling and stops there.
+    #
+    # It did. On 2026-08-21 prod held anime=1.0, movies=1.0,
+    # sports=0.986, against a best-observed gate confidence of ~0.91.
+    # A threshold above the achievable maximum does not make the gate
+    # selective, it switches it off — 701 gate-approved blueprints
+    # across those three niches in 7 days, zero auto-approved, the
+    # entire backlog diverted to manual review.
+    #
+    #   * _HARD_CEILING — an absolute cap. Above this a threshold is
+    #     indistinguishable from "disabled", and disabling should be an
+    #     explicit operator act (enabled: false), never a side effect of
+    #     a tuner integrating a constant error.
+    #   * achievable_ceiling — caller-supplied, derived from the recent
+    #     confidence distribution this niche actually produces. Guards
+    #     the same failure a niche at a time, because the ceiling is a
+    #     property of the signals available, not a global constant.
+    ceiling = _HARD_CEILING
+    if achievable_ceiling is not None:
+        ceiling = min(ceiling, achievable_ceiling)
+
+    raw = current_min_confidence + delta
+    suggested = max(0.0, min(1.0, raw))
+    if suggested > ceiling:
+        rationale += (
+            f" | CLAMPED {suggested:.3f} → {ceiling:.3f}: a threshold above "
+            f"the achievable confidence ceiling disables auto-approval "
+            f"rather than tightening it"
+        )
+        suggested = ceiling
+        delta = round(suggested - current_min_confidence, 3)
     within_apply = abs(delta) <= AUTO_APPLY_MAX_DELTA and delta != 0.0
 
     return TuningSuggestion(

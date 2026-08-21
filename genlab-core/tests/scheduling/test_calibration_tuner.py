@@ -22,6 +22,7 @@ from genlab_core.scheduling.calibration_tuner import (
     _NEGATIVE_OPERATOR_ACTIONS,
     _POSITIVE_OPERATOR_ACTIONS,
     compute_confusion,
+    _HARD_CEILING,
     suggest_min_confidence,
 )
 
@@ -172,11 +173,30 @@ class TestSuggestMinConfidence:
         assert s.within_auto_apply is False
 
     def test_suggested_min_confidence_clamped_upper(self):
-        # Current 0.98 + big raise → clamp to 1.0
+        """Updated 2026-08-21: the upper clamp is _HARD_CEILING, not 1.0.
+
+        This test previously asserted the clamp landed at exactly 1.0, which
+        pinned the defect rather than the intent. A min_confidence of 1.0 is
+        "auto-approval disabled" written as a number — the gate's confidence is
+        a mean of signals that in practice tops out near 0.9, so a threshold of
+        1.0 cannot be met by anything.
+
+        Prod reached exactly that: anime 1.0, movies 1.0, sports 0.986, with
+        701 gate-approved blueprints across those niches in 7 days and zero
+        auto-approved. The tuner ratcheted there because `compute_confusion`
+        does not take `min_confidence` as an input — raising the threshold
+        cannot change the imbalance that caused the raise, so a persistent
+        FP > FN produces the same positive delta forever.
+
+        The clamp still exists and still fires on a large FP-heavy skew; it now
+        stops somewhere a blueprint can actually reach.
+        """
         s = suggest_min_confidence(
             "gaming", self._cm(30, 10, 60, 0), current_min_confidence=0.98,
         )
-        assert s.suggested_min_confidence == 1.0
+        assert s.suggested_min_confidence == _HARD_CEILING
+        assert s.suggested_min_confidence < 1.0
+        assert "CLAMPED" in s.rationale
 
     def test_suggested_min_confidence_clamped_lower(self):
         # Current 0.05 + big lower → clamp to 0.0
