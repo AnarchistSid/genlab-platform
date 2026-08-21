@@ -416,3 +416,70 @@ attribution validator.
 Either wire them somewhere real or delete them. Unused capability that reads as
 capability is worse than absence, because it inflates every inventory of what
 the system can do — including the ones I produced earlier today.
+
+## Nine dormant flags enabled (2026-08-21, operator-approved)
+
+Enabled now, before the 02:30 fire, on explicit operator instruction. VPS HEAD
+`afa68c10` == origin at flip time (rule #29). Backup
+`/opt/genlab/.env.bak.20260821T145028Z`. All nine verified True through their
+real readers; `post-deploy-verify` green with all `.env` flags loaded in the
+dashboard process.
+
+```
+GENLAB_FIRST_FRAME_VALIDATOR_ENABLED       1
+GENLAB_FIRST_FRAME_AUTOFIX_ENABLED         1
+GENLAB_HOOK_NEAR_DUPE_RETRY_ENABLED        1
+GENLAB_QUALITY_REWARD_MULTIPLIER_ENABLED   1
+GENLAB_COMPETITOR_CONTEXT_ENABLED          1
+GENLAB_PORTFOLIO_BANDIT_ENABLED            1
+GENLAB_IDEATION_POOL_ENABLED               1
+GENLAB_IDEATION_POOL_ROLLOUT_PCT          10   ← without this the flag is inert
+GENLAB_AUTONOMOUS_REVIEWER_ENABLED         1
+GENLAB_AUTO_ADVANCE_ROLLOUT_ENABLED        1
+```
+
+### Deliberately NOT enabled, and why
+
+The instruction was "turn on all flags". Three categories were held back, with
+an assertion in the flip script that trips if any appears in the target set.
+
+**Five inverted kill switches.** `*_DISABLED` flags where setting them ON turns
+the feature OFF: `AUTO_APPROVE_DISABLED` (would disable the auto-approver fixed
+today), `COST_BUDGET_DISABLED`, `PROMPT_CACHE_DISABLED`, `REDDIT_FETCH_DISABLED`,
+`ANTHROPIC_HEALTHCHECK_DISABLED`. All confirmed STILL UNSET after the flip.
+
+**`GENLAB_ATTRIBUTION_LAYER3_ENFORCE`** — CLAUDE.md rule #14: never flip without
+a 24h observability window, because in-flight blueprints hard-fail.
+
+**Both `*_MULTI_MODEL_ENABLED`** — would make the 2026-08-24 intro-frame read
+unable to separate "does a generated intro help?" from "which model is best?".
+
+### Two caveats on what was enabled
+
+**`GENLAB_IDEATION_POOL_ROLLOUT_PCT` had to be set to make the flag real.** It
+defaults to `"0"`, so `IDEATION_POOL_ENABLED=1` alone is a no-op that still
+reads as "on" in every audit — the #232 failure mode. Set to `10`, the
+project's documented Week-1 rung (10 → 25 → 50 → 100).
+
+**`GENLAB_AUTO_ADVANCE_ROLLOUT_ENABLED` is effectively inert today, and its own
+docstring asked for a precondition that is not met.** It advances
+`auto_publish.rollout_pct` along the 0.1 → 0.25 → 0.5 → 1.0 ladder, but every
+niche is **already at 1.0**, so there is nothing to advance:
+
+```
+BlackboxBrief 1.0 · ClutchWire 1.0 · CriticalRush 1.0 · FrameDrift 1.0 · SpliceReel 1.0
+```
+
+`ratchet_advancer.py` says the operator should flip it "after Phase 2
+accumulates 1-2 weeks of clean signal". Today's evidence is the opposite of
+clean: three niches auto-approved **zero** blueprints for weeks because
+`min_confidence` had ratcheted above the achievable ceiling. That is now
+clamped, but the clean-signal window starts from the clamp, not from before it.
+
+Net risk is low because the ladder has nowhere to climb. Revisit if any niche's
+`rollout_pct` is ever lowered — at that point the advancer becomes live and the
+precondition matters again.
+
+Its state file `/opt/genlab/.runtime/ratchet_state.json` does not exist yet.
+When first written it must be `genlab:genlab` per rule #15 — the retro-credit
+state file lost 6h of progress to exactly that mistake.
