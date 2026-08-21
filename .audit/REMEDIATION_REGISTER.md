@@ -327,3 +327,92 @@ The banner today read "4 unresolved CRITICAL system alerts" when one was good
 news, one had already self-corrected, and two were ~1 day old. Worth an explicit
 resolve endpoint plus a visual distinction between "fired in the last hour" and
 "fired yesterday, awaiting the sweep".
+
+## Hook-thumbnail rollout to all five niches (2026-08-21)
+
+`GENLAB_HOOK_THUMBNAIL_NICHES` expanded `ai_creators` → all five.
+`GENLAB_HOOK_THUMBNAIL_MULTI_MODEL_ENABLED` deliberately left **unset**, so
+every niche uses the flux baseline. Generation-first, model-second: flipping
+both together would make "does a generated intro help?" and "which model is
+best?" inseparable in the retention read.
+
+Backup: `/opt/genlab/.env.bak.20260821T141851Z`. VPS HEAD `b4e8c329` == origin
+at flip time (rule #29).
+
+### Why now, reversing the earlier recommendation
+
+The hold was justified on two grounds this morning, and one of them was wrong.
+
+**Wall-clock — retracted.** I reported that a five-niche rollout would add
+~600s to gaming's pipeline, from `hook_thumbnail`'s 120s allowance. That is the
+**timeout**, not the duration. Timed against the real app:
+
+```
+pruna/flux-dev, one 9:16 image     6 seconds
+```
+
+Plus download and the concat re-encode (1–2s by its own comment) — roughly 10s
+per blueprint. Gaming makes ~5/day, so the true cost is **~30s on a 2002s
+pipeline: 1.5%**, not 30%. The +114.8s render delta I measured on ai_creators
+sits well inside the pre-canary variance (78–431s) and is not evidence of
+anything.
+
+**Evidence — weaker than I claimed.** Waiting for 2026-08-24 buys three reels
+on `ai_creators`, which has the *lowest* baseline of the five (338 views/post
+vs anime 461, sports 402). Three posts on the weakest niche is not a read. Five
+niches produce ~15/week against better baselines, so flipping accelerates the
+evidence rather than pre-empting it.
+
+Cost at five niches on flux: **~$0.75/month**. Balance $23.58.
+
+### What to watch, and when
+
+* **From 2026-08-24**: first generative reels publish. Compare views/retention
+  against the per-niche baselines above.
+* **2026-08-28 (7 days)**: if no per-niche degradation, consider enabling
+  `..._MULTI_MODEL_ENABLED` — that is the *second* variable and must not move
+  before this one is read.
+* **Revert**: restore `GENLAB_HOOK_THUMBNAIL_NICHES=ai_creators` from the
+  backup above. Fail-open by construction — any belt error leaves the base
+  composite untouched, so the downside is a wasted $0.005, not a broken reel.
+
+## #231 — 309 high-severity silent-failure handlers in genlab-core
+
+Swept with `anarchistsid/silent-failure-scanner` (built and submitted today).
+1705 exception handlers examined, **309 high-severity**:
+
+| rule | n | what it hides |
+|---|---:|---|
+| `debug_only_log` | 195 | failure recorded only at a level prod drops |
+| `silent_pass` | 80 | exception discarded entirely |
+| `default_return_no_log` | 34 | every cause collapses into one empty result |
+
+Ranked by file: `learning/metric_collector.py` (14), `push_to_backlog.py` (12),
+`llm_hook_generator.py` (12), `video_content_writer.py` (12), `cta_engine.py`
+(10).
+
+**Calibration note.** The first sweep reported 551 high and a 91% hit rate,
+which is noise rather than a ranking. Reviewing three findings in
+`run_change_point_detector.py` showed one real bug, one marginal, and one clear
+false positive — `_row_severity`'s narrow `except (IndexError, KeyError,
+TypeError): return None`, whose documented contract *is* to return None.
+Teaching the scanner that a narrow exception tuple states an intended contract
+while a bare `except Exception` is more likely accidental cut high-severity
+551 → 309. The remaining 80% overall hit rate is still dominated by
+low-severity `log_without_exc_info` (570) and should not be read as 80% broken.
+
+This is a program of work, not a session task. `metric_collector.py` is the
+highest-value entry: it feeds the learning loop, so a swallowed failure there
+degrades reward attribution silently.
+
+## #232 — `inference_utilities`: wire or delete
+
+`isolate_voice`, `remove_background`, `upscale_image` are implemented,
+flag-gated behind `GENLAB_INFERENCE_UTILITIES_ENABLED` (unset), and have
+**zero production callers**. Third instance of built-never-wired found today,
+after `validate_narration_script` (20 pin tests, no callers) and the L4
+attribution validator.
+
+Either wire them somewhere real or delete them. Unused capability that reads as
+capability is worse than absence, because it inflates every inventory of what
+the system can do — including the ones I produced earlier today.
