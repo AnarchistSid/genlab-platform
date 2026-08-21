@@ -232,3 +232,98 @@ single-variable content change with its own retention read.
 **Annotation for #219:** the baseline is measured at `window_seconds: 16`. When
 #226 lands, the #219 series breaks and a new baseline segment starts. Any
 retention comparison spanning the change is invalid.
+
+## Findings from the 2026-08-21 alert sweep (filed, not fixed)
+
+### #227 — the calibration tuner rewrites git-tracked YAML, permanently blocking deploy.sh
+
+**This is the root cause of the SERVICE_DOWN alert, not a side issue.**
+
+The Phase 5.A threshold tuner writes `auto_publish.min_confidence` directly
+into each niche's `config/publishing.yaml` — files that are tracked in git. Prod's
+working tree is therefore *permanently dirty*, and `deploy.sh` refuses to run
+against a dirty tree by design:
+
+```
+ERROR: working tree has modified tracked files. Commit, stash, or reset before deploying.
+```
+
+The consequences chain cleanly:
+
+```
+tuner writes tracked YAML
+  → prod tree always dirty
+  → deploy.sh can never run
+  → .version.env never stamped        → post-deploy-verify check 5 fails
+  → services never restarted          → post-deploy-verify check 6 fails
+  → verify exits 1 → OnFailure fires  → SERVICE_DOWN critical, daily
+```
+
+Deploys have been happening via manual `git pull`, which moves the code but
+skips version stamping, `daemon-reload`, unit-file sync (Phase 6.8) and service
+restarts. Every long-running process — the dashboard above all — silently keeps
+its old environment. That is why 11 `.env` flags, including
+`GENLAB_NARRATION_ENABLED`, were absent from the dashboard process today.
+
+**Second defect in the same writer:** it round-trips the whole YAML file and
+mangles unrelated keys. Across the five files it rewrote `account_id: null` to
+a bare `account_id:` in six places, discarding explicit `null` literals and
+their comment alignment. Semantically equivalent in YAML, but it means the
+tuner's blast radius is the entire file rather than the one key it owns.
+
+**Fix direction:** the tuner should write to an untracked overlay
+(`config/publishing.local.yaml` or a `runtime/` path) that the loader merges
+over the tracked defaults, and it should do a surgical key edit rather than a
+full document rewrite. Then prod's tree stays clean and `deploy.sh` works.
+
+### #228 — min_confidence tuner runaway
+
+Current prod values, versus the tracked defaults:
+
+| niche | tracked | live | effect |
+|---|---:|---:|---|
+| ai_creators | 0.715 | 0.846 | tightened |
+| sports | 0.732 | **0.986** | near-total block |
+| gaming | 0.85 | 0.89 | tightened |
+| anime | 0.85 | **1.0** | **auto-approve impossible** |
+
+A `min_confidence` of 1.0 cannot be met, so anime's auto-approver is off in
+practice while reporting itself enabled with `rollout_pct: 1.0`. Sports at
+0.986 is nearly the same. Whatever feedback drives this tuner has no ceiling —
+it needs a clamp (e.g. `min(0.95, …)`) and an alert when a niche's effective
+approval rate hits zero.
+
+Note this interacts with #227: because the values live in a dirty tracked file,
+nobody reviewing the repo would ever see them.
+
+### #229 — persona drift on all five niches
+
+Every niche emitted a `persona_drift` warning at 07:35 UTC today, scored well
+under the 0.6 gate: anime 0.05, movies 0.10, sports 0.20, gaming 0.45,
+ai_creators 0.45. Separately, `GENLAB_PERSONA_HINT_NICHES` does not appear in
+the pipeline's `flag_audit` active list (54/59) for today's ai_creators fire.
+
+That combination is the shape of
+`[[class-of-bug-write-side-and-audit-side-load-from-different-sources]]`, which
+was supposedly closed on 2026-08-15 by routing the writer through the same
+`persona.yaml` loader the auditor uses, with anime as the canary. Worth
+re-checking whether the canary flag is actually reaching the writer.
+
+### #230 — the operator cannot resolve an alert
+
+`dashboard/server/api/alerts.py` exposes only `GET /api/v1/alerts/critical`.
+There is no acknowledge, dismiss, or resolve action anywhere in the API or UI.
+The sole clearing mechanism is `health_monitor.resolve_stale_alerts()`, which
+blanket-resolves anything older than 24h on the assumption it will be recreated
+if still real.
+
+That assumption holds for genuinely periodic checks, but it means:
+
+* a fixed condition still shows red for up to 24h;
+* an alert the operator has consciously accepted cannot be silenced;
+* and a *stale* alert and a *live* one look identical on the banner.
+
+The banner today read "4 unresolved CRITICAL system alerts" when one was good
+news, one had already self-corrected, and two were ~1 day old. Worth an explicit
+resolve endpoint plus a visual distinction between "fired in the last hour" and
+"fired yesterday, awaiting the sweep".
