@@ -79,8 +79,26 @@ def _daily_reward_series(conn, niche_id: str, platform: str) -> list[float]:
 
 def _emit_alert(conn, niche_id: str, platform: str, cp) -> None:
     check_name = f"platform_reward_shift:{platform}"
-    severity = "warning" if cp.confidence < 0.9 else "critical"
     direction_label = "UP" if cp.direction == "up" else "DOWN"
+    # 2026-08-21: severity keyed on DIRECTION as well as confidence.
+    #
+    # Previously this was `"warning" if cp.confidence < 0.9 else "critical"`,
+    # which ignored direction entirely — so a high-confidence UP shift, i.e.
+    # reward IMPROVING, paged as CRITICAL. The operator's Mission Control
+    # banner opened on "4 unresolved CRITICAL system alerts" whose first
+    # entry was good news (movies/instagram, +16.14σ, confidence 0.98).
+    #
+    # That is worse than noise: a CRITICAL band that routinely contains
+    # things needing no action teaches the operator to skim it, and the real
+    # entries below it (an imminent OOM, a permissions drift that stops every
+    # pipeline at startup) inherit that discount.
+    #
+    # A downward shift is a regression and still escalates on confidence. An
+    # upward shift is information — worth surfacing, never worth paging.
+    if cp.direction == "up":
+        severity = "warning"
+    else:
+        severity = "warning" if cp.confidence < 0.9 else "critical"
     msg = (
         f"CUSUM detected {direction_label} shift in reward for "
         f"{niche_id}/{platform} at index {cp.at_index} of 30d series "

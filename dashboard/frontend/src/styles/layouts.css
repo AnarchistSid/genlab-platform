@@ -16,6 +16,7 @@
   display: grid;
   grid-template-columns: 5fr 3fr 3fr;
   grid-template-areas:
+    "briefing     briefing     briefing"
     "kpi          kpi          kpi"
     "spotlight    learning     insight"
     "timeline     upcoming     upcoming"
@@ -29,6 +30,7 @@
   .mc-grid-v2 {
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
+      "briefing     briefing"
       "kpi          kpi"
       "spotlight    spotlight"
       "learning     insight"
@@ -44,6 +46,7 @@
   .mc-grid-v2 {
     grid-template-columns: 1fr;
     grid-template-areas:
+      "briefing"
       "kpi"
       "spotlight"
       "learning"
@@ -59,6 +62,12 @@
   }
 }
 
+/* 2026-08-21: OperatorBriefingCard (added 2026-08-15, Phase 5.D) shipped
+   wrapped in .area-kpi — the SAME grid area as KpiHero. Two elements
+   assigned one grid-area stack in the same cell, so the KPI cards painted
+   on top of the briefing markdown and the operator saw text fragments
+   bleeding out between cards. Each card needs its own area. */
+.area-briefing     { grid-area: briefing; }
 .area-kpi          { grid-area: kpi; }
 .area-spotlight    { grid-area: spotlight; }
 .area-learning     { grid-area: learning; }

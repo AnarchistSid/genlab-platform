@@ -233,7 +233,7 @@ export default function MissionControl() {
               first read: 5 lines + "N to review" badge + email
               status. Runner fires 06:00 UTC via
               genlab-operator-briefing.timer; card polls hourly. */}
-          <div className="area-kpi">
+          <div className="area-briefing">
             <OperatorBriefingCard />
           </div>
           {/* Row 1: KPI Hero (full width) */}

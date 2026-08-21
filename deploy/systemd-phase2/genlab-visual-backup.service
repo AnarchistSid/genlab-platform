@@ -7,8 +7,18 @@ OnFailure=genlab-service-failure-alert@%n.service
 
 [Service]
 Type=oneshot
-User=root
-Group=root
+# 2026-08-21: was User=root/Group=root. Running as root made mkdir -p create
+# /opt/genlab/.backups/visuals/<date>/ and <date>/opt/ owned by root:root —
+# everything deeper stayed genlab because cp -a preserves source ownership.
+# The permissions-drift monitor then flagged 2 new root-owned paths EVERY DAY,
+# and repair_permissions.sh only ever cleaned up after the fact.
+#
+# This is CLAUDE.md rule #15 (never leave root-owned paths in a tree that
+# genlab-user services read/write). Nothing here needs root: the script is a
+# hardlink farm from /opt/genlab/.tmp/runs/*/visuals/*.mp4 into
+# /opt/genlab/.backups/visuals/, and genlab owns both ends.
+User=genlab
+Group=genlab
 WorkingDirectory=/opt/genlab
 EnvironmentFile=/opt/genlab/.env
 Environment=GENLAB_PROJECT_ROOT=/opt/genlab
