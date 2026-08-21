@@ -107,12 +107,37 @@ class GenerateAudio:
                     script = narration_script
                 else:
                     content["narration_degraded"] = True
-                    content["narration_degraded_reason"] = "script_generation_failed"
+                    # NARR-13 (2026-08-21): preserve the writer's specific
+                    # reason instead of overwriting it.
+                    #
+                    # base_writing._validate_narration_with_retry already
+                    # recorded WHY it gave up (script_too_long, or one of the
+                    # compliance slugs) at base_writing.py:842-843. This branch
+                    # sees only the empty string that the validator returns
+                    # alongside that reason, and used to stamp the generic
+                    # "script_generation_failed" over the top.
+                    #
+                    # The two reasons are OPPOSITES. "generation_failed" means
+                    # the LLM produced nothing; "too_long" means it produced
+                    # too much. They call for opposite fixes — loosen the
+                    # budget vs. tighten the prompt. On 2026-08-21 the DB said
+                    # script_generation_failed for a fire whose logs said
+                    # script_too_long twice, and the DB reading pointed at the
+                    # wrong repair.
+                    #
+                    # Only claim generation_failed when nobody upstream has
+                    # already said something more specific.
+                    reason = (
+                        str(content.get("narration_degraded_reason", "")).strip()
+                        or "script_generation_failed"
+                    )
+                    content["narration_degraded_reason"] = reason
                     logger.warning(
                         "[GenerateAudio] narration enabled for %s but "
-                        "writer emitted empty narration_script — "
-                        "degrading to legacy audio path (bp=%s)",
+                        "writer emitted empty narration_script "
+                        "(reason=%s) — degrading to legacy audio path (bp=%s)",
                         niche_id,
+                        reason,
                         bp.get("candidate_id", "?"),
                     )
             if not script:

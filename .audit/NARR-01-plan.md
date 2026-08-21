@@ -1164,3 +1164,87 @@ above. No date-dependent marker shifts — BB affiliate re-entry stays
 
 
 Rollback: restore the captured `scheduled_for` value.
+
+
+## 20. Round 4 — the 02:30 fire of 2026-08-21, and the margin revert
+
+### 20.1 What the fire actually did
+
+The window closed before this could be run live: the publisher fired at
+06:35:01 UTC and finished 06:56:44 UTC, publishing all five niches. But A.1
+run after the fact shows the run would not have produced a listenable file
+anyway.
+
+Blueprint `afcc2762` (created 02:49:16 UTC) recorded
+`narration_degraded_reason = script_generation_failed`, script length 0.
+
+**That reason was wrong.** The journal from the fire:
+
+```
+[Pipeline] 24 stages: … 'ViralityScoring', 'GenerateAudio',
+                        'BBVisualRenderStrategy', 'RenderTextOverlays', …
+[ai_creators] narration attempt 1 rejected (script_too_long) at wpm=141
+              — regenerating with budget 13.6s (85% of 16.0s)
+[ai_creators] narration attempt 2 also rejected (script_too_long) — degrading
+[GenerateAudio] narration enabled but writer emitted empty narration_script
+```
+
+Everything built across NARR-06 → NARR-11 worked. `GenerateAudio` ran at
+position 15, ahead of render at 16 — the hoist is live in production. The
+validator fired at the calibrated Inworld rate. `_resolve_render_duration_seconds`
+returned BB's real 16.0s highlight window. Retry-then-degrade executed exactly
+as specified. VPS narration code was byte-identical to origin.
+
+### 20.2 The margin was the defect
+
+`fit_margin: 0.05` shipped 2026-08-20 and degraded both stories on the very
+next fire. The mechanism was self-inflicted, because the margin has **two
+implementers** — the validator's check and the prompt's hard word cap — and
+both read the same value:
+
+```
+fit_budget      = 16.0 − 2.0 tail = 14.0s
+margin 0.05     → effective 13.3s → prompt asks for ~31 words
+margin 0.00     → effective 14.0s → prompt asks for ~33 words
+32 words @141wpm = 13.62s        ← inside 14.0s, outside 13.3s
+```
+
+Tightening the margin lowered the ask *and* the acceptance threshold together,
+so the validator rejected the length its own prompt had requested. The band it
+criminalised is precisely where the LLM lands.
+
+**Reverted to 0.0 on operator ruling.** The reasoning behind 0.05 was sound —
+measured TTS ran 6.6% slow on round 3 — but aimed at the wrong layer. Overrun
+protection belongs at `vo_overruns_reel`, which measures the real trimmed reel
+rather than projecting from a word count, and which was always the actual
+guard. A predictive margin stacked on a measured one rejects good scripts to
+pre-empt an error the measurement already catches.
+
+Pinned by `test_shipped_default_admits_the_script_the_llm_actually_writes`,
+which asserts against the *shipped config* rather than a literal, so a future
+re-tightening fails in CI instead of at 02:30 on a Saturday.
+
+### 20.3 The reason mislabel
+
+`base_writing.py:842-843` records the specific reason and returns an empty
+script alongside it. `generate_audio.py:110` saw only the empty string and
+stamped `script_generation_failed` over the top.
+
+The two reasons are opposites — nothing produced vs. too much produced — and
+they call for opposite repairs. The database pointed at tightening the prompt
+when the fix was loosening the budget. Fixed to preserve any upstream reason
+and fall back to the generic one only when nobody upstream said anything.
+Another instance of `[[class-of-bug-signal-loss-through-merged-failure-paths]]`,
+this time at the persistence layer rather than the log layer.
+
+### 20.4 NARR-09 → Saturday 2026-08-22, choreography unchanged
+
+* Evidence run: Saturday **02:30 UTC** fire.
+* A.1 filter: `created_at > 2026-08-22 02:00:00+00`.
+* A.2 displacement target: **`bb716d20`** (Saturday's 06:30 holder), per the
+  capture SQL already recorded in §19.8.
+* Listen file to the operator Desktop Saturday; on PASS, A.2 assigns to the
+  06:35 publisher slot.
+* Phase B and #218 close Saturday.
+* Window raise to ~28s filed as **#226**, explicitly post-evidence, with the
+  #219 baseline annotation.

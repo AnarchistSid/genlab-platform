@@ -161,7 +161,32 @@ def get_narration_config(niche_config: dict[str, Any] | None) -> dict[str, Any]:
         # NOTE: this margin has TWO implementers — the validator's check and
         # the prompt's HARD word cap. Both read this value. Changing one alone
         # is the NARR-11 defect.
-        "fit_margin": 0.05,
+        #
+        # REVERTED to 0.0 on 2026-08-21 (operator ruling). The 0.05 tightening
+        # shipped 2026-08-20 and turned a passing case into a guaranteed
+        # failure on the very next fire. Arithmetic, on BB's 16.0s highlight
+        # window:
+        #
+        #     fit_budget       = 16.0 - 2.0 tail = 14.0s
+        #     margin 0.05      -> effective 13.3s  -> asks for ~31 words
+        #     margin 0.00      -> effective 14.0s  -> asks for ~33 words
+        #
+        # A 32-word script projects 13.6s: inside 14.0s, outside 13.3s. That
+        # band is exactly where the LLM lands when asked for ~31 words, so the
+        # margin criminalised its own prompt's output. The 02:30 UTC fire on
+        # 2026-08-21 degraded BOTH stories with script_too_long on attempt 1
+        # AND the 85% retry.
+        #
+        # The reasoning behind 0.05 was not wrong — measured TTS ran 6.6% slow
+        # on round 3, so a script projecting at 99% of budget really is
+        # odds-on to overrun. It was aimed at the wrong layer. Overrun
+        # protection belongs at the mix-time guard
+        # (transformation_orchestrator.vo_overruns_reel, tolerance 0.5s),
+        # which measures the REAL reel instead of predicting from a word
+        # count, and which was always the actual protection. A predictive
+        # margin stacked on top of it rejects scripts that would have been
+        # fine and costs the reel its narration for a projection error.
+        "fit_margin": 0.0,
     }
     if not isinstance(niche_config, dict):
         return defaults

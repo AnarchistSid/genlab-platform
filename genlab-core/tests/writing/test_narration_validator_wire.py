@@ -328,8 +328,75 @@ class TestFitMargin:
     def test_margin_is_config_driven_with_a_safe_default(self):
         from genlab_core.publishing.narration_gate import get_narration_config
 
-        assert get_narration_config(None)["fit_margin"] == 0.05
+        # Shipped default reverted 0.05 -> 0.0 on 2026-08-21. See
+        # test_shipped_default_admits_the_script_the_llm_actually_writes
+        # below for why, and narration_gate.py for the arithmetic.
+        assert get_narration_config(None)["fit_margin"] == 0.0
         assert (
             get_narration_config({"narration": {"fit_margin": 0.12}})["fit_margin"]
             == 0.12
+        )
+
+    def test_shipped_default_admits_the_script_the_llm_actually_writes(self):
+        """Regression pin for the 2026-08-21 02:30 UTC fire.
+
+        The 0.05 margin shipped on 2026-08-20 and degraded BOTH stories on
+        the very next fire, with script_too_long on attempt 1 AND on the 85%
+        retry. The mechanism was self-inflicted: the prompt's word cap and
+        the validator's check read the SAME margin, so tightening it lowered
+        the ask to ~31 words and then rejected the ~32-word script that ask
+        produces.
+
+            16.0s clip - 2.0s tail = 14.0s fit budget
+            margin 0.05 -> effective 13.3s
+            margin 0.00 -> effective 14.0s
+            32 words @141wpm = 13.62s   <- inside 14.0, outside 13.3
+
+        This asserts against the SHIPPED config rather than a literal, so a
+        future re-tightening fails here instead of at 02:30 on a Saturday.
+        """
+        from genlab_core.publishing.narration_gate import get_narration_config
+        from genlab_core.writing.narration_validator import (
+            project_tts_duration_seconds,
+            validate_narration_script,
+        )
+
+        cfg = get_narration_config(None)
+        margin = cfg["fit_margin"]
+        wpm = cfg["tts_rates"]["inworld"]
+
+        script = " ".join(["word"] * 32)
+        projected = project_tts_duration_seconds(script, wpm)
+        assert 13.5 < projected < 13.8, (
+            f"fixture drifted — 32 words at {wpm}wpm should project ~13.6s, "
+            f"got {projected:.2f}s"
+        )
+
+        ok, reason = validate_narration_script(
+            script, self.TARGET_S, wpm, 2.0, margin
+        )
+        assert ok is True, (
+            f"the shipped fit_margin={margin} rejected a {projected:.2f}s "
+            f"script against a 14.0s budget (reason={reason}). This is the "
+            "2026-08-21 degrade recurring: the validator is refusing the "
+            "length its own prompt asks for."
+        )
+
+    def test_overrun_protection_still_exists_after_the_revert(self):
+        """Reverting the margin must not leave overruns unguarded.
+
+        The margin was predictive; the real protection is the mix-time guard,
+        which measures the actual trimmed reel instead of projecting from a
+        word count. This pins that the guard is still wired, so the revert
+        trades a prediction for a measurement rather than for nothing.
+        """
+        import inspect
+
+        from genlab_core.media import transformation_orchestrator as to
+
+        assert hasattr(to, "vo_overruns_reel")
+        src = inspect.getsource(to)
+        assert "vo_overruns_reel(" in src.replace("def vo_overruns_reel(", ""), (
+            "vo_overruns_reel is defined but never called — the revert would "
+            "leave nothing guarding VO overrun"
         )

@@ -201,3 +201,34 @@ Hence: prove the join first, arm second.
   (first 100 chars, `e790334c`) is untouched by any phase.
 * ai_creators stays `cta_injection_enabled: false` until on/after
   **2026-08-29** — unchanged, since the fire never moved.
+
+## #226 — BB highlight window raise 16s → ~28s (post-evidence content change)
+
+**Filed 2026-08-21. Gated: does NOT ship before Saturday's evidence run.**
+
+BB's `highlight_moment.window_seconds: 16` is the shortest reel we produce and
+sits at the floor of the 15–60s platform range. It is also the constraint that
+made narration marginal:
+
+```
+16.0s clip − 2.0s tail = 14.0s fit budget @141wpm → ~33 words
+```
+
+Thirty-three words is one sentence. The voice-over has no room to say anything
+a viewer would notice, and any projection error at all pushes it over. Raising
+the window to ~28s gives ~61 words — a natural two-sentence VO with headroom
+above the mix-time guard's 0.5s tolerance.
+
+**Why it is filed rather than shipped:** it changes reel duration, which is a
+published-artifact surface, and the pre-evidence freeze covers render, caption
+and metadata alike. Changing the clip length in the same window as the
+narration evidence run would confound #219's retention read — a duration change
+and an audio change landing together are not separable in the retention curve.
+
+**Sequence:** Saturday's evidence run at the current 16s → operator listen
+verdict → #218 closes → #219 baseline starts → *then* #226, as a deliberate
+single-variable content change with its own retention read.
+
+**Annotation for #219:** the baseline is measured at `window_seconds: 16`. When
+#226 lands, the #219 series breaks and a new baseline segment starts. Any
+retention comparison spanning the change is invalid.
