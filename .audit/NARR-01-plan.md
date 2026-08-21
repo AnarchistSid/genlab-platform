@@ -892,17 +892,28 @@ and −1.14. The hook_thumbnail intro concat runs *after*
 positive with nothing downstream to catch it. Observation, not urgent — one
 sample, intro-prepended variant only, and the live asset measured −0.95.
 
-### 17.6 #218 verdict slots — still open
+### 17.6 #218 verdict slots — one open, corrected 2026-08-21
 
 | # | Subject | Verdict |
 |---|---|---|
-| 1 | Round-2 pre-verification (`PREVERIFY2_narrated.mp4`) | **PENDING** |
-| 2 | Thursday publish candidate | **PENDING** (not yet produced) |
+| 1 | Round-2 pre-verification (`PREVERIFY2_narrated.mp4`) | **FAIL on mix** — "too much overlapped audio" (2026-08-19) |
+| 2 | Round-3 pre-verification (`PREVERIFY3`) | **PASS with polish note** (2026-08-19). Polish note filed as **OUTRO-01**. |
+| 3 | Publish candidate | **OPEN** — not yet produced |
 
-The final re-invocation arrived as the **unfilled template**: all three
-mutually exclusive verdict lines present, `[your exact words]` and
-`[what's wrong]` still literal placeholders. No verdict has been given, so
-A.1 onward remains blocked per Phase 0.1.
+**Ledger correction (2026-08-21).** This section previously listed the
+round-3 slot as PENDING and stated that "no verdict has been given". Both were
+wrong. The round-3 verdict — PASS with a polish note on PREVERIFY3 — was given
+and recorded on 2026-08-19, and OUTRO-01 exists precisely because it is that
+note, filed. The PENDING entry was left over from the round-2 template and was
+never updated when round 3 landed.
+
+The consequence of the error was not cosmetic: a PENDING round-3 slot reads as
+"A.1 onward is blocked pending a listen", which is the gate in Phase 0.1. It is
+not. **Only the publish-candidate slot is open**, and that one is blocked on
+production — no narrated blueprint exists yet — not on an operator verdict.
+
+Same class as the schedule-drift retraction in §19.9: a stale record asserting
+a blocker that had already cleared, then reasoned over as though current.
 
 ---
 
@@ -1248,3 +1259,75 @@ this time at the persistence layer rather than the log layer.
 * Phase B and #218 close Saturday.
 * Window raise to ~28s filed as **#226**, explicitly post-evidence, with the
   #219 baseline annotation.
+
+
+## 21. #221 — per-fire displacement replaces bulk unschedule (2026-08-21)
+
+### 21.1 The collision
+
+Every one of BB's six scheduled blueprints carries `narration_script` of
+**zero characters**, and together they hold every slot from 2026-08-22 through
+2026-08-27:
+
+```
+bb716d20  2026-08-22 06:30  0 chars   (created 08-16, pre-narration)
+92e463ce  2026-08-23 06:30  0 chars   (created 08-18, pre-narration)
+d94bd9b1  2026-08-24 06:30  0 chars   script_generation_failed
+5ebb14a2  2026-08-25 06:30  0 chars   script_generation_failed
+afcc2762  2026-08-26 06:30  0 chars   script_generation_failed
+cd6ffaab  2026-08-27 07:00  0 chars   (created 08-18, pre-narration)
+```
+
+A seventh, `dcad123d`, held a **past-due** 2026-08-19 10:00 slot that never
+fired. Its `scheduled_for` was cleared 2026-08-21 (capture-first, guarded on
+id + niche_id + status + `scheduled_for < now()`; result `UPDATE 1`; prior
+value `2026-08-19 10:00:00+00`, `action_taken = approved`).
+
+### 21.2 Why bulk unschedule was the wrong instinct
+
+The obvious unwind — clear all six so narrated stock can take the slots — is
+wrong on coverage arithmetic.
+
+BB produces roughly **one blueprint per day** and publishes **one per day**
+(the hard cap). Its queue is therefore a six-deep buffer that refills at
+exactly the rate it drains. Emptying it does not create room for narrated
+stock; it creates **six days of dark channel** while the buffer refills one
+day at a time. BB is already the thinnest-covered niche after anime, and it is
+the canary — a gap there costs the evidence run the very publishes it exists
+to measure.
+
+The bulk unwind also assumes narrated stock is waiting. None exists. Clearing
+six slots today would trade a full week of pre-narration reels for a week of
+nothing, in exchange for a queue that fills with narrated reels no faster than
+one per fire either way.
+
+### 21.3 The revision: displace one slot per fire
+
+Each BB fire that produces a **narrated** blueprint displaces the nearest
+reachable slot holder, and only that one. Concretely: a narrated blueprint from
+the 2026-08-22 02:30 fire takes `bb716d20`'s 06:30 slot; the next takes
+`92e463ce`'s; and so on.
+
+Properties that make this the right shape:
+
+* **Coverage is invariant.** One in, one out. The queue stays six deep every
+  day of the conversion, so the channel never goes dark.
+* **It self-limits on failure.** A fire that degrades displaces nothing, and
+  the pre-narration reel publishes as normal. The unwind cannot outrun the
+  thing it depends on — which is exactly the property bulk unschedule lacked.
+* **It converts at the natural rate.** Six fires, six days, queue fully
+  narrated — the same wall-clock as the bulk approach, without the gap.
+* **Every step is individually reversible.** One displaced blueprint, one
+  captured `scheduled_for`, one row to restore.
+
+### 21.4 Not executed
+
+Nothing beyond `dcad123d` was touched. `92e463ce` through `cd6ffaab` keep
+their slots. The first displacement is A.2's, and only against a real narrated
+asset from the 2026-08-22 02:30 UTC fire — the first fire to run with the
+`fit_margin: 0.0` revert, which deployed at ~07:45 UTC on 2026-08-21, after
+that day's 02:49 UTC fire had already degraded.
+
+If that fire degrades too, the blocker is the writer rather than the schedule,
+and **#226** (highlight window 16s → ~28s) stops being a post-evidence content
+change and becomes the fix.
