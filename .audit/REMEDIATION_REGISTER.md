@@ -635,3 +635,150 @@ nothing at all** — not narration, not hooks, not captions — until credit is
 restored. Both fixes above are untestable against a real fire until then.
 
 Operator action required; this is a billing top-up, not a code change.
+
+## OPS-02 — LLM outage: notification, runway, correlation (2026-08-22)
+
+Six outages in nineteen days (08-03, 08-04, 08-13, 08-16, 08-17, 08-22), several
+spanning 19–24h. **Detection worked every time. Nothing ever paged.**
+
+### Step 1 — rejected candidates are now measured (`08477435`, live)
+
+`_validate_narration_with_retry` discarded the candidate, so logs said *that* a
+script was too long, never *by how much*. Sizing #226 needed a reproduction, and
+on 2026-08-22 that was impossible because both providers were dead — the one
+number that would have sized the fix was destroyed at the moment it was
+measured.
+
+Now per rejected attempt, at WARN: word count, projected seconds, the
+validator's **effective** budget, overshoot delta, attempt number. Verified by
+unit-level invocation on prod:
+
+```
+attempt 1 rejected (script_too_long): 51 words, projected 21.70s vs budget 14.00s
+  — overshoot +7.70s (target 16.0s, tail 2.0s, margin 0%, wpm 141)
+attempt 2 rejected (script_too_long): 44 words, projected 18.72s vs budget 11.60s
+  — overshoot +7.12s (target 13.6s, tail 2.0s, margin 0%, wpm 141)
+```
+
+**Never the script text** — a rejected candidate is the least-vetted text the
+writer produces, and the other reason slugs exist precisely because it may
+contain URLs, affiliate pitches or first-person claims. Pinned with a sentinel
+asserted absent at DEBUG.
+
+**Immediate finding from the first reading**: the 85% retry barely helps
+(+7.70s → +7.12s) because the budget shrinks in proportion to the ask. Filed,
+not acted on.
+
+### Step 2 — the notification path (`995f49fb`)
+
+`notify()` at `health_monitor.py:305-330`, called `:359`, timer every 30 min.
+Behaviour when the webhook IS set: routes `severity == "critical"` only
+(`:316`); Slack-shaped `{"text": …}` payload (`:321`); caps at 25 alerts
+(`:320`); no retry.
+
+**Two defects that would have made simply setting a URL insufficient:**
+
+1. **The response was discarded** (`:325`). A revoked or mistyped webhook
+   returning 404/410 logged `"Delivered"` and returned `True`. The path built
+   to end silent failures was itself silently failing. Now checks 2xx, logs
+   status + body on failure, and does **not** record throttle state on a failed
+   send — otherwise the retry would be throttled too.
+2. **No throttle.** `notify()` receives the whole run's alerts, not just
+   newly-inserted ones, so a persisting CRITICAL paged every 30 minutes. The
+   six outages would have delivered ~250 identical messages — which is how a
+   real page gets muted. Now fingerprints the set of `(check, niche)` pairs: a
+   **changed** set pages immediately, an unchanged one re-pages every 4h.
+   **Fails open** — an unreadable state file pages anyway. State at
+   `/opt/genlab/.runtime/alert_notify_state.json`, `genlab:genlab` per rule #15.
+
+**Step 2.4 — which alerts will route** (severities measured from prod):
+
+| check | severity | routes? |
+|---|---|---|
+| `anthropic_credit_exhausted` | critical | ✅ |
+| `service_down` | critical | ✅ |
+| `systemd_unit_failed` | critical | ✅ |
+| `slo:zero_blueprints` | critical | ✅ |
+| `zero_blueprints` | **critical AND warning** | ⚠️ partial |
+
+`zero_blueprints` is emitted at both severities — 78 warning rows, most recent
+today. **The warning variant will not route.** Proposed mapping: leave the
+severity filter alone (a WARNING band that pages defeats the throttle work) and
+instead make the emitter consistent — a niche producing zero blueprints is
+either an incident or it is not. Filed rather than changed, since it is a
+semantics decision outside this prompt.
+
+**BLOCKED on `GENLAB_ALERT_WEBHOOK_URL`** — empty, so `notify()` is still a
+no-op and delivery proof (Step 2.3) cannot be produced.
+
+### Step 3 — runway: the mechanism, with evidence (`995f49fb`)
+
+Not "never scheduled", not "threshold unreachable", not "fires but only logs",
+not "no notification path". `check_llm_budget_runway` **early-returns because
+`ANTHROPIC_MONTHLY_BUDGET_USD` is unset**:
+
+```python
+budget_str = os.environ.get(_BUDGET_ENV_VAR, "").strip()
+if not budget_str:
+    return []
+```
+
+Confirmed by **zero `llm_budget_runway_low` rows in `pipeline_alerts` across
+the table's entire history**. It is scheduled (`health_monitor.py:141`), its
+data source works (`pipeline_run_costs`, MTD $4.16, ~$0.35/day over 10 days),
+and its thresholds are sane. It is configured out, not broken.
+
+Warning threshold raised **3 → 7 days**. At $0.35/day a 3-day warning fires
+with ~$1.05 left: under two days of lead time against a human who must notice,
+open a billing console and pay. Seven days survives a weekend plus a working
+day. CRITICAL stays at 1 day. 12 simulation tests, inversion-validated.
+
+**Caveat worth stating plainly:** this measures *spend against a declared
+monthly budget*, not the *prepaid balance* that actually ran out. It only
+approximates balance runway if the budget is kept equal to the top-up amount.
+The exact quantity is not exposed programmatically; the credit monitor probes
+binary exhaustion, not remaining balance.
+
+**BLOCKED on the top-up figure** for `ANTHROPIC_MONTHLY_BUDGET_USD`.
+
+### Step 4 — the correlation audit FALSIFIED my own hypothesis
+
+I speculated on 2026-08-22 that some diagnosed writer defects may have been
+billing outages wearing a writer's face. **The data says no.**
+
+167 events cross-referenced against the six windows: **9 inside (5%), 158
+outside (95%)**. And decisively:
+
+```
+narration script_generation_failed  79bee628  2026-08-19 02:49   no
+narration script_generation_failed  5ebb14a2  2026-08-20 02:56   no
+narration script_generation_failed  d94bd9b1  2026-08-20 02:56   no
+narration script_generation_failed  afcc2762  2026-08-21 02:49   no
+narration script_too_long           d11b32ac  2026-08-22 02:59   no
+narration script_too_long           8bb85dcb  2026-08-22 02:59   no
+narration script_too_long           c5b79263  2026-08-22 02:59   no
+narration script_too_long           3c4bd8a3  2026-08-22 02:59   no
+```
+
+**0 of 8 narration degradations fall inside an outage window.** The NARR arc's
+writer defects were genuine and the bug count is **not** overstated. No prior
+finding needs revising, and no revision tasks are filed — the audit was worth
+running precisely because it could have gone the other way.
+
+The 9 overlaps are all `zero_blueprints`, 6 of them clustered in the
+2026-08-17 16:15 → 08-18 15:00 window, which does look like a genuine
+credit-caused ingestion outage. That one is worth a second look under
+ALERT-01/#230, not here.
+
+### Tasks filed
+
+* **Provider-side spend alerts** — Anthropic and OpenAI console thresholds.
+  Operator-only, not visible or settable from here. **Still open.**
+* **`zero_blueprints` severity semantics** — emitted at both critical and
+  warning; decide which it is.
+* **Retry budget is proportional, so it barely helps** — first finding from
+  Step 1's new numbers (+7.70s → +7.12s). A fixed-word-count retry, or a retry
+  at the *same* budget with a corrective instruction, would be a real second
+  attempt.
+* **ALERT-01 / #230** — these alerts should also *resolve* when the condition
+  clears; the 4h reminder cadence assumes something eventually closes them.
