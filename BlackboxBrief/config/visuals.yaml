@@ -126,7 +126,20 @@ intelligent_transform:
       # now (weeks of dormant learning were caused by the 12s config).
       # Real fix (deferred): motion_compositor.py intro/outro pipeline
       # reliability. See post_render_transform.py:216 comment.
-      window_seconds: 16
+      # 2026-08-22 (#226): 16 -> 28. The 16s window gave narration a
+      # 32-word budget (16 - 2s tail, at 141 wpm), which is ~2 short
+      # sentences. Eight consecutive blueprints degraded
+      # `script_too_long` across the 08-21 and 08-22 fires. 28s gives
+      # 61 words -- 3-4 sentences, matching what the prompt now derives.
+      # Still well clear of the >=15s duration guard that the 12->16
+      # bump on 2026-07-09 existed to satisfy, so arm attribution keeps
+      # flowing even when motion_compositor skips intro/outro.
+      # Trade-off acknowledged: the 2026-07-09 note called 16s already
+      # '4s longer than optimal for reaction pace'. 28s is a deliberate
+      # bet that a reel WITH narration outperforms a shorter one
+      # without. #219's retention baseline breaks here -- any read
+      # spanning this change is invalid.
+      window_seconds: 28
     audio_ducking:
       enabled: true
       # QB-FIX-01 F3a-2 (2026-08-06): recentered from [-9,-12,-15] (around

@@ -538,3 +538,100 @@ mentioned in my reply but not named as a collision, and the two timing options
 were offered as symmetric when one of them broke a standing gate. Recorded as
 `[[feedback-name-the-collision-before-executing]]`: compliance after flagging,
 never compliance instead of it.
+
+## #226 SHIPPED + the prompt-coherence fix (2026-08-22)
+
+### A.1 result: degraded, 4/4, `script_too_long`
+
+The 2026-08-22 02:30 UTC fire produced four BB blueprints, all degraded, all
+`script_too_long` on attempt 1 (16.0s budget) AND on the 85% retry (13.6s).
+`fit_margin: 0.0` was live and did not help.
+
+The reason string is now correct — `script_too_long`, not
+`script_generation_failed` — which is yesterday's reason-preservation fix
+working. Yesterday the DB inverted the diagnosis; today it stated it.
+
+**The rejected script texts do not exist anywhere.**
+`_validate_narration_with_retry` returns `("", reason)` and discards the
+candidate: not persisted, not logged, not in run artifacts. So we reject on
+length without ever recording *by how much* — the one number that sizes the
+fix. Filed as a follow-on; the reproduction that would have supplied it was
+blocked by the credit exhaustion below.
+
+### Root cause: the prompt contradicted its own cap
+
+`_build_narration_hint` emitted a hardcoded **"2-4 sentences"** at every window
+size, alongside a cap derived from the window:
+
+```
+16.0s window -> fit 14.0s -> HARD word cap 32 words
+                          -> "2-4 sentences of ORIGINAL commentary"
+```
+
+Two to four sentences of spoken commentary is ~30-80 words. A model given a
+range writes near its middle: 3 sentences at ~17 words is 51 words, against a
+32-word cap. **The prompt asked for something it simultaneously forbade**, and
+the 85% retry inherited the same contradiction, which is why both attempts
+failed identically on all eight blueprints across two days.
+
+Third instance of the NARR-11 class — one contract, two implementers, allowed
+to drift. NARR-11: the cap and the validator each hardcoded a speaking rate.
+Here: the cap and the sentence ask each hardcoded a length.
+
+### Fix 1 — derive the sentence ask from the cap
+
+```
+10s -> cap  18w -> "exactly 1 sentence"
+16s -> cap  32w -> "1-2 sentences"
+22s -> cap  47w -> "2-3 sentences"
+28s -> cap  61w -> "3-4 sentences"
+60s -> cap 136w -> "7-8 sentences"
+```
+
+Short windows collapse to a single sentence rather than a range: at 10s, asking
+"1-2" already projects to ~25 words against an 18-word cap — the same overshoot
+one size down.
+
+This removes the class, not the instance. Raising the window now widens the ask
+automatically instead of silently under-using the budget.
+
+### Fix 2 — #226: BB `highlight_moment.window_seconds` 16 -> 28
+
+28s yields 61 words / 3-4 sentences. It stays clear of the >=15s duration guard
+that the 2026-07-09 bump to 16s existed to satisfy, so arm attribution keeps
+flowing when `motion_compositor` skips intro/outro.
+
+**Trade-off acknowledged in the config comment.** The 2026-07-09 note already
+called 16s *"4s longer than optimal for reaction pace"*. 28s is a deliberate bet
+that a reel WITH narration outperforms a shorter one without. **#219's retention
+baseline breaks here — any read spanning this change is invalid.**
+
+### Pinning
+
+`test_narration_prompt_coherence.py`, 18 tests, validated by inversion.
+
+The first version of the central pin asserted against the sentence *floor* and
+**passed at 16s** — the exact window production was failing on — because 2 x 14
+= 28 fits a 32-word cap. A pin that survives the defect it exists to catch is
+worthless. Rewritten to assert the **midpoint at typical length**, which is what
+a model given a range actually targets; it now fails at 16s under the old
+prompt.
+
+A second pin initially grepped the function source for the literal
+`"2-4 sentences"` and failed against the comment *explaining* the bug — the
+same match-the-prose trap that produced several false findings this week. Now
+behavioural: a derived range varies across windows, a hardcoded one cannot.
+
+### BLOCKER — both LLM providers are out of credit
+
+```
+Anthropic: credit balance too low        alert raised 2026-08-22 06:45:03 UTC, open
+OpenAI:    no credits remaining (fallback also dead)
+```
+
+Exhaustion began ~3h45m AFTER today's fire completed, so today's degradation is
+genuine and not a credit artifact. But **tomorrow's 02:30 fire will produce
+nothing at all** — not narration, not hooks, not captions — until credit is
+restored. Both fixes above are untestable against a real fire until then.
+
+Operator action required; this is a billing top-up, not a code change.

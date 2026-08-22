@@ -416,13 +416,53 @@ def _build_narration_hint(
     # defect, one layer down.
     fit_seconds *= 1.0 - max(0.0, min(fit_margin, 0.9))
     word_cap = int(fit_seconds * wpm / 60)
+    # 2026-08-22: the sentence range is DERIVED from the word cap instead of
+    # being a second hardcoded constant.
+    #
+    # It used to read "2-4 sentences" at every window size. At BB's 16s window
+    # the cap is 32 words, and 2-4 sentences of spoken commentary is ~30-80 —
+    # so the prompt asked for something its own cap forbade. The model obeyed
+    # the sentence instruction and blew the cap, on attempt 1 and again on the
+    # 85% retry which inherits the same contradiction. Four blueprints degraded
+    # `script_too_long` on the 2026-08-22 02:30 fire, and four more the day
+    # before, for this reason alone.
+    #
+    # This is the NARR-11 defect a third time: one contract, two implementers,
+    # allowed to drift. There the cap and the validator both hardcoded a rate;
+    # here the cap and the sentence ask both hardcoded a length. Deriving one
+    # from the other removes the class, not just the instance — raising the
+    # window now widens the sentence ask automatically instead of silently
+    # under-using the budget.
+    #
+    # ~17 words per spoken sentence, from the round-3 scripts that passed.
+    # Derive the ceiling from the cap, then offer one sentence of latitude
+    # below it. A model given a range writes near its middle, so the midpoint
+    # at 17 words must fit the cap — that is the property
+    # test_requested_sentences_fit_inside_the_cap pins.
+    #
+    # Short windows collapse to a single sentence rather than a range: at a
+    # 10s window the cap is 18 words, and asking for "1-2" already projects to
+    # ~25. Better to ask for exactly what fits than to offer a range whose own
+    # middle overshoots.
+    _WORDS_PER_SENTENCE = 17
+    max_sentences = max(1, round(word_cap / _WORDS_PER_SENTENCE))
+    min_sentences = max(1, max_sentences - 1)
+    if max_sentences > min_sentences:
+        sentence_ask = f"{min_sentences}-{max_sentences} sentences"
+    else:
+        sentence_ask = (
+            f"exactly {max_sentences} sentence"
+            f"{'s' if max_sentences != 1 else ''}"
+        )
     return (
         "NARRATION SCRIPT (voice-over commentary read aloud by TTS):\n"
         f"  - Target duration: fits into ≈ {fit_seconds:.1f} seconds of clip time\n"
         f"    (with a 2-second music-bed tail after your voice ends)\n"
         f"  - HARD word cap: {word_cap} words. Longer will be REJECTED and\n"
         f"    the reel will publish without narration.\n"
-        "  - 2-4 sentences of ORIGINAL commentary, analysis, or context.\n"
+        f"  - {sentence_ask} of ORIGINAL commentary,\n"
+        "    analysis, or context — the sentence count is derived from the word\n"
+        "    cap above, so obeying one obeys the other.\n"
         "    NOT a summary of what the clip shows — viewers can see the clip.\n"
         "    Your job is to ADD interpretation the visuals don't provide.\n"
         "  - Spoken voice: conversational, opinion-forward, first-person plural\n"

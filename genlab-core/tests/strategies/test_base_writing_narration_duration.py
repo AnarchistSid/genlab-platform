@@ -64,8 +64,13 @@ class TestDurationFallback:
     def test_render_window_outranks_source_metadata(self):
         """Behavioural companion to the structural pin above.
 
-        A 356s source clip against BB's 16s ``window_seconds`` must resolve
-        16 — not 30 (the old default) and not 356 (the file on disk).
+        A 356s source clip against BB's configured ``window_seconds`` must
+        resolve THAT — not 30 (the old default) and not 356 (the file on disk).
+
+        Reads the window from config rather than pinning a literal. The literal
+        made #226 (a deliberate 16 -> 28 change on 2026-08-22) look like a
+        regression in two unrelated files; the property under test is the
+        ORDERING, not the number.
         """
         from pathlib import Path
 
@@ -79,6 +84,25 @@ class TestDurationFallback:
             {"story_id": "s0"},
             {"clips": {"s0": {"duration_seconds": 356.588844}}},
         )
-        assert resolved == 16.0, (
-            f"expected the 16s render window, got {resolved}"
+        import yaml
+
+        cfg = yaml.safe_load((repo / "BlackboxBrief" / "config" / "visuals.yaml").read_text())
+        windows: list = []
+
+        def _walk(node):
+            if isinstance(node, dict):
+                if "window_seconds" in node:
+                    windows.append(float(node["window_seconds"]))
+                for v in node.values():
+                    _walk(v)
+            elif isinstance(node, list):
+                for v in node:
+                    _walk(v)
+
+        _walk(cfg)
+        assert windows, "BB visuals.yaml has no highlight_moment.window_seconds"
+        assert resolved == windows[0], (
+            f"expected BB's configured render window {windows[0]}s, got {resolved}"
         )
+        assert resolved != 30.0, "must not fall back to the 30s default"
+        assert resolved < 356.0, "must not size to the untrimmed source clip"

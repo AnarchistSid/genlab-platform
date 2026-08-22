@@ -11,6 +11,8 @@ on disk.
 """
 from __future__ import annotations
 
+import pathlib
+
 import subprocess
 from pathlib import Path
 
@@ -49,7 +51,7 @@ class TestRendererTrimWindowWins:
         """The exact 2026-08-19 story_0 inputs.
 
         356.6s source clip, no duration metadata on the story, BB's
-        ``highlight_moment.window_seconds: 16``. Must resolve 16 — not 30
+        ``highlight_moment.window_seconds``. Must resolve THAT — not 30
         (the old default) and not 356.6 (the file on disk).
         """
         s = _Strategy("ai_creators", _REPO / "BlackboxBrief")
@@ -64,7 +66,9 @@ class TestRendererTrimWindowWins:
         }
 
         resolved = s._resolve_render_duration_seconds(story, clip_index)
-        assert resolved == 16.0
+        assert resolved == _bb_configured_window(), (
+            "must resolve BB's CONFIGURED render window, whatever it is set to"
+        )
         assert resolved != 30.0, "the e1f508e9 baseline must no longer be reached"
         assert resolved < 356.0, "must not size to the untrimmed source clip"
 
@@ -139,3 +143,33 @@ class TestUnresolvableStillReturnsNone:
         s = _Strategy("testniche", niche_root)
 
         assert s._resolve_render_duration_seconds({"story_id": "s1"}, None) is None
+
+
+def _bb_configured_window() -> float:
+    """BB's configured highlight window, read from config rather than pinned.
+
+    These tests exist to prove the RENDER WINDOW outranks both the 30s default
+    and the untrimmed source clip. The specific number is config, and pinning
+    it as a literal made a deliberate config change (#226, 16 -> 28 on
+    2026-08-22) look like a regression in two unrelated test files. Read the
+    value; assert the ordering.
+    """
+    import yaml
+
+    repo = pathlib.Path(__file__).resolve().parents[3]
+    cfg = yaml.safe_load((repo / "BlackboxBrief" / "config" / "visuals.yaml").read_text())
+    found: list = []
+
+    def walk(node):
+        if isinstance(node, dict):
+            if "window_seconds" in node:
+                found.append(float(node["window_seconds"]))
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+
+    walk(cfg)
+    assert found, "BB visuals.yaml has no highlight_moment.window_seconds"
+    return found[0]
