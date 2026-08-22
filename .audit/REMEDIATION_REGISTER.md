@@ -782,3 +782,49 @@ ALERT-01/#230, not here.
   attempt.
 * **ALERT-01 / #230** — these alerts should also *resolve* when the condition
   clears; the 4h reminder cadence assumes something eventually closes them.
+
+### Step 3 follow-up — the runway proxy is WEAK, demonstrated on first run
+
+`ANTHROPIC_MONTHLY_BUDGET_USD=20.00` set (operator choice, backup
+`.env.bak.20260822T092901Z`). The check now runs and computes cleanly:
+
+```
+budget          $20.00
+month-to-date   $4.1609
+remaining       $15.8391
+avg daily burn  $0.2759/day
+runway          57.4 days
+alerts now      none (runway comfortable)
+```
+
+**It reports 57.4 days of runway while the account is exhausted right now.**
+That is not a bug in the check — it is the caveat above, arriving immediately
+and unmistakably.
+
+Two structural reasons the proxy cannot track the real quantity:
+
+1. **Budget ≠ balance.** `$20 declared − $4.16 spent` says nothing about the
+   prepaid credit actually sitting in the Anthropic account. Today those two
+   numbers disagree completely: one says $15.84, the truth is $0.
+2. **The window is the calendar month, not the top-up.**
+   `_fetch_month_to_date_llm_spend` sums from `DATE_TRUNC('month', NOW())`. A
+   mid-month top-up resets the real balance but not the MTD figure, so
+   remaining is understated after a top-up and overstated before one. The two
+   clocks never align.
+
+**Honest status: the runway guard is enabled but should not be relied on to
+prevent outage seven.** It will catch a slow burn against a correctly-declared
+budget; it will not catch prepaid exhaustion, which is what has happened six
+times.
+
+What actually would:
+
+* **Provider-side spend/balance alerts** (Anthropic + OpenAI consoles) — the
+  only place the true balance is visible. Operator-only. **This is the real
+  fix; everything here is a fallback.**
+* **Step 2's webhook**, which makes the *existing* binary exhaustion probe
+  page instead of writing to a table. `anthropic_credit_exhausted` already
+  detects reliably — it detected all six — it simply told nobody.
+* A `last_topup_at` marker so runway measures spend since top-up rather than
+  since month start. Filed; it narrows the gap but still measures spend, not
+  balance.
