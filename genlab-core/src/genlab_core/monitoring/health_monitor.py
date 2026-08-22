@@ -302,6 +302,52 @@ def resolve_stale_alerts() -> int:
 # ── CLI ───────────────────────────────────────────────────────────────
 
 
+# OPS-02: webhook throttle state. Owned by genlab:genlab per rule #15 — the
+# retro-credit state file lost 6h of progress to a root-owned state file that
+# systemd services could not write.
+_NOTIFY_STATE_PATH = "/opt/genlab/.runtime/alert_notify_state.json"
+_NOTIFY_REMINDER_SECONDS = 4 * 3600
+
+
+def _notify_throttled(fingerprint: str) -> bool:
+    """True when this exact critical set was notified recently.
+
+    Fails OPEN — any error returns False so the page still goes out. A broken
+    throttle that suppresses alerts would be strictly worse than the alert
+    fatigue it exists to prevent.
+    """
+    try:
+        import json as _json
+        import time as _time
+
+        with open(_NOTIFY_STATE_PATH, encoding="utf-8") as fh:
+            state = _json.load(fh)
+        if state.get("fingerprint") != fingerprint:
+            return False
+        return (_time.time() - float(state.get("ts", 0))) < _NOTIFY_REMINDER_SECONDS
+    except FileNotFoundError:
+        return False
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("notify throttle read failed, paging anyway: %s", exc)
+        return False
+
+
+def _notify_record(fingerprint: str) -> None:
+    """Record a successful delivery. Never raises."""
+    try:
+        import json as _json
+        import os as _os
+        import time as _time
+
+        _os.makedirs(_os.path.dirname(_NOTIFY_STATE_PATH), exist_ok=True)
+        tmp = f"{_NOTIFY_STATE_PATH}.tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            _json.dump({"fingerprint": fingerprint, "ts": _time.time()}, fh)
+        _os.replace(tmp, _NOTIFY_STATE_PATH)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("notify throttle write failed: %s", exc, exc_info=True)
+
+
 def notify(alerts: list[Alert]) -> bool:
     """Deliver CRITICAL alerts to a configured webhook (Slack-compatible).
 
@@ -317,16 +363,49 @@ def notify(alerts: list[Alert]) -> bool:
     if not url or not critical:
         return False
 
+    # OPS-02: throttle before composing. A persisting CRITICAL used to page on
+    # every run — the timer is every 30 minutes, so a 24h outage produced 48
+    # identical pages. Six credit outages between 2026-08-03 and 08-22 spanned
+    # up to 24h each; had the webhook been set, they would have delivered ~250
+    # messages saying the same thing. That is how a real page gets muted.
+    #
+    # Re-notify when the SET of critical (check, niche) pairs changes, or every
+    # _NOTIFY_REMINDER_SECONDS as a reminder that the condition persists.
+    fingerprint = ",".join(sorted(f"{a.check}:{a.niche_id or '-'}" for a in critical))
+    if _notify_throttled(fingerprint):
+        logger.info(
+            "Webhook throttled: %d critical alert(s), unchanged set already "
+            "notified within %dm",
+            len(critical), _NOTIFY_REMINDER_SECONDS // 60,
+        )
+        return False
+
     lines = "\n".join(f"• {a}" for a in critical[:25])
     text = f"\U0001f6a8 Gen Lab health: {len(critical)} CRITICAL alert(s)\n{lines}"
     try:
         import requests
 
-        requests.post(url, json={"text": text}, timeout=10)
-        logger.info("Delivered %d critical alert(s) to webhook", len(critical))
+        resp = requests.post(url, json={"text": text}, timeout=10)
+        # OPS-02: the response used to be discarded, so a revoked or mistyped
+        # webhook returned 404/410 and this logged "Delivered" and returned
+        # True. The path built to end silent failures was itself silently
+        # failing — only a transport exception was ever noticed.
+        if not (200 <= resp.status_code < 300):
+            logger.warning(
+                "Alert webhook returned HTTP %s — %d critical alert(s) NOT "
+                "delivered. Body: %s",
+                resp.status_code, len(critical),
+                (resp.text or "")[:200].replace("\n", " "),
+            )
+            return False
+        _notify_record(fingerprint)
+        logger.info(
+            "Delivered %d critical alert(s) to webhook (HTTP %s)",
+            len(critical), resp.status_code,
+        )
         return True
     except Exception as e:
-        logger.warning("Alert webhook delivery failed: %s", e)
+        logger.warning("Alert webhook delivery failed: %s", e, exc_info=True)
         return False
 
 

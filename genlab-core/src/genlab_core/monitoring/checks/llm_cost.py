@@ -181,12 +181,16 @@ def check_llm_cost_runaway() -> list[Alert]:
     ]
 
 
+# OPS-02: days of runway below which a WARNING pages. See the threshold note
+# inside check_llm_budget_runway for why 7 rather than 3.
+_RUNWAY_WARNING_DAYS: float = 7.0
+
+
 def check_llm_budget_runway() -> list[Alert]:
     """Project days-until-budget-exhausted from month-to-date spend.
 
     Only fires when ANTHROPIC_MONTHLY_BUDGET_USD is set. Escalates:
-    * 7-day runway: no alert (informational only via dashboard card)
-    * 3-day runway: WARNING
+    * 7-day runway: WARNING (OPS-02 — was informational)
     * 1-day runway: CRITICAL
     * Budget exceeded: CRITICAL
     """
@@ -236,12 +240,23 @@ def check_llm_budget_runway() -> list[Alert]:
 
     days_runway = remaining / avg_daily
 
+    # OPS-02 (2026-08-22): warning threshold 3 -> 7 days.
+    #
+    # Six credit outages between 2026-08-03 and 08-22, several spanning 19-24h
+    # — full pipeline cycles firing with a dead writer. At the measured burn of
+    # ~$0.35/day, a 3-day warning fires with about $1.05 left: under two days
+    # of lead time against a human who has to notice, open a billing console
+    # and pay. Seven days is the smallest threshold that survives a weekend
+    # plus a working day, which is the realistic worst case for a solo
+    # operator.
+    #
+    # CRITICAL stays at 1 day: by then it is an incident, not a heads-up.
     if days_runway < 1.0:
         severity = "critical"
-    elif days_runway < 3.0:
+    elif days_runway < _RUNWAY_WARNING_DAYS:
         severity = "warning"
     else:
-        return []  # 3+ days of runway is not incident-level
+        return []
 
     return [
         Alert(
