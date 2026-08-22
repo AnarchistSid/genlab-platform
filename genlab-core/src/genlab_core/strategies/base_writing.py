@@ -585,6 +585,57 @@ class BaseWritingStrategy(WritingStrategy):
         ),
     }
 
+    def _log_rejected_candidate(
+        self,
+        script: str,
+        *,
+        attempt: int,
+        reason: str,
+        target_seconds: float,
+        wpm: int,
+        tail: float,
+        margin: float,
+    ) -> None:
+        """Record HOW MUCH a rejected narration candidate missed by.
+
+        OPS-02 Step 1. The validator returns ``("", reason)`` and the candidate
+        is discarded, so the logs said *that* a script was too long and never
+        *by how much*. Sizing the fix then required reproducing the generation —
+        and on 2026-08-22 that reproduction was impossible because both LLM
+        providers were out of credit. The one number that would have sized
+        #226 was destroyed at the moment it was measured.
+
+        Emits word count, projected seconds, the validator's effective budget,
+        and the overshoot delta. **Never the script text** — narration is a
+        compliance surface (URLs, affiliate pitches, first-person claims are
+        exactly what the other reason slugs catch), and a rejected candidate is
+        the least-vetted text the writer produces. Numbers and reason only.
+
+        Never raises: diagnostics must not cost a reel.
+        """
+        try:
+            from genlab_core.writing.narration_validator import (
+                project_tts_duration_seconds,
+            )
+
+            words = len((script or "").split())
+            projected = project_tts_duration_seconds(script or "", wpm)
+            budget = max(0.0, (target_seconds - tail) * (1.0 - margin))
+            overshoot = projected - budget
+            logger.warning(
+                "[%s] narration attempt %d rejected (%s): %d words, "
+                "projected %.2fs vs budget %.2fs — overshoot %+.2fs "
+                "(target %.1fs, tail %.1fs, margin %.0f%%, wpm %d)",
+                self._niche_id, attempt, reason, words, projected, budget,
+                overshoot, target_seconds, tail, margin * 100, wpm,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "[%s] narration attempt %d rejected (%s); could not measure "
+                "the overshoot: %s",
+                self._niche_id, attempt, reason, exc, exc_info=True,
+            )
+
     def _validate_narration_with_retry(
         self,
         *,
@@ -640,6 +691,11 @@ class BaseWritingStrategy(WritingStrategy):
             )
             return "", reason
 
+        self._log_rejected_candidate(
+            script, attempt=1, reason=reason, target_seconds=target_seconds,
+            wpm=wpm, tail=tail, margin=margin,
+        )
+
         retry_target = target_seconds
         correction = self._NARRATION_CORRECTIONS.get(reason, "")
         if reason == "script_too_long":
@@ -689,6 +745,10 @@ class BaseWritingStrategy(WritingStrategy):
             )
             return candidate, ""
 
+        self._log_rejected_candidate(
+            candidate, attempt=2, reason=reason2, target_seconds=retry_target,
+            wpm=wpm, tail=tail, margin=margin,
+        )
         logger.warning(
             "[%s] narration attempt 2 also rejected (%s) — degrading; "
             "this reel publishes without narration",
