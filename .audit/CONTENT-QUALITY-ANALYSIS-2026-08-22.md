@@ -163,3 +163,137 @@ system decorates the republishing.
 "World class" requires changing what the pipeline **produces**, not what it
 garnishes — and on channels with an audience large enough for the difference to
 show.
+
+---
+
+# Second pass — why distribution fails, and the objective-function defect
+
+The first pass concluded audience is the constraint. This pass asks why the
+audience doesn't grow, and finds a defect one layer deeper than content.
+
+## 7. The two large audiences were never earned
+
+They are present at the **first snapshot**, before the pipeline's record begins:
+
+```
+                2026-03-31      2026-08-21      5-month delta
+ai_creators        10,099   →      10,027            −72
+movies              8,502   →       8,659           +157
+anime                   0   →          55            +55
+gaming                 15   →          26            +11
+sports                  0   →          19            +19
+```
+
+~1,350 reels published. **Net +170 Facebook followers.** One follower per eight
+reels — and the largest channel is shrinking.
+
+## 8. Distribution works better than the platform averages suggested
+
+Breakout rate (posts reaching ≥100 views):
+
+```
+ai_creators × facebook   36%      gaming  × facebook   22%
+ai_creators × instagram  32%      movies  × facebook   16%
+gaming      × instagram  26%      sports  × facebook   16%
+anime       × instagram  23%      sports  × youtube     6%
+movies      × instagram  23%      movies  × youtube     2%
+```
+
+Both Meta platforms give real non-follower reach — gaming has 14 Instagram
+followers and a 26% breakout rate, so this is algorithmic distribution, not
+audience delivery.
+
+**YouTube is a lottery, not a dead channel.** Sports on YouTube: median 0, p90
+17, **best 13,126** — the single highest-reach post in the system's history, on
+the platform with 17 total subscribers. 9 breakouts in 147 posts.
+
+## 9. A straight delivery leak
+
+```
+instagram   45 FAILED / ~294   (15%)
+threads     40 FAILED + 45 INSIGHTS_UNAVAILABLE / ~198  (20%)
+facebook    15 FAILED, 18 unavailable, 2 REMOVED_BY_META
+twitter     50 SKIPPED, 16 FAILED, 14 delivered
+```
+
+One in six Instagram publishes never lands.
+
+## 10. Content still explains nothing — even inside one platform
+
+Restricting to Instagram alone, n=420 posts:
+
+```
+hook length 0.038   composite −0.053   virality 0.066   source velocity 0.004
+```
+
+This is not a platform-mixing artefact. Within a single distribution channel,
+across 420 posts, nothing we author or score predicts reach.
+
+## 11. THE FINDING — attention is not converting into audience
+
+Total delivered: **116,791 views, 3,563 likes, 352 comments.**
+
+View → follow conversion, corrected for the Facebook `fans`/`followers`
+double-count:
+
+| channel | views delivered | followers gained | conversion |
+|---|---:|---:|---:|
+| movies | 14,263 | ~160 | **1.12%** |
+| anime | 16,753 | ~65 | 0.39% |
+| gaming | 13,572 | ~25 | 0.18% |
+| sports | **41,251** | ~41 | **0.10%** |
+| ai_creators | 24,452 | ~−72 | **negative** |
+
+Healthy short-form converts **1–3%**. The system runs at ~0.26% overall — 4–10×
+below — and the spread between niches is **11×**.
+
+**Sports has delivered more views than any other channel and converted almost
+none of them.** Movies delivered a third as many views and gained four times
+the followers.
+
+That is the signature of commodity content: a sports highlight satisfies the
+viewer completely in six seconds and gives them no reason to follow the
+account, because a thousand accounts post the same clip. Movies and anime are
+taste signals — following implies shared judgement.
+
+## 12. The objective function explains why the system drifts toward commodity
+
+Audience-growth weight in `RewardShaper.BASE_WEIGHTS`:
+
+```
+youtube    0.20        instagram  0.15        facebook   0.15
+tiktok     0.20        threads    0.15        twitter/x  0.00
+
+audience-growth share of total reward weight: 11.8%
+```
+
+**88% of the reward the learning system maximises is views and engagement.**
+
+Views do not compound. Followers do. A bandit optimising an 88%-engagement
+objective on channels with no audience will hill-climb toward whatever produces
+views per post — which the data above shows is precisely the content that
+converts worst.
+
+The system is not failing at its objective. **It is succeeding at the wrong
+one.** Sports is its best-performing niche by views and its worst by audience,
+and nothing in the reward function can see that distinction.
+
+---
+
+# Revised conclusion
+
+The tools were never the constraint, and neither, ultimately, is content
+quality. Three defects compound:
+
+1. **Objective** — 88% of reward weight on a metric that does not compound.
+   Fixable: raise audience-growth weight, and add view→follow conversion as a
+   first-class tracked metric. It is currently not measured anywhere.
+2. **Selection** — `composite_score` correlates −0.193 with reach, so the gate
+   and bandit steer on noise. Fixable: retire or re-fit against realised reach.
+3. **Format** — one borrowed clip, trimmed, overlaid. No editing, no point of
+   view. Narration is the shipped attempt and has never once succeeded.
+
+The single most informative number in the dataset is the 11× conversion spread
+between movies (1.12%) and sports (0.10%). It is measurable today, nothing in
+the system optimises for it, and it points at a content-strategy answer rather
+than a tooling one.
