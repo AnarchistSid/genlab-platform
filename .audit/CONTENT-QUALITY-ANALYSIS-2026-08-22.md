@@ -297,3 +297,112 @@ The single most informative number in the dataset is the 11× conversion spread
 between movies (1.12%) and sports (0.10%). It is measurable today, nothing in
 the system optimises for it, and it points at a content-strategy answer rather
 than a tooling one.
+
+---
+
+# Third pass — two corrections, and the mechanism found
+
+## 13. CORRECTION: the reward inputs are not missing
+
+Pass 2's implication that reward weight lands on absent metrics was **wrong**.
+It was inferred from the `publishing_analytics` schema, which persists only
+views/likes/comments/shares/saves. At **runtime** the collector supplies far
+more, in memory, and the shaper renormalises over what it receives — and warns
+when it drops ≥15%:
+
+```
+instagram   dropped 33%   ['completion_rate', 'dm_send_rate', 'skip_rate']
+threads     dropped 30%   ['discovery_share', 'follower_gained']
+youtube / facebook / twitter   no warnings in 10 days → <15% dropped
+```
+
+So `follower_gained`, `vtr`, `avg_view_duration`, `reach` and `minutes_viewed`
+**are** supplied on the main platforms. The plumbing is sound; the weighting is
+the question. (`reward_shaper.py:433-455` already anticipated this failure mode
+and logs it — the warning has fired 26 times in 10 days and nobody read it,
+which is its own rule-#19 instance.)
+
+## 14. CORRECTION: the objective is not badly misdirected
+
+Pass 2 said the system optimises the wrong thing. Measured, that is too strong:
+
+```
+reward vs views             r = 0.488   (n=764)
+reward vs follower growth   r = 0.108 – 0.273 per niche
+```
+
+Reward predicts views ~3× better than growth — but the **niche ranking is
+nearly identical on both**:
+
+| niche | avg reward | follower gain/day |
+|---|---:|---:|
+| movies | 0.0926 | +1.06 |
+| anime | 0.0787 | +0.57 |
+| gaming | 0.0773 | +0.10 |
+| sports | 0.0639 | +0.26 |
+| ai_creators | 0.0590 | **−0.50** |
+
+The system is not pointed at the wrong niche. It is pointed roughly right and
+the absolute numbers are ~10× too small. **ai_creators has lost half a follower
+per day, every day, for 113 days.**
+
+## 15. THE MECHANISM — intent signals, per 1,000 views
+
+| niche | views | saves/1k | shares/1k | comments/1k |
+|---|---:|---:|---:|---:|
+| movies | 14,263 | **4.63** | 2.17 | 4.35 |
+| gaming | 13,572 | 4.49 | 0.29 | 5.23 |
+| anime | 16,753 | 3.94 | **7.88** | **6.98** |
+| ai_creators | 24,452 | 3.27 | 0.33 | 1.35 |
+| **sports** | **41,251** | **0.36** | **0.12** | 0.95 |
+
+**Sports earns the most views of any channel — 71 per post, the highest — and
+the lowest save, share and comment rates by an order of magnitude.** Saves are
+13× below movies; shares 66× below anime.
+
+And save-rate ranks almost exactly like follow-conversion:
+
+```
+saves/1k     movies 4.63 > gaming 4.49 > anime 3.94 > ai_creators 3.27 > sports 0.36
+conversion   movies 1.12% > anime 0.39% > gaming 0.18% > sports 0.10% > ai_creators neg
+```
+
+This is the commodity signature, measured rather than asserted. A sports
+highlight is consumed and discarded: watched, not saved, not shared, not
+followed. The viewer wanted the play, not the channel.
+
+**`saves_per_1k_views` is a leading indicator of follow conversion, is already
+collected, and is not a target anywhere in the system.**
+
+---
+
+# Final synthesis across three passes
+
+1. The system **repackages** rather than creates: 89/89 reels are someone
+   else's clip plus ~300 characters of text.
+2. The generative tools have **never run on a published reel** (0/89), and sit
+   on the packaging layer regardless — first 3 seconds and the audio track.
+3. `composite_score` correlates **−0.193** with reach, so selection steers on
+   noise. Nothing content-side predicts reach even within one platform (n=420).
+4. The two large audiences were **never earned** — present at the first
+   snapshot. The pipeline's real record is **+170 followers across ~1,350
+   reels**.
+5. Conversion is **~0.26%** against a healthy 1–3%, with an **11× spread**
+   between niches.
+6. Reward tracks **views (0.488)** ~3× better than growth, though niche
+   rankings align — so the objective is imprecise, not inverted.
+7. **The content that gets the most views earns the least.** Sports leads on
+   views and trails on every intent signal by 13–66×.
+
+**The answer to "why isn't it world-class":** the pipeline optimises and
+publishes content that is watched and forgotten. Better generation tools would
+make a forgettable clip prettier at its edges. What the data points to instead
+is selecting for **save- and share-worthiness** — which is already measured,
+already varies 13× across our own channels, and is currently optimised by
+nothing.
+
+The cheapest real experiment available: **add `saves_per_1k` and
+`shares_per_1k` as explicit reward components**, and re-weight away from raw
+views. That is a config change against metrics already flowing, testable inside
+two weeks, and it targets the one variable that separates our best-converting
+channel from our worst.
