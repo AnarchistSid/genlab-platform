@@ -828,3 +828,137 @@ What actually would:
 * A `last_topup_at` marker so runway measures spend since top-up rather than
   since month start. Filed; it narrows the gap but still measures spend, not
   balance.
+
+### Step 2.3 — delivery PROVEN (2026-08-22 15:05 UTC)
+
+Operator set `GENLAB_ALERT_WEBHOOK_URL` (capture-first append). A real CRITICAL
+was fired through the actual `notify()` path — not a mock, not a code read.
+
+```
+configured    : True          scheme : https
+host          : hooks.slack.com
+path segments : 4 (values withheld)     url length : 81
+
+call 1  same set        -> notify() True   "Delivered 1 critical alert(s) to webhook (HTTP 200)"
+call 2  same set        -> notify() False  "Webhook throttled: unchanged set already notified within 240m"
+call 3  CHANGED set     -> notify() True   "Delivered 2 critical alert(s) to webhook (HTTP 200)"
+
+VERDICT: DELIVERY PROVEN + THROTTLE PROVEN
+```
+
+The three calls prove the three properties that matter together: it delivers,
+a persisting condition does not re-page, and a **new** condition breaks through
+the throttle immediately. The HTTP 200 is what the old code could not have
+told us — it would have logged "Delivered" on a 404 just the same.
+
+Throttle state `-rw-rw-r-- genlab genlab /opt/genlab/.runtime/alert_notify_state.json`
+(rule #15 satisfied). `.env` confirmed gitignored; the URL appears in no
+tracked file and no log line.
+
+**Now routing** (all critical, verified against prod severities):
+`anthropic_credit_exhausted`, `service_down`, `systemd_unit_failed`,
+`slo:zero_blueprints`. The `zero_blueprints` warning variant still does not —
+see ALERT-01 below.
+
+---
+
+## #233 — runway guard mis-measures; wire to real balance or retire it
+
+**It reads healthy at zero.** On its first live run with
+`ANTHROPIC_MONTHLY_BUDGET_USD=20.00`:
+
+```
+budget $20.00 − MTD $4.16 = $15.84 remaining ÷ $0.2759/day = 57.4 days runway
+alerts: none (comfortable)
+…while the Anthropic account was exhausted at that exact moment.
+```
+
+Two clocks that never align:
+
+1. **Budget ≠ balance.** A declared monthly ceiling says nothing about prepaid
+   credit sitting in the account. Today: $15.84 vs $0.
+2. **Window is the calendar month, not the top-up.**
+   `_fetch_month_to_date_llm_spend` sums from `DATE_TRUNC('month', NOW())`. A
+   mid-month top-up resets the balance but not the MTD figure — remaining is
+   understated after a top-up, overstated before one.
+
+**Proposal, in order of preference:**
+
+* **Wire to real balance if an API exposes it.** Anthropic's Admin/organization
+  usage-and-cost endpoints are the candidate; not verified here (would need
+  admin-key access, and the account is exhausted). If a balance or
+  credit-remaining field exists, read it directly and delete the projection
+  entirely — the arithmetic is only a proxy for a number that would then be
+  available.
+* **Otherwise retire the check.** A guard that reads "57.4 days, comfortable"
+  during a live outage is worse than no guard: it occupies the slot where real
+  coverage would go and it will be believed. Retiring it makes the gap visible
+  and leaves provider-side alerts as the acknowledged single point of
+  prevention.
+* **Interim, if kept:** a `last_topup_at` marker so runway measures spend since
+  top-up rather than since month start. Narrows the second mismatch, does
+  nothing about the first, and still measures spend rather than balance.
+
+**Do not leave it as-is.** The current state is the dangerous middle: enabled,
+computing cleanly, and wrong.
+
+## #234 — the 85% retry is close to a no-op
+
+First finding produced by Step 1's new numbers, on Saturday's real shape:
+
+```
+attempt 1   51 words, projected 21.70s vs budget 14.00s   overshoot +7.70s
+attempt 2   44 words, projected 18.72s vs budget 11.60s   overshoot +7.12s
+```
+
+The retry shrinks the **ask** and the **budget** together —
+`retry_target = target_seconds * 0.85` — so the model writes proportionally
+less against proportionally less room and lands almost exactly as far over.
+0.58s of improvement for a second LLM call. That is why every degradation this
+week failed twice rather than once.
+
+**Two candidate fixes, to be decided once a real fire produces a script at the
+28s window** (the prompt-coherence fix may have removed the underlying cause,
+in which case the retry rarely fires and the question is moot):
+
+* **Retry at the FULL budget with a tighter sentence instruction** — keep the
+  room, reduce the ask. The retry then has genuine headroom instead of
+  inheriting the same ratio.
+* **Drop the retry entirely.** If the prompt is self-consistent, a first-attempt
+  failure is unlikely to be fixed by an identical second attempt, and the LLM
+  call is not free.
+
+Blocked on evidence, deliberately: proposing without a post-fix data point
+would be guessing at whether the retry still has a job.
+
+## ALERT-01 — `zero_blueprints` dual severity + the 08-17→08-18 cluster
+
+`zero_blueprints` is emitted at **both** critical (70 rows) and warning (78
+rows, most recent 2026-08-22). The warning variant does not route to the
+webhook, so the same condition pages or does not depending on which emitter
+fired.
+
+**Fix the emitter's semantics, not the severity filter.** Widening the filter to
+route warnings would page on every warning in the system and defeat the
+throttle work above. A niche producing zero blueprints is either an incident or
+it is not — pick one, and if it is conditional (e.g. critical only after N
+consecutive zero runs), make that condition explicit in the emitter.
+
+**Case to carry into the work:** the 2026-08-17 16:15 → 08-18 15:00 outage
+window contains **six** zero-blueprint events across both severities:
+
+```
+08-18 05:05  slo:zero_blueprints [critical]
+08-18 06:06  slo:zero_blueprints [critical]
+08-18 07:06  slo:zero_blueprints [critical]
+08-18 07:30  zero_blueprints     [warning]
+08-18 07:34  slo:zero_blueprints [critical]
+08-18 08:00  zero_blueprints     [warning]
+08-18 08:30  zero_blueprints     [critical]
+```
+
+One underlying cause — dead credit starving ingestion — surfacing as seven rows
+across two check names and two severities within 3.5 hours. It is
+simultaneously the strongest correlation in the Step 4 audit and a clean
+demonstration of why the emitter needs deduplicating before the severity
+question is even meaningful.
