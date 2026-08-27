@@ -80,12 +80,19 @@ class TestVideoScore:
 class TestScore:
     def test_basic_formula(self):
         """composite = velocity_score × trend_multiplier × niche_relevance."""
+        # 2026-08-26: the trend multiplier is now CAPPED at 1.0 by default.
+        # Measured on 207 published reels, boosting on Google Trends position
+        # inverted the ranking -- boosted items averaged 133 views against 421
+        # unboosted, and the highest-scored band performed worst of seven.
+        # These tests previously pinned the boost, i.e. the defect. They now
+        # pin the cap, and prove the boost is still REACHABLE via the env
+        # override so the change stays reversible.
         scorer = CompositeScorer("gaming")  # threshold = 1500
         vs = scorer.score(_video(view_velocity=750.0), trend_multiplier=2.0)
         # velocity_score = 750/1500 = 0.5
-        # composite = 0.5 × 2.0 × 1.0 = 1.0
+        # trend_multiplier 2.0 is capped to 1.0 -> composite = 0.5 × 1.0 = 0.5
         assert vs.velocity_score == pytest.approx(0.5)
-        assert vs.composite == pytest.approx(1.0)
+        assert vs.composite == pytest.approx(0.5)
 
     def test_velocity_capped_at_1(self):
         """View velocity above threshold still caps velocity_score at 1.0."""
@@ -107,16 +114,32 @@ class TestScore:
         assert vs.composite == 0.0
         assert vs.passed is False
 
-    def test_trend_multiplier_amplifies(self):
+    def test_trend_multiplier_no_longer_amplifies(self):
+        """Renamed from test_trend_multiplier_amplifies — amplifying is the
+        behaviour that inverted the ranking."""
         scorer = CompositeScorer("movies")  # threshold = 800
+        vs_base = scorer.score(_video(view_velocity=400.0), trend_multiplier=1.0)
+        vs_trend = scorer.score(_video(view_velocity=400.0), trend_multiplier=3.0)
+        assert vs_trend.composite == pytest.approx(vs_base.composite)
+
+    def test_trend_multiplier_amplification_is_restorable(self, monkeypatch):
+        """The cap must be a policy, not a deletion — a future re-fit should be
+        able to re-enable the boost with evidence."""
+        from genlab_core.scoring.composite_scorer import _TREND_CEILING_ENV
+
+        monkeypatch.setenv(_TREND_CEILING_ENV, "3.0")
+        scorer = CompositeScorer("movies")
         vs_base = scorer.score(_video(view_velocity=400.0), trend_multiplier=1.0)
         vs_trend = scorer.score(_video(view_velocity=400.0), trend_multiplier=3.0)
         assert vs_trend.composite == pytest.approx(vs_base.composite * 3.0)
 
-    def test_trend_multiplier_clamped_to_3(self):
+    def test_trend_multiplier_clamped_to_the_ceiling(self):
+        """Was clamped to 3.0; the default ceiling is now 1.0. The reported
+        value must be what was USED, not what was supplied, or the next audit
+        sees 3.0 and misdiagnoses."""
         scorer = CompositeScorer("gaming")
         vs = scorer.score(_video(view_velocity=1500.0), trend_multiplier=5.0)
-        assert vs.trend_multiplier == 3.0
+        assert vs.trend_multiplier == 1.0
 
     def test_negative_trend_multiplier_clamped_to_0(self):
         scorer = CompositeScorer("gaming")
@@ -214,10 +237,11 @@ class TestScoreAndRank:
         ]
         trend_map = {"v1": 3.0, "v2": 1.0}
         results = scorer.score_and_rank(videos, trend_multipliers=trend_map)
-        # v1: 0.5 × 3.0 = 1.5, v2: 0.5 × 1.0 = 0.5
-        assert results[0].video_id == "v1"
-        assert results[0].composite == pytest.approx(1.5)
+        # Both capped to 1.0 -> identical composites. The map is still WIRED
+        # (the value reaches the scorer); it simply cannot boost any more.
+        assert results[0].composite == pytest.approx(0.5)
         assert results[1].composite == pytest.approx(0.5)
+        assert {r.video_id for r in results} == {"v1", "v2"}
 
     def test_niche_relevance_map(self):
         scorer = CompositeScorer("gaming", min_composite=0.01)

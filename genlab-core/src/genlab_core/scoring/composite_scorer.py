@@ -36,8 +36,9 @@ Usage::
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 from genlab_core.config.tuning import get_tuning_config
 
@@ -121,6 +122,29 @@ _SOURCE_REACH_MULTIPLIER: dict[str, dict[str, float]] = {
         "youtube_trending": 0.6,
     },
 }
+
+
+# 2026-08-26: ceiling on the Google-Trends multiplier. Default 1.0 neutralises
+# it; see the evidence block in score() for why. Env-overridable so the change
+# can be reverted or re-widened without a code deploy.
+_TREND_CEILING_ENV: Final[str] = "GENLAB_TREND_MULTIPLIER_CEILING"
+_DEFAULT_TREND_CEILING: Final[float] = 1.0
+
+
+def _trend_multiplier_ceiling() -> float:
+    """Read the ceiling at call time. Falls back to the safe default on any
+    malformed value rather than restoring a boost nobody asked for."""
+    raw = (os.environ.get(_TREND_CEILING_ENV) or "").strip()
+    if not raw:
+        return _DEFAULT_TREND_CEILING
+    try:
+        return max(0.0, min(float(raw), 3.0))
+    except ValueError:
+        logger.warning(
+            "%s=%r is not a number — using the default ceiling %.1f",
+            _TREND_CEILING_ENV, raw, _DEFAULT_TREND_CEILING,
+        )
+        return _DEFAULT_TREND_CEILING
 
 
 def _source_reach_multiplier(niche_id: str, source: str) -> float:
@@ -219,8 +243,46 @@ class CompositeScorer:
             else 0.0
         )
 
-        # Clamp inputs to valid ranges
-        trend_mult = max(0.0, min(float(trend_multiplier), 3.0))
+        # Clamp inputs to valid ranges.
+        #
+        # 2026-08-26: the trend multiplier is capped at 1.0 by default, which
+        # neutralises it, because measurement says boosting on Google Trends
+        # position makes ranking WORSE.
+        #
+        # Evidence, 207 published reels with realised views:
+        #
+        #   composite band   n    avg views
+        #   0.30-0.48       59      520      <- lowest scored, best performing
+        #   0.50-1.00       69      353
+        #   1.00-1.21       57      393
+        #   1.50             3      182
+        #   2.00-2.08        6      173
+        #   2.56-2.85        5      118
+        #   3.00             8      105      <- highest scored, worst performing
+        #
+        # Monotone decline, 5x from bottom band to top. Split by whether the
+        # multiplier fired at all: boosted (>1.0) averaged 133 views against
+        # 421 for unboosted — a 3.2x penalty — and the effect reproduces in
+        # every niche where boosting occurs (anime 74 vs 436, sports 66 vs 485,
+        # movies 237 vs 363, ai_creators 298 vs 435). Gaming, which produces no
+        # boosted scores at all, shows no inversion outside noise.
+        #
+        # Within-group correlations are weak (-0.13 boosted, -0.09 unboosted),
+        # so the inversion is almost entirely BETWEEN the groups: the base
+        # score is roughly uninformative, and the multiplier is what actively
+        # inverts the ranking. Overall composite vs views was pearson -0.221,
+        # spearman -0.317, top-decile/bottom-decile 0.468x.
+        #
+        # Why this is plausible rather than a fluke: a topic trending in Google
+        # SEARCH is one people are looking up — news, controversy, "what
+        # happened". That is a different intent from wanting to watch a
+        # 20-second clip in a feed, and such topics are usually already
+        # saturated with coverage.
+        #
+        # Reversible without a deploy: set GENLAB_TREND_MULTIPLIER_CEILING=3.0
+        # to restore the previous behaviour. Kept as a ceiling rather than
+        # deleting the input so a future re-fit can re-enable it with evidence.
+        trend_mult = max(0.0, min(float(trend_multiplier), _trend_multiplier_ceiling()))
         relevance = 1.0 if float(niche_relevance) > 0 else 0.0
 
         # Engagement: like/view ratio as a virality proxy. Neutral (1.0) when no
