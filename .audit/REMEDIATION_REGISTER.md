@@ -962,3 +962,93 @@ across two check names and two severities within 3.5 hours. It is
 simultaneously the strongest correlation in the Step 4 audit and a clean
 demonstration of why the emitter needs deduplicating before the severity
 question is even meaningful.
+
+## composite_score FIXED — the Google-Trends multiplier was inverting the ranking (2026-08-27, `c2a483c6`)
+
+### The mechanism
+
+```
+composite = velocity_score × trend_mult × relevance × engagement × source_mult
+                             ^^^^^^^^^^ Google Trends position, clamped [0, 3.0]
+```
+
+Measured on 207 published reels with realised views:
+
+| composite band | n | avg views |
+|---|---:|---:|
+| 0.30–0.48 | 59 | **520** ← lowest scored, best performing |
+| 0.50–1.00 | 69 | 353 |
+| 1.00–1.21 | 57 | 393 |
+| 1.50 | 3 | 182 |
+| 2.00–2.08 | 6 | 173 |
+| 2.56–2.85 | 5 | 118 |
+| 3.00 | 8 | **105** ← highest scored, worst performing |
+
+Monotone, 5× from bottom band to top. Split on whether the multiplier fired:
+**boosted (>1.0) averaged 133 views against 421 unboosted — a 3.2× penalty** —
+and it reproduces in every niche where boosting occurs (anime 74 vs 436, sports
+66 vs 485, movies 237 vs 363, ai_creators 298 vs 435). Gaming produces no
+boosted scores and shows no inversion outside noise.
+
+Within-group correlations are weak (−0.13 boosted, −0.09 unboosted), so the
+inversion lives **between** the groups. The base score is roughly
+uninformative; the multiplier is what actively inverts. That is why the fix is
+a ceiling and not a re-weight.
+
+**Why it is plausible rather than a fluke:** a topic trending in Google
+*search* is one people are looking up — news, controversy, "what happened".
+That is a different intent from wanting to watch a 20-second clip in a feed,
+and such topics are already saturated with coverage.
+
+### Checks made before touching a scorer that gates publishing
+
+* **Selection bias ruled out** — published (median 0.797) and unpublished
+  (0.921) span the same range, so the correlation is not range-restricted.
+  ARCHIVED items in fact score *higher* than PUBLISHED (0.953 vs 0.904).
+* **Damage located** — `_scoring.py:1041` sorts candidates by composite and
+  assigns rank, so the top-N is chosen by it. The 0.3 gate is inert: only
+  1 of 207 items falls below it.
+* **All five niches negative** — anime −0.394, sports −0.377, gaming −0.202,
+  movies −0.115, ai_creators −0.051.
+
+### The fix
+
+`trend_mult` is capped at **1.0** by default, neutralising the boost.
+`GENLAB_TREND_MULTIPLIER_CEILING=3.0` restores the old behaviour without a
+deploy; malformed values fall back to the safe default rather than silently
+restoring a boost. Kept as a ceiling rather than deleting the input so a future
+re-fit can re-enable it with evidence.
+
+Verified live on prod: `trend=1.0 → 1.0000`, `trend=3.0 → 1.0000`, boost
+neutralised, and velocity still differentiates (0.0167 → 1.0000).
+
+### Honest limits — this does NOT make the score good
+
+Simulated against the same 207 reels:
+
+```
+correlation with views   -0.221  ->  -0.161
+mean views of top-10        84   ->     128   (+52%)
+mean views of top-20       140   ->     209   (+49%)
+mean views of top-50       242   ->     261    (+8%)
+                                 all reels: 388.7
+```
+
+A real improvement, and still negative. **The top-10 at 128 views remains far
+below the 388.7 all-reel average, so ranking by composite is still worse than
+not ranking at all.** The cap removes the actively harmful part; it does not
+make the remainder predictive.
+
+### Filed, not done
+
+* **#235 — re-fit or retire the base score.** `velocity × relevance ×
+  engagement × source` is itself weakly inverted (−0.09 within the unboosted
+  group). Needs a fit against realised reach with a held-out evaluation, not a
+  hand-tuned weight change.
+* **#236 — persist the score components.** The scorer computes interpretable
+  parts and stores only the opaque product, which is why this went undiagnosed
+  for months. Persisting them costs nothing and makes the next inversion a
+  query rather than an investigation.
+* **#237 — 4 pre-existing `TestIntroFallback` failures** in
+  `test_transformation_orchestrator` (video intro compositing). Confirmed to
+  fail with this change stashed; untouched here.
