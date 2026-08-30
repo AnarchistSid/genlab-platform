@@ -1052,3 +1052,75 @@ make the remainder predictive.
 * **#237 — 4 pre-existing `TestIntroFallback` failures** in
   `test_transformation_orchestrator` (video intro compositing). Confirmed to
   fail with this change stashed; untouched here.
+
+## ANIME DARK — 9 days, root cause found (2026-08-30)
+
+**Anime has published nothing since 2026-08-21.** The other four channels
+published on 08-29/08-30. Not noticed until an approval sweep showed anime
+absent from the queue, the coverage table AND the carryover list.
+
+### Mechanism
+
+The pipeline runs fine (`success` daily) and creates blueprints daily. They
+never leave DRAFTED:
+
+```
+VideoGate: 0 passed, 3 skipped
+SLO VIOLATION: Zero blueprints produced — VideoGate dropped all 3/3 stories
+for missing clips (video sourcing failure)
+```
+
+The sourcing log gives the cause, and it is **not** the datacenter-IP bot
+detection this looked like:
+
+```
+yt-dlp failed: The uploader has not made this video available in your country  ×2
+Downloaded: 1089d018f3d115e3.mp4 (95.2s)                                       ×1
+VideoSourcer stats: direct_url=3 → "Wrote clip_index.json: 1/3 downloaded"
+VideoGate: 0 passed, 3 skipped                                                ← even the one that DID download
+```
+
+**Two separate defects:**
+
+1. **Geo-blocking.** Anime's YouTube sources are region-locked from the German
+   VPS. Distinct from `[[class-of-bug-datacenter-ip-bot-detection]]` and needs
+   the opposite fix — a different egress *region*, not cookies. Confusing the
+   two costs a week.
+2. **A clip downloaded and was still dropped.** `1/3 downloaded` yet
+   `0 passed, 3 skipped`. The successful 95.2s clip did not reach VideoGate.
+   That is a wiring gap independent of the geo problem, and it means anime
+   would still be dark even with sources that resolve.
+
+### Also stranded
+
+Four anime blueprints sit VISUAL_READY + `approved` with **past-due**
+`scheduled_for` (2026-08-23, 08-24, 08-25, 08-26) that never fired — same shape
+as `dcad123d`. They are not blocking future slots, but they are the only
+VISUAL_READY anime rows, so the channel has nothing publishable.
+
+### Filed, not fixed
+
+* **#238 — anime geo-blocked sourcing.** Prefer non-region-locked sources
+  (AniList performed best on reach anyway: 120 avg views vs youtube_trending
+  77), or route anime's fetch through a different region.
+* **#239 — downloaded clip dropped by VideoGate.** `1/3 downloaded` →
+  `0 passed`. Diagnose the clip_index → VideoGate handoff. This one is the
+  higher priority: it is a silent loss of work already paid for.
+* **#240 — clear the 4 stranded past-due anime slots** (capture-first, same
+  treatment as `dcad123d`).
+
+## Approval sweep 2026-08-30
+
+20 blueprints approved via the dashboard's own `batch_approve_schedule`
+primitives (per-niche advisory lock spanning slot-pick and write). 14
+scheduled, 6 unslotted — all ai_creators, whose 8-day horizon is full.
+
+```
+coverage after   gaming 2026-09-01 · sports 09-02 · movies 09-04 · ai_creators 09-06
+anime            ZERO scheduled — see above
+```
+
+Note: the run initially failed with `AttributeError: module 'queue' has no
+attribute 'LifoQueue'` — a scratch `/tmp/queue.py` from an earlier diagnostic
+shadowed the stdlib, because Python puts the script's own directory first on
+`sys.path`. Ops scripts now run from `/tmp/glops/` to avoid collisions.
