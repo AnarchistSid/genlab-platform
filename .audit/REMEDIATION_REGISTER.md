@@ -1199,3 +1199,63 @@ inference to fact on the next fire.
 Same class as `[[class-of-bug-pass-through-fields-die-in-explicit-propagators]]`:
 an identifier that must survive several stages to be usable at the far end,
 with nothing asserting it did.
+
+## #239 RESOLVED — it was never the clip lookup. Anime's WRITER produces no hooks.
+
+The diagnostic shipped in `175a0d84` did its job by **staying silent**: 0 fires
+across every anime run, which ruled out all four clip-miss classes. The
+early-return also never fired. The path that actually runs is
+`Render failed → staying DRAFTED`, 4 occurrences, and the line immediately
+above it names the cause:
+
+```
+[anime] pre-render quality gate rejected story 47ed907b1f409cb6
+  (hook_title_truncation): Hook is the title truncated at 60 chars with '...':
+  'My Happy Marriage Special Episodes | Official Teaser | Ne...'
+  Writer produced no real hook
+
+[anime] pre-render quality gate rejected story 4f05826e62a9de40
+  (hook_equals_title): Hook is the title verbatim:
+  'AI-generated: anime speed lines and impact frames'
+  Writer produced no real hook — writer-bug-544cf0e9 shape
+  (empty summary + populated description_snippet fallback)
+```
+
+**The clips download, VideoGate passes them, `_compose_frame` is called — and
+the pre-render quality gate rejects the hook.** Correctly. It is refusing to
+publish a reel whose hook is just the source video's title.
+
+So the outage decomposes into three separate things, only one of which was ever
+about video:
+
+1. **Disk full** (fixed) — real, and the cause of the hard failures.
+2. **Clip lookup** (#239 as filed) — **never broken**. Retracted.
+3. **The writer produces no usable hook for anime** — the standing cause of
+   DRAFTED, and it predates the disk incident.
+
+### Why anime specifically
+
+Both rejected stories show the `writer-bug-544cf0e9` shape: empty `summary`
+with a populated `description_snippet`, so the writer falls back to the title.
+Per CLAUDE.md, `base_writing._has_writable_context` requires ≥40 chars in
+`summary` / `description_snippet` / `description`; anime's sources (AniList
+teasers, and the AI-backfill entries whose "title" is a generation prompt like
+*"AI-generated: anime speed lines and impact frames"*) frequently carry no
+real body text to write from.
+
+That is also why the backfill made things worse rather than better: a generated
+clip whose title is its own prompt has no story to hook.
+
+### #241 — give anime stories writable context
+
+The fix is upstream of rendering: either enrich anime stories so the writer has
+≥40 chars of real context, or stop admitting sources that cannot produce one.
+The pre-render gate is behaving correctly and should not be relaxed — it is the
+only thing preventing title-as-hook reels from publishing.
+
+### What the diagnostic was worth
+
+It cost one commit and returned a negative result that eliminated four
+hypotheses at once, including the one I had filed with confidence. A diagnostic
+that stays quiet on the healthy path and lets the real warning surface is doing
+exactly what it should.
