@@ -206,8 +206,48 @@ class AnimeVisualRenderStrategy(BaseVisualRenderStrategy):
                 sid = story.get("story_id", "")
                 clip_entry = clips.get(sid, {})
 
+                # 2026-08-31 diagnostic: anime published nothing for 10 days.
+                # Clips downloaded (2/2), VideoGate passed both, stories reached
+                # this stage (GenerateAudio produced 2, RenderTextOverlays saw
+                # 2) — and this lookup matched nothing, so every story fell
+                # through to the no-video path and the reel stayed DRAFTED.
+                #
+                # Four different ways to miss, each needing a different fix, and
+                # all four were previously indistinguishable because the
+                # fall-through logged nothing at all:
+                #
+                #   no_story_id   the story never carried one
+                #   id_mismatch   clips are keyed by an id the story does not have
+                #                 (the standing hypothesis — clip_index keys are
+                #                  64-char hashes assigned upstream)
+                #   not_success   the entry exists but the download failed
+                #   file_missing  the path was recorded but is gone from disk
+                #
+                # Logged once per missing story at WARNING with a bounded sample
+                # of the available keys, so one real fire turns this from
+                # inference into fact.
+                if not clip_entry.get("success") or not clip_entry.get("clip_path"):
+                    if not sid:
+                        miss = "no_story_id"
+                    elif sid not in clips:
+                        miss = "id_mismatch"
+                    else:
+                        miss = "not_success"
+                    logger.warning(
+                        "[anime] no clip for story '%s' (%s): story_id=%r; "
+                        "clip_index has %d key(s): %s",
+                        story.get("title", "")[:40], miss, sid, len(clips),
+                        [k[:16] + "…" for k in list(clips)[:4]],
+                    )
+
                 if clip_entry.get("success") and clip_entry.get("clip_path"):
                     clip_path = Path(clip_entry["clip_path"])
+                    if not clip_path.exists():
+                        logger.warning(
+                            "[anime] clip recorded but missing on disk "
+                            "(file_missing): story_id=%r path=%s",
+                            sid, clip_path,
+                        )
                     if clip_path.exists():
                         composed = self._compose_frame(clip_path, story, context)
                         if composed:
@@ -225,7 +265,10 @@ class AnimeVisualRenderStrategy(BaseVisualRenderStrategy):
                             )
                         continue
 
-                # No downloaded video — fall back to Pexels query generation
+                # No downloaded video — fall back to Pexels query generation.
+                # NOTE: `rendered` is incremented here too, so a run where every
+                # story missed its clip still reports rendered == len(stories).
+                # `videos_found` is the honest counter; run_stats carries both.
                 self._render_story(story)
                 story.setdefault("media", {})["render_status"] = "no_video"
                 rendered += 1
