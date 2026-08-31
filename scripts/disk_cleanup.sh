@@ -70,6 +70,37 @@ find /var/log -name "*.gz" -mtime +14 -delete 2>/dev/null || true
 find /var/log -name "*.1" -mtime +14 -delete 2>/dev/null || true
 find /var/log/genlab -name "*.log.*" -mtime +7 -delete 2>/dev/null || true
 
+# 3b) Orphaned yt-dlp partials on the media volume
+#
+# 2026-08-31 incident: /mnt/genlab-media hit 100% (744K free of 49G) and took
+# down the anime, gaming and sports pipelines with "No space left on device".
+# 36.3 GB of it was 25 abandoned yt-dlp partials under channel-tmp/CriticalRush
+# — a single 14 GB .part file, a 4.8 GB .temp.mp4, and dozens at 1-2 GB. The
+# oldest was 18 days old.
+#
+# yt-dlp leaves .part / .temp / .ytdl behind whenever a download is interrupted
+# (timeout, OOM, service restart). Nothing removed them: the existing cleanup
+# covers /opt/genlab/.tmp/runs, and these live on a different volume entirely.
+#
+# Guarded on age so an in-flight download is never touched: a partial still
+# being written was modified within the last few minutes, and 120 minutes is
+# far longer than any single download takes.
+MEDIA_ROOT="/mnt/genlab-media/channel-tmp"
+if [ -d "$MEDIA_ROOT" ]; then
+    ORPHANS=$(find "$MEDIA_ROOT" -type f \
+        \( -name "*.part" -o -name "*.temp.mp4" -o -name "*.ytdl" \) \
+        -mmin +120 2>/dev/null | wc -l)
+    if [ "$ORPHANS" -gt 0 ]; then
+        FREED=$(find "$MEDIA_ROOT" -type f \
+            \( -name "*.part" -o -name "*.temp.mp4" -o -name "*.ytdl" \) \
+            -mmin +120 -printf "%s\n" 2>/dev/null | awk '{s+=$1} END {printf "%.1f", s/1024/1024/1024}')
+        log "Pruning $ORPHANS orphaned download partial(s) (~${FREED} GB) from $MEDIA_ROOT"
+        find "$MEDIA_ROOT" -type f \
+            \( -name "*.part" -o -name "*.temp.mp4" -o -name "*.ytdl" \) \
+            -mmin +120 -delete 2>/dev/null || log "WARNING: partial prune incomplete"
+    fi
+fi
+
 # 4) GH Actions runner — cache + tool cache + old per-job _temp dirs
 # All under /home/gh-runner/, NEVER /opt/genlab/. Any cache subdir here
 # is fine to nuke — CI jobs re-fetch on next sync.

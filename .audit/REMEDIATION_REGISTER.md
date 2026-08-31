@@ -1124,3 +1124,78 @@ Note: the run initially failed with `AttributeError: module 'queue' has no
 attribute 'LifoQueue'` — a scratch `/tmp/queue.py` from an earlier diagnostic
 shadowed the stdlib, because Python puts the script's own directory first on
 `sys.path`. Ops scripts now run from `/tmp/glops/` to avoid collisions.
+
+## DISK FULL — the real cause of the anime outage (2026-08-31)
+
+`/mnt/genlab-media` (`/dev/sdb`, 49G) hit **100% — 744K free** and took down
+anime, gaming and sports with `No space left on device`. Root `/` was fine at
+68%, which is why routine checks missed it: `.tmp` lives on a *separate* volume.
+
+**36.3 GB of the 47 GB used was 25 abandoned yt-dlp partials** under
+`channel-tmp/CriticalRush/clips`:
+
+```
+14 GB   direct_80554dbc57a7.f399.mp4.part
+4.8 GB  direct_d56b63cef5a9.temp.mp4
+4.6 GB  direct_d56b63cef5a9.f399.mp4
+2.0 GB  direct_564be4de4c07.f399.mp4.part      … and 21 more at 1-2 GB
+oldest: 2026-08-13 (18 days)
+```
+
+yt-dlp leaves `.part` / `.temp` / `.ytdl` behind on any interrupted download.
+Nothing removed them: the existing hourly and daily cleanups cover
+`/opt/genlab/.tmp/runs`, and these are on a different volume.
+
+**Cleared** (manifest captured to `.logs/orphan_partials_20260831T081019Z.txt`
+first): `100% → 22%`, 744K → **37G free**.
+
+**Structural fix shipped** — `scripts/disk_cleanup.sh` now prunes orphaned
+partials under `/mnt/genlab-media/channel-tmp`, guarded on `-mmin +120` so an
+in-flight download is never touched.
+
+### What this reframes
+
+The 08-30 anime diagnosis (#238 geo-blocking, #239 clip dropped by VideoGate)
+was reading a **disk-full symptom** as a sourcing problem. With space restored,
+a manual anime run downloaded **2/2 clips** and `VideoGate passed=2, skipped=0`.
+Geo-blocking is intermittent, not the outage.
+
+## #239 REVISED — the renderer's clip lookup misses
+
+Anime still produces no video. Precise evidence from the clean run
+`anime_20260831_081041`:
+
+```
+DownloadTopVideos           2/2 downloaded, 54.9s and 50.1s clips
+VideoGate                   passed=2, skipped=0, drop_rate=0%
+QCGates                     passed=2/2
+GenerateAudio               generated=2          <- stories DO exist here
+AnimeVisualRenderStrategy   0.07s                <- rendered nothing
+RenderTextOverlays          overlaid=0, skipped=2
+ValidateVideos              skipped=2
+PushToBacklog               2 in, 1 out -> DRAFTED, no visual
+```
+
+`stories` is **not** empty — audio generated 2 and overlays skipped 2. So the
+renderer took its loop branch, not the `no stories to render` early return, and
+this lookup matched nothing:
+
+```python
+sid = story.get("story_id", "")
+clip_entry = clips.get(sid, {})          # fd_strategies/visual_render.py
+if clip_entry.get("success") and clip_entry.get("clip_path"):
+```
+
+`clip_index.json` keys the two clips by 64-char story hashes
+(`47ed907b…`, `4f05826e…`). The story ids reaching the renderer evidently
+differ. `FetchGeneratedBackfill` (40.8s, produced `backfill_anime_0.mp4`) runs
+*before* `DownloadTopVideos` and is the most likely place ids are re-keyed.
+
+**Not fixed here** — it is a change to the render path and warrants operator
+sign-off. The next step is one log line in the renderer printing
+`story_id` alongside the available `clips.keys()`, which converts this from
+inference to fact on the next fire.
+
+Same class as `[[class-of-bug-pass-through-fields-die-in-explicit-propagators]]`:
+an identifier that must survive several stages to be usable at the far end,
+with nothing asserting it did.
