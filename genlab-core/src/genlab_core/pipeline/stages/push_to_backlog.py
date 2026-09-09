@@ -30,6 +30,25 @@ from genlab_core.utils.text_sanitizer import sanitize_for_graph_api
 
 logger = logging.getLogger(__name__)
 
+
+def _degrade_reason(content: dict) -> str:
+    """Reason for a degraded narration row; never blank when degraded.
+
+    Returns "" for a row that is not degraded — that is correct and means
+    "no degradation happened", not "degraded for an unknown cause".
+    """
+    reason = str(content.get("narration_degraded_reason", "") or "").strip()
+    if reason:
+        return reason
+    if bool(content.get("narration_degraded", False)):
+        logger.warning(
+            "[PushToBacklog] narration_degraded=True with no reason from any "
+            "upstream site — persisting 'reason_unavailable'. A blank here "
+            "would be indistinguishable from a healthy row at query time."
+        )
+        return "reason_unavailable"
+    return ""
+
 # R-53: text fields that ship to platforms / Postgres and must be HTML-stripped.
 # LLM output can carry <cite>/<p>/<strong> tags; the Graph sanitizer runs on the
 # SharePoint path but is bypassed on the Postgres path, so strip here — the one
@@ -2621,9 +2640,18 @@ class PushToBacklog:
                         "narration_degraded": bool(
                             content.get("narration_degraded", False)
                         ),
-                        "narration_degraded_reason": str(
-                            content.get("narration_degraded_reason", "")
-                        ),
+                        # A degraded row MUST carry a reason. Today every
+                        # upstream site sets one (base_writing:903,
+                        # generate_audio:130, transformation_orchestrator's
+                        # three literals), so the invariant holds by
+                        # convention across N implementers rather than
+                        # structurally — the shape that drifts. If a future
+                        # site sets the flag without a reason, persist the
+                        # absence explicitly instead of a blank: an empty
+                        # string is indistinguishable from "not degraded" at
+                        # query time, which is exactly the misreading that
+                        # produced (and then retracted) register #245.
+                        "narration_degraded_reason": _degrade_reason(content),
                         "priority_score": _apply_engagement_boost(
                             story.get("final_score")
                             if story.get("final_score") is not None
