@@ -234,7 +234,41 @@ class GenerateAudio:
                             )
 
                     media["audio_path"] = str(out_path)
-                    media["audio_provider"] = getattr(result, "provider", "unknown")
+
+                    # FIX-T01 (2026-09-10): record WHICH tier produced this VO.
+                    # Until now the provider was set in memory here and never
+                    # persisted, so the tier of every reel ever published was
+                    # unrecoverable -- enumerated across 158 blueprints, zero
+                    # carried the key. The playbook's voice gate ("Edge/gTTS on
+                    # a hero reel = DEGRADED, hold") could not be evaluated at
+                    # all. push_to_backlog carries these three into extra.
+                    used = str(getattr(result, "provider", "") or "unknown")
+                    # The cascade tries providers in declared order, so the
+                    # head of the chain is the tier that was attempted first.
+                    # Read defensively: this is a private attribute and a
+                    # cascade shape change must not break synthesis.
+                    chain = list(getattr(cascade, "_providers", []) or [])
+                    attempted = (
+                        str(getattr(chain[0], "name", "") or "unknown")
+                        if chain else "unknown"
+                    )
+                    fell_back = bool(attempted != "unknown" and used != attempted)
+
+                    media["audio_provider"] = used
+                    media["audio_provider_attempted"] = attempted
+                    media["audio_fallback_reason"] = (
+                        f"{attempted}_unavailable" if fell_back else ""
+                    )
+                    logger.info(
+                        "[GenerateAudio] tts tier attempted=%s used=%s "
+                        "fell_back=%s duration=%.1fs cost=$%.4f bp=%s",
+                        attempted,
+                        used,
+                        fell_back,
+                        float(getattr(result, "duration", 0.0) or 0.0),
+                        float(getattr(result, "cost_estimate", 0.0) or 0.0),
+                        self._audio_stem(bp),
+                    )
 
                     # NARR-13 (2026-09-10): reported success must equal a
                     # VERIFIED artifact at the path the consumer will read.

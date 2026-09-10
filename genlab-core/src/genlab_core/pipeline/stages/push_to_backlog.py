@@ -2652,6 +2652,21 @@ class PushToBacklog:
                         # query time, which is exactly the misreading that
                         # produced (and then retracted) register #245.
                         "narration_degraded_reason": _degrade_reason(content),
+                        # FIX-T01 (2026-09-10): the VO tier, carried across the
+                        # six stages between GenerateAudio (15) and here (21).
+                        # A pass-through field crossing a stage boundary is the
+                        # exact shape that dies silently -- narration_audio_path
+                        # did precisely this -- so there is an output gate on
+                        # this one, not just a propagator to read.
+                        # None (not "") on historical rows: absent must stay
+                        # distinguishable from "synthesised on an unknown tier".
+                        "audio_provider": (media.get("audio_provider") or None),
+                        "audio_provider_attempted": (
+                            media.get("audio_provider_attempted") or None
+                        ),
+                        "audio_fallback_reason": (
+                            media.get("audio_fallback_reason") or None
+                        ),
                         "priority_score": _apply_engagement_boost(
                             story.get("final_score")
                             if story.get("final_score") is not None
