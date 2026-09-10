@@ -54,10 +54,18 @@ def test_warn_never_raises(monkeypatch):
 
 def test_blueprint_context_carries_narration_script():
     """The warn's independent signal must actually reach the orchestrator.
-    Without this the guard is dead code -- the failure being fixed."""
-    src = inspect.getsource(BVR)
-    ctx_block = src.split("blueprint_context = {")[1].split("}")[0]
-    assert '"narration_script"' in ctx_block
+    Without this the guard is dead code -- the failure being fixed.
+
+    Asserts against the BUILT context rather than the source text: after the
+    single-writer extraction there is no inline dict to grep, and a source-text
+    assertion would have gone quietly green on a refactor while proving nothing.
+    """
+    from genlab_core.strategies.blueprint_context import build_blueprint_context
+
+    ctx = build_blueprint_context(
+        {"content": {"narration_script": "a real script"}}, hook="h"
+    )
+    assert ctx["narration_script"] == "a real script"
 
 
 def test_generate_audio_verifies_published_artifact():

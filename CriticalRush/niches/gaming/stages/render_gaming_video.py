@@ -407,12 +407,17 @@ class RenderGamingVideo(VisualRenderStrategy):
                             )
 
                             content = story.get("content") or {}
-                            blueprint_context = {
-                                "hook": hook,
-                                "caption_segments": content.get("caption_segments"),
-                                "title": story.get("title", ""),
-                                "summary": story.get("summary", ""),
-                            }
+                            # NARR-13 (2026-09-10): same 4-key divergence as
+                            # BB. Gaming has no narration today, but a strategy
+                            # that cannot carry the keys cannot be enabled
+                            # later without rediscovering this bug.
+                            from genlab_core.strategies.blueprint_context import (
+                                build_blueprint_context,
+                            )
+
+                            blueprint_context = build_blueprint_context(
+                                story, hook=hook
+                            )
                             gaming_niche_root = Path(__file__).resolve().parents[1]
                             rendered_path, _arm_ids = apply_post_render_transformations(
                                 rendered_path,

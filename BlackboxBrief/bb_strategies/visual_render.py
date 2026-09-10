@@ -98,12 +98,19 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
                                 )
 
                                 content = story.get("content") or {}
-                                blueprint_context = {
-                                    "hook": hook_text,
-                                    "caption_segments": content.get("caption_segments"),
-                                    "title": story.get("title", ""),
-                                    "summary": story.get("summary", ""),
-                                }
+                                # NARR-13 (2026-09-10): was a 4-key dict built
+                                # here, carrying no narration fields. BB is the
+                                # narration canary, so the orchestrator read
+                                # narration_audio_path from a dict that could
+                                # not contain it and silently used the 2-input
+                                # mix. Single writer now.
+                                from genlab_core.strategies.blueprint_context import (
+                                    build_blueprint_context,
+                                )
+
+                                blueprint_context = build_blueprint_context(
+                                    story, hook=hook_text
+                                )
                                 # Task #581 (2026-07-08): now returns
                                 # (path, arm_ids_by_dimension). The dict
                                 # travels through push_to_backlog into

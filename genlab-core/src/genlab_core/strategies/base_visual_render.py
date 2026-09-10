@@ -369,33 +369,16 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                 # when a VO landed. All 4 keys are safe when narration
                 # is disabled — every consumer is guarded and defaults
                 # to the 2-input legacy path (byte-identical output).
-                media = story.get("media") or {}
-                blueprint_context = {
-                    "hook": hook_text,
-                    "caption_segments": content.get("caption_segments"),
-                    "title": story.get("title", ""),
-                    "summary": story.get("summary", ""),
-                    # NARR-01 fields: only carry meaningful values when
-                    # the writer + GenerateAudio pipeline populated them.
-                    "narration_audio_path": media.get("audio_path"),
-                    # NARR-05 (2026-08-19): did the gate actually ask for
-                    # narration on this story? Stamped by GenerateAudio,
-                    # which now runs upstream of this render. Lets the
-                    # orchestrator WARN on a missing VO for a canary niche
-                    # without spamming the four non-canary niches.
-                    "narration_expected": bool(content.get("narration_expected", False)),
-                    # NARR-13 (2026-09-10): carried so the orchestrator's
-                    # missing-VO WARN has a signal that does NOT originate in
-                    # the handoff it polices. narration_expected is stamped by
-                    # GenerateAudio; if that propagation is what broke, the
-                    # flag is absent and the alarm is disabled by the fault.
-                    # The script comes from the writer, one stage earlier and
-                    # on a different path, so it survives independently.
-                    "narration_script": str(content.get("narration_script", "") or ""),
-                    "narration_degraded": bool(content.get("narration_degraded", False)),
-                    "narration_degraded_reason": content.get("narration_degraded_reason", ""),
-                    "variant_type": (content.get("variant_type") or story.get("variant_type")),
-                }
+                # NARR-13 (2026-09-10): single writer. This dict is a contract
+                # with transformation_orchestrator, and it drifted -- BB and
+                # gaming each built a 4-key version inline that carried no
+                # narration fields at all, so the one niche narration was
+                # enabled for was the one niche the wire never reached.
+                from genlab_core.strategies.blueprint_context import (
+                    build_blueprint_context,
+                )
+
+                blueprint_context = build_blueprint_context(story, hook=hook_text)
                 # Task #581 (2026-07-08): apply_post_render_transformations
                 # now returns (path, arm_ids_by_dimension). The dict lets
                 # `register_pending_feedback` route reward per-dimension
