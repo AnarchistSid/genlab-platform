@@ -1,0 +1,50 @@
+area,capability,niche,platform,status,evidence_class,artifact_pointer,window,note
+phase0,SHA parity repo/origin/prod,all,-,FUNCTIONING-VERIFIED,M,ca37a028 on all three,2026-09-10,match confirmed
+phase0,systemd unit inventory,all,-,FUNCTIONING-UNVERIFIED,M,329 units / 106 timers,2026-09-10,110 active
+phase0,prod-only units,all,-,DRIFTED,M,"6 units: archive-stale-drafted, attribution-health-monitor, retro-credit",2026-09-10,no repo file
+phase0,journal retention,all,-,BROKEN,M,"oldest entry: pipeline-ai none, publisher 09-10T06:35",2026-09-10,"30d configured, hours actual, 47.8M of 2G"
+phase0,flag coverage by flag_audit,all,-,DRIFTED,M,105 set / 59 tracked / active=55/59,2026-09-10,46 untracked
+phase0,credentials present,all,-,FUNCTIONING-UNVERIFIED,M,.env keys,2026-09-10,INFERENCE_SH/BELT absent
+phase1,narration stage order (GenerateAudio before render),ai_creators,-,FUNCTIONING-VERIFIED,M,journal 02:42:03 before 02:42:03 compositor,2026-09-10,NARR-05 holds
+phase1,blueprint_context narration keys,ai_creators,-,FUNCTIONING-VERIFIED,M,ca37a028 single writer; contract test 12 pass,2026-09-10,"was 4-key, now 10"
+phase1,blueprint_context narration keys,gaming,-,FUNCTIONING-VERIFIED,M,ca37a028; same fix,2026-09-10,gaming can now carry NARR keys
+phase1,per-stage execution history,all,-,MISSING,M,journal rotated,14d,UNMEASURABLE - see U-01
+phase2.1,TTS synthesis producer,ai_creators,-,FUNCTIONING-VERIFIED,M,167a830c_audio.mp3 136690B; Whisper matches script,2026-09-10,17.0s
+phase2.1,VO tier attribution,all,-,MISSING,M,0 of 158 blueprints carry audio_provider,14d,UNMEASURABLE - T-01
+phase2.1,narration in published file,ai_creators,-,BROKEN,M,Whisper on published reel: 6% script overlap 1/16,2026-09-10,pre-fix reel
+phase2.1,narration in fixed-path render,ai_creators,-,FUNCTIONING-VERIFIED,M,v3 Whisper 16/16 = 100%,2026-09-10,not a pipeline artifact
+phase2.1,loudness of final asset,ai_creators,-,FUNCTIONING-VERIFIED,M,v3 -14.06 LUFS / -1.40 dBTP,2026-09-10,gate PASS
+phase2.1,synthetic-voice disclosure on YT,all,youtube,MISSING,I,no upload-payload field found,14d,not audited against API
+phase2.1,#218 first narrated publish,ai_creators,-,HUMAN-BLOCKED,M,verdict PASS 09-10; scheduled 09-11T07:00Z,2026-09-10,publish pending
+phase2.2,subtitles / captions,all,-,MISSING,M,not audited,14d,NOT AUDITED - U-06
+phase2.3,audio and music,all,-,MISSING,M,not audited,14d,NOT AUDITED - U-06
+phase2.3,music bed applied,ai_creators,-,FUNCTIONING-VERIFIED,M,journal: study_lofi_music_548638.mp3 duck=-9 bed=-20,2026-09-10,single render
+phase2.4,editing/motion/animation,all,-,MISSING,M,not audited,14d,NOT AUDITED - U-06
+phase2.4,multi-clip compilation renderer,all,-,MISSING,M,variant_types.py: single_clip only,2026-09-10,5 of 6 unshipped
+phase2.5,publish to platform,ai_creators,fb/ig/yt/threads,FUNCTIONING-VERIFIED,M,"14 reels x 4 platforms, last 09-05",since 08-22,all 4 identical counts
+phase2.5,publish to platform,sports,fb/ig/yt/threads,FUNCTIONING-VERIFIED,M,"15 reels x 4, last 09-05",since 08-22,
+phase2.5,publish to platform,gaming,fb/ig/yt/threads,FUNCTIONING-VERIFIED,M,"12 reels x 4, last 09-08",since 08-22,
+phase2.5,publish to platform,movies,fb/ig/yt/threads,FUNCTIONING-VERIFIED,M,"16 reels x 4, last 09-06",since 08-22,
+phase2.5,publish to platform,anime,fb/ig/yt/threads,DEGRADED,M,"3 reels x 4, last 08-26",since 08-22,3 of 18 days
+phase2.5,per-platform failure classes,all,all,MISSING,M,no publish-outcome rows since 08-14,14d,UNMEASURABLE - U-07
+phase2.5,publish cadence,all,-,DEGRADED,M,60 of 90 expected reels,since 08-22,33% miss
+phase2.6,compliance warns,gaming,-,FUNCTIONING-UNVERIFIED,M,61 events,14d,highest load
+phase2.6,compliance warns,movies,-,FUNCTIONING-UNVERIFIED,M,40 events,14d,
+phase2.6,compliance warns,sports,-,FUNCTIONING-UNVERIFIED,M,36 events,14d,
+phase2.6,compliance warns,ai_creators,-,FUNCTIONING-UNVERIFIED,M,32 events,14d,
+phase2.6,compliance warns,anime,-,FUNCTIONING-UNVERIFIED,M,4 events,14d,low because barely publishing
+phase2.7,bandit learning,all,-,FUNCTIONING-VERIFIED,M,265 of 502 arms updated,14d,
+phase2.7,reward capture,sports,-,FUNCTIONING-VERIFIED,M,"33/36 rows, mean 0.1871",14d,highest
+phase2.7,reward capture,movies,-,FUNCTIONING-VERIFIED,M,"40/40 rows, mean 0.0855",14d,
+phase2.7,reward capture,ai_creators,-,FUNCTIONING-VERIFIED,M,"31/32 rows, mean 0.0563",14d,
+phase2.7,reward capture,gaming,-,FUNCTIONING-VERIFIED,M,"34/36 rows, mean 0.0527",14d,
+phase2.7,reward capture,anime,-,BROKEN,M,"4 rows, 0 with reward_48h",14d,UNMEASURABLE mean
+phase2.7,calibration tuner prod YAML,all,-,DRIFTED,M,5 modified + 65 untracked on box,2026-09-10,#227
+phase2.7,engagement comment ingestion,all,-,BROKEN,M,pending_engagement 0 rows,14d,cause UNMEASURABLE
+phase2.8,post-deploy verifier,all,-,BROKEN,M,systemctl --failed,2026-09-10,T-03
+phase2.8,strategist weekly meta-analysis,all,-,BROKEN,M,failed state; 15 llm_call_failed 08-23..09-06,14d,T-04
+growth,follower delta,ai_creators,facebook,DEGRADED,M,"+3 (10,022 base)",14d,provenance H-07
+growth,follower delta,movies,facebook,DEGRADED,M,"+8 (8,653 base)",14d,provenance H-05
+growth,follower delta,sports,youtube,FUNCTIONING-VERIFIED,M,+7 (17 subs),14d,only subscriber movement
+growth,follower delta,all,instagram,BROKEN,M,0 across all 5 niches,14d,
+growth,follower delta,anime,all,BROKEN,M,0 on every platform,14d,
