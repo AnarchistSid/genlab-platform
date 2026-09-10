@@ -235,6 +235,29 @@ class GenerateAudio:
 
                     media["audio_path"] = str(out_path)
                     media["audio_provider"] = getattr(result, "provider", "unknown")
+
+                    # NARR-13 (2026-09-10): reported success must equal a
+                    # VERIFIED artifact at the path the consumer will read.
+                    # This stage logged "1 generated, 0 skipped, 0 errors" for
+                    # a fire whose reel shipped with no voice-over, because the
+                    # counter tracked "the synthesis call returned" rather than
+                    # "a usable file exists where the mix will look". A success
+                    # claim nothing checks is worse than no claim: it ends the
+                    # investigation before it starts.
+                    published = Path(media["audio_path"])
+                    if not published.exists() or published.stat().st_size <= 0:
+                        logger.warning(
+                            "[GenerateAudio] synthesis reported success but the "
+                            "published artifact is missing or empty: %s "
+                            "(exists=%s size=%s) — NOT counting as generated",
+                            published,
+                            published.exists(),
+                            published.stat().st_size if published.exists() else "n/a",
+                        )
+                        media.pop("audio_path", None)
+                        skipped += 1
+                        continue
+
                     generated += 1
                 else:
                     skipped += 1

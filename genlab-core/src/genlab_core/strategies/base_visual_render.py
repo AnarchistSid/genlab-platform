@@ -384,6 +384,14 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                     # orchestrator WARN on a missing VO for a canary niche
                     # without spamming the four non-canary niches.
                     "narration_expected": bool(content.get("narration_expected", False)),
+                    # NARR-13 (2026-09-10): carried so the orchestrator's
+                    # missing-VO WARN has a signal that does NOT originate in
+                    # the handoff it polices. narration_expected is stamped by
+                    # GenerateAudio; if that propagation is what broke, the
+                    # flag is absent and the alarm is disabled by the fault.
+                    # The script comes from the writer, one stage earlier and
+                    # on a different path, so it survives independently.
+                    "narration_script": str(content.get("narration_script", "") or ""),
                     "narration_degraded": bool(content.get("narration_degraded", False)),
                     "narration_degraded_reason": content.get("narration_degraded_reason", ""),
                     "variant_type": (content.get("variant_type") or story.get("variant_type")),

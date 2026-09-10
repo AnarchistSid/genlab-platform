@@ -131,7 +131,22 @@ SPEC = {
     "min_duration": 15.0,
     "max_duration": 60.0,
     "max_file_size_mb": 100,
+    # Loudness is measured on the FINAL ASSEMBLED asset, not mid-pipeline.
+    # post_render_transform normalises the transformed body, but the intro is
+    # prepended and captions burned AFTERWARDS -- so anything appended after
+    # that pass is unnormalised. Measured 2026-09-10 on the first narrated
+    # candidate: body -13.91 LUFS / -1.31 dBTP (correct), appended intro
+    # +3.42 dBTP (clipping), in the first three seconds where the hook lives.
+    # Third instance of the append-after-normalize class.
+    "target_lufs": -14.0,
+    "lufs_tolerance": 1.0,
+    "max_true_peak": -1.0,
 }
+
+# Limiter ceiling in linear amplitude, 0.5 dB under SPEC["max_true_peak"].
+# Limiting to exactly the gate threshold lands ON it: measured -0.98 dBTP
+# against a -1.0 ceiling, which fails by two hundredths of a dB.
+_LIMITER_CEILING = 10 ** ((SPEC["max_true_peak"] - 0.5) / 20)
 
 
 class ValidateVideos:
@@ -176,6 +191,43 @@ class ValidateVideos:
                     continue
 
                 issues = self._check(probe)
+
+                # --- final-asset loudness gate (2026-09-10) ---------------
+                # This stage is the LAST to touch the asset, which is the only
+                # place the measurement is meaningful. post_render_transform
+                # normalises the transformed body, then the intro is prepended
+                # and captions burned on top -- so a mid-pipeline pass leaves
+                # everything appended after it unnormalised. Repair in place if
+                # we can; block if we cannot. A clipping asset must not reach a
+                # platform, and this is the last gate before it does.
+                loud_issues = self._check_loudness(Path(video_path))
+                if loud_issues and auto_fix and "loudness_unmeasured" not in loud_issues:
+                    logger.info(
+                        "[ValidateVideos] final-asset loudness out of spec (%s) — "
+                        "re-normalising assembled asset",
+                        ",".join(loud_issues),
+                    )
+                    relouded = self._fix_loudness(Path(video_path))
+                    if relouded is not None:
+                        remaining = self._check_loudness(relouded)
+                        if remaining:
+                            # Re-normalising did not bring it into spec. Keep the
+                            # original path and let the issue block: silently
+                            # publishing the half-fixed file would be worse.
+                            loud_issues = remaining
+                        else:
+                            video_path = str(relouded)
+                            media["rendered_path"] = video_path
+                            probe = self._probe(relouded) or probe
+                            issues = self._check(probe)
+                            loud_issues = []
+                            fixed += 1
+                            logger.info(
+                                "[ValidateVideos] final-asset loudness repaired -> %s",
+                                relouded.name,
+                            )
+                if loud_issues:
+                    issues = issues + loud_issues
 
                 if not issues:
                     # Lever G3 wire (2026-06-22): post-render frame-ensemble
@@ -525,6 +577,101 @@ class ValidateVideos:
             issues.append(f"too_large:{size_mb:.1f}MB")
 
         return issues
+
+    @staticmethod
+    def _measure_loudness(path: Path) -> tuple[float, float] | None:
+        """Integrated loudness and true peak of an asset, via ffmpeg loudnorm.
+
+        Returns ``(lufs, dbtp)`` or None when measurement fails. ffprobe cannot
+        answer this -- loudness needs a decode pass, which is why it was never
+        part of the spec check that runs off probe data alone.
+        """
+        import json as _json
+        import re as _re
+        import subprocess
+
+        try:
+            proc = subprocess.run(
+                ["ffmpeg", "-hide_banner", "-nostats", "-i", str(path),
+                 "-af", "loudnorm=I=-14:TP=-1.0:LRA=7:print_format=json",
+                 "-f", "null", "-"],
+                capture_output=True, text=True, timeout=300,
+            )
+            blob = _re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", proc.stderr, _re.S)
+            if not blob:
+                logger.warning(
+                    "[ValidateVideos] loudness measurement produced no JSON for %s", path.name
+                )
+                return None
+            d = _json.loads(blob.group(0))
+            return float(d["input_i"]), float(d["input_tp"])
+        except Exception as exc:
+            logger.warning(
+                "[ValidateVideos] loudness measurement failed for %s: %s", path.name, exc
+            )
+            return None
+
+    @classmethod
+    def _check_loudness(cls, path: Path) -> list[str]:
+        """Gate the final asset on loudness. Never fabricates a pass.
+
+        A measurement failure returns ``loudness_unmeasured`` rather than an
+        empty list: a gate that silently reports clean when it could not run is
+        the failure mode this gate exists to close.
+        """
+        measured = cls._measure_loudness(path)
+        if measured is None:
+            return ["loudness_unmeasured"]
+        lufs, dbtp = measured
+        issues: list[str] = []
+        if dbtp > SPEC["max_true_peak"]:
+            issues.append(f"true_peak_over:{dbtp:+.2f}dBTP")
+        if abs(lufs - SPEC["target_lufs"]) > SPEC["lufs_tolerance"]:
+            issues.append(f"loudness_off:{lufs:.2f}LUFS")
+        return issues
+
+    @staticmethod
+    def _fix_loudness(path: Path) -> Path | None:
+        """Re-normalise the FINAL assembled asset, video stream untouched.
+
+        ``loudnorm`` ALONE CANNOT FIX THIS, which is worth stating because the
+        obvious repair silently fails. Measured 2026-09-10 on the real asset:
+        the file was already at -13.97 LUFS against a -14.0 target, so loudnorm
+        applied essentially no gain change and the true peak moved +3.42 ->
+        +3.27 dBTP. Single-pass loudnorm's ``TP=`` constrains its own output
+        gain; it is not a limiter, and it will not pull down inter-sample peaks
+        in an asset whose integrated loudness is already correct.
+
+        So the chain ends in a real true-peak limiter. The limit is set 0.5 dB
+        below the gate (-1.5 dBFS for a -1.0 dBTP ceiling) because limiting to
+        exactly the threshold lands on it: with ``limit=0.891`` the same asset
+        measured -0.98 dBTP, which fails ``> -1.0`` by two hundredths.
+
+        ``-c:v copy`` matters: the video has already been encoded, captioned
+        and validated for colour. Re-encoding it to repair audio would risk a
+        second-generation quality loss and could invalidate the bt709 tags this
+        same stage just checked.
+        """
+        import subprocess
+
+        out = path.with_name(f"{path.stem}_ln{path.suffix}")
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(path),
+                 "-c:v", "copy",
+                 # 0.5 dB of headroom under the gate; see docstring.
+                 "-af", (f"loudnorm=I={SPEC['target_lufs']}:"
+                         f"TP={SPEC['max_true_peak']}:LRA=7,"
+                         f"alimiter=limit={_LIMITER_CEILING:.4f}:level=disabled"),
+                 "-c:a", "aac", "-b:a", "192k",
+                 "-ar", str(SPEC["audio_sample_rate"]),
+                 "-ac", str(SPEC["audio_channels"]), str(out)],
+                capture_output=True, text=True, timeout=600, check=True,
+            )
+            return out if out.exists() and out.stat().st_size > 0 else None
+        except Exception as exc:
+            logger.warning("[ValidateVideos] final loudnorm failed for %s: %s", path.name, exc)
+            return None
 
     @staticmethod
     def _can_fix(issues: list[str]) -> bool:

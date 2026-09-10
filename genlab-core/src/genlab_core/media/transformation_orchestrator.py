@@ -340,7 +340,22 @@ def _warn_narration_absent(
     than the gap it closes.
     """
     try:
-        if not ctx.get("narration_expected"):
+        # NARR-13 (2026-09-10): this WARN used to be reachable only when
+        # ``narration_expected`` was truthy — a key stamped by the same
+        # upstream stage whose handoff the WARN exists to police. When that
+        # propagation failed, the flag was absent, so the alarm for the failure
+        # was disabled BY the failure. The guard shared a root cause with the
+        # defect it guarded, which is why the canary read healthy across two
+        # separate fixes.
+        #
+        # A written narration script is now sufficient grounds to expect a VO:
+        # it is set by the writer, independent of this stage, and it is exactly
+        # the condition under which a missing voice-over is an anomaly. The
+        # four non-canary niches never carry one, so they stay silent.
+        expected = bool(ctx.get("narration_expected")) or bool(
+            str(ctx.get("narration_script") or "").strip()
+        )
+        if not expected:
             return
         logger.warning(
             "[transformation_orchestrator] narration EXPECTED for niche=%s "
