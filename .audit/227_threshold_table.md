@@ -56,3 +56,28 @@ comparison, not a recommendation — the choice is the operator's.
 R-08 approval hardening, the safety gate, the strict video policy. Only the
 confidence-prediction threshold is in scope. Nothing applied; both tuner timers
 remain disabled.
+
+---
+
+## Correction, 2026-09-11 (OPS-19 §1)
+
+**BlackboxBrief's active `min_confidence` was `0.715` (line 131), not `0.85`.**
+The 0.85 cited for ai_creators throughout OPS-14 §5's drift table, OPS-15 §B's
+revert verification, and this file's "clears @ committed" column came from a
+**commented-out line at line 22**. Both sides of the "live == committed, no
+drift" comparison read the same comment.
+
+Corrected admit count for ai_creators at its true pre-change threshold:
+**0.715 → 22/30 clear** (not 14/30 as tabulated at 0.85).
+
+History is not rewritten; this note is the correction of record.
+
+### P3 reinterpretation
+
+At 0.715, roughly three-quarters of ai_creators' 30 rendered blueprints cleared
+the threshold, yet only 8 were approved. **ai_creators' narrowing was the
+one-reel-per-niche-per-day cap and the approval queue — not the threshold.**
+
+The threshold explanation stands unchanged for the other three: sports (0.986)
+and movies (1.0) against maxima of 0.870 and 0.891, and anime (1.0) against
+0.862 — all unreachable by construction.
