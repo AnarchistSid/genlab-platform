@@ -72,3 +72,31 @@ s3,1b3e0a5c publish,ai_creators,all,BROKEN,M,blocked by approval_gate: Not appro
 1b,captions on published reel,ai_creators,-,FUNCTIONING-UNVERIFIED,M,whisper stage succeeded despite caption_animator failure,2026-09-11 fire,supersedes HUMAN-PENDING row
 s1,gaming MP4 render,gaming,-,FUNCTIONING-VERIFIED,M,4 MP4s at CriticalRush/.tmp/rendered/gaming_20260911_040019/,2026-09-11 fire,RETRACTS INV-01b finding 2
 s1,gaming render output path,gaming,-,DRIFTED,M,writes to CriticalRush/.tmp/rendered not /opt/genlab/.tmp/runs,2026-09-11 fire,T-14c
+C1,VO probe positive control,ai_creators,-,FUNCTIONING-VERIFIED,M,"3c904e01/36ba9664_reel_captioned frac=0.950 (57/60), whisper base",2026-09-11 fire,threshold 0.9 - probe VALIDATED
+C1,VO probe negative control,gaming,-,FUNCTIONING-VERIFIED,M,transcript='I'm going to be a nurse...' 75 chars source speech,2026-09-11 fire,distinguishes VO-absent from probe-broken
+C1,VO present in published render,ai_creators,-,FUNCTIONING-VERIFIED,M,frac=0.950 vs narration_script (356 chars),2026-09-11 fire,only niche with a narration_script
+C1,VO present in published render,anime,-,MISSING,M,narration_script empty (0 chars) on both blueprints,2026-09-11 fire,legacy hook+caption path - no script to match
+C1,VO present in published render,movies,-,MISSING,M,narration_script empty on both blueprints,2026-09-11 fire,legacy path
+C1,VO present in published render,sports,-,MISSING,M,narration_script empty,2026-09-11 fire,legacy path
+C1,VO present in published render,gaming,-,MISSING,M,narration_script empty on all 6,2026-09-11 fire,legacy path; negative control
+C1,VO track file in retention,ai_creators,-,FUNCTIONING-VERIFIED,M,3 *_audio.mp3,2026-09-11 fire,GenerateAudio runs for all niches
+C1,VO track file in retention,anime,-,FUNCTIONING-VERIFIED,M,3 *_audio.mp3,2026-09-11 fire,
+C1,VO track file in retention,gaming,-,FUNCTIONING-VERIFIED,M,6 *_audio.mp3,2026-09-11 fire,
+C1,VO track file in retention,movies,-,FUNCTIONING-VERIFIED,M,3 *_audio.mp3,2026-09-11 fire,
+C1,VO track file in retention,sports,-,FUNCTIONING-VERIFIED,M,2 *_audio.mp3,2026-09-11 fire,
+C1,audio streams in render,ai_creators,-,FUNCTIONING-VERIFIED,M,2 streams h264/aac,2026-09-11 fire,
+C1,audio streams in render,anime,-,FUNCTIONING-VERIFIED,M,2 streams h264/aac,2026-09-11 fire,
+C1,audio streams in render,gaming,-,FUNCTIONING-VERIFIED,M,2 streams h264/aac,2026-09-11 fire,
+C1,audio streams in render,movies,-,FUNCTIONING-VERIFIED,M,2 streams h264/aac,2026-09-11 fire,
+C1,audio streams in render,sports,-,FUNCTIONING-VERIFIED,M,2 streams h264/aac,2026-09-11 fire,
+C2,render path probe control,all,-,MISSING,M,no journal line names short-video-maker vs FFmpeg in any niche,2026-09-11 fire,CONTROL FAILED - fingerprint unvalidated
+C2,render path,ai_creators,-,MISSING,M,encoder=Lavf62.13.102,W,UNMEASURABLE: probe not validated
+C2,render path,anime,-,MISSING,M,encoder=Google,W,UNMEASURABLE: probe not validated; probed file may be a source clip
+C2,render path,gaming,-,MISSING,M,encoder=Lavf60.16.100,W,UNMEASURABLE: probe not validated
+C2,render path,movies,-,MISSING,M,encoder=Google,W,UNMEASURABLE: probe not validated; probed file may be a source clip
+C2,render path,sports,-,MISSING,M,encoder=Google,W,UNMEASURABLE: probe not validated; probed file may be a source clip
+C1,caption path,ai_creators,-,FUNCTIONING-VERIFIED,M,RenderWhisperCaptions (caption_animator FAILED),2026-09-11 fire,two paths; whisper carried it
+C1,caption path,gaming,-,DEGRADED,M,"caption_animator FAILED, no whisper stage",2026-09-11 fire,shipped without captions
+C1,caption path,anime,-,MISSING,M,neither path reached,2026-09-11 fire,
+C1,caption path,movies,-,FUNCTIONING-VERIFIED,M,caption_animator succeeded,2026-09-11 fire,
+C1,caption path,sports,-,FUNCTIONING-VERIFIED,M,caption_animator succeeded,2026-09-11 fire,

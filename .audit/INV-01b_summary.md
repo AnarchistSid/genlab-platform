@@ -74,3 +74,55 @@ belongs**, so the discriminator is segment timing, not style or count. (M)
 scan read only `/opt/genlab/.tmp/runs/`, which the other four niches use. Files
 are now in retention; manifest 102 entries. The real findings underneath are
 T-14a (filtergraph defect) and T-14c (divergent output path).
+
+---
+
+## INV-01c (OPS-06 C) — VO presence and render path, control-validated
+
+**Controls reported before any real reading, per T-20.**
+
+| control | result |
+|---|---|
+| **C1 positive** — `3c904e01` / `36ba9664_reel_captioned`, whisper `base`, normalised word-overlap (lowercase, punctuation stripped, stopwords retained, order-insensitive) | **frac 0.950 (57/60)** vs threshold 0.9 → **VALIDATED** |
+| **C1 negative** — gaming render, `narration_script` empty by construction | transcript = *"I'm going to be a nurse…"*, 75 chars of **source-clip speech**. Probe finds audio and correctly finds no narration — distinguishes VO-absent from probe-broken |
+| **C2 control** — a render whose journal line *and* metadata both name the render path | **FAILED — no journal line names short-video-maker vs FFmpeg in any niche.** Fingerprint unvalidated |
+
+### C1 — VO presence
+
+**Only `3c904e01` (ai_creators) has a non-empty `narration_script` in the entire
+09-11 fire** — 356 chars. All twelve other blueprints across anime, gaming,
+movies and sports have `script_chars = 0`. So a script-match fraction is
+computable for exactly one niche, and the others are `MISSING` **by
+construction, not by failure**: they run the legacy hook+caption audio path.
+
+| niche | VO fraction | VO track in retention | audio streams | status |
+|---|---|---|---|---|
+| ai_creators | **0.950** | 3 × `*_audio.mp3` | 2 (h264/aac) | FUNCTIONING-VERIFIED |
+| anime | n/a — no script | 3 | 2 | MISSING (legacy path) |
+| gaming | n/a — no script | 6 | 2 | MISSING (legacy path) |
+| movies | n/a — no script | 3 | 2 | MISSING (legacy path) |
+| sports | n/a — no script | 2 | 2 | MISSING (legacy path) |
+
+Note the asymmetry worth keeping: **`GenerateAudio` produces a VO track for every
+niche** (2–6 files each) and stamps `audio_provider` on all of them, but only the
+narration canary supplies a *script* for that audio to speak. "VO track exists"
+and "narration present" are different claims.
+
+### C2 — render path: `UNMEASURABLE: probe not validated`
+
+The control failed, so every C2 row is recorded as unmeasurable rather than as a
+number. Raw `encoder` tags, for the record only: ai_creators `Lavf62.13.102`,
+gaming `Lavf60.16.100`, anime/movies/sports `Google`. The `Google` tags are
+suspicious — those three niches have no `_reel_captioned.mp4`, so the file my
+selector picked may be a downloaded **source clip** rather than a render. That
+possibility alone disqualifies the reading.
+
+### Caption path per niche (recorded as a matrix field)
+
+| niche | path | status |
+|---|---|---|
+| ai_creators | `RenderWhisperCaptions` (`caption_animator` failed) | captions present |
+| movies | `caption_animator` | succeeded |
+| sports | `caption_animator` | succeeded |
+| gaming | `caption_animator` failed, **no whisper stage** | DEGRADED — shipped without captions |
+| anime | neither path reached | MISSING |
