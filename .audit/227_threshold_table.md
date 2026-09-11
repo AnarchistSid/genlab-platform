@@ -96,10 +96,35 @@ Verified by reading the ACTIVE (non-comment) line at `1b66168e^` for all five
 files: **only BlackboxBrief carried the comment defect**; gaming, movies and
 anime were genuinely 0.85 and sports genuinely 0.732.
 
-This corrects the expectation for the 09-12 fire. If **sports approves 0 again**,
-that is NOT evidence the threshold change failed — sports' threshold did not
-effectively move. Its blocker was never the threshold, and the same is true of
-ai_creators. The change is testable on **gaming, movies and anime only**.
+### Correction to this correction (OPS-20): two legs, not one
+
+The paragraph originally here said sports approving 0 would not be evidence of
+failure. That was over-broad — it generalised a Q2-only exclusion into a blanket
+exemption, and it is wrong for Q1.
+
+Each niche moved in **two legs**, and they answer different questions:
+
+| niche | leg 1 — parity revert | leg 2 — 1b66168e | in Q1? | in Q2? |
+|---|---|---|---|---|
+| sports | **0.986 → 0.732** (large) | 0.732 → 0.65 (no-op, same gap) | **yes** | no |
+| movies | **1.0 → 0.85** (large) | 0.85 → 0.65 (+15) | **yes** | **yes** |
+| anime | **1.0 → 0.85** (large) | 0.85 → 0.65 (+5) | **yes** | **yes** |
+| gaming | 0.85 (unchanged) | 0.85 → 0.65 (+12) | **yes** | **yes** |
+| ai_creators | 0.715 (unchanged) | 0.715 → 0.65 (no-op, same gap) | **yes** | no |
+
+**Q1 — is approval unblocked at all?** Scope: **all five niches**. The relevant
+comparison is against the 14-day state, in which the tuner had driven sports to
+0.986 and movies/anime to 1.0 — thresholds above every score the pipeline
+produced, i.e. off switches. Sports approving 0 while candidates clear 0.65 is a
+**failure of something**, and the log must name what.
+
+**Q2 — did 0.65 specifically admit more than 0.85 would have?** Scope: **gaming,
+movies, anime only**. ai_creators and sports are excluded by construction,
+because 0.715 and 0.732 sit inside their own empty gaps and admit the identical
+set at 0.65.
+
+The no-op finding above is sound; what was wrong was treating it as an exemption
+from Q1. A niche can be excluded from Q2 and still be a hard failure under Q1.
 
 History is not rewritten; this note is the correction of record.
 
