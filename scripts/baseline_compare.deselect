@@ -1,0 +1,4 @@
+# Tests that WRITE to absolute /opt/genlab paths (B.12). Running these from a
+# worktree mutates production. 17 tests = 0.150% of collected.
+tests/learning/test_cross_niche_priors_path_resolution.py
+tests/test_push_to_backlog_captioned_guard.py
