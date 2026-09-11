@@ -83,6 +83,6 @@ platforms:
 
 auto_publish:
   enabled: true
-  min_confidence: 0.85
+  min_confidence: 0.65
   max_approvals_per_pass: 3
   rollout_pct: 1.0
