@@ -2,10 +2,41 @@
 Description=GenLab Publisher Timer
 
 [Timer]
-# 06:35 UTC — the main fresh-publish run. The 10:30 2nd run moved to
+# Three FULL fresh-publish runs. The 10:30 2nd run moved to
 # genlab-publisher-retry.timer as a RETRY-ONLY run (R-83), so it can recover
-# failed platforms without re-publishing fresh content.
+# failed platforms without re-publishing fresh content; it is retained.
+#
+# FIX-T23 (2026-09-11) — why three, and why these times.
+#
+# _schedule_gate (platforms/gatekeeper.py:103) blocks a blueprint that is not
+# yet due, and blocks it again once it is more than _SCHEDULE_STALE_AFTER (18h)
+# past its slot. With a single 06:35 fire, any slot later in the day is in the
+# future at 06:35 and >18h stale by the next 06:35 — so the window in which it
+# is publishable is never sampled. Four of five niches sit at 12:00, which
+# misses by 35 minutes. Measured 2026-09-11: all five niches logged
+# "No blueprints passed gatekeeper", 21 of ~26 candidates blocked as
+# "Stale schedule", with slots from 2026-08-27 onward.
+#
+# The fix is sampling rate, not slot times: slots are the audience-timing
+# choice and the learning layer's tunable.
+#
+# INVARIANT: any two consecutive full fires <= 18h apart guarantee every
+# scheduled_for is evaluated while due and not stale. Gaps here are
+# 06:35->12:05 = 5h30, 12:05->18:35 = 6h30, 18:35->06:35 = 12h00. Max 12h.
+#
+# This holds for ANY slot, not just the configured ones: the optimal-time
+# learner (publishing_queue.py:332) mines the engagement hour-of-day
+# distribution and can emit any hour, with the static YAML value used only on
+# cold start. A fire tuned to today's configured slot would silently break the
+# next time the learner moved it.
+#
+# publishing_queue.py:174 already named this failure in June -- "stranded
+# scheduled_for values pointing at slots the publisher will skip" -- for a
+# different cause. What was missing was the measurement joining it to
+# "the publisher publishes nothing".
 OnCalendar=*-*-* 06:35:00 UTC
+OnCalendar=*-*-* 12:05:00 UTC
+OnCalendar=*-*-* 18:35:00 UTC
 Persistent=true
 
 [Install]
