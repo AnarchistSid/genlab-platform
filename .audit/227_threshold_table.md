@@ -137,3 +137,50 @@ one-reel-per-niche-per-day cap and the approval queue — not the threshold.**
 The threshold explanation stands unchanged for the other three: sports (0.986)
 and movies (1.0) against maxima of 0.870 and 0.891, and anime (1.0) against
 0.862 — all unreachable by construction.
+
+---
+
+## OPS-21 — scheduled-job label audit, 2026-09-11 23:20 IST
+
+**Scheduler TZ: Asia/Kolkata (+0530), determined by discriminating test.**
+Host `/etc/localtime` → `Asia/Kolkata`, `TZ` env unset, and no DST shift on
+09-11/12/13 (all +0530). The discriminating evidence is `9a4b93a2`: its cron
+names day-of-month **12** while its label says **09-11** 18:55 UTC. Only local
+IST interpretation produces that rollover (00:25 IST Sep 12 = 18:55Z Sep 11);
+under UTC interpretation the cron would fire 00:25Z Sep 12 and could not carry a
+Sep 11 label. Consistency across the other three is corroboration, not proof.
+
+| job | cron (raw) | tz evaluated in | resolved UTC | label claims | match? |
+|---|---|---|---|---|---|
+| 9a4b93a2 | `25 0 12 9 *` | Asia/Kolkata | **2026-09-11 18:55Z** | 09-11 ~18:55 UTC | ✅ |
+| 4157f9c6 | `2 10 12 9 *` | Asia/Kolkata | **2026-09-12 04:32Z** | 09-12 04:32Z | ✅ |
+| 58a4b47d | `27 12 12 9 *` | Asia/Kolkata | **2026-09-12 06:57Z** | 09-12 06:57Z | ✅ |
+| 6092026c | `25 12 13 9 *` | Asia/Kolkata | **2026-09-13 06:55Z** | 09-13 ~06:55 UTC | ✅ |
+
+**No mismatches. No job replaced.** The only mislabel in the set was `b674da45`,
+already retired under OPS-20 §1 and now filed as T-32.
+
+### Order-dependent pairs — MEASURED, not assumed
+
+Upstream durations from the live journal (UTC-forced):
+
+* **auto-approver**: starts :00/:30, exits in **3–24 s** (six consecutive runs
+  15:00–17:30 all ≤ 24 s).
+* **publisher**: 09-11 06:35Z fire finished **06:39:53** (4m53s); 09-11 12:05Z
+  fire finished **12:17:01** (**12m00s**). Duration is variable, 5–12 min.
+
+| pair | requirement | margin | verdict |
+|---|---|---|---|
+| 4157f9c6 (04:32Z) after ~04:30Z approver pass | approver exits ≤ 04:30:25 | **~95 s** | ✅ |
+| 4157f9c6 (04:32Z) before 06:35Z publisher | — | **2h03m** | ✅ |
+| 58a4b47d (06:57Z) after 06:35Z publisher | worst observed exit 06:47Z | **10 min** | ✅ |
+| 6092026c (06:55Z) after 06:35Z publisher | worst observed exit 06:47Z | **8 min** | ✅ |
+
+**Contention: none.** `58a4b47d` fires 09-**12**, `6092026c` fires 09-**13** —
+different days, not two minutes apart. No fold-in required; `6092026c` stands.
+
+**Residual risk, named:** the publisher's 5→12 min spread is two samples. A
+06:35Z fire running >20 min would put both 06:55Z and 06:57Z reads mid-run.
+Mitigated, not eliminated: both jobs gate on `ExecMainExitTimestamp` at STEP 0,
+so that case reports "not yet run" rather than a false zero — which is the whole
+point of the three-meanings gate.
