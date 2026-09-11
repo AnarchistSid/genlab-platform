@@ -24,3 +24,33 @@ Filed, not started. M=measured, I=inferred, D=documented.
 **T-11 — CLOSED 2026-09-11.** The 13 skip-delta tests gate on two gitignored operator configs; both now mirrored by the harness. (M)
 
 **T-14 — SUPERSEDED** by T-14a/b/c. The "gaming rendered zero MP4s" reading was an artifact of scanning only `/opt/genlab/.tmp/runs/`.
+
+---
+
+## Added 2026-09-11 (OPS-16b)
+
+| id | title | one line | class |
+|---|---|---|---|
+| **T-26** | Remove the retry-only unit | Gate: 7 consecutive days of full-run journal lines showing `_run_retry_pass` re-attempting prior failures under the 06:35/12:05/18:35 fires. Code read already confirms it is called on the full path (`publish_all_platforms.py:380,710`); this is the observed half. Observation 1 due from the 18:35Z fire on the 12:15Z movies/threads failure. | M |
+| **T-29** | Approved-queue ordering is FIFO by approval time | Degraded, script-less blueprints publish ahead of narrated ones: `ca19f6a7` (degraded, 0 chars) holds 09-12 while `3c904e01` (356-char script, not degraded) waits for 09-13. Proposed: when >1 approved candidate waits, order by `degraded = false`, then confidence, then approval time. Config-level. | M |
+| **T-27** | TN = 0 in the tuner's confusion matrix | The operator has never confirmed a rejection, so agreement measures half the decision (rule #22's shape). A rejection path — even sampled — is needed before the tuner's calibration means anything. | M |
+| **T-28** | Tuner alerts unread | `[ALERT] … the threshold is acting as an off switch, not a filter` was correct for three weeks and reached only the journal. Same class as T-24. | M |
+
+### #227 state as of 2026-09-11
+
+Parity revert **done**: all five `publishing.yaml` at committed values
+(0.85 / 0.732 / 0.85 / 0.85 / 0.85), tree clean, both tuner timers
+**disabled** (`genlab-gate-tuner` 01:00Z, `genlab-calibration-tuner` 06:15Z;
+restoration record in `.audit-retention/2026-09-11/tuner/`).
+
+Mechanism, from the tuner's own log: **ratchet-only-up plus a self-locking
+safety rail.** The `.bak` chain shows `0.9 → 0.95 → 0.99 → 1.0` over four days.
+Escaping 1.0 needs a delta of −0.075 to −0.090, and `|delta| > 0.05` triggers
+`[SKIP APPLY] operator review required` — it can climb in auto-appliable steps
+and can only descend in blocked ones. The tuner had already diagnosed it
+correctly: *"the threshold is acting as an off switch, not a filter."*
+
+**Still owed:** §C's recomputed bimodal table (low-cluster max, main-cluster
+min, proposed midpoint per niche) for the operator's value decision, and
+A.3/A.5 (does the tuner ever commit; what "gate approved" counts in its
+confusion matrix — 21-in-48h vs 1-in-14d cannot both be `action_taken`).

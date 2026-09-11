@@ -126,3 +126,56 @@ possibility alone disqualifies the reading.
 | sports | `caption_animator` | succeeded |
 | gaming | `caption_animator` failed, **no whisper stage** | DEGRADED — shipped without captions |
 | anime | neither path reached | MISSING |
+
+---
+
+## FIX-T23 gate 2 — PASS (2026-09-11 12:05Z)
+
+First fire under the three-fire timer (`9a273ed6`). `success | 12:05:01 → 12:17:01`.
+
+| blueprint | `scheduled_for` | fire | `stale_at` (+18h) | in window |
+|---|---|---|---|---|
+| `83e39119` ai_creators | 07:00Z | **12:05Z** | 09-12 01:00Z | ✓ |
+| `9c9927e3` movies | 10:00Z | **12:05Z** | 09-12 04:00Z | ✓ |
+
+**7 post IDs, 2 niches, 4 platforms** — first publishes since 09-10:
+`facebook:1048758904820470`, `instagram:18382086361230844`,
+`threads:18094171961540796`, `youtube:hjts6xut-0E` (ai_creators);
+`facebook:1990550371519925`, `instagram:18153982084509046`,
+`youtube:egrrkcVKOUU` (movies). movies/threads `FAILED`, empty post_id.
+
+**These are the exact two blueprints the 06:35Z run blocked as "Scheduled for
+\<future\>".** Same candidates, same gates, same code — only the sampling time
+changed, which is the fix's entire claim. Wall time **12 min** at 12:05Z vs
+**4m52s** on the empty 06:35Z run: the publisher was always willing, it was
+never asked at the right moment. (M)
+
+Retention: `.audit-retention/2026-09-11/published-1205Z/` — 15 files, 43 MB,
+14-entry sha256 manifest, per-platform renders included. **`set = PUBLISHED`**,
+the first such files EVAL-01a can use.
+
+### #218 does NOT close on this
+
+`83e39119` has `audio_provider` null, `narration_degraded = true`,
+`narration_script` 0 chars. **State: "reel published", not "narrated reel
+published."**
+
+### Correction: 3c904e01 and 1b3e0a5c ARE approved
+
+An earlier reading recorded `1b3e0a5c` as unapproved; the auto-approver has
+since approved it. The ai_creators queue, all above the 0.85 threshold:
+
+| bp | conf | slot | degraded | script |
+|---|---|---|---|---|
+| 83e39119 | 0.940 | 09-11 07:00Z | true | 0 — **published** |
+| ca19f6a7 | 0.908 | 09-12 06:30Z | true | 0 |
+| **3c904e01** | 0.910 | **09-13 06:30Z** | **false** | **356** |
+| 1b3e0a5c | 0.946 | 09-14 06:30Z | false | 260 |
+
+The stopper was never score or the approval gate — it is the **one-reel-per-
+niche-per-day slot queue**, which is correct behaviour. Slots are 06:30Z and the
+first fire is 06:35Z, so each is reachable.
+
+**#218 is expected to close on 2026-09-13 at ~06:35Z**, unaided, if `3c904e01`
+publishes with a measured VO ≥ 0.9. Scheduled check: `6092026c`. No manual
+approval is needed or will be performed.
