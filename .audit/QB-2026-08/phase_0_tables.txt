@@ -1,0 +1,50 @@
+                      List of tables
+ Schema |              Name              | Type  | Owner  
+--------+--------------------------------+-------+--------
+ public | ab_tests                       | table | genlab
+ public | affiliate_clicks               | table | genlab
+ public | affiliate_revenue              | table | genlab
+ public | alembic_version                | table | genlab
+ public | analytics                      | table | genlab
+ public | assets                         | table | genlab
+ public | audience_snapshots             | table | genlab
+ public | auto_approval_calibration      | table | genlab
+ public | auto_experiments               | table | genlab
+ public | bandit_arms                    | table | genlab
+ public | bandit_arms_pre_reset_20260517 | table | genlab
+ public | bandit_validation              | table | genlab
+ public | blueprints                     | table | genlab
+ public | compliance_events              | table | genlab
+ public | config_updates                 | table | genlab
+ public | content_memory                 | table | genlab
+ public | content_pool                   | table | genlab
+ public | dashboard_events               | table | genlab
+ public | drift_signals                  | table | genlab
+ public | email_subscribers              | table | genlab
+ public | ensemble_votes                 | table | genlab
+ public | episodic_events                | table | genlab
+ public | gate_examinations              | table | genlab
+ public | late_reward_deltas             | table | genlab
+ public | learning_findings              | table | genlab
+ public | monetisationprogress           | table | genlab
+ public | niche_pauses                   | table | genlab
+ public | outbound_reply_history         | table | genlab
+ public | pending_engagement             | table | genlab
+ public | pending_feedback               | table | genlab
+ public | pipeline_alerts                | table | genlab
+ public | pipeline_run_costs             | table | genlab
+ public | post_decision_trace            | table | genlab
+ public | preference_data                | table | genlab
+ public | product_embeddings             | table | genlab
+ public | publishing_analytics           | table | genlab
+ public | sources                        | table | genlab
+ public | stories                        | table | genlab
+ public | strategist_reports             | table | genlab
+ public | templates                      | table | genlab
+ public | tenant_niches                  | table | genlab
+ public | tenants                        | table | genlab
+ public | tier_history                   | table | genlab
+ public | universal_playbook             | table | genlab
+ public | users                          | table | genlab
+(45 rows)
+

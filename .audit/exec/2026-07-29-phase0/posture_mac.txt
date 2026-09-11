@@ -1,0 +1,16 @@
+=== HOST: mac ===
+GIT_HEAD: 1f46f53f9898e611b09d9965ed9a5b6c16c7970a
+GIT_BRANCH: main
+GIT_LAST_COMMIT_ISO: 2026-07-28T12:44:04+05:30
+GIT_STATUS_COUNT: 2
+GIT_AHEAD_BEHIND: 0	0
+PYTHON: Python 3.14.3
+UV: uv 0.11.3 (45da18ac3 2026-04-01 aarch64-apple-darwin)
+FFMPEG: ffmpeg version 8.1 Copyright (c) 2000-2026 the FFmpeg developers
+PSQL: psql (PostgreSQL) 14.19 (Homebrew)
+NODE: v25.6.1
+NPM: 11.9.0
+COUNT_OBJECTS: count: 8757|size: 50.01 MiB|in-pack: 16636|packs: 2|size-pack: 31.85 MiB|prune-packable: 0|garbage: 0|size-garbage: 0 bytes|
+DIRTY_FILES:
+ M .claude/scheduled_tasks.lock
+?? .audit/exec/2026-07-29-phase0/

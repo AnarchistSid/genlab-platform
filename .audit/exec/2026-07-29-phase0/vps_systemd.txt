@@ -1,0 +1,435 @@
+genlab-affiliate-link-check.service                                              loaded    inactive dead    GenLab Affiliate Link Checker
+genlab-affiliate-scraper.service                                                 loaded    inactive dead    GenLab Affiliate Revenue Scraper
+genlab-agent-memory-scratchpad.service                                           loaded    inactive dead    GenLab Agent Memory Scratchpad — weekly Opus reflection
+genlab-alert-auto-resolve.service                                                loaded    inactive dead    GenLab Alert Auto-Resolve — bleed out stale systemd_unit_failed alerts
+genlab-alert-notifier.service                                                    loaded    inactive dead    GenLab Cross-Source CRITICAL Alert Notifier (Slack/webhook pump)
+genlab-anthropic-credit-monitor.service                                          loaded    inactive dead    GenLab Anthropic Credit Monitor — surface credit-balance exhaustion as a CRITICAL alert
+genlab-anticipate-trends.service                                                 loaded    inactive dead    GenLab Trend Anticipation — daily rank of upcoming topics per niche
+genlab-anticipation-accuracy.service                                             loaded    inactive dead    GenLab Anticipation Accuracy — weekly Spearman validation of anticipation scores
+genlab-archive-stale-drafted.service                                             loaded    inactive dead    GenLab — auto-archive stale DRAFTED blueprints (no source video)
+genlab-archive-stale-visuals.service                                             loaded    inactive dead    GenLab Auto-Archive Stale visual_paths (2026-06-16 outage prevention)
+genlab-attribution-health-monitor.service                                        loaded    inactive dead    GenLab Attribution Health Monitor — surface low attribution_present_pct as a CRITICAL alert
+genlab-audience-collector.service                                                loaded    inactive dead    GenLab Audience Collector
+genlab-auto-approver.service                                                     loaded    inactive dead    GenLab AUTO #2 Auto-Approval Worker (enforce mode; per-niche via publishing.yaml)
+genlab-auto2-ramp.service                                                        loaded    inactive dead    GenLab AUTO #2 Auto-Ramp — weekly +10% rollout_pct per qualifying niche
+genlab-backup-test.service                                                       loaded    inactive dead    GenLab — weekly backup-restore dry-run validation
+genlab-bandit-backfill.service                                                   loaded    inactive dead    GenLab Bandit Backfill (replay unprocessed pending_feedback rewards)
+genlab-bandit-snapshot.service                                                   loaded    inactive dead    GenLab Bandit Arms Daily Snapshot (S6, AUTO #2 runbook)
+genlab-bandit-validation.service                                                 loaded    inactive dead    GenLab Bandit Validation — daily rank-correlation snapshot per niche
+genlab-bayesian-gate-refit.service                                               loaded    inactive dead    GenLab Bayesian Gate Refit — nightly per-niche LR posterior recomputation
+genlab-cleanup.service                                                           loaded    inactive dead    GenLab Media Cleanup
+genlab-compliance-digest-sender.service                                          loaded    inactive dead    GenLab Compliance Digest Sender — daily Slack digest of compliance events
+genlab-config-updater.service                                                    loaded    inactive dead    GenLab Config Updater
+genlab-conformal-router-refit.service                                            loaded    inactive dead    GenLab Conformal Router Refit — nightly per-niche posterior + calibration-score recomputation
+genlab-content-gap-remediator.service                                            loaded    inactive dead    GenLab content_gap alert auto-remediator — trigger niche pipelines when scheduling has 48h gaps
+genlab-counterfactual-replay.service                                             loaded    inactive dead    GenLab Counterfactual Replay — monthly IPS + DR estimator run
+genlab-cross-niche-transfer.service                                              loaded    inactive dead    GenLab Cross-Niche Transfer — weekly hierarchical Bayesian prior refit
+genlab-cuelinks-campaign-refresh.service                                         loaded    inactive dead    GenLab Cuelinks campaign shortlist refresh (weekly)
+genlab-daily-verify.service                                                      loaded    inactive dead    GenLab Daily Verification
+genlab-dashboard.service                                                         loaded    active   running GenLab Operations Dashboard
+genlab-db-maintenance.service                                                    loaded    inactive dead    GenLab DB Maintenance
+genlab-disk-cleanup.service                                                      loaded    inactive dead    GenLab Disk Cleanup — periodic prune to prevent disk-full on prod VPS
+genlab-dpo-export.service                                                        loaded    inactive dead    GenLab DPO Preference-Pair Export (JSONL for fine-tune training)
+genlab-drift-detector.service                                                    loaded    inactive dead    GenLab bandit-arm drift detection (L7, 2026-07-08)
+genlab-engagement-drainer.service                                                loaded    inactive dead    GenLab Engagement Review-Queue Drainer — second-tier LLM re-review
+genlab-engagement-poller.service                                                 loaded    active   running GenLab Engagement Poller (YT/X/Threads — fills the gap Meta webhooks don't cover)
+genlab-engagement-worker.service                                                 loaded    active   running GenLab Engagement Worker (Dramatiq)
+genlab-experiment-lifecycle.service                                              loaded    inactive dead    GenLab auto-experiment lifecycle runner — start pending, complete due
+genlab-experiment-parser.service                                                 loaded    inactive dead    GenLab auto-experiment parser — LLM-parse strategist testable_predictions
+genlab-fb-survival-check.service                                                 loaded    inactive dead    GenLab FB Post Survival Check
+genlab-feedback-collector.service                                                loaded    inactive dead    GenLab Feedback Collector
+genlab-gate-tuner.service                                                        loaded    inactive dead    GenLab Gate Tuner — nightly auto-approval threshold tuning
+genlab-gh-cache-prune.service                                                    loaded    inactive dead    GenLab gh-runner cache prune — fast surgical cleanup between CI jobs
+genlab-health-monitor.service                                                    loaded    inactive dead    GenLab Health Monitor (detect + alert on pipeline/channel failures)
+genlab-hook-trainer.service                                                      loaded    inactive dead    GenLab Hook Trainer
+genlab-hypothesis-promote.service                                                loaded    inactive dead    GenLab Hypothesis promoter — write medium/high strategist hypotheses to learning_findings
+genlab-import-cuelinks-conversions.service                                       loaded    inactive dead    GenLab Cuelinks V3 conversion importer → affiliate_revenue
+genlab-insights-collector.service                                                loaded    inactive dead    GenLab Insights Collector
+genlab-late-reward.service                                                       loaded    inactive dead    GenLab late-window reward re-evaluation
+genlab-metric-collector.service                                                  loaded    inactive dead    GenLab Metric Collector
+genlab-metric-drift-detect.service                                               loaded    inactive dead    GenLab Metric Drift Detect — nightly engagement_rate distribution sanity check
+genlab-morning-briefing.service                                                  loaded    inactive dead    GenLab Morning Briefing
+genlab-niche-pause-sweeper.service                                               loaded    inactive dead    GenLab Niche Pause Sweeper — daily GC of expired niche_pauses rows
+genlab-nightly-schedule-remediate.service                                        loaded    inactive dead    GenLab nightly-schedule failure remediation (task #612, 2026-07-09)
+genlab-nightly-schedule.service                                                  loaded    inactive dead    GenLab nightly auto-scheduler — Path B safety net (2026-07-06)
+genlab-outbound-reply-engine.service                                             loaded    inactive dead    GenLab outbound reply engine — replies to top comments on top-creator videos in-niche
+genlab-permission-auto-repair.service                                            loaded    inactive dead    GenLab Permission Drift Auto-Repair (root)
+genlab-permissions-check.service                                                 loaded    inactive dead    GenLab Permissions Drift Detector (2026-06-16 outage prevention)
+genlab-pg-backup.service                                                         loaded    inactive dead    GenLab PostgreSQL Backup
+genlab-pipeline-ai-creators.service                                              not-found inactive dead    genlab-pipeline-ai-creators.service
+genlab-pipeline-ai.service                                                       loaded    failed   failed  GenLab AI Creators Pipeline (BlackboxBrief)
+genlab-pipeline-anime.service                                                    loaded    inactive dead    GenLab Anime Pipeline (FrameDrift)
+genlab-pipeline-gaming.service                                                   loaded    inactive dead    GenLab Gaming Pipeline (CriticalRush)
+genlab-pipeline-movies.service                                                   loaded    failed   failed  GenLab Movies Pipeline (SpliceReel)
+genlab-pipeline-sports.service                                                   loaded    inactive dead    GenLab Sports Pipeline (ClutchWire)
+genlab-post-deploy-verify.service                                                loaded    failed   failed  GenLab Post-Deploy Verify — sanity-check prod after deploy/restart
+genlab-preference-collector.service                                              loaded    inactive dead    GenLab Preference Collector
+genlab-proposal-auto-accept.service                                              loaded    inactive dead    GenLab strategist proposal auto-accepter — low-risk arm_add classifier
+genlab-proxy-revenue.service                                                     loaded    inactive dead    GenLab Proxy Revenue Aggregator
+genlab-publisher-retry.service                                                   loaded    inactive dead    GenLab Publisher (retry-only 2nd run)
+genlab-publisher.service                                                         loaded    inactive dead    GenLab Publisher
+genlab-quota-monitor.service                                                     loaded    active   running GenLab Disk Quota Monitor
+genlab-refit-top-creator-priors.service                                          loaded    inactive dead    GenLab top-creator prior refit — weekly Spearman feature correlations
+genlab-retro-credit.service                                                      loaded    inactive dead    GenLab retro-credit uncredited posts (rate-limit-safe, state-file-backed)
+genlab-reward-shaper-recovery.service                                            loaded    inactive dead    GenLab reward-shaper recovery check (post-#713)
+genlab-rls-drift-check.service                                                   loaded    inactive dead    GenLab RLS Policy Drift Detector (post-Wave-4 audit prevention)
+genlab-scan-stale-durable-errors.service                                         loaded    inactive dead    GenLab scanner — surface stale /opt/genlab/.runtime/*_last_error.txt
+genlab-service-failure-alert@genlab-affiliate-link-check.service.service         loaded    inactive dead    GenLab Systemd Failure Alert for genlab/affiliate/link/check.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-affiliate-scraper.service.service            loaded    inactive dead    GenLab Systemd Failure Alert for genlab/affiliate/scraper.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-agent-memory-scratchpad.service.service      loaded    inactive dead    GenLab Systemd Failure Alert for genlab/agent/memory/scratchpad.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-alert-auto-resolve.service.service           loaded    inactive dead    GenLab Systemd Failure Alert for genlab/alert/auto/resolve.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-alert-notifier.service.service               loaded    inactive dead    GenLab Systemd Failure Alert for genlab/alert/notifier.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-anthropic-credit-monitor.service.service     loaded    inactive dead    GenLab Systemd Failure Alert for genlab/anthropic/credit/monitor.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-anticipate-trends.service.service            loaded    inactive dead    GenLab Systemd Failure Alert for genlab/anticipate/trends.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-anticipation-accuracy.service.service        loaded    inactive dead    GenLab Systemd Failure Alert for genlab/anticipation/accuracy.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-archive-stale-drafted.service.service        loaded    inactive dead    GenLab Systemd Failure Alert for genlab/archive/stale/drafted.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-archive-stale-visuals.service.service        loaded    inactive dead    GenLab Systemd Failure Alert for genlab/archive/stale/visuals.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-attribution-health-monitor.service.service   loaded    inactive dead    GenLab Systemd Failure Alert for genlab/attribution/health/monitor.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-audience-collector.service.service           loaded    inactive dead    GenLab Systemd Failure Alert for genlab/audience/collector.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-auto-approver.service.service                loaded    inactive dead    GenLab Systemd Failure Alert for genlab/auto/approver.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-auto2-ramp.service.service                   loaded    inactive dead    GenLab Systemd Failure Alert for genlab/auto2/ramp.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-backup-test.service.service                  loaded    inactive dead    GenLab Systemd Failure Alert for genlab/backup/test.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-bandit-backfill.service.service              loaded    inactive dead    GenLab Systemd Failure Alert for genlab/bandit/backfill.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-bandit-snapshot.service.service              loaded    inactive dead    GenLab Systemd Failure Alert for genlab/bandit/snapshot.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-bandit-validation.service.service            loaded    inactive dead    GenLab Systemd Failure Alert for genlab/bandit/validation.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-bayesian-gate-refit.service.service          loaded    inactive dead    GenLab Systemd Failure Alert for genlab/bayesian/gate/refit.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-cleanup.service.service                      loaded    inactive dead    GenLab Systemd Failure Alert for genlab/cleanup.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-compliance-digest-sender.service.service     loaded    inactive dead    GenLab Systemd Failure Alert for genlab/compliance/digest/sender.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-config-updater.service.service               loaded    inactive dead    GenLab Systemd Failure Alert for genlab/config/updater.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-conformal-router-refit.service.service       loaded    inactive dead    GenLab Systemd Failure Alert for genlab/conformal/router/refit.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-content-gap-remediator.service.service       loaded    inactive dead    GenLab Systemd Failure Alert for genlab/content/gap/remediator.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-counterfactual-replay.service.service        loaded    inactive dead    GenLab Systemd Failure Alert for genlab/counterfactual/replay.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-cross-niche-transfer.service.service         loaded    inactive dead    GenLab Systemd Failure Alert for genlab/cross/niche/transfer.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-cuelinks-campaign-refresh.service.service    loaded    inactive dead    GenLab Systemd Failure Alert for genlab/cuelinks/campaign/refresh.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-daily-verify.service.service                 loaded    inactive dead    GenLab Systemd Failure Alert for genlab/daily/verify.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-dashboard.service.service                    loaded    inactive dead    GenLab Systemd Failure Alert for genlab/dashboard.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-db-maintenance.service.service               loaded    inactive dead    GenLab Systemd Failure Alert for genlab/db/maintenance.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-disk-cleanup.service.service                 loaded    inactive dead    GenLab Systemd Failure Alert for genlab/disk/cleanup.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-dpo-export.service.service                   loaded    inactive dead    GenLab Systemd Failure Alert for genlab/dpo/export.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-drift-detector.service.service               loaded    inactive dead    GenLab Systemd Failure Alert for genlab/drift/detector.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-engagement-drainer.service.service           loaded    inactive dead    GenLab Systemd Failure Alert for genlab/engagement/drainer.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-engagement-poller.service.service            loaded    inactive dead    GenLab Systemd Failure Alert for genlab/engagement/poller.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-engagement-worker.service.service            loaded    inactive dead    GenLab Systemd Failure Alert for genlab/engagement/worker.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-experiment-lifecycle.service.service         loaded    inactive dead    GenLab Systemd Failure Alert for genlab/experiment/lifecycle.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-experiment-parser.service.service            loaded    inactive dead    GenLab Systemd Failure Alert for genlab/experiment/parser.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-fb-survival-check.service.service            loaded    inactive dead    GenLab Systemd Failure Alert for genlab/fb/survival/check.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-feedback-collector.service.service           loaded    inactive dead    GenLab Systemd Failure Alert for genlab/feedback/collector.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-gate-tuner.service.service                   loaded    inactive dead    GenLab Systemd Failure Alert for genlab/gate/tuner.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-gh-cache-prune.service.service               loaded    inactive dead    GenLab Systemd Failure Alert for genlab/gh/cache/prune.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-health-monitor.service.service               loaded    inactive dead    GenLab Systemd Failure Alert for genlab/health/monitor.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-hook-trainer.service.service                 loaded    inactive dead    GenLab Systemd Failure Alert for genlab/hook/trainer.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-hypothesis-promote.service.service           loaded    inactive dead    GenLab Systemd Failure Alert for genlab/hypothesis/promote.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-import-cuelinks-conversions.service.service  loaded    inactive dead    GenLab Systemd Failure Alert for genlab/import/cuelinks/conversions.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-insights-collector.service.service           loaded    inactive dead    GenLab Systemd Failure Alert for genlab/insights/collector.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-late-reward.service.service                  loaded    inactive dead    GenLab Systemd Failure Alert for genlab/late/reward.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-metric-collector.service.service             loaded    inactive dead    GenLab Systemd Failure Alert for genlab/metric/collector.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-metric-drift-detect.service.service          loaded    inactive dead    GenLab Systemd Failure Alert for genlab/metric/drift/detect.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-morning-briefing.service.service             loaded    inactive dead    GenLab Systemd Failure Alert for genlab/morning/briefing.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-niche-pause-sweeper.service.service          loaded    inactive dead    GenLab Systemd Failure Alert for genlab/niche/pause/sweeper.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-nightly-schedule-remediate.service.service   loaded    inactive dead    GenLab Systemd Failure Alert for genlab/nightly/schedule/remediate.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-nightly-schedule.service.service             loaded    inactive dead    GenLab Systemd Failure Alert for genlab/nightly/schedule.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-outbound-reply-engine.service.service        loaded    inactive dead    GenLab Systemd Failure Alert for genlab/outbound/reply/engine.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-permission-auto-repair.service.service       loaded    inactive dead    GenLab Systemd Failure Alert for genlab/permission/auto/repair.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-permissions-check.service.service            loaded    inactive dead    GenLab Systemd Failure Alert for genlab/permissions/check.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-pg-backup.service.service                    loaded    inactive dead    GenLab Systemd Failure Alert for genlab/pg/backup.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-pipeline-ai.service.service                  loaded    inactive dead    GenLab Systemd Failure Alert for genlab/pipeline/ai.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-pipeline-anime.service.service               loaded    inactive dead    GenLab Systemd Failure Alert for genlab/pipeline/anime.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-pipeline-gaming.service.service              loaded    inactive dead    GenLab Systemd Failure Alert for genlab/pipeline/gaming.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-pipeline-movies.service.service              loaded    inactive dead    GenLab Systemd Failure Alert for genlab/pipeline/movies.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-pipeline-sports.service.service              loaded    inactive dead    GenLab Systemd Failure Alert for genlab/pipeline/sports.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-post-deploy-verify.service.service           loaded    inactive dead    GenLab Systemd Failure Alert for genlab/post/deploy/verify.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-preference-collector.service.service         loaded    inactive dead    GenLab Systemd Failure Alert for genlab/preference/collector.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-proposal-auto-accept.service.service         loaded    inactive dead    GenLab Systemd Failure Alert for genlab/proposal/auto/accept.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-proxy-revenue.service.service                loaded    inactive dead    GenLab Systemd Failure Alert for genlab/proxy/revenue.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-publisher-retry.service.service              loaded    inactive dead    GenLab Systemd Failure Alert for genlab/publisher/retry.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-publisher.service.service                    loaded    inactive dead    GenLab Systemd Failure Alert for genlab/publisher.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-quota-monitor.service.service                loaded    inactive dead    GenLab Systemd Failure Alert for genlab/quota/monitor.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-refit-top-creator-priors.service.service     loaded    inactive dead    GenLab Systemd Failure Alert for genlab/refit/top/creator/priors.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-retro-credit.service.service                 loaded    inactive dead    GenLab Systemd Failure Alert for genlab/retro/credit.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-reward-shaper-recovery.service.service       loaded    inactive dead    GenLab Systemd Failure Alert for genlab/reward/shaper/recovery.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-rls-drift-check.service.service              loaded    inactive dead    GenLab Systemd Failure Alert for genlab/rls/drift/check.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-scan-stale-durable-errors.service.service    loaded    inactive dead    GenLab Systemd Failure Alert for genlab/scan/stale/durable/errors.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-shadow-reviewer.service.service              loaded    inactive dead    GenLab Systemd Failure Alert for genlab/shadow/reviewer.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-shared-ingestion.service.service             loaded    inactive dead    GenLab Systemd Failure Alert for genlab/shared/ingestion.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-spike-detector.service.service               loaded    inactive dead    GenLab Systemd Failure Alert for genlab/spike/detector.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-strategist-apply.service.service             loaded    inactive dead    GenLab Systemd Failure Alert for genlab/strategist/apply.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-strategist.service.service                   loaded    inactive dead    GenLab Systemd Failure Alert for genlab/strategist.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-threads-token-refresh.service.service        loaded    inactive dead    GenLab Systemd Failure Alert for genlab/threads/token/refresh.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-token-refresh.service.service                loaded    inactive dead    GenLab Systemd Failure Alert for genlab/token/refresh.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-verify-intelligent-transform.service.service loaded    inactive dead    GenLab Systemd Failure Alert for genlab/verify/intelligent/transform.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-viral-detector.service.service               loaded    inactive dead    GenLab Systemd Failure Alert for genlab/viral/detector.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-visual-backup.service.service                loaded    inactive dead    GenLab Systemd Failure Alert for genlab/visual/backup.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-watch-top-creators.service.service           loaded    inactive dead    GenLab Systemd Failure Alert for genlab/watch/top/creators.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-webhook.service.service                      loaded    inactive dead    GenLab Systemd Failure Alert for genlab/webhook.service (instance = name of failing unit)
+genlab-service-failure-alert@genlab-yt-session-warm.service.service              loaded    inactive dead    GenLab Systemd Failure Alert for genlab/yt/session/warm.service (instance = name of failing unit)
+genlab-shadow-reviewer.service                                                   loaded    inactive dead    GenLab Shadow Reviewer — LLM would-approve verdict for scheduled blueprints
+genlab-shared-ingestion.service                                                  loaded    inactive dead    GenLab Shared Ingestion
+genlab-spike-detector.service                                                    loaded    inactive dead    GenLab Spike Detector
+genlab-strategist-apply.service                                                  loaded    inactive dead    GenLab Strategist actions applier — materialise accepted arm_add proposals
+genlab-strategist.service                                                        loaded    failed   failed  GenLab Strategist — weekly LLM-based meta-cognition per niche
+genlab-threads-token-refresh.service                                             loaded    inactive dead    GenLab Threads LLUT auto-refresh (prevents 60-day silent expiry)
+genlab-token-refresh.service                                                     loaded    inactive dead    GenLab Token Health Check
+genlab-verify-2026-07-22-fixes.service                                           loaded    inactive dead    GenLab 2026-07-22 fixes verification — post-morning-fire hook check
+genlab-verify-intelligent-transform.service                                      loaded    inactive dead    GenLab Intelligent-Transform Verification — post-publish attribution check
+genlab-verify-meta-usage.service                                                 loaded    inactive dead    GenLab meta_usage morning-fire verification — post-publisher hook check
+genlab-verify-whisper-canary.service                                             loaded    inactive dead    GenLab whisper_sync canary verification — post-BB-pipeline caption check
+genlab-viral-detector.service                                                    loaded    inactive dead    GenLab Viral Detector
+genlab-visual-backup.service                                                     loaded    inactive dead    GenLab visual asset backup — daily rendered .mp4 snapshot
+genlab-watch-top-creators.service                                                loaded    inactive dead    GenLab top-tier creator upload watcher — leading trend indicator
+genlab-webhook.service                                                           loaded    active   running GenLab Meta Webhook Receiver
+genlab-yt-session-warm.service                                                   loaded    inactive dead    GenLab YouTube Session Keep-Warm
+genlab-postgres-ready.target                                                     not-found inactive dead    genlab-postgres-ready.target
+genlab-affiliate-link-check.timer                                                loaded    active   waiting GenLab Affiliate Link Check Timer
+genlab-affiliate-scraper.timer                                                   loaded    active   waiting GenLab Affiliate Scraper Timer
+genlab-agent-memory-scratchpad.timer                                             loaded    active   waiting GenLab Agent Memory Scratchpad Timer (weekly Sunday)
+genlab-alert-auto-resolve.timer                                                  loaded    active   waiting GenLab Alert Auto-Resolve Timer — bleed out stale systemd_unit_failed alerts every 5 min
+genlab-alert-notifier.timer                                                      loaded    active   waiting GenLab Cross-Source CRITICAL Alert Notifier Timer (every 5 min)
+genlab-anthropic-credit-monitor.timer                                            loaded    active   waiting GenLab Anthropic Credit Monitor Timer — scan journalctl for credit-low signal every 15 min
+genlab-anticipate-trends.timer                                                   loaded    active   waiting GenLab Trend Anticipation Timer — daily 03:30 UTC before pipeline runs
+genlab-anticipation-accuracy.timer                                               loaded    active   waiting GenLab Anticipation Accuracy Timer — Mondays 05:00 UTC weekly
+genlab-archive-stale-drafted.timer                                               loaded    active   waiting GenLab — stale DRAFTED blueprint cleanup timer
+genlab-archive-stale-visuals.timer                                               loaded    active   waiting GenLab Auto-Archive Stale visual_paths Timer (nightly, pre-publisher)
+genlab-attribution-health-monitor.timer                                          loaded    active   waiting Fire GenLab Attribution Health Monitor every 30 min
+genlab-audience-collector.timer                                                  loaded    active   waiting GenLab Audience Collector Timer
+genlab-auto-approver.timer                                                       loaded    active   waiting GenLab AUTO #2 Auto-Approval Worker Timer
+genlab-auto2-ramp.timer                                                          loaded    active   waiting GenLab AUTO #2 Auto-Ramp Timer — weekly +10% per qualifying niche
+genlab-backup-test.timer                                                         loaded    active   waiting GenLab — weekly backup-restore dry-run validation (timer)
+genlab-bandit-backfill.timer                                                     loaded    active   waiting GenLab Bandit Backfill Timer (Daily)
+genlab-bandit-snapshot.timer                                                     loaded    active   waiting GenLab Bandit Arms Daily Snapshot Timer (S6, AUTO #2 runbook)
+genlab-bandit-validation.timer                                                   loaded    active   waiting GenLab Bandit Validation Timer — daily rank-correlation snapshot
+genlab-bayesian-gate-refit.timer                                                 loaded    active   waiting GenLab Bayesian Gate Refit Timer — daily Laplace posterior refresh
+genlab-cleanup.timer                                                             loaded    active   waiting GenLab Cleanup Timer
+genlab-compliance-digest-sender.timer                                            loaded    active   waiting GenLab Compliance Digest Timer — daily Slack push at start of operator's day
+genlab-config-updater.timer                                                      loaded    active   waiting GenLab Config Updater Timer (Weekly Monday)
+genlab-conformal-router-refit.timer                                              loaded    active   waiting GenLab Conformal Router Refit Timer — daily posterior refresh
+genlab-content-gap-remediator.timer                                              loaded    active   waiting Remediate content_gap alerts twice per hour
+genlab-counterfactual-replay.timer                                               loaded    active   waiting GenLab Counterfactual Replay Timer — monthly on 1st @ 04:30 UTC
+genlab-cross-niche-transfer.timer                                                loaded    active   waiting GenLab Cross-Niche Transfer Timer — Mondays 05:30 UTC weekly
+genlab-cuelinks-campaign-refresh.timer                                           loaded    active   waiting GenLab Cuelinks campaign shortlist refresh timer
+genlab-daily-verify.timer                                                        loaded    active   waiting GenLab Daily Verify Timer
+genlab-db-maintenance.timer                                                      loaded    active   waiting GenLab DB Maintenance Timer
+genlab-disk-cleanup.timer                                                        loaded    active   waiting GenLab Disk Cleanup Timer — prune caches + old artifacts hourly
+genlab-dpo-export.timer                                                          loaded    active   waiting GenLab DPO Export Timer (weekly, after preference-collector)
+genlab-drift-detector.timer                                                      loaded    active   waiting GenLab drift detector timer — daily 04:15 UTC
+genlab-engagement-drainer.timer                                                  loaded    active   waiting Drain stale pending_review engagement rows every 4h
+genlab-experiment-lifecycle.timer                                                loaded    active   waiting Advance auto_experiments pending → running → completed every 6h
+genlab-experiment-parser.timer                                                   loaded    active   waiting Parse fresh testable_predictions into auto_experiments queue — daily 03:45 UTC
+genlab-fb-survival-check.timer                                                   loaded    active   waiting GenLab FB Post Survival Check Timer
+genlab-feedback-collector.timer                                                  loaded    active   waiting GenLab Feedback Collector Timer
+genlab-gate-tuner.timer                                                          loaded    active   waiting GenLab Gate Tuner Timer — nightly threshold adaptation
+genlab-gh-cache-prune.timer                                                      loaded    active   waiting Prune gh-runner cache every 5 min — burst-commit protection
+genlab-health-monitor.timer                                                      loaded    active   waiting GenLab Health Monitor Timer (every 30 min)
+genlab-hook-trainer.timer                                                        loaded    active   waiting GenLab Hook Trainer Timer (Daily)
+genlab-hypothesis-promote.timer                                                  loaded    active   waiting Promote fresh strategist hypotheses to learning_findings — daily 03:15 UTC
+genlab-import-cuelinks-conversions.timer                                         loaded    active   waiting GenLab Cuelinks importer timer — daily 06:15 UTC (11:45 IST)
+genlab-insights-collector.timer                                                  loaded    active   waiting GenLab Insights Collector Timer
+genlab-late-reward.timer                                                         loaded    active   waiting Late-window reward re-eval daily — 04:00 UTC
+genlab-metric-collector.timer                                                    loaded    active   waiting GenLab Metric Collector Timer
+genlab-metric-drift-detect.timer                                                 loaded    active   waiting GenLab Metric Drift Detect Timer — nightly distribution sanity check
+genlab-morning-briefing.timer                                                    loaded    active   waiting GenLab Morning Briefing Timer
+genlab-niche-pause-sweeper.timer                                                 loaded    active   waiting GenLab Niche Pause Sweeper Timer — daily expired-row GC
+genlab-nightly-schedule.timer                                                    loaded    active   waiting GenLab nightly auto-scheduler Timer — daily 16:30 UTC (22:00 IST)
+genlab-outbound-reply-engine.timer                                               loaded    active   waiting GenLab outbound reply engine timer — every 4 hours
+genlab-permission-auto-repair.timer                                              loaded    active   waiting GenLab Permission Drift Auto-Repair Timer
+genlab-permissions-check.timer                                                   loaded    active   waiting GenLab Permissions Drift Detector Timer (nightly)
+genlab-pg-backup.timer                                                           loaded    active   waiting GenLab PG Backup Timer
+genlab-pipeline-ai.timer                                                         loaded    active   waiting GenLab AI Creators Pipeline Timer
+genlab-pipeline-anime.timer                                                      loaded    active   waiting GenLab Anime Pipeline Timer
+genlab-pipeline-gaming.timer                                                     loaded    active   waiting GenLab Gaming Pipeline Timer
+genlab-pipeline-movies.timer                                                     loaded    active   waiting GenLab Movies Pipeline Timer
+genlab-pipeline-sports.timer                                                     loaded    active   waiting GenLab Sports Pipeline Timer
+genlab-post-deploy-verify.timer                                                  loaded    active   waiting GenLab Post-Deploy Verify Timer — weekly drift check
+genlab-preference-collector.timer                                                loaded    active   waiting GenLab Preference Collector Timer (Weekly Sunday)
+genlab-proposal-auto-accept.timer                                                loaded    active   waiting Auto-accept low-risk strategist proposals — daily 03:30 UTC
+genlab-proxy-revenue.timer                                                       loaded    active   waiting GenLab Proxy Revenue Aggregator Timer
+genlab-publisher-retry.timer                                                     loaded    active   waiting GenLab Publisher retry-only Timer (2nd daily run)
+genlab-publisher.timer                                                           loaded    active   waiting GenLab Publisher Timer
+genlab-refit-top-creator-priors.timer                                            loaded    active   waiting GenLab top-creator prior refit timer — weekly Sundays
+genlab-retro-credit.timer                                                        loaded    active   waiting Timer for GenLab retro-credit uncredited posts
+genlab-reward-shaper-recovery.timer                                              loaded    active   waiting GenLab reward-shaper recovery check timer
+genlab-rls-drift-check.timer                                                     loaded    active   waiting GenLab RLS Policy Drift Detector Timer (nightly)
+genlab-scan-stale-durable-errors.timer                                           loaded    active   waiting Scan for stale durable-error files every 6 hours
+genlab-shadow-reviewer.timer                                                     loaded    inactive dead    Run shadow reviewer LLM pass — daily 04:00 UTC
+genlab-shared-ingestion.timer                                                    loaded    active   waiting GenLab Shared Ingestion Timer
+genlab-spike-detector.timer                                                      loaded    active   waiting GenLab Spike Detector Timer
+genlab-strategist-apply.timer                                                    loaded    active   waiting Apply operator-accepted Strategist proposals — daily 03:00 UTC
+genlab-strategist.timer                                                          loaded    active   waiting GenLab Strategist weekly cadence — Sunday 02:00 UTC
+genlab-threads-token-refresh.timer                                               loaded    active   waiting Daily Threads LLUT auto-refresh — prevents 60-day silent expiry
+genlab-token-refresh.timer                                                       loaded    active   waiting GenLab Token Health Timer
+genlab-verify-2026-07-22-fixes.timer                                             loaded    active   elapsed GenLab 2026-07-22 fixes verification (12:30 IST tomorrow, 25 min post-publisher)
+genlab-verify-intelligent-transform.timer                                        loaded    active   waiting GenLab Verify Intelligent-Transform Timer — daily 11:00 UTC (16:30 IST)
+genlab-verify-meta-usage.timer                                                   loaded    active   waiting GenLab meta_usage morning-fire verification (12:15 IST daily, 10 min post-publisher)
+genlab-verify-whisper-canary.timer                                               loaded    active   waiting GenLab whisper_sync canary post-BB-fire verification (09:30 IST daily)
+genlab-viral-detector.timer                                                      loaded    active   waiting GenLab Viral Detector Timer
+genlab-visual-backup.timer                                                       loaded    active   waiting GenLab visual backup daily — 07:00 UTC (12:30 IST)
+genlab-watch-top-creators.timer                                                  loaded    active   waiting GenLab top-creator upload watcher timer — 4× daily
+genlab-yt-session-warm.timer                                                     loaded    active   waiting GenLab YouTube Session Keep-Warm Timer
+---TIMERS---
+Wed 2026-07-29 15:20:00 IST      17s Wed 2026-07-29 15:15:01 IST 4min 41s ago genlab-alert-auto-resolve.timer           genlab-alert-auto-resolve.service
+Wed 2026-07-29 15:20:00 IST      17s Wed 2026-07-29 15:15:01 IST 4min 41s ago genlab-gh-cache-prune.timer               genlab-gh-cache-prune.service
+Wed 2026-07-29 15:23:03 IST 3min 21s Wed 2026-07-29 15:18:03 IST 1min 38s ago genlab-alert-notifier.timer               genlab-alert-notifier.service
+Wed 2026-07-29 15:23:03 IST 3min 21s Wed 2026-07-29 15:18:03 IST 1min 38s ago genlab-spike-detector.timer               genlab-spike-detector.service
+Wed 2026-07-29 15:26:48 IST     7min Wed 2026-07-29 13:56:48 IST 1h 22min ago genlab-yt-session-warm.timer              genlab-yt-session-warm.service
+Wed 2026-07-29 15:28:02 IST     8min Wed 2026-07-29 14:58:02 IST    21min ago genlab-attribution-health-monitor.timer   genlab-attribution-health-monitor.service
+Wed 2026-07-29 15:30:00 IST    10min Wed 2026-07-29 15:15:01 IST 4min 41s ago genlab-anthropic-credit-monitor.timer     genlab-anthropic-credit-monitor.service
+Wed 2026-07-29 15:30:00 IST    10min Wed 2026-07-29 15:00:01 IST    19min ago genlab-auto-approver.timer                genlab-auto-approver.service
+Wed 2026-07-29 15:30:00 IST    10min Wed 2026-07-29 15:00:01 IST    19min ago genlab-health-monitor.timer               genlab-health-monitor.service
+Wed 2026-07-29 15:30:00 IST    10min Wed 2026-07-29 15:15:01 IST 4min 41s ago genlab-permission-auto-repair.timer       genlab-permission-auto-repair.service
+Wed 2026-07-29 15:30:27 IST    10min Wed 2026-07-29 14:30:27 IST    49min ago genlab-metric-collector.timer             genlab-metric-collector.service
+Wed 2026-07-29 15:36:51 IST    17min Wed 2026-07-29 14:06:51 IST 1h 12min ago genlab-retro-credit.timer                 genlab-retro-credit.service
+Wed 2026-07-29 15:45:00 IST    25min Wed 2026-07-29 15:15:01 IST 4min 41s ago genlab-content-gap-remediator.timer       genlab-content-gap-remediator.service
+Wed 2026-07-29 15:47:00 IST    27min Wed 2026-07-29 14:47:00 IST    32min ago genlab-disk-cleanup.timer                 genlab-disk-cleanup.service
+Wed 2026-07-29 16:00:00 IST    40min Tue 2026-07-28 16:00:01 IST      23h ago genlab-publisher-retry.timer              genlab-publisher-retry.service
+Wed 2026-07-29 16:30:00 IST 1h 10min Tue 2026-07-28 16:30:00 IST      22h ago genlab-verify-intelligent-transform.timer genlab-verify-intelligent-transform.service
+Wed 2026-07-29 16:30:13 IST 1h 10min Wed 2026-07-29 14:30:13 IST    49min ago genlab-viral-detector.timer               genlab-viral-detector.service
+Wed 2026-07-29 17:30:00 IST 2h 10min Tue 2026-07-28 17:30:01 IST      21h ago genlab-affiliate-scraper.timer            genlab-affiliate-scraper.service
+Wed 2026-07-29 17:30:00 IST 2h 10min Wed 2026-07-29 13:30:01 IST 1h 49min ago genlab-outbound-reply-engine.timer        genlab-outbound-reply-engine.service
+Wed 2026-07-29 17:50:00 IST 2h 30min Wed 2026-07-29 11:50:01 IST 3h 29min ago genlab-experiment-lifecycle.timer         genlab-experiment-lifecycle.service
+Wed 2026-07-29 18:00:00 IST 2h 40min Wed 2026-07-29 14:00:01 IST 1h 19min ago genlab-engagement-drainer.timer           genlab-engagement-drainer.service
+Wed 2026-07-29 18:00:00 IST 2h 40min Wed 2026-07-29 12:15:01 IST  3h 4min ago genlab-insights-collector.timer           genlab-insights-collector.service
+Wed 2026-07-29 18:05:00 IST 2h 45min Wed 2026-07-29 12:05:01 IST 3h 14min ago genlab-scan-stale-durable-errors.timer    genlab-scan-stale-durable-errors.service
+Wed 2026-07-29 19:00:00 IST 3h 40min Tue 2026-07-28 19:00:01 IST      20h ago genlab-feedback-collector.timer           genlab-feedback-collector.service
+Wed 2026-07-29 19:30:00 IST 4h 10min Wed 2026-07-29 13:30:01 IST 1h 49min ago genlab-watch-top-creators.timer           genlab-watch-top-creators.service
+Wed 2026-07-29 20:00:00 IST 4h 40min Tue 2026-07-28 20:00:01 IST      19h ago genlab-audience-collector.timer           genlab-audience-collector.service
+Wed 2026-07-29 22:00:00 IST       6h Tue 2026-07-28 22:00:01 IST      17h ago genlab-daily-verify.timer                 genlab-daily-verify.service
+Wed 2026-07-29 22:00:00 IST       6h Tue 2026-07-28 22:00:01 IST      17h ago genlab-nightly-schedule.timer             genlab-nightly-schedule.service
+Thu 2026-07-30 03:00:00 IST      11h Wed 2026-07-29 03:00:01 IST      12h ago genlab-archive-stale-visuals.timer        genlab-archive-stale-visuals.service
+Thu 2026-07-30 03:00:00 IST      11h Wed 2026-07-29 03:00:01 IST      12h ago genlab-bandit-snapshot.timer              genlab-bandit-snapshot.service
+Thu 2026-07-30 04:00:00 IST      12h Wed 2026-07-29 04:00:00 IST      11h ago genlab-permissions-check.timer            genlab-permissions-check.service
+Thu 2026-07-30 04:30:00 IST      13h Wed 2026-07-29 04:30:01 IST      10h ago genlab-rls-drift-check.timer              genlab-rls-drift-check.service
+Thu 2026-07-30 06:30:00 IST      15h Wed 2026-07-29 06:30:01 IST       8h ago genlab-cleanup.timer                      genlab-cleanup.service
+Thu 2026-07-30 06:30:00 IST      15h Wed 2026-07-29 06:30:01 IST       8h ago genlab-gate-tuner.timer                   genlab-gate-tuner.service
+Thu 2026-07-30 06:30:00 IST      15h Wed 2026-07-29 06:30:01 IST       8h ago genlab-pg-backup.timer                    genlab-pg-backup.service
+Thu 2026-07-30 07:30:00 IST      16h Wed 2026-07-29 07:30:01 IST       7h ago genlab-niche-pause-sweeper.timer          genlab-niche-pause-sweeper.service
+Thu 2026-07-30 07:30:00 IST      16h Wed 2026-07-29 07:30:01 IST       7h ago genlab-token-refresh.timer                genlab-token-refresh.service
+Thu 2026-07-30 08:00:00 IST      16h Wed 2026-07-29 08:00:01 IST       7h ago genlab-pipeline-ai.timer                  genlab-pipeline-ai.service
+Thu 2026-07-30 08:15:00 IST      16h Wed 2026-07-29 08:15:01 IST       7h ago genlab-morning-briefing.timer             genlab-morning-briefing.service
+Thu 2026-07-30 08:30:00 IST      17h Wed 2026-07-29 08:30:01 IST       6h ago genlab-conformal-router-refit.timer       genlab-conformal-router-refit.service
+Thu 2026-07-30 08:30:00 IST      17h Wed 2026-07-29 08:30:01 IST       6h ago genlab-strategist-apply.timer             genlab-strategist-apply.service
+Thu 2026-07-30 08:45:00 IST      17h Wed 2026-07-29 08:45:01 IST       6h ago genlab-bayesian-gate-refit.timer          genlab-bayesian-gate-refit.service
+Thu 2026-07-30 08:45:00 IST      17h Wed 2026-07-29 08:45:01 IST       6h ago genlab-hypothesis-promote.timer           genlab-hypothesis-promote.service
+Thu 2026-07-30 09:00:00 IST      17h Wed 2026-07-29 09:00:01 IST       6h ago genlab-anticipate-trends.timer            genlab-anticipate-trends.service
+Thu 2026-07-30 09:00:00 IST      17h Wed 2026-07-29 09:00:01 IST       6h ago genlab-compliance-digest-sender.timer     genlab-compliance-digest-sender.service
+Thu 2026-07-30 09:00:00 IST      17h Wed 2026-07-29 09:00:01 IST       6h ago genlab-pipeline-movies.timer              genlab-pipeline-movies.service
+Thu 2026-07-30 09:00:00 IST      17h Wed 2026-07-29 09:00:01 IST       6h ago genlab-proposal-auto-accept.timer         genlab-proposal-auto-accept.service
+Thu 2026-07-30 09:01:03 IST      17h Wed 2026-07-29 09:00:22 IST       6h ago genlab-threads-token-refresh.timer        genlab-threads-token-refresh.service
+Thu 2026-07-30 09:02:50 IST      17h Wed 2026-07-29 09:01:21 IST       6h ago genlab-bandit-validation.timer            genlab-bandit-validation.service
+Thu 2026-07-30 09:15:00 IST      17h Wed 2026-07-29 09:15:01 IST       6h ago genlab-affiliate-link-check.timer         genlab-affiliate-link-check.service
+Thu 2026-07-30 09:15:00 IST      17h Wed 2026-07-29 09:15:01 IST       6h ago genlab-experiment-parser.timer            genlab-experiment-parser.service
+Thu 2026-07-30 09:30:00 IST      18h Wed 2026-07-29 09:30:00 IST 5h 49min ago genlab-late-reward.timer                  genlab-late-reward.service
+Thu 2026-07-30 09:30:00 IST      18h Wed 2026-07-29 09:30:00 IST 5h 49min ago genlab-metric-drift-detect.timer          genlab-metric-drift-detect.service
+Thu 2026-07-30 09:30:00 IST      18h Wed 2026-07-29 09:30:00 IST 5h 49min ago genlab-pipeline-gaming.timer              genlab-pipeline-gaming.service
+Thu 2026-07-30 09:30:00 IST      18h Wed 2026-07-29 09:30:00 IST 5h 49min ago genlab-proxy-revenue.timer                genlab-proxy-revenue.service
+Thu 2026-07-30 09:30:00 IST      18h Wed 2026-07-29 09:30:00 IST 5h 49min ago genlab-verify-whisper-canary.timer        genlab-verify-whisper-canary.service
+Thu 2026-07-30 09:45:00 IST      18h Wed 2026-07-29 09:45:01 IST 5h 34min ago genlab-archive-stale-drafted.timer        genlab-archive-stale-drafted.service
+Thu 2026-07-30 09:45:00 IST      18h Wed 2026-07-29 09:45:01 IST 5h 34min ago genlab-drift-detector.timer               genlab-drift-detector.service
+Thu 2026-07-30 10:30:00 IST      19h Wed 2026-07-29 10:30:01 IST 4h 49min ago genlab-pipeline-sports.timer              genlab-pipeline-sports.service
+Thu 2026-07-30 10:30:00 IST      19h Wed 2026-07-29 10:30:01 IST 4h 49min ago genlab-shared-ingestion.timer             genlab-shared-ingestion.service
+Thu 2026-07-30 10:35:54 IST      19h Wed 2026-07-29 10:30:58 IST 4h 48min ago genlab-hook-trainer.timer                 genlab-hook-trainer.service
+Thu 2026-07-30 11:30:00 IST      20h Wed 2026-07-29 11:30:01 IST 3h 49min ago genlab-fb-survival-check.timer            genlab-fb-survival-check.service
+Thu 2026-07-30 11:30:00 IST      20h Wed 2026-07-29 11:30:01 IST 3h 49min ago genlab-pipeline-anime.timer               genlab-pipeline-anime.service
+Thu 2026-07-30 11:35:25 IST      20h Wed 2026-07-29 11:40:01 IST 3h 39min ago genlab-bandit-backfill.timer              genlab-bandit-backfill.service
+Thu 2026-07-30 11:45:00 IST      20h Wed 2026-07-29 11:45:01 IST 3h 34min ago genlab-import-cuelinks-conversions.timer  genlab-import-cuelinks-conversions.service
+Thu 2026-07-30 12:05:00 IST      20h Wed 2026-07-29 12:05:01 IST 3h 14min ago genlab-publisher.timer                    genlab-publisher.service
+Thu 2026-07-30 12:15:00 IST      20h Wed 2026-07-29 12:15:01 IST  3h 4min ago genlab-verify-meta-usage.timer            genlab-verify-meta-usage.service
+Thu 2026-07-30 12:30:00 IST      21h Wed 2026-07-29 12:30:01 IST 2h 49min ago genlab-visual-backup.timer                genlab-visual-backup.service
+Thu 2026-07-30 14:15:00 IST      22h Wed 2026-07-29 14:15:01 IST  1h 4min ago genlab-db-maintenance.timer               genlab-db-maintenance.service
+Sat 2026-08-01 10:00:00 IST   2 days Mon 2026-07-06 14:23:13 IST            - genlab-counterfactual-replay.timer        genlab-counterfactual-replay.service
+Sun 2026-08-02 07:30:00 IST   3 days Sun 2026-07-26 07:30:01 IST   3 days ago genlab-agent-memory-scratchpad.timer      genlab-agent-memory-scratchpad.service
+Sun 2026-08-02 07:30:00 IST   3 days Sun 2026-07-26 07:30:01 IST   3 days ago genlab-strategist.timer                   genlab-strategist.service
+Sun 2026-08-02 09:30:00 IST   3 days Sun 2026-07-26 09:30:01 IST   3 days ago genlab-preference-collector.timer         genlab-preference-collector.service
+Sun 2026-08-02 09:30:00 IST   3 days Sun 2026-07-26 09:30:01 IST   3 days ago genlab-refit-top-creator-priors.timer     genlab-refit-top-creator-priors.service
+Sun 2026-08-02 11:00:00 IST   3 days Sun 2026-07-26 11:00:01 IST   3 days ago genlab-dpo-export.timer                   genlab-dpo-export.service
+Mon 2026-08-03 04:00:00 IST   4 days Mon 2026-07-27 04:00:01 IST   2 days ago genlab-backup-test.timer                  genlab-backup-test.service
+Mon 2026-08-03 09:30:00 IST   4 days Mon 2026-07-27 09:30:01 IST   2 days ago genlab-cuelinks-campaign-refresh.timer    genlab-cuelinks-campaign-refresh.service
+Mon 2026-08-03 09:30:00 IST   4 days Mon 2026-07-27 09:30:01 IST   2 days ago genlab-post-deploy-verify.timer           genlab-post-deploy-verify.service
+Mon 2026-08-03 10:30:00 IST   4 days Mon 2026-07-27 10:30:01 IST   2 days ago genlab-anticipation-accuracy.timer        genlab-anticipation-accuracy.service
+Mon 2026-08-03 10:45:00 IST   4 days Mon 2026-07-27 10:45:01 IST   2 days ago genlab-reward-shaper-recovery.timer       genlab-reward-shaper-recovery.service
+Mon 2026-08-03 11:00:00 IST   4 days Mon 2026-07-27 11:00:01 IST   2 days ago genlab-cross-niche-transfer.timer         genlab-cross-niche-transfer.service
+Mon 2026-08-03 14:30:00 IST   4 days Mon 2026-07-27 14:30:00 IST   2 days ago genlab-config-updater.timer               genlab-config-updater.service
+Mon 2026-08-03 15:00:22 IST   4 days Mon 2026-07-27 15:00:12 IST   2 days ago genlab-auto2-ramp.timer                   genlab-auto2-ramp.service
+-                                  - -                                      - genlab-shadow-reviewer.timer              genlab-shadow-reviewer.service
+-                                  - Thu 2026-07-23 12:30:00 IST   6 days ago genlab-verify-2026-07-22-fixes.timer      genlab-verify-2026-07-22-fixes.service
+---UNIT_FILES---
+220
+units in /etc/systemd/system/
+actions.runner.AnarchistSid-genlab-platform.genlab-prod-vps-runner.service
+actions.runner.AnarchistSid-genlab-platform.genlab-prod-vps-runner.service.d
+genlab-affiliate-link-check.service
+genlab-affiliate-link-check.service.d
+genlab-affiliate-link-check.timer
+genlab-affiliate-scraper.service
+genlab-affiliate-scraper.service.d
+genlab-affiliate-scraper.timer
+genlab-agent-memory-scratchpad.service
+genlab-agent-memory-scratchpad.timer
+genlab-alert-auto-resolve.service
+genlab-alert-auto-resolve.timer
+genlab-alert-notifier.service
+genlab-alert-notifier.timer
+genlab-anthropic-credit-monitor.service
+genlab-anthropic-credit-monitor.timer
+genlab-anticipate-trends.service
+genlab-anticipate-trends.timer
+genlab-anticipation-accuracy.service
+genlab-anticipation-accuracy.timer
+genlab-archive-stale-drafted.service
+genlab-archive-stale-drafted.timer
+genlab-archive-stale-visuals.service
+genlab-archive-stale-visuals.timer
+genlab-attribution-health-monitor.service
+genlab-attribution-health-monitor.timer
+genlab-audience-collector.service
+genlab-audience-collector.service.d
+genlab-audience-collector.timer
+genlab-auto2-ramp.service
+genlab-auto2-ramp.timer
+genlab-auto-approver.service
+genlab-auto-approver.service.pre-2026-07-05
+genlab-auto-approver.timer
+genlab-auto-approver.timer.pre-2026-07-05
+genlab-backup-test.service
+genlab-backup-test.timer
+genlab-bandit-backfill.service
+genlab-bandit-backfill.timer
+genlab-bandit-snapshot.service
+genlab-bandit-snapshot.timer
+genlab-bandit-validation.service
+genlab-bandit-validation.timer
+genlab-bayesian-gate-refit.service
+genlab-bayesian-gate-refit.timer
+genlab-cleanup.service
+genlab-cleanup.service.d
+genlab-cleanup.timer
+genlab-compliance-digest-sender.service
+genlab-compliance-digest-sender.timer
+genlab-config-updater.service
+genlab-config-updater.service.d
+genlab-config-updater.timer
+genlab-conformal-router-refit.service
+genlab-conformal-router-refit.timer
+genlab-content-gap-remediator.service
+genlab-content-gap-remediator.timer
+genlab-counterfactual-replay.service
+genlab-counterfactual-replay.timer
+genlab-cross-niche-transfer.service
+genlab-cross-niche-transfer.timer
+genlab-cuelinks-campaign-refresh.service
+genlab-cuelinks-campaign-refresh.timer
+genlab-daily-verify.service
+genlab-daily-verify.service.d
+genlab-daily-verify.timer
+genlab-dashboard.service
+genlab-dashboard.service.d
+genlab-db-maintenance.service
+genlab-db-maintenance.service.d
+genlab-db-maintenance.timer
+genlab-disk-cleanup.service
+genlab-disk-cleanup.timer
+genlab-dpo-export.service
+genlab-dpo-export.timer
+genlab-drift-detector.service
+genlab-drift-detector.timer
+genlab-engagement-drainer.service
+genlab-engagement-drainer.timer
+genlab-engagement-poller.service

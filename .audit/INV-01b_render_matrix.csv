@@ -4,9 +4,7 @@ s1,retention copy,all,-,FUNCTIONING-VERIFIED,M,.audit-retention/2026-09-11 86 fi
 s2,journal capture,all,-,FUNCTIONING-VERIFIED,M,"5 niche journals, 17 tier lines",2026-09-11 fire,retention preserved
 s3,1b3e0a5c audio_provider,ai_creators,-,MISSING,M,extra->>audio_provider absent,2026-09-11 fire,"pre-12e7d7f7, as predicted"
 s3,1b3e0a5c publish,ai_creators,all,BROKEN,M,blocked by approval_gate: Not approved,2026-09-11 fire,FINDING 1 - blocks #218
-1,caption burn-in,ai_creators,-,HUMAN-PENDING,M,_reel_captioned.mp4 exists; pixel heuristic unvalidated,2026-09-11 fire,needs eyes
 1,caption burn-in,anime,-,MISSING,M,no _reel_captioned.mp4,2026-09-11 fire,whisper canary-only
-1,caption burn-in,gaming,-,NOT-FIRED,M,no MP4 at all,2026-09-11 fire,see finding 2
 1,caption burn-in,movies,-,MISSING,M,no _reel_captioned.mp4,2026-09-11 fire,whisper canary-only
 1,caption burn-in,sports,-,MISSING,M,no _reel_captioned.mp4,2026-09-11 fire,whisper canary-only
 1,sidecar SRT/VTT,all,youtube,MISSING,M,0 subtitle files across 5 retention dirs,2026-09-11 fire,finding 9
@@ -15,7 +13,6 @@ s3,1b3e0a5c publish,ai_creators,all,BROKEN,M,blocked by approval_gate: Not appro
 2,audio streams/codec,anime,-,FUNCTIONING-VERIFIED,M,2 streams h264/aac 16.06s,2026-09-11 fire,
 2,audio streams/codec,movies,-,FUNCTIONING-VERIFIED,M,2 streams h264/aac 19.41s,2026-09-11 fire,
 2,audio streams/codec,sports,-,FUNCTIONING-VERIFIED,M,2 streams h264/aac 18.60s,2026-09-11 fire,
-2,audio streams/codec,gaming,-,NOT-FIRED,M,no MP4,2026-09-11 fire,finding 2
 2,integrated LUFS,ai_creators,-,FUNCTIONING-VERIFIED,M,-14.52 (ffmpeg loudnorm print_format=json),2026-09-11 fire,target -14 +/-1
 2,integrated LUFS,anime,-,FUNCTIONING-VERIFIED,M,-14.32,2026-09-11 fire,
 2,integrated LUFS,movies,-,FUNCTIONING-VERIFIED,M,-14.02,2026-09-11 fire,
@@ -56,3 +53,22 @@ s3,1b3e0a5c publish,ai_creators,all,BROKEN,M,blocked by approval_gate: Not appro
 4,reward per platform,anime,all,MISSING,M,n<3 on every platform,14d,FINDING 7
 5,anime fired today,anime,-,FUNCTIONING-VERIFIED,M,"run anime_20260911_060014, 2 bp, 4 mp4",2026-09-11 fire,scheduler+pipeline ruled OUT
 5,anime 14d stoppage cause,anime,-,MISSING,M,publisher journal rotated,14d,approver-rejection leading; UNMEASURABLE
+1b,caption_animator segments,ai_creators,-,DEGRADED,M,applying 4 segments (style=karaoke),2026-09-11 fire,transform-layer captions
+1b,caption_animator ffmpeg exit,ai_creators,-,DEGRADED,M,ffmpeg exit=8 x2,2026-09-11 fire,T-14a
+1b,caption_animator filtergraph,ai_creators,-,DEGRADED,M,No such filter: '23.700' and '21.000',2026-09-11 fire,time value in filter-name slot
+1b,min_duration guard,ai_creators,-,FUNCTIONING-VERIFIED,M,guard absent - not triggered,2026-09-11 fire,
+1b,whisper caption stage,ai_creators,-,FUNCTIONING-VERIFIED,M,RenderWhisperCaptions 3 stories captioned,2026-09-11 fire,"SEPARATE stage, succeeded"
+1b,caption_animator segments,anime,-,NOT-FIRED,M,no caption_animator line in journal,2026-09-11 fire,transform not reached
+1b,caption_animator ffmpeg exit,anime,-,NOT-FIRED,M,absent,2026-09-11 fire,
+1b,caption_animator segments,movies,-,FUNCTIONING-VERIFIED,M,applying 4 segments (style=karaoke) -> output written,2026-09-11 fire,"same style as ai_creators, succeeded"
+1b,caption_animator ffmpeg exit,movies,-,FUNCTIONING-VERIFIED,M,no exit line,2026-09-11 fire,
+1b,caption_animator segments,sports,-,FUNCTIONING-VERIFIED,M,applying 4 segments (style=word_by_word) -> output written,2026-09-11 fire,
+1b,caption_animator ffmpeg exit,sports,-,FUNCTIONING-VERIFIED,M,no exit line,2026-09-11 fire,
+1b,caption_animator segments,gaming,-,DEGRADED,M,applying 4 segments (style=minimal),2026-09-11 fire,
+1b,caption_animator ffmpeg exit,gaming,-,DEGRADED,M,ffmpeg exit=8,2026-09-11 fire,T-14a
+1b,caption_animator filtergraph,gaming,-,DEGRADED,M,No such filter: '0.000',2026-09-11 fire,time value in filter-name slot
+1b,min_duration guard,gaming,-,DEGRADED,M,transformed output 8.52s < SPEC.min_duration 15.0s,2026-09-11 fire,shipped base composite
+1b,captions on published reel,gaming,-,DEGRADED,M,caption_animator failed; no whisper stage for gaming,2026-09-11 fire,reels shipped WITHOUT captions
+1b,captions on published reel,ai_creators,-,FUNCTIONING-UNVERIFIED,M,whisper stage succeeded despite caption_animator failure,2026-09-11 fire,supersedes HUMAN-PENDING row
+s1,gaming MP4 render,gaming,-,FUNCTIONING-VERIFIED,M,4 MP4s at CriticalRush/.tmp/rendered/gaming_20260911_040019/,2026-09-11 fire,RETRACTS INV-01b finding 2
+s1,gaming render output path,gaming,-,DRIFTED,M,writes to CriticalRush/.tmp/rendered not /opt/genlab/.tmp/runs,2026-09-11 fire,T-14c

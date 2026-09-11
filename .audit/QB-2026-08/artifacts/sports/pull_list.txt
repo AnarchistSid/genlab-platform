@@ -1,0 +1,6 @@
+/opt/genlab/.tmp/runs/sports_20260805_050005/clips/d3633c09182f1a0a.mp4
+/opt/genlab/.backups/visuals/2026-07-28/opt/genlab/.tmp/runs/sports_20260717_050004/visuals/0e361e6ee79af94d40b351226eff8bdcfd90a7ef40b7e21522ee317a3b8d3e2f/0e361e6ee79af94d_reel_threads.mp4
+/opt/genlab/.backups/visuals/2026-07-27/opt/genlab/.tmp/runs/sports_20260719_050006/visuals/6fd305b2c1a065b8bc3ea0aa815174d61586e1c57fed93ed30d459839bab7892/6fd305b2c1a065b8_reel_facebook.mp4
+/opt/genlab/.backups/visuals/2026-07-27/opt/genlab/.tmp/runs/sports_20260719_050006/visuals/13b488e156529f4178d48225187b002cc6094af5ed6e245970aae4a9f1d53796/13b488e156529f41_reel_facebook.mp4
+/opt/genlab/.backups/visuals/2026-07-25/opt/genlab/.tmp/runs/sports_20260723_050005/visuals/a0248c1c77cdddc101cb1a6827813de56e434873c48c6c68e6064cc9be661d98/a0248c1c77cdddc1_reel_youtube.mp4
+/opt/genlab/.backups/visuals/2026-07-28/opt/genlab/.tmp/runs/sports_20260717_050004/visuals/98b374a7be0f1b50a5e141b376929f1df997bd1935ff9480ab25f4feebdd3c04/98b374a7be0f1b50_reel_facebook.mp4

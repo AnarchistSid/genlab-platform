@@ -1,0 +1,34 @@
+=== HOST: vps ===
+GIT_HEAD: 34140a82183a5d9b9a1648a8b5460697014ddab8
+GIT_BRANCH: main
+GIT_LAST_COMMIT_ISO: 2026-07-27T23:26:24+05:30
+GIT_STATUS_COUNT: 24
+GIT_AHEAD_BEHIND: 0	0
+PYTHON: Python 3.12.3
+UV: uv 0.11.3 (x86_64-unknown-linux-gnu)
+FFMPEG: ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
+PSQL: psql (PostgreSQL) 18.3 (Ubuntu 18.3-1.pgdg24.04+1)
+NODE: v22.22.2
+NPM: 10.9.7
+COUNT_OBJECTS: count: 2075|size: 11.20 MiB|in-pack: 39802|packs: 25|size-pack: 133.84 MiB|prune-packable: 7|garbage: 0|size-garbage: 0 bytes|
+DIRTY_FILES:
+ M CriticalRush/niches/gaming/config/publishing.yaml
+ M FrameDrift/config/publishing.yaml
+ M SpliceReel/config/publishing.yaml
+ M genlab-core/config/cuelinks_campaigns.yaml
+?? .conformal_router_state.json
+?? .genlab/
+?? .local/
+?? .npm/
+?? .reddit_cookies.txt
+?? .threads_tokens.json
+?? .threads_tokens.lock
+?? .version.env
+?? .youtube_cookies.txt
+?? .youtube_session.json
+?? BlackboxBrief/assets/motion/
+?? ClutchWire/assets/
+?? CriticalRush/niches/gaming/assets/
+?? CriticalRush/niches/gaming/config/publishing.yaml.lock
+?? FrameDrift/config/publishing.yaml.lock
+?? SpliceReel/assets/

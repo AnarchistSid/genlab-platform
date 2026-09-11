@@ -1,0 +1,6 @@
+.claude/scheduled_tasks.lock
+CriticalRush/niches/gaming/config/publishing.yaml
+FrameDrift/config/publishing.yaml
+genlab-core/config/affiliate_catalog.yaml
+genlab-core/config/cuelinks_campaigns.yaml
+SpliceReel/config/publishing.yaml

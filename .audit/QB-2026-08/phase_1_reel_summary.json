@@ -1,0 +1,37 @@
+{
+  "reels_analysed": 20,
+  "per_niche": {
+    "ai_creators": {
+      "files": 5,
+      "conforming": 0,
+      "vbr_median_M": 0.944612,
+      "issue_types": {
+        "vbr": 5
+      }
+    },
+    "sports": {
+      "files": 5,
+      "conforming": 2,
+      "vbr_median_M": 2.39498,
+      "issue_types": {
+        "vbr": 3
+      }
+    },
+    "movies": {
+      "files": 5,
+      "conforming": 0,
+      "vbr_median_M": 0.956786,
+      "issue_types": {
+        "vbr": 5
+      }
+    },
+    "anime": {
+      "files": 5,
+      "conforming": 0,
+      "vbr_median_M": 1.506845,
+      "issue_types": {
+        "vbr": 5
+      }
+    }
+  }
+}

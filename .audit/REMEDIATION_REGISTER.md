@@ -1259,3 +1259,96 @@ It cost one commit and returned a negative result that eliminated four
 hypotheses at once, including the one I had filed with confidence. A diagnostic
 that stays quiet on the healthy path and lets the real warning surface is doing
 exactly what it should.
+
+---
+
+## STATE-01 (2026-09-09) — tasks filed from the 18-day gap audit
+
+Read-only forensic. No fixes attempted, no gate opened, nothing committed by
+this session.
+
+| # | Task | Evidence |
+|---|---|---|
+| 242 | ~~**Publish-outcome writes are dead.**~~ **RETRACTED 2026-09-09 — see PUBLISH-01 correction below.** Original text: `PUBLISHED` status has 5 rows EVER (newest 2026-04-03); `SKIPPED` stops 2026-08-14; `FAILED` stops 2026-08-07. Zero of the 90 blueprints created since 2026-08-22 carry any analytics row — including the 14 the blueprints table marks PUBLISHED. `INSIGHTS_*` writes to the same table continue normally (48H 09-07, 24H 09-08), so the table is reachable and the collector works; it is the publish-side write that stopped. CLAUDE.md rule #5 requires a SKIPPED record on every skipped platform, so this is also a rule violation. FetchInsights reads this table — the learning loop is running on a source that has recorded no publish outcome for ~26 days. | `SELECT status, count(*), max(created_at) FROM publishing_analytics GROUP BY 1` |
+| 243 | **Schedule coverage exhausted today.** Only 3 niches hold a future scheduled post (ai_creators, anime, gaming — one each, all 2026-09-09). movies and sports hold zero. Pool depth is healthy (111 unpublished across niches), so this is a scheduling gap, not a supply gap. | `scheduled_for > now()` grouped by niche |
+| 244 | **24 stranded past-due scheduled blueprints**, none PUBLISHED/ARCHIVED: ai_creators 11 (oldest 2026-08-27), movies 5 (2026-08-30), anime 4 (2026-08-23), sports 3 (2026-08-30), gaming 1. Supersedes #240, which counted only anime's 4. | `scheduled_for <= now() AND status NOT IN (PUBLISHED, ARCHIVED)` |
+| 245 | **Non-BB narration degrades with an EMPTY reason string** — 154 of 195 blueprints since 2026-08-22 (anime 29, gaming 26, movies 59, sports 40) carry `narration_degraded_reason = ''`. Only ai_creators records a real reason. An empty reason is indistinguishable from "degraded for an unknown cause" and defeats the reason-preservation fix shipped in the NARR arc. Instance of `[[class-of-bug-signal-loss-through-merged-failure-paths]]`. | degrade-reason breakdown by niche |
+| 246 | **`genlab-post-deploy-verify.service` and `genlab-strategist.service` are in failed state**, plus orphan transient `run-u555874.service` (`/tmp/narr06_repro.py`, a leftover from the NARR-06 session — register #2's shape, still present). `strategist_llm_call_failed` warned 15 times 2026-08-23 → 2026-09-06, consistent with the credit outage. | `systemctl --failed` |
+| 247 | **`publish_silence` CRITICAL has fired 22 times since 2026-08-25** and is still firing (latest 2026-09-09 08:30). It was correct the whole time and nothing acted on it. Pairs with #242 — the alert fired while the table that would evidence publishing went unwritten. | `pipeline_alerts` since 2026-08-22 |
+| 248 | **`bandit_posterior_drift` fired 460 times in 18 days** (~26/day), the single largest alert volume. Either the threshold is miscalibrated or the drift is real and unactioned; at that rate it functions as noise regardless. | alert tally |
+
+### Not findings — confirmed healthy or correctly pending
+
+* **2026-08-29 BB affiliate marker**: `cta_injection_enabled: false` in
+  `BlackboxBrief/config/monetization.yaml:38`; the other four niches `true`.
+  The marker is **pending, not expired** — its condition (#218 closed + 7 clear
+  narration-only days) was never met, and the flag correctly never moved.
+* **#219 retention watch**: cannot have started. Zero narration audio exists
+  across all 195 blueprints since 2026-08-22 (`narration_audio_path` NULL
+  everywhere). Preconditions unchanged.
+* **Disk**: 68% root, 15% media. No pressure.
+* **Clock**: verified three ways (see close-out). Not a finding.
+
+---
+
+## PUBLISH-01 (2026-09-09) — #242 RETRACTED. The record was never broken.
+
+**Headline: GenLab has been publishing throughout. 240 live posts across all
+20 channel×platform cells since 2026-08-22, verified against the platforms
+themselves (Graph API, YouTube Data API, Threads API) — not against our tables.**
+
+| niche | reels | platforms | most recent |
+|---|---|---|---|
+| movies | 16 | 16/16/16/16 | 2026-09-06 |
+| sports | 15 | 15/15/15/15 | 2026-09-05 |
+| ai_creators | 14 | 14/14/14/14 | 2026-09-05 |
+| gaming | 12 | 12/12/12/12 | 2026-09-08 |
+| anime | **3** | 3/3/3/3 | **2026-08-26** |
+
+Per-platform counts are identical within each niche: all four platforms
+succeed together. There is no partial-publish failure.
+
+### The error in #242
+
+`publishing_analytics.blueprint_id` is a **uuid** referencing `blueprints.id`.
+`blueprints.blueprint_id` is a *separate, empty `text` column* — vestigial.
+My reconciliation joined `p.blueprint_id = b.blueprint_id` (uuid against an
+empty text column), got zero matches, and I read that as "no analytics rows
+exist for published blueprints".
+
+Joined correctly on `b.id`, **every published blueprint has its rows**:
+ai_creators 8/8, gaming 6/6, and all 60 distinct analytics blueprint_ids
+resolve. The production code was right the whole time —
+`metric_collector.py:412` reads
+`LEFT JOIN blueprints b ON p.blueprint_id::text = b.id::text`.
+
+### The other three sub-claims, also wrong
+
+* **"`SUCCESS` rows are missing"** — the recorder writes a row at publish time
+  and the metric collector re-stamps its `status` as each window lands, so a
+  healthy row progresses `→ INSIGHTS_24H → 48H → 168H`. No SUCCESS row is
+  *supposed* to persist. 2263 `INSIGHTS_168H` rows are the successful publishes.
+* **"`SKIPPED` stops 2026-08-14 / `FAILED` stops 2026-08-07"** — these are
+  exception statuses. They stopped because nothing has been skipped or failed
+  since. That is the system working, reported as the system broken.
+* **"The learning loop trains on a publish-outcome-free table"** — false.
+  FetchInsights reads correctly-linked rows; 240 exist for the window.
+
+### What that leaves
+
+**#247 `publish_silence` is CORROBORATED, not refuted — but for cadence, not
+silence.** Expected 5 niches × 18 days = 90 reels; actual 60. A 33% miss rate,
+and anime missed 15 of 18 days. The alert is correct and was never acted on.
+
+**Rule #5 is NOT being violated.** Withdrawn with #242.
+
+### Class-of-bug
+
+`[[class-of-bug-metric-proxies-mask-audience-facing-failures]]` inverted: an
+audit proxy manufacturing a failure that did not exist. Three readings in two
+sessions took a **field name as evidence of the state it names** —
+`narration_script` (key presence, not success), `publishing_analytics` row
+counts (insights, not publishes), and now `blueprints.blueprint_id` (vestigial,
+not the key). Detection heuristic before reporting any zero-match join:
+**confirm the join key by matching a known-good row first.** A join returning
+exactly 0 of 60 is far more often a wrong key than a total outage.

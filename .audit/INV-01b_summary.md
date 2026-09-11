@@ -40,3 +40,37 @@ stoppage, consistent with CADENCE-01's measurement that scheduling is 100%
 downstream of approval and anime carried 10 DRAFTED with title-as-hook on 60%.
 Publish-failure is **not ruled out**; distinguishing requires the publisher
 journal for prior days, which has rotated. **UNMEASURABLE for the 14-day window.**
+
+---
+
+## Scope 1b addendum (OPS-03b) — caption_animator sweep
+
+| niche | segments / style | ffmpeg exit | `No such filter:` | min-duration guard | fired |
+|---|---|---|---|---|---|
+| ai_creators | 4 / karaoke | **8** (×2) | **`'23.700'`, `'21.000'`** | absent | yes |
+| anime | — | absent | absent | absent | yes (transform not reached) |
+| movies | 4 / karaoke | absent | absent | absent | yes — **succeeded** |
+| sports | 4 / word_by_word | absent | absent | absent | yes — **succeeded** |
+| gaming | 4 / minimal | **8** | **`'0.000'`** | **8.52s < 15.0s** | yes |
+
+**Statement: the defect is neither gaming-only nor style-specific.** It hit
+ai_creators (twice) and gaming (once); movies ran the *same* style (karaoke) and
+the *same* segment count (4) and succeeded. All three failing literals —
+`0.000`, `23.700`, `21.000` — are **time values appearing where a filter name
+belongs**, so the discriminator is segment timing, not style or count. (M)
+
+**Caption consequence differs per niche, and the distinction matters:**
+- **gaming — DEGRADED (M).** `caption_animator` failed and gaming has no
+  whisper stage, so today's reels shipped with **no captions at all**.
+- **ai_creators — not degraded on captions.** `caption_animator` failed, but
+  `RenderWhisperCaptions` is a *separate stage* and succeeded on 3 stories.
+  This supersedes the HUMAN-PENDING caption row, and it also explains the 0/5
+  pixel-heuristic result differently than a caption absence would.
+
+## Retraction — INV-01b finding #2
+
+"gaming rendered ZERO MP4s" is **withdrawn**. Gaming rendered four MP4s to
+`CriticalRush/.tmp/rendered/gaming_20260911_040019/` (2.4–7.5 MB). My retention
+scan read only `/opt/genlab/.tmp/runs/`, which the other four niches use. Files
+are now in retention; manifest 102 entries. The real findings underneath are
+T-14a (filtergraph defect) and T-14c (divergent output path).
