@@ -1,0 +1,58 @@
+area,capability,niche,platform,status,evidence_class,artifact_pointer,window,note
+s0,publisher completion,all,-,FUNCTIONING-VERIFIED,M,06:35:01->06:39:53 success,2026-09-11 fire,4m52s vs 15m20s yesterday
+s1,retention copy,all,-,FUNCTIONING-VERIFIED,M,.audit-retention/2026-09-11 86 files 281MB,2026-09-11 fire,sha256 manifest
+s2,journal capture,all,-,FUNCTIONING-VERIFIED,M,"5 niche journals, 17 tier lines",2026-09-11 fire,retention preserved
+s3,1b3e0a5c audio_provider,ai_creators,-,MISSING,M,extra->>audio_provider absent,2026-09-11 fire,"pre-12e7d7f7, as predicted"
+s3,1b3e0a5c publish,ai_creators,all,BROKEN,M,blocked by approval_gate: Not approved,2026-09-11 fire,FINDING 1 - blocks #218
+1,caption burn-in,ai_creators,-,HUMAN-PENDING,M,_reel_captioned.mp4 exists; pixel heuristic unvalidated,2026-09-11 fire,needs eyes
+1,caption burn-in,anime,-,MISSING,M,no _reel_captioned.mp4,2026-09-11 fire,whisper canary-only
+1,caption burn-in,gaming,-,NOT-FIRED,M,no MP4 at all,2026-09-11 fire,see finding 2
+1,caption burn-in,movies,-,MISSING,M,no _reel_captioned.mp4,2026-09-11 fire,whisper canary-only
+1,caption burn-in,sports,-,MISSING,M,no _reel_captioned.mp4,2026-09-11 fire,whisper canary-only
+1,sidecar SRT/VTT,all,youtube,MISSING,M,0 subtitle files across 5 retention dirs,2026-09-11 fire,finding 9
+1,alignment method,all,-,MISSING,M,no caption file to read format from,2026-09-11 fire,UNMEASURABLE as executed
+2,audio streams/codec,ai_creators,-,FUNCTIONING-VERIFIED,M,2 streams h264/aac 30.58s,2026-09-11 fire,
+2,audio streams/codec,anime,-,FUNCTIONING-VERIFIED,M,2 streams h264/aac 16.06s,2026-09-11 fire,
+2,audio streams/codec,movies,-,FUNCTIONING-VERIFIED,M,2 streams h264/aac 19.41s,2026-09-11 fire,
+2,audio streams/codec,sports,-,FUNCTIONING-VERIFIED,M,2 streams h264/aac 18.60s,2026-09-11 fire,
+2,audio streams/codec,gaming,-,NOT-FIRED,M,no MP4,2026-09-11 fire,finding 2
+2,integrated LUFS,ai_creators,-,FUNCTIONING-VERIFIED,M,-14.52 (ffmpeg loudnorm print_format=json),2026-09-11 fire,target -14 +/-1
+2,integrated LUFS,anime,-,FUNCTIONING-VERIFIED,M,-14.32,2026-09-11 fire,
+2,integrated LUFS,movies,-,FUNCTIONING-VERIFIED,M,-14.02,2026-09-11 fire,
+2,integrated LUFS,sports,-,FUNCTIONING-VERIFIED,M,-14.65,2026-09-11 fire,
+2,true peak,ai_creators,-,FUNCTIONING-VERIFIED,M,-1.22 dBTP,2026-09-11 fire,<= -1.0 OK
+2,true peak,anime,-,FUNCTIONING-VERIFIED,M,-1.49 dBTP,2026-09-11 fire,
+2,true peak,sports,-,FUNCTIONING-VERIFIED,M,-1.44 dBTP,2026-09-11 fire,
+2,true peak,movies,-,DEGRADED,M,-0.19 dBTP on _reel_with_intro.mp4,2026-09-11 fire,FINDING 5 append-after-normalize
+2,audio_provider recorded,ai_creators,-,FUNCTIONING-VERIFIED,M,"infsh_inworld, 2/2 blueprints",2026-09-11 fire,FIX-T01
+2,audio_provider recorded,anime,-,FUNCTIONING-VERIFIED,M,"infsh_inworld, 2/2",2026-09-11 fire,FIX-T01
+2,audio_provider recorded,gaming,-,FUNCTIONING-VERIFIED,M,"infsh_inworld, 6/6",2026-09-11 fire,FIX-T01
+2,audio_provider recorded,movies,-,FUNCTIONING-VERIFIED,M,"infsh_inworld, 2/2",2026-09-11 fire,FIX-T01
+2,audio_provider recorded,sports,-,FUNCTIONING-VERIFIED,M,"infsh_inworld, 1/1",2026-09-11 fire,FIX-T01
+2,VO presence in render,all,-,MISSING,M,not probed - whisper not run on retention copies,2026-09-11 fire,NOT AUDITED this pass
+2,ducking measurement,all,-,MISSING,M,not probed,2026-09-11 fire,NOT AUDITED this pass
+2,source-clip audio disposition,gaming,-,MISSING,M,no render to compare,2026-09-11 fire,licensed-audio check blocked
+2,source-clip audio disposition,sports,-,MISSING,M,not probed,2026-09-11 fire,NOT AUDITED this pass
+3,scene cuts,ai_creators,-,FUNCTIONING-VERIFIED,M,"9 cuts / 30.58s = 0.294 per s, gap 13.4s",2026-09-11 fire,showinfo scene>0.3
+3,scene cuts,anime,-,DEGRADED,M,0 cuts / 16.06s,2026-09-11 fire,FINDING 3 single continuous clip
+3,scene cuts,movies,-,DEGRADED,M,0 cuts / 19.41s,2026-09-11 fire,FINDING 3
+3,scene cuts,sports,-,DEGRADED,M,0 cuts / 18.60s,2026-09-11 fire,FINDING 3
+3,scene cuts,gaming,-,NOT-FIRED,M,no MP4,2026-09-11 fire,
+3,render path / transitions / slate,all,-,MISSING,M,not probed from render metadata,2026-09-11 fire,NOT AUDITED this pass
+4,compliance warn classes,gaming,-,FUNCTIONING-UNVERIFIED,M,ai_disclosure_added 152; pre_publish_check 25,2026-09-11 fire,only 2 classes exist
+4,compliance warn classes,ai_creators,-,FUNCTIONING-UNVERIFIED,M,ai_disclosure_added 46,2026-09-11 fire,single class
+4,compliance warn classes,movies,-,FUNCTIONING-UNVERIFIED,M,ai_disclosure_added 36,2026-09-11 fire,single class
+4,compliance warn classes,sports,-,FUNCTIONING-UNVERIFIED,M,ai_disclosure_added 32,2026-09-11 fire,single class
+4,compliance warn classes,anime,-,FUNCTIONING-UNVERIFIED,M,ai_disclosure_added 4,2026-09-11 fire,single class
+4,compliance niche attribution,all,-,DRIFTED,M,niche_id='all' 30 rows,2026-09-11 fire,FINDING 11
+4,reward per platform,movies,facebook,FUNCTIONING-VERIFIED,M,0.2922 n=9,14d,highest FB
+4,reward per platform,sports,youtube,FUNCTIONING-VERIFIED,M,0.3828 n=8,14d,FINDING 6 highest cell
+4,reward per platform,sports,facebook,FUNCTIONING-VERIFIED,M,0.2225 n=8,14d,
+4,reward per platform,gaming,facebook,FUNCTIONING-VERIFIED,M,0.1920 n=7,14d,
+4,reward per platform,ai_creators,facebook,FUNCTIONING-VERIFIED,M,0.1854 n=7,14d,
+4,reward per platform,ai_creators,youtube,DEGRADED,M,0.0041 n=7,14d,YT near zero
+4,reward per platform,gaming,youtube,DEGRADED,M,0.0000 n=8,14d,YT zero
+4,reward per platform,movies,youtube,DEGRADED,M,0.0002 n=9,14d,YT near zero
+4,reward per platform,anime,all,MISSING,M,n<3 on every platform,14d,FINDING 7
+5,anime fired today,anime,-,FUNCTIONING-VERIFIED,M,"run anime_20260911_060014, 2 bp, 4 mp4",2026-09-11 fire,scheduler+pipeline ruled OUT
+5,anime 14d stoppage cause,anime,-,MISSING,M,publisher journal rotated,14d,approver-rejection leading; UNMEASURABLE
