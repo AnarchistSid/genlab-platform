@@ -2,3 +2,7 @@
 # worktree mutates production. 17 tests = 0.150% of collected.
 tests/learning/test_cross_niche_priors_path_resolution.py
 tests/test_push_to_backlog_captioned_guard.py
+
+# T-21: drives RunReport().execute() for real; persists to pipeline_run_costs.
+# Now mocked in-file by an autouse fixture; listed here as the record of why.
+# (not ignored -- the mock is the fix; re-add to --ignore if the mock regresses)

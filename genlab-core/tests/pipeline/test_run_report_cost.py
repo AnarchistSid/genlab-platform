@@ -20,7 +20,38 @@ from genlab_core.intelligence.cost_accumulator import (
     reset_accumulator,
     set_accumulator,
 )
+import pytest
+
 from genlab_core.pipeline.stages.run_report import RunReport
+
+
+@pytest.fixture(autouse=True)
+def _no_prod_cost_writes(monkeypatch):
+    """T-21 (2026-09-11): RunReport.execute() persists its cost summary to
+    Postgres (run_report.py:455, cost_persist.persist_run_cost). These tests
+    drive the real stage with run_id="test_run" and a $10 accumulator, so every
+    suite run wrote a $10.00 fixture row into the PRODUCTION pipeline_run_costs
+    table -- 32x the real daily spend, and the only such row in the table's
+    history.
+
+    It went unnoticed because $10.32 reads as a busy day, not as an error, and
+    because B.12's deselect scan grepped for literal /opt/genlab paths and write
+    verbs: this test has neither. It writes through a configured DSN.
+
+    Patched at the import site the stage uses, not at the source module -- the
+    stage imports lazily inside execute(), so patching the source namespace is
+    what actually intercepts it.
+    """
+    calls: list[dict] = []
+
+    def _capture(**kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(
+        "genlab_core.intelligence.cost_persist.persist_run_cost", _capture,
+        raising=False,
+    )
+    return calls
 
 
 def _make_ctx(tmp_path: Path) -> dict:

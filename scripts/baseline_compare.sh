@@ -98,6 +98,24 @@ say "  $(echo "$DIRTY" | grep -c .) dirty + ${#UNTRACKED_DIRS[@]} dirs + ${#GITI
 # ------------------------------------------------------------------- runs
 DES=()
 [[ -f "$DESELECT_FILE" ]] && while read -r l; do [[ -n "$l" && "$l" != \#* ]] && DES+=(--ignore="$l"); done < "$DESELECT_FILE"
+
+# T-21 guard. The deselect file was seeded by grepping for literal /opt/genlab
+# paths plus write verbs (B.12). That scan cannot see a test which writes to
+# PRODUCTION through a configured DSN -- no path literal, no write verb. One
+# such test drove RunReport().execute() for real and planted a $10.00 fixture
+# row in pipeline_run_costs on every suite run: 32x the real daily spend, and
+# invisible because $10.32 reads as a busy day rather than an error.
+# Warn on any test that imports a production storage/persist entry point
+# without a mock in the same file. Advisory, not fatal -- a false positive here
+# must not block a comparison.
+say "=== prod-storage write scan (T-21) ==="
+_unmocked=0
+while read -r tf; do
+  [[ -z "$tf" ]] && continue
+  grep -qE "monkeypatch|unittest\.mock|mocker|patch\(" "$WT_H/genlab-core/$tf" 2>/dev/null && continue
+  say "  WARN unmocked prod-storage import: $tf"; _unmocked=$((_unmocked+1))
+done < <(cd "$WT_H/genlab-core" 2>/dev/null && grep -rlE "persist_run_cost|PostgresBackend\(|cost_persist" tests/ 2>/dev/null)
+say "  $_unmocked file(s) import prod storage with no mock in-file"
 PYARGS=(-q -p no:cacheprovider --timeout=300 "${DES[@]}")
 [[ "$COLLECT_ONLY" == 1 ]] && PYARGS=(-q -p no:cacheprovider --collect-only "${DES[@]}")
 
