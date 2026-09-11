@@ -68,7 +68,38 @@ revert verification, and this file's "clears @ committed" column came from a
 drift" comparison read the same comment.
 
 Corrected admit count for ai_creators at its true pre-change threshold:
-**0.715 → 22/30 clear** (not 14/30 as tabulated at 0.85).
+**0.715 → 24/30 clear** (not 14/30 as tabulated at 0.85).
+
+MEASURED, not interpolated. The first draft of this correction said 22/30 by
+eyeballing between the 0.65 and 0.85 columns; that was an inference and it was
+wrong. The table's own cluster bounds settle it: ai_creators' scores are bimodal
+with low-cluster max **0.472** and main-cluster min **0.791**, and *nothing lies
+between them*. 0.715 falls inside that empty gap, so it admits exactly the
+main cluster — the same 24 that 0.65 admits.
+
+### Consequence: 1b66168e is a no-op for two niches
+
+Both thresholds sit in the same gap, so for ai_creators the change moves the
+admit set not at all. The same holds for sports: committed 0.732 also lies
+inside its gap (0.457 → 0.789), clearing 9/11 either way — as the table's own
+"clears @ committed" column already recorded.
+
+| niche | pre-change (ACTIVE, verified at 1b66168e^) | clears before | clears at 0.65 | moved? |
+|---|---|---|---|---|
+| ai_creators | 0.715 (line 131) | 24/30 | 24/30 | **no — same gap** |
+| sports | 0.732 (line 98) | 9/11 | 9/11 | **no — same gap** |
+| gaming | 0.85 (line 122) | 3/23 | 15/23 | yes, +12 |
+| movies | 0.85 (line 88) | 3/24 | 18/24 | yes, +15 |
+| anime | 0.85 (line 86) | 2/13 | 7/13 | yes, +5 |
+
+Verified by reading the ACTIVE (non-comment) line at `1b66168e^` for all five
+files: **only BlackboxBrief carried the comment defect**; gaming, movies and
+anime were genuinely 0.85 and sports genuinely 0.732.
+
+This corrects the expectation for the 09-12 fire. If **sports approves 0 again**,
+that is NOT evidence the threshold change failed — sports' threshold did not
+effectively move. Its blocker was never the threshold, and the same is true of
+ai_creators. The change is testable on **gaming, movies and anime only**.
 
 History is not rewritten; this note is the correction of record.
 
