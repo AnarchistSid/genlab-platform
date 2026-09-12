@@ -1325,3 +1325,85 @@ owner is how T-14a survived; this one has an owner and an exit.
 against the known text — strictly more accurate, and it removes the risk of
 captioning a mis-transcription. That is an improvement to the chosen path, not a
 change of path.
+
+---
+
+# OPS-24 §1.5 GATE — PASSED. The auto-pause loop is broken end-to-end.
+
+## STEP 0 — the flag change took
+
+| check | result |
+|---|---|
+| env-sourced probe | `_connect: OK` — reading is VALID (T-47) |
+| `is_paused('ai_creators')` | **False** · row `None` |
+| `AUTO-PAUSED` fires since 08:42Z | **0** |
+| **positive control**, same grep 21:00Z 09-11 → 08:42Z 09-12 | **8** |
+
+The zero is a real absence, not a broken pattern — the identical grep returns 8
+over the pre-flip window.
+
+## STEP 1 — publisher gate
+
+| gate | value |
+|---|---|
+| (a) exited | 12:05:01 → **12:18:34Z** (13m33s) ✅ |
+| (b) exit code **verbatim** | **`ExecMainStatus=3`** (`Result=success`, reported not gated) |
+| (c) posts in 12:05–12:35Z | **4** ✅ |
+
+## STEP 3 — ca19f6a7 PUBLISHED
+
+| niche | post_id | pub | scheduled_for | stale_at | in window |
+|---|---|---|---|---|---|
+| ai_creators | `instagram:18095119385454343` | 12:11 | 06:30Z | 09-13 00:30Z | ✅ |
+| ai_creators | `youtube:lq26rjlsPRw` | 12:11 | 06:30Z | 09-13 00:30Z | ✅ |
+| ai_creators | `facebook:2602017260240671` | 12:11 | 06:30Z | 09-13 00:30Z | ✅ |
+| ai_creators | `threads:17932597005389654` | 12:11 | 06:30Z | 09-13 00:30Z | ✅ |
+
+`ca19f6a7` is now `status=PUBLISHED`. The blueprint that could not publish at
+06:35Z because the niche was auto-paused published at 12:05Z after the flag flip.
+**T-45's loop is closed in production, verified by post IDs.**
+
+## STEP 5 — it does NOT count toward #218
+`ca19f6a7`: `narration_degraded=true`, `narration_script` length **0**. #218
+stays **OPEN**, pending `3c904e01` (356 chars, `degraded=false`, slot 09-13
+06:30Z) via job 58e59293.
+
+## STEP 4 — gates 3 and 5 are UNDEFINED in the record
+Grepping `.audit/` for FIX-T23 gate definitions returns **only gate 2**
+(227_threshold_table.md:190, INV-01b_summary.md:132). Gates 3 and 5 have no
+written criteria anywhere. I am not inventing them. What is measurable is
+recorded above: every post's `scheduled_for` / fire time / `stale_at` side by
+side, all in window. **Whoever defined gates 3 and 5 needs to write them down
+before they can be claimed.**
+
+---
+
+# CORRECTION to T-37 — the publisher's SuccessExitStatus is deliberate, not masking
+
+T-37 filed `SuccessExitStatus=0 1 3 4` as "makes Result=success meaningless for
+the publisher" and implied it swallows real failures. **The source says
+otherwise** (`publish_all_platforms.py:91-96`):
+
+```
+EXIT_SUCCESS       = 0
+EXIT_NO_BLUEPRINTS = 1   # benign — no fresh content today
+EXIT_ALL_FAILED    = 2   # REAL SIGNAL — every platform failed
+EXIT_DAILY_CAP     = 3   # benign — already published today
+EXIT_LOCK_HELD     = 4   # benign — concurrent run, next timer retry
+EXIT_UNEXPECTED    = 5   # REAL SIGNAL — unhandled exception
+```
+
+`0 1 3 4` is **exactly the benign set**, and it deliberately EXCLUDES **2 and 5**
+— the two real-failure codes — which therefore still fire `OnFailure`. This is a
+considered mapping, not a widened net.
+
+Today's exit **3** is `EXIT_DAILY_CAP`: it published `ca19f6a7`, then the daily
+cap stopped the rest. Yesterday's exit **1** was `EXIT_NO_BLUEPRINTS`. Both are
+correct reports of benign outcomes, and both were misread by me as evidence of
+masking.
+
+**What survives of T-37:** `Result=success` still cannot distinguish "published"
+from "nothing to publish", so **gating on post count (OPS-23 §3(c)) remains
+right** and reporting the exit code verbatim remains right. What does not survive
+is the claim that the unit cannot report a genuine fault. It can, via 2 and 5.
+T-37 is downgraded accordingly.
