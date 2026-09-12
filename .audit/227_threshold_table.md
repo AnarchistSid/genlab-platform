@@ -1049,3 +1049,43 @@ greens → **T-58**.
 
 Repo-wide sweep with `compile()`: **0 files fail**, and **0 files** have two
 consecutive module-level string literals. The defect was isolated to this one.
+
+---
+
+# OPS-28 §B.3/§B.4 — gates on both hosts, and the VOID re-run
+
+## The harness's first sound verdicts
+
+**VPS, base `1b66168e` (inside the dead window):**
+```
+collected: base=19   head=11321   delta=11302
+executed:  base=0    head=9799
+VERDICT: INVALID — no tests executed (base ran=0 head ran=9799)
+```
+Correct and informative from both directions: head executes **9,799** tests while
+base executes **zero**, confirming the 20-commit dead window. The guard refuses a
+verdict when one side did not run — where the old harness would have computed
+set (b) against an empty base and emitted a number either way.
+
+**Mac, base `0e1abe6b` (last runnable, `9bed1094^`) → head `2abe7a61`:**
+```
+collected: base=11321  head=11321  delta=0
+executed:  base=11208  head=11208
+skipped:   base=113    head=113    delta=0
+sets: (a) fail in both 69   (b) head-only 0   (c) base-only 0
+VERDICT: PASS — no test went passing -> failing
+```
+**11,208 tests executed per side, set (b) empty.** This is the first sound PASS
+this harness has produced since it was written.
+
+## §B.4 — the VOID re-run is satisfied
+`0f78f5d7` (FIX-LOUD) lies inside `0e1abe6b..2abe7a61`, so the run above covers
+it. **FIX-LOUD's gate 4, marked VOID in §A, now passes on executed tests.**
+The VPS re-run of the same range is in flight for a second host.
+
+## A number worth flagging, not yet explained
+Failing-ID counts differ sharply by host and base: Mac **72**, VPS head **2068**,
+T-06's 09-11 measurement **201**. These are not comparable as stated — different
+bases, and the VPS head figure came from a run whose base was dead. Until the VPS
+re-run lands there is no clean cross-host baseline, and **T-06's "201 is the
+reference" should not be quoted as if it were one.**
