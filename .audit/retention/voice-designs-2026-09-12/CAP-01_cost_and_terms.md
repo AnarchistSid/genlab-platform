@@ -299,3 +299,75 @@ are six dollars away, with the caveat that the *current* files still cannot be
 used and must be regenerated under the paid plan.
 
 Not legal advice; a summary of published terms read 2026-09-12.
+
+---
+
+# Part 5 — Dia TTS (VOICE-04 §1). Read 2026-09-12.
+
+## Which route produced the sample Aditya picked
+
+**`falai/dia-tts`** — confirmed from the bake-off record, not from memory
+(`bakeoff.py:25`, and the retained URL). `infsh/dia-tts` also exists, is a
+**different app with no published pricing**, and is NOT assumed equivalent.
+Everything below applies to the fal route only.
+
+| measured | value |
+|---|---|
+| price | **$0.04 / 1K chars** = $40/M |
+| latency | **132.6 s** for a 30 s clip |
+| normalised | −14.92 LUFS, on target |
+
+## The governing chain, and where the rights actually come from
+
+**fal.ai's own terms are SILENT.** Output ownership, commercial use, voice-clone
+responsibility, attribution and redistribution are all **NOT ADDRESSED**. Silence
+is not a grant, so fal is not the source of clearance.
+
+**inference.sh** grants ownership and commercial use "subject to any applicable
+Model Terms", with "the more restrictive provision applies". So the operative
+document is the model's own licence.
+
+**Dia's licence — Apache License 2.0**, verified on the Nari Labs model card, not
+from a search summary. Apache 2.0 is permissive and expressly allows commercial
+use. The model card adds three prohibitions:
+* **Identity Misuse** — no audio resembling real individuals without permission
+* **Deceptive Content** — no fake news or misleading material
+* **Illegal or Malicious Use**
+
+## Point by point
+
+| question | finding |
+|---|---|
+| Commercial use on owned channels | **CLEAR** — Apache 2.0, permissive; nothing in the chain restricts it |
+| Output ownership | Ours via inference.sh; Apache 2.0 imposes no output claim |
+| Voice-clone ownership | Model is permissive, but **source-rights responsibility rests with us** |
+| Attribution | **NOT ADDRESSED for outputs.** Apache 2.0's attribution obligation attaches to redistributing the MODEL or CODE, not to generated audio. We redistribute neither. |
+| SaaS / enterprise carve-out | **None** — Apache 2.0 has no distribution-scale carve-out, unlike Eleven Music's |
+
+## RULING
+
+**`eval_only` LIFTED for `falai/dia-tts` on owned channels.** Apache 2.0 is the
+most permissive position of any provider evaluated — materially better than
+Inworld (silent on commercial use, cleared by ownership assignment) and
+ElevenLabs (free tier expressly non-commercial).
+
+**And unlike every other provider so far, this one plausibly extends to SaaS.**
+Apache 2.0 carries no distribution carve-out. Not asserting SaaS clearance —
+inference.sh's own terms still govern that relationship — but the *model* licence
+is not the blocker there, which is a first.
+
+## Two things carried forward as risks, not clearances
+
+1. **Latency 132.6 s** for a 30 s clip — ~4.4× realtime, and 20× slower than
+   Inworld's 6.7 s. Five niches × ~20 TTS calls per fire makes this a scheduling
+   question, not a preference. Quantified further in §2/§3.
+2. **"Natural nonverbals" is the app's own headline feature.** That is precisely
+   §3's risk: a model that inserts breaths and laughs unbidden is charming once
+   and wrong on a news desk daily.
+
+**Cloning source:** the ElevenLabs previews are disqualified as a clone source —
+free-tier output is non-commercial (Part 4), and Dia puts source-rights
+responsibility on us. A commercially clear source would be Aditya's own recording,
+a licensed sample, or output from a provider whose terms permit it.
+
+Not legal advice; a summary of published terms and the model card read 2026-09-12.
