@@ -181,11 +181,22 @@ def _overlay_text_and_pad(
     # filter per line sidesteps newline handling entirely.
     import textwrap
 
-    # Use `escape_drawtext` (U+2019 apostrophes) — the `_simple`
-    # helper's `\'` escape terminates the `text='...'` quoted
-    # string prematurely inside a comma-chained `-vf` filter
-    # graph, corrupting the next filter's parser state.
-    from genlab_core.media.ffmpeg_utils import escape_drawtext
+    # T-67 (2026-09-12): this used `escape_drawtext` as a workaround, with a
+    # comment correctly describing the `_simple` helper's `\'` defect — the
+    # quote terminated the `text='...'` value early and corrupted the rest of
+    # the comma-chained `-vf` graph. The defect was known here and routed
+    # around rather than fixed, so it stayed live everywhere else until
+    # 95449e5e; the same bug then cost a day of broken captions as T-14a.
+    #
+    # `_escape_drawtext_simple` is now the correct choice on both counts:
+    # it escapes the apostrophe properly ('\''), and it is the `-vf` escaper.
+    # `escape_drawtext` is the filter_complex variant — four-level backslash
+    # escaping and `;`/`[`/`]` handling — which is the wrong dialect for this
+    # call site and would mis-render a backslash here.
+    #
+    # Visible change: apostrophes render as ASCII ' instead of U+2019, i.e.
+    # exactly the hook as written.
+    from genlab_core.media.ffmpeg_utils import _escape_drawtext_simple as escape_drawtext
 
     truncated = hook if len(hook) <= 60 else hook[:57] + "..."
     lines = [ln.strip() for ln in
