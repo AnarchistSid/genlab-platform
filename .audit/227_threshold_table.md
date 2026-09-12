@@ -774,3 +774,107 @@ Remaining gate: **§1.5 at 12:05Z** (job `37cf43a9`) — `ca19f6a7`, slot 09-12
 end-to-end. If ai_creators is re-paused before then, the flag change did not take.
 
 FIX-LOUD's precondition (§1.2) is now met.
+
+---
+
+# OPS-26 §A — FIX-LOUD. The diagnosis inverted.
+
+**Probe named:** `ValidateVideos._measure_loudness` / `_check_loudness`
+(`validate_videos.py:615`), using `ffmpeg -af loudnorm=print_format=json` and
+reading `input_i` / `input_tp`. Gate: `|I − (−14.0)| ≤ 1.0` and `TP ≤ −1.0`.
+The same probe was used for every number below, so no cross-tool disagreement
+arises. (Had one appeared, that disagreement would have been the finding.)
+
+## The three sports renders were never too quiet
+
+| file | stage | I | TP | gate |
+|---|---|---|---|---|
+| a8378e94 | entering repair | **−14.54** ✅ | **−0.72** ❌ | FAIL |
+| a8378e94 | after repair | −15.83 ❌ | −2.04 ✅ | FAIL |
+| b9cbbe53 | entering | −14.55 ✅ | −0.72 ❌ | FAIL |
+| b9cbbe53 | after | −15.98 ❌ | −2.75 ✅ | FAIL |
+| fb419f20 | entering | −14.51 ✅ | −0.72 ❌ | FAIL |
+| fb419f20 | after | −16.07 ❌ | −1.99 ✅ | FAIL |
+
+`_check_loudness` on the inputs returns exactly **`['true_peak_over:-0.72dBTP']`**
+— one issue, and it is not loudness. **The `loudness_off:−15.83LUFS` recorded in
+`error_message` is the error the repair created.** The peak was over by 0.28 dB;
+the repair traded a passing integrated loudness for a failing one.
+
+Mechanism: `loudnorm` targeting −14 from −14.5 applies ~+0.5 dB, pushing material
+into the limiter that follows; the limiter's gain reduction drags integrated down
+~1.3 LU and nothing restores it.
+
+## Both proposed approaches fail, for one shared reason
+
+| approach | result on the three | verdict |
+|---|---|---|
+| **1** two-pass `loudnorm` (measured values, `linear=true`) + limiter | −15.81 / −15.95 / −16.05 | **FAIL** |
+| **2** `anarchistsid/loudness-normalize` | same method → same undershoot | **FAIL** (not adopted) |
+
+ffmpeg's `loudnorm` **reverts to dynamic mode when the linear gain would breach
+the TP ceiling**, and dynamic mode compresses. Two-pass linear was therefore
+indistinguishable from single-pass. Approach 2 is my own belt app implementing
+that same two-pass linear method, and its signature undershoot on the CAP-01
+voice previews (−15.55, −15.78, both `on_target=False`) is this same failure —
+so the comparison was already in hand. Not adopting it also avoids putting a
+network call in the render path, which the fallback rule would have disqualified
+anyway.
+
+## What actually works: apply only the correction that was measured
+
+Limiter **alone**, no `loudnorm`, ceiling sweep — every ceiling passes all three:
+
+| ceiling | I (three files) | TP | verdict |
+|---|---|---|---|
+| −1.3 dBFS | −14.62 / −14.60 / −14.57 | −1.24 | PASS |
+| **−1.5 dBFS (existing constant)** | **−14.62 / −14.60 / −14.58** | **−1.20** | **PASS** |
+| −2.0 dBFS | −14.70 / −14.67 / −14.66 | −1.75 | PASS |
+
+Shipped `0f78f5d7`: `_fix_loudness(path, issues)` builds the chain from the issue
+list — `loudnorm` only when `loudness_off` fired, limiter whenever either did
+(loudnorm can itself raise peaks). No issue list → repair both, preserving legacy
+behaviour. **Limiter ceiling unchanged at −1.5 dBFS. Gate tolerance unchanged at
+±1.0 LU. Nothing widened.**
+
+**Gate: 3/3 clear** through the patched `_check_loudness` + `_fix_loudness` on the
+real assets. 9 pipeline tests pass.
+
+### Two tooling properties, measured, both non-obvious
+* **`alimiter` limits SAMPLE peaks, not TRUE peaks** — limiting to −1.2 dBFS
+  yielded **−0.95 dBTP**, still over the −1.0 gate.
+* **The AAC re-encode regenerates overshoot** — a flat −0.38 dB attenuation moved
+  true peak only **0.13 dB** (−0.72 → −0.85), not the 0.38 the arithmetic
+  predicts. Plain attenuation cannot be trusted to hit a true-peak target.
+
+### Deployment state
+Committed and pushed, **not deployed**. Standing authorised one commit; VPS is
+still at `1b66168e` and this is the first CODE change since. Deploying is a
+separate decision (rule #29: push → pull → verify HEAD → then observe).
+`baseline_compare.sh` set (b): **not run** — T-21's unfreeze state is unchanged
+and stated rather than assumed.
+
+---
+
+# OPS-26 §B.4 — the 8 examined are not re-queued, but 4 are a 6–8 day loop
+
+Eight distinct blueprints examined at 09:00Z, **none already queued** — every one
+has `action_taken = (none)` and no `scheduled_for`. But four are old:
+
+| bp | conf | created | age |
+|---|---|---|---|
+| `3720eade` | 0.893 | 09-04 02:56 | **8 days** |
+| `5b9ca7c0` | **0.924** | 09-06 02:53 | **6 days** |
+| `4e21ac88` | 0.809 | 09-06 02:53 | 6 days |
+| `4b724255` | 0.793 | 09-06 02:53 | 6 days |
+| `fb5e58a4` · `a8279f1f` · `0d0182d2` · `6c68baeb` | 0.776–0.867 | 09-12 03:02 | today |
+
+**This is T-48's real source.** Four blueprints are re-scored and refused on every
+30-minute pass inside the 06:00–22:30Z window — ~34 runs/day, so `3720eade` has
+been refused on the order of **270 times over 8 days**, each refusal counted as a
+per-blueprint `error`. The `errors=8` figure will read 8 indefinitely.
+
+**And the queue is holding worse content than it refuses.** `5b9ca7c0` at
+**0.924** has been refused for six days, while the queue holds five degraded
+0-char blueprints at 0.791–0.893. First-come scheduling, not merit — which is the
+concrete case for T-53's ordering plus expiry.
