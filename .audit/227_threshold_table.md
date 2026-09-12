@@ -278,3 +278,63 @@ in the 06:32Z and 06:57Z jobs.
   06:35Z publisher) — the only window where it can be made.
 * Anime fires 06:00Z and the approver runs 06:00/06:30, so anime is structurally
   one cycle behind and may legitimately publish at 12:05Z rather than 06:35Z.
+
+---
+
+## OPS-23 §2 — ai_creators pause provenance, 2026-09-11
+
+### Verdict: HUMAN action via the dashboard. Not an automated trip.
+
+`grep` for callers of `niche_pause.pause()` across `genlab-core/src/` and
+`scripts/` returns **zero**. Nothing in the pipeline, publisher, approver or any
+runner can set a pause. The only write surface is
+`POST /api/v1/scheduling/pauses` (dashboard, PR #577), reachable by a person.
+**§2's "if automated, name the rule" does not apply — there is no rule to name.**
+
+### Dated timeline (M unless noted)
+
+| when (UTC) | event | source |
+|---|---|---|
+| 2026-09-11 ~09:00 | ai_creators examined normally, 18 rows/hr | `gate_examinations` |
+| 2026-09-11 10:00–11:00 | examinations drop 18 → **6** → 0. **Pause begins here.** | `gate_examinations` |
+| 2026-09-11 13:00–22:30 | approver logs `[ai_creators] examined=0 … paused=True` on every run (15 observations) | journal |
+| 2026-09-11 18:35 | publisher: `niche is paused (PR #577 emergency-stop), skipping fresh publish + retry pass` | journal |
+| 2026-09-11 22:30:04 | last `paused=True`; approver then stops for the overnight window | journal |
+| 2026-09-12 02:00:02 | `sweep_expired_pauses deleted 2 row(s)` — expiry had passed | journal |
+| 2026-09-12 02:35 | all five niches read `paused=False` | live probe |
+
+**Correction to the earlier reading:** I previously dated the pause "≤13:00Z"
+from the journal. `gate_examinations` puts the true start at **~10:xx Z**, three
+hours earlier. The journal could not show it because of T-44.
+
+### UNRECOVERABLE, and stated as such rather than guessed
+**Who set it, the reason string, the exact `paused_until`, and who the second
+swept row belonged to are all gone.** Three independent reasons:
+* the row was DELETEd by the sweeper and there is no archive (**T-43**);
+* the journal reaches back only ~14h (**T-44**);
+* the dashboard logs no request line for the POST.
+
+Note the sweeper deleted **2** rows — so a second niche also carried an expired
+pause. Which one is not recoverable.
+
+### "Any other niche paused in the last 30 days?" — CANNOT BE ANSWERED
+`gate_examinations` is durable and survives journal rotation, but it **cannot
+distinguish "paused" from "no candidates"** — a paused niche and an idle one both
+produce zero rows. Proof from the data itself: on 2026-09-11 gaming shows only
+2 examined-hours and sports 5, and neither was paused. Reporting the low-hour
+table as a pause history would be a false positive of exactly the T-20 shape,
+so it is not reported as one.
+
+**Answering this properly needs T-43 fixed first.** Until a pause is archived on
+expiry, pause history is only knowable for the ~14h the journal retains.
+
+### Why this is the fourth confound on ai_creators this week
+1. BB's live `min_confidence` was 0.715, not the 0.85 read from a comment (T-31);
+2. 0.715 and 0.65 sit in the same empty score gap, so `1b66168e` is a no-op there;
+3. the one-per-niche-per-day cap and approval queue, not the threshold;
+4. **and it was paused with `examined=0` for ~12h of 09-11** — those zeros are not
+   gate results at all.
+
+A silent emergency-stop that expires on its own and then erases itself is the
+T-14b shape lifted to the niche level: the state is invisible while active and
+unprovable afterwards.
