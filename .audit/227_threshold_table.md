@@ -944,3 +944,66 @@ stays frozen; T-21's unfreeze remains unverified.**
 Earlier sessions' gate-4 PASS from this harness should be re-checked: if it ran on
 Linux, `setsid` existed and the result stands; if it ran on the Mac, it has the
 same defect.
+
+---
+
+# OPS-28 §A — which harness PASSes stand
+
+| invocation | date | host | tests executed | reported | **audited** |
+|---|---|---|---|---|---|
+| gate 4 / T-06 baseline | 09-11 | **VPS (Linux)** | **YES** — 189 failed + 12 errors *per side*, 201 IDs | PASS | **STANDS** |
+| FIX-LOUD §A.2 | 09-12 | Mac | **NO** — `setsid` absent, 0 collected | PASS | **VOID** |
+| FIX-T55 negative control ×2 | 09-12 | Mac | NO (by design) | — | **INVALID, correctly** |
+
+**Host determination (Inferred, tightly).** `setsid` has been in the harness since
+the original commit `bbaa115c:105` — never optional. The Mac has no `setsid`
+anywhere: not on PATH, not in `/opt/homebrew/bin`, `/usr/local/bin` or `/usr/bin`,
+and `util-linux` is not installed. The VPS has `/usr/bin/setsid`. A run producing
+**201 failing IDs** therefore cannot have happened on the Mac, where the identical
+code path yields 0. What would falsify this: evidence that `setsid` was once
+installed on the Mac and later removed.
+
+**Consequences, stated plainly:**
+* Gate 4's PASS **stands**. **FIX-T01 remains complete.**
+* FIX-LOUD's §A.2 is **VOID**. **`0f78f5d7` is deployed to prod with gate 4
+  unverified.** Its *output* gate passed (3/3 through the deployed module), so the
+  change is evidenced — but "no test went passing → failing" is unproven for it.
+  Re-run owed on the VPS.
+
+**A further finding the audit surfaced:** the baseline is **host-dependent** —
+VPS 201 failing IDs, Mac 18 collection errors and 0 executed. T-06's "201
+baseline is the reference" is only true *on the VPS*, and T-18's harness-adoption
+rule inherits that constraint.
+
+---
+
+# OPS-28 §B — FIX-T55 / T-56 shipped (`f558942a`)
+
+## The guard needed two attempts, and the second was found by running it
+
+**v1** — require a pytest summary line and `collected > 0`. **Insufficient.** The
+Mac's real state is `Interrupted: 18 errors during collection`: pytest prints a
+summary, and `1 skipped + 18 errors` sums to **19 collected**, so v1 passed a run
+in which **nothing executed**.
+
+**v2** — `executed = passed + failed` only. Skips were collected but not run;
+errors are collection failures. Plus `Interrupted:` is fatal outright.
+
+That v1 failed the same class of check it was written to add is the point, and it
+is now recorded in T-57: *test the guard against the failure it is meant to catch*.
+
+## Gates
+
+| control | condition | result |
+|---|---|---|
+| negative #1 | `setsid` present but exits 127 (today's exact failure) | **VERDICT: INVALID**, exit 2 |
+| negative #2 | Mac's real interrupted collection | collected 19/19, **executed 0/0 → INVALID** |
+| positive, Mac | post-fix | correctly INVALID — the Mac cannot run this suite |
+| positive, VPS | post-fix | see below |
+
+## T-56 portability, all four fixed
+`SRC` derived from the script's own location · import-isolation compares
+**resolved** paths (macOS `/tmp` → `/private/tmp` was false-aborting a correctly
+isolated venv) · `setsid` used when present · logs in a per-run `mktemp` dir
+instead of world-writable fixed `/tmp/bc_*.log`, one of which was already stale
+and root-owned today.
