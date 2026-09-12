@@ -1007,3 +1007,45 @@ is now recorded in T-57: *test the guard against the failure it is meant to catc
 isolated venv) · `setsid` used when present · logs in a per-run `mktemp` dir
 instead of world-writable fixed `/tmp/bc_*.log`, one of which was already stale
 and root-owned today.
+
+---
+
+# OPS-28 §B addendum — the harness's first real verdict found a suite-wide outage
+
+The fixed harness returned **INVALID on BOTH hosts**. That was not a harness
+fault — it was correct, and it surfaced a live regression.
+
+**In the main repo, outside the harness entirely:**
+`11152/11198 tests collected (46 deselected), 18 errors` → `Interrupted: 18
+errors during collection`. **An `Interrupted:` collection abort runs NOTHING** —
+all 11,152 collected tests, not merely the 18 erroring modules.
+
+## Root cause: mine, from `9bed1094` (the T-21 fix, 09-11)
+
+That commit **prepended** a second module docstring to
+`monitoring/checks/llm_cost.py` instead of extending the existing one. Python
+treats only the first string literal as the docstring; the second is an
+expression statement, so `from __future__ import annotations` at line 54 was no
+longer at the beginning of the file — a hard `SyntaxError`. Eighteen test modules
+import the package transitively.
+
+**Impact: zero tests ran on either host from 09-11 until now.** Fixed in
+`2abe7a61` by merging the two docstrings: **11,337 collected, 0 errors.**
+
+## Why it survived a day: two faults concealing each other
+
+The harness was the only thing running the full suite, and it was simultaneously
+reporting **PASS on zero tests** (T-55). A suite that could not run and an
+instrument that reported success for not running it are a matched pair — neither
+was visible while the other held.
+
+## And my own diagnosis used the wrong instrument three times
+
+I checked the file with `ast.parse()` at `1b66168e`, at `635f9189`, at `HEAD`, and
+in a plain worktree. **CLEAN every time.** `ast.parse` does not enforce
+future-statement placement; `compile()` does, and reports the error immediately.
+Three false greens from the wrong tool, inside the very investigation into false
+greens → **T-58**.
+
+Repo-wide sweep with `compile()`: **0 files fail**, and **0 files** have two
+consecutive module-level string literals. The defect was isolated to this one.
