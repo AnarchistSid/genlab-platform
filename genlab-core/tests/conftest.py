@@ -112,3 +112,48 @@ def _prevent_postgres_password_leak():
     os.environ.pop("POSTGRES_PASSWORD", None)
     yield
     os.environ.pop("POSTGRES_PASSWORD", None)
+
+
+@pytest.fixture(autouse=True)
+def _block_prod_cost_telemetry_writes(monkeypatch):
+    """T-61: stop the suite writing cost rows into PRODUCTION telemetry.
+
+    A single ``run_id='test_run'`` row at **$10.00** was written to prod
+    ``pipeline_run_costs`` on 2026-09-12 at 10:21:20Z while the full suite ran
+    on the VPS — 34x a real day's total spend ($0.2956), landing under
+    ``niche_id='gaming'`` and corrupting that niche's figure until it was
+    deleted by primary key. It had never appeared before that run, so the suite
+    wrote it.
+
+    Why the existing defences did not hold:
+
+    * ``os.environ.pop("DATABASE_URL")`` at the top of this file runs at IMPORT
+      time. 82 test files reference ``DATABASE_URL`` and any ``monkeypatch.setenv``
+      restores it for the duration of a test, after which ``persist_run_cost``
+      reads ``os.environ`` at CALL time and connects for real.
+    * The 9bed1094 filter is READER-side. It keeps ``test_`` rows out of budget
+      and runway readers — which is correct and stays, because the ~$0.0022
+      health-check probes are legitimate telemetry — but a reader filter cannot
+      prevent a write.
+
+    So the block belongs at the writer. This patches the function in its OWN
+    module namespace, because callers import it lazily and patching the importing
+    module would miss them (the documented project pattern). Writes become
+    in-memory no-ops returning True, so callers that assert on the return value
+    still behave.
+
+    A test that genuinely needs the real writer can re-patch inside its own body;
+    monkeypatch teardown restores this one.
+    """
+    from genlab_core.intelligence import cost_persist
+
+    recorded: list[dict] = []
+
+    def _fake_persist_run_cost(**kwargs):
+        recorded.append(kwargs)
+        return True
+
+    monkeypatch.setattr(
+        cost_persist, "persist_run_cost", _fake_persist_run_cost, raising=True
+    )
+    yield recorded

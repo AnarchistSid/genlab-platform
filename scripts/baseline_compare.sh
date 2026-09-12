@@ -132,6 +132,23 @@ while read -r tf; do
   say "  WARN unmocked prod-storage import: $tf"; _unmocked=$((_unmocked+1))
 done < <(cd "$WT_H/genlab-core" 2>/dev/null && grep -rlE "persist_run_cost|PostgresBackend\(|cost_persist" tests/ 2>/dev/null)
 say "  $_unmocked file(s) import prod storage with no mock in-file"
+# T-61: this warning was advisory, printed on every run, and read past TWICE
+# while 11,208 tests ran against prod on the VPS. One of those runs wrote a
+# run_id='test_run' row at $10.00 into production pipeline_run_costs -- 34x a
+# real day's spend -- under niche_id='gaming', corrupting that niche's figure
+# until it was deleted by primary key. An advisory warning on a destructive
+# vector is not a control. It aborts now.
+#
+# The suite-wide block lives in genlab-core/tests/conftest.py
+# (_block_prod_cost_telemetry_writes). This check verifies that block is present
+# in the HEAD worktree; it is not a substitute for it.
+if ! grep -q "_block_prod_cost_telemetry_writes" "$WT_H/genlab-core/tests/conftest.py" 2>/dev/null; then
+  if [[ "${BC_ALLOW_PROD_STORAGE:-0}" == "1" ]]; then
+    say "  !! OVERRIDE: BC_ALLOW_PROD_STORAGE=1 — proceeding without the suite-wide write block"
+  else
+    die "head worktree has no _block_prod_cost_telemetry_writes fixture in tests/conftest.py — the suite can write to PROD telemetry (T-61). Set BC_ALLOW_PROD_STORAGE=1 to override deliberately."
+  fi
+fi
 PYARGS=(-q -p no:cacheprovider --timeout=300 "${DES[@]}")
 [[ "$COLLECT_ONLY" == 1 ]] && PYARGS=(-q -p no:cacheprovider --collect-only "${DES[@]}")
 
@@ -228,5 +245,67 @@ if [[ -n "$NEWFILES" ]]; then
   done <<< "$NEWFILES"
 fi
 
-if [[ "$B" -eq 0 ]]; then say ""; say "VERDICT: PASS — no test went passing -> failing"; exit 0; fi
-say ""; say "VERDICT: FAIL — $B regression(s):"; sed 's/^/  /' "$RUNDIR/setb.ids"; exit 1
+# ------------------------------------------------------- T-60 stability check
+# The set difference attributes EVERY in-suite failure to the diff. That is only
+# valid for order-independent tests. Measured 2026-09-12: a VPS run reported
+# "FAIL — 1 regression" where the flagged test passed 6/6 STANDALONE at head, and
+# a set (c) test failed 6/6 standalone while passing in-suite. Neither was
+# reachable from the diff, and the Mac run over the identical range had set (b)=0.
+# One order-dependent test manufactures a regression, so isolate before judging.
+comm -23 "$RUNDIR/b.ids" "$RUNDIR/h.ids" > "$RUNDIR/setc.ids"
+ISO_RUNS="${BC_ISOLATION_RUNS:-3}"
+
+isolate() {   # $1=worktree $2=node-id ; echo "pass" if it passes every isolated run
+  local wt=$1 nid=$2 i rc
+  for ((i=0; i<ISO_RUNS; i++)); do
+    ( cd "$wt/genlab-core" && "$wt/.venv/bin/python" -m pytest -q -p no:cacheprovider \
+        --timeout=300 "$nid" >/dev/null 2>&1 )
+    rc=$?
+    [[ $rc -ne 0 ]] && { echo "fail"; return; }
+  done
+  echo "pass"
+}
+
+REAL_REGRESSIONS="$RUNDIR/real_regressions.ids"; : > "$REAL_REGRESSIONS"
+UNSTABLE="$RUNDIR/unstable.ids"; : > "$UNSTABLE"
+
+if [[ "$B" -gt 0 ]]; then
+  say "=== T-60 isolation: re-running set (b) standalone at head, n=$ISO_RUNS ==="
+  while read -r nid; do
+    [[ -z "$nid" ]] && continue
+    if [[ "$(isolate "$WT_H" "$nid")" == "pass" ]]; then
+      say "  UNSTABLE  $nid  (passes standalone, failed in-suite)"
+      echo "$nid" >> "$UNSTABLE"
+    else
+      say "  REGRESSION $nid  (fails standalone at head too)"
+      echo "$nid" >> "$REAL_REGRESSIONS"
+    fi
+  done < "$RUNDIR/setb.ids"
+fi
+
+if [[ "$C" -gt 0 ]]; then
+  say "=== T-60 isolation: re-running set (c) standalone at head, n=$ISO_RUNS ==="
+  while read -r nid; do
+    [[ -z "$nid" ]] && continue
+    # set (c) claims "failed at base, passes at head". If it FAILS standalone at
+    # head, the in-suite pass was order-luck, not a recovery.
+    if [[ "$(isolate "$WT_H" "$nid")" == "fail" ]]; then
+      say "  UNSTABLE  $nid  (fails standalone at head, passed in-suite — not a recovery)"
+      echo "$nid" >> "$UNSTABLE"
+    fi
+  done < "$RUNDIR/setc.ids"
+fi
+
+NU=$(wc -l < "$UNSTABLE" | tr -d ' '); NR=$(wc -l < "$REAL_REGRESSIONS" | tr -d ' ')
+if [[ "$NU" -gt 0 ]]; then
+  say ""; say "  $NU UNSTABLE (order-dependent, excluded from the verdict):"
+  sed 's/^/    /' "$UNSTABLE"
+fi
+
+if [[ "$NR" -eq 0 ]]; then
+  say ""
+  if [[ "$NU" -gt 0 ]]; then say "VERDICT: PASS with $NU UNSTABLE — no test went passing -> failing"
+  else say "VERDICT: PASS — no test went passing -> failing"; fi
+  exit 0
+fi
+say ""; say "VERDICT: FAIL — $NR regression(s) confirmed standalone:"; sed 's/^/  /' "$REAL_REGRESSIONS"; exit 1
