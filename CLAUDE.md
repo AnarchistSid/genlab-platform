@@ -473,10 +473,55 @@ paths remain wired as a fallback only. Do not add new writes here.
 - Max 50 search calls per day across all channels
 
 ### External Services
-- LLM: Anthropic Claude Haiku (content writing), OpenAI GPT-Image-1 (visuals)
-- TTS: ElevenLabs → OpenAI TTS → Edge-TTS → gTTS (cascade)
-- Video: yt-dlp (download), FFmpeg (render), short-video-maker Docker (port 3123)
+- LLM: Anthropic Claude Haiku (content writing), OpenAI GPT-Image-1 (visuals).
+  **Fallback chain on exhaustion**: Anthropic → belt `anthropic/claude-haiku-4-5`
+  (same model, 0% markup, separate pool) → OpenAI. Triggered on
+  `error.type == "billing_error"` ONLY — never on 429/5xx/timeouts.
+- TTS cascade, **measured 2026-09-12** (was documented as
+  `ElevenLabs → OpenAI → Edge → gTTS`, which was wrong on the head AND on
+  ElevenLabs): `infsh_inworld` → OpenAI TTS → Edge-TTS → gTTS.
+  ElevenLabs is **skipped by capability precondition** — the SDK is not installed
+  on the prod host and the key is free-tier (10k chars/month vs ~60k needed).
+  It re-enables itself automatically if both are fixed.
+- Video: yt-dlp (download), **FFmpeg (render — the ONLY render path)**.
 - Trends: pytrends (Google Trends unofficial wrapper)
+
+**short-video-maker is NOT wired.** `short_video_maker_url` exists in
+`settings.py` and `.env.example`, gaming's `niche.yaml` carries
+`use_short_video_maker: false`, and `ShortVideoMakerClient` has been removed from
+the codebase — **there is no consumer and no second render engine.** Docs under
+`docs/archive/` and `docs/superpowers/` describing it as live are historical
+records of 2026-03, not current architecture.
+
+**Render-path rule.** FFmpeg is the only render path, so any future render
+integration must be **additive**: if it fails, the FFmpeg path must still produce
+a publishable reel standalone. (This states the guarantee positively. Earlier
+audit docs framed FFmpeg as "the fallback for short-video-maker" — the rule was
+right, its premise was not.)
+
+### Shot density — measure it, and name the detector
+
+Baseline 2026-09-12, one real render per niche. **Two FFmpeg-based detectors
+disagree 2.4–3× at nominally the same threshold (T-70), so a cut count without
+its method is not a measurement:**
+
+| niche | `showinfo scene>0.3` | `shot-density-check` | longest static |
+|---|---|---|---|
+| ai_creators | 6 · 0.191/s | 2 · 0.064/s | **28.03s / 31.4s** |
+| anime | — | 1 · 0.059/s | 16.01s |
+| gaming | 2 · 0.108/s | 0 · 0.000/s | 18.60s |
+| movies | 12 · **0.618/s** | 5 · 0.258/s | 9.77s |
+| sports | — | 2 · 0.103/s | 16.00s |
+
+Against the 0.33–1.5 cuts/s target, **movies passes on one detector and fails on
+the other**. `shot-density-check` therefore stays **ADVISORY** until T-70
+reconciles them against a hand count — a blocking gate on an unreconciled
+detector would reject reels nobody can reproduce by hand. The target itself is
+also unvalidated: "a cut every 2–4s" came from an article, not from measuring
+files that perform.
+
+`longest_static` is the more robust signal — method-independent, and a 28-second
+still frame is a defect under any measurement.
 
 ---
 

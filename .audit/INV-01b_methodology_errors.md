@@ -30,3 +30,5 @@
 - `find: Failed to restore initial working directory: /root` appeared in copy
   output — cosmetic, from running as `genlab` with a root cwd; the copy is
   verified by the 86-entry manifest.
+
+| E-09 | **A withdrawal is a claim, and needs the original's standard.** I reported the "9 cuts / 0.294 cuts-per-second" ai_creators figure as matching no render measured, and it was accepted into an instruction to withdraw it. I had run ONE detector. Running both on the same file shows `showinfo` reads 2.4–3× higher than `shot-density-check` — today's ai_creators is 6 cuts / 0.191 on the original method, the same order as the figure I was retracting. The retraction would have encoded a second error on top of the first. | Two detectors on the same file BEFORE retracting a measurement, exactly as E-03 required before reporting one. Retracting feels like caution and is not: it is an assertion that the earlier number was wrong, and it needs evidence of the same weight. |
