@@ -48,14 +48,26 @@ class TestExhaustionDetection:
         exc = Exception("insufficient credits remaining")
         assert _is_exhaustion_error(exc) is True
 
-    def test_ratelimit_class_triggers_fallback(self):
-        # anthropic SDK raises RateLimitError on 429
+    # FIX-LLMFB §1 (2026-09-12) INVERTED both of these, deliberately. Second
+    # copy of the same stale pin — the first is in tests/llm/test_fallback.py,
+    # which is itself worth noting: one classifier, two files pinning it, both
+    # pinning the wrong thing.
+    #
+    # They asserted name-based matching on SYNTHETIC classes, and that mechanism
+    # was the defect. It made a 429 fail over while a typed `billing_error` with
+    # a terse message did not, because detection was substring-only. Exhaustion
+    # is now keyed on Anthropic's own `error.type`.
+    def test_ratelimit_class_does_NOT_trigger_fallback(self):
+        """429 is retryable on the primary. Failing over on transient
+        throttling moves traffic off Anthropic for no reason — and on the day
+        the primary is genuinely down, straight into the secondary's limit."""
         exc = type("RateLimitError", (Exception,), {})("rate limited")
-        assert _is_exhaustion_error(exc) is True
+        assert _is_exhaustion_error(exc) is False
 
-    def test_apistatuserror_triggers_fallback(self):
+    def test_generic_5xx_does_NOT_trigger_fallback(self):
+        """A 5xx is transient; the secondary cannot help and a retry can."""
         exc = type("APIStatusError", (Exception,), {})("some 5xx")
-        assert _is_exhaustion_error(exc) is True
+        assert _is_exhaustion_error(exc) is False
 
     def test_auth_error_does_NOT_trigger_fallback(self):
         # 401 unauthorized is an operator issue OpenAI can't help with
