@@ -338,3 +338,176 @@ expiry, pause history is only knowable for the ~14h the journal retains.
 A silent emergency-stop that expires on its own and then erases itself is the
 T-14b shape lifted to the niche level: the state is invisible while active and
 unprovable afterwards.
+
+---
+
+# OPS-20 §1/§2 — 09-12 cycle. Run at 08:31Z (both windows had passed)
+
+**The 06:32Z prediction was never issued** — this session resumed at 08:31Z, after
+both scheduled windows. What follows is the confirmation scope only; the
+prediction/confirmation split did not happen and is not claimed.
+
+## STEP 0 — GATE (OPS-23 §3): all three satisfied
+
+| fact | value |
+|---|---|
+| (a) exited | publisher 06:35:01 → **06:48:09Z** ✅ |
+| (b) exit code **verbatim** | **`ExecMainStatus=1`** (`Result=success` — reported, not gated) |
+| (c) post count, 06:35–07:00Z window | **8** ✅ |
+
+**Exit 1 for the second consecutive fire.** T-37 is recurring, not a one-off: the
+publisher exits 1 and `SuccessExitStatus=0 1 3 4` renders `Result` meaningless.
+
+All five pipelines `LoadState=loaded`, `ExecMainStatus=0`. **Stagger confirmed
+exactly**: ai 02:30:08→03:02:55 · movies 03:30:11→03:47:39 · gaming
+04:00:11→04:12:19 · sports 05:00:10→05:21:04 · anime 06:00:11→06:08:41.
+
+## Publishes — 8 posts, 2 niches
+
+| niche | bp | slot | published | stale_at | tier |
+|---|---|---|---|---|---|
+| gaming | `2cb13852` | 09-11 19:00Z | 06:39 | 09-12 13:00Z | – |
+| sports | `2f663eb9` | 09-12 06:30Z | 06:44 | 09-13 00:30Z | `infsh_inworld` |
+
+**Prediction result: 2 of 3 held, and the third was correctly anticipated.**
+`2cb13852` ✅, `2f663eb9` ✅. `76d4d9de` did NOT publish — the daily cap admitted
+**one** gaming post and the older slot (09-11 19:00Z) won. Reported as *which and
+why*, not as "gaming published".
+
+`sports` carries `audio_provider=infsh_inworld`; gaming `2cb13852` is NULL
+(rendered before FIX-T01 reached that path).
+
+---
+
+# THE HEADLINE FINDING — ai_creators is in a self-sustaining auto-pause loop
+
+## I was wrong in OPS-23 §2. The pause IS automated.
+
+```
+reason:       auto_paused_health_critical: Reach dropped ∞x: 48h avg 0 vs 14d baseline 5. Probable shadowban.
+paused_by:    system:account_health_check
+created_at:   2026-09-12 06:00:10Z     paused_until: 2026-09-12 10:00:21Z
+```
+
+I reported "human dashboard action, zero automated callers" from a grep for
+`niche_pause.pause|pause_niche|\.pause(`. The real caller imports the symbol
+directly and calls a bare `pause(` — `compliance/account_health.py:384`,
+`maybe_auto_pause_on_critical`. **Textbook grep-doesn't-match-codebase**, and I
+filed a confident wrong conclusion on it.
+
+## The rule, now named (what §2 asked for)
+
+* Flag `GENLAB_AUTO_PAUSE_ON_HEALTH_CRITICAL=1` (live in prod).
+* Trips when 48h avg reach ÷ 14d baseline reach < `CRITICAL_RATIO_THRESHOLD` (**0.1**).
+* Pause window **NOW + 4h**, `paused_by='system:account_health_check'`.
+* **UPSERT semantics: each new critical signal re-pauses and extends the window.**
+
+## The loop
+
+1. ai_creators' recent reach reads **0**;
+2. → critical → **auto-pause 4h**;
+3. → publisher skips the niche entirely (confirmed at 06:35:02Z, and `ca19f6a7`
+   sat approved with an in-window 06:30Z slot and did not publish);
+4. → no new posts → reach stays 0;
+5. → next check re-pauses. **It fired 8 times in a single run**, once per
+   blueprint examined, each an UPSERT extending the window.
+
+**A niche paused for low reach cannot earn reach.** The remedy and the disease
+are the same action.
+
+## The detector has no absolute floor — this is the root defect
+
+The baseline is **5**. Not 5,000 — five. Going 5 → 0 is mathematically an
+infinite drop and practically meaningless; both numbers are noise.
+`MIN_BASELINE_SAMPLES=5` gates the *sample count*, never the *magnitude*. So the
+shadowban detector fires hardest on exactly the low-reach channels that most need
+to keep publishing, and then prevents them from publishing.
+
+ai_creators DID publish 4 posts on 09-11 at 12:07Z (status since advanced to
+`INSIGHTS_6H`). The zero is a **reach** zero, not a publish zero.
+
+*(Method note: my first 48h query filtered `status='SUCCESS'` and returned a
+false zero for anime and ai_creators, because rows advance SUCCESS →
+INSIGHTS_6H. T-20 in my own SQL — caught by the anime row I knew existed.)*
+
+---
+
+# `is_paused()` FAIL-OPENS SILENTLY — and I shipped the broken probe
+
+Measured, both directions, same host and user:
+
+```
+without env:   _connect() -> None          is_paused('ai_creators') -> False   # FAIL-OPEN
+with .env:     _connect() -> Connection    is_paused('ai_creators') -> True  + full row
+```
+
+`_connect()` returns None when `DATABASE_URL` is absent from the environment, and
+`is_paused` fail-opens to False. **My 02:35Z reading of "all five niches read
+paused=False" was a false negative**, and the OPS-23 §2 claim that the pause "had
+cleared" rests on it. I then wrote that same env-less probe into all three
+scheduled jobs, where it would have reported `paused=False` regardless of truth.
+
+Correct form: `set -a && . /opt/genlab/.env && set +a` before invoking python.
+
+---
+
+# Q1 — IS APPROVAL UNBLOCKED? (all five niches)
+
+| niche | candidates | cleared 0.65 | approved | cleared-not-approved | verdict |
+|---|---|---|---|---|---|
+| ai_creators | 4 | 4 | **0** | 4 | **blocked — queue full** |
+| anime | 1 | 1 | 1 | 0 | ✅ |
+| gaming | 2 | 2 | 1 | 1 | ✅ (1 rejected by LLM judge) |
+| movies | 2 | 2 | 1 | 1 | ✅ |
+| sports | 5 | 5 | **0** | 5 | **see below** |
+
+**ai_creators — the threshold is not the constraint. Quoted:**
+> `[auto_approver] niche=ai_creators bp=0d0182d2… — no cap-available slot in next 7 days, skipping`
+
+All four cleared 0.65 and all four were refused for **slots**, not confidence.
+ai_creators has **7 queued out to 09-19**. This is the P3 reinterpretation
+confirmed verbatim: the cap and queue are the narrowing, not the threshold.
+
+**sports — 5 cleared, 0 approved, and it is NOT a threshold failure either.**
+Only 1 of the 5 was examinable (4 are `DRAFTED`, not `VISUAL_READY`). The one
+examined was rejected by the LLM judge:
+> `[gate] LLM judge fired for niche=sports rule_decision=False rule_conf=0.40 llm_decision=False reason=Virality score of 0.0 indicates minimal engagement potential; hook is too niche/specific for broad sports audience`
+
+**Q1 verdict: approval IS unblocked.** Sports published `2f663eb9` today — its
+first publish in 14 days — and movies and anime each approved one. No niche is
+blocked by the threshold. The remaining blockers are the slot queue
+(ai_creators), the daily cap (gaming), render state (sports `DRAFTED`), and the
+LLM judge — all downstream of the threshold, and all now named.
+
+# Q2 — DID 0.65 MOVE ANYTHING? (gaming / movies / anime only)
+
+Marginal admits this cycle — cleared 0.65 but **not** 0.85:
+
+| niche | marginal | of candidates |
+|---|---|---|
+| gaming | 0 | 2 (both ≥ 0.85) |
+| movies | **2** | 2 |
+| anime | **1** | 1 |
+
+**3 marginal admits in one cycle.** Both of movies' candidates (0.784, 0.729) and
+anime's single approved one (0.836) would have been refused at 0.85 — anime's is
+the blueprint now holding the 09-13 06:30Z slot. A one-cycle slice of the 14-day
+prior (+12/+15/+5), as expected.
+
+**ai_creators and sports: N/A**, not zero — 0.715 and 0.732 sit inside their empty
+score gaps.
+
+# Queue depth (T-29 evidence)
+
+| niche | queued | next slot | last slot |
+|---|---|---|---|
+| ai_creators | **7** | 09-13 06:30Z | 09-19 06:30Z |
+| gaming | **7** | 09-13 06:30Z | 09-19 06:30Z |
+| anime | 1 | 09-13 | 09-13 |
+| movies | 1 | 09-13 | 09-13 |
+| sports | **0** | — | — |
+
+16 queued, out to 09-19. ai_creators and gaming are saturated a full week ahead —
+which is precisely why their new candidates get "no cap-available slot in next 7
+days". Sports at 0 explains why its 5 candidates matter and why 4 being `DRAFTED`
+is the live constraint there.
