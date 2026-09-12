@@ -58,8 +58,40 @@ logger = logging.getLogger(__name__)
 
 _ANTHROPIC_EXHAUSTION_COUNT: int = 0
 _ANTHROPIC_CB_OPEN_UNTIL: float = 0.0
-_CB_THRESHOLD: int = 3
-_CB_COOLDOWN_S: int = 600  # 10 min
+
+
+def _cb_threshold() -> int:
+    """Consecutive exhaustions before the shared breaker opens.
+
+    FIX-LLMFB §B says "once tripped", which reads as 1. Kept at 3 by default,
+    deliberately and recorded rather than silently substituted: this breaker is
+    MODULE-LEVEL and shared by eight Anthropic call sites, so a threshold of 1
+    lets any single transient misclassification divert every site at once. The
+    exhaustion classifier is now typed on ``error.type == "billing_error"``
+    (ad6b4d18) and no longer fires on 429/5xx, so 3 consecutive genuine billing
+    errors is a strong signal and costs at most two extra failed calls.
+    Configurable for an operator who wants the spec's literal behaviour.
+    """
+    try:
+        return max(1, int(os.environ.get("GENLAB_LLM_FALLBACK_CB_THRESHOLD", "3")))
+    except ValueError:
+        return 3
+
+
+def _cb_cooldown_s() -> int:
+    """How long to serve from the fallback chain before probing Anthropic.
+
+    FIX-LLMFB §B: default 60 minutes, configurable. Previously a hardcoded 600s
+    (10 min). Ten minutes against a genuinely exhausted key means six pointless
+    primary attempts an hour, each one a failed request the writer waits on.
+    """
+    try:
+        return max(
+            60,
+            int(os.environ.get("GENLAB_LLM_FALLBACK_COOLDOWN_MINUTES", "60")) * 60,
+        )
+    except ValueError:
+        return 3600
 
 
 class CircuitOpen(Exception):
@@ -167,14 +199,15 @@ def cb_record_exhaustion() -> None:
     we hit the threshold. Idempotent within a single process."""
     global _ANTHROPIC_EXHAUSTION_COUNT, _ANTHROPIC_CB_OPEN_UNTIL
     _ANTHROPIC_EXHAUSTION_COUNT += 1
-    if _ANTHROPIC_EXHAUSTION_COUNT >= _CB_THRESHOLD:
-        _ANTHROPIC_CB_OPEN_UNTIL = time.time() + _CB_COOLDOWN_S
-        logger.warning(
-            "[llm-fallback] Anthropic circuit breaker OPEN for %ds after "
-            "%d consecutive exhaustion errors — routing ALL Anthropic "
-            "sites straight to OpenAI",
-            _CB_COOLDOWN_S,
-            _ANTHROPIC_EXHAUSTION_COUNT,
+    if _ANTHROPIC_EXHAUSTION_COUNT >= _cb_threshold():
+        cooldown = _cb_cooldown_s()
+        _ANTHROPIC_CB_OPEN_UNTIL = time.time() + cooldown
+        _notify_failover(
+            "circuit-breaker",
+            "ANTHROPIC CIRCUIT OPEN",
+            f"{_ANTHROPIC_EXHAUSTION_COUNT} consecutive exhaustion errors — "
+            f"serving from the fallback chain for {cooldown // 60} min, then "
+            f"one probe call returns traffic if the primary recovers",
         )
 
 
@@ -183,10 +216,14 @@ def cb_record_success() -> None:
     Anthropic call from any site."""
     global _ANTHROPIC_EXHAUSTION_COUNT, _ANTHROPIC_CB_OPEN_UNTIL
     if _ANTHROPIC_EXHAUSTION_COUNT > 0 or _ANTHROPIC_CB_OPEN_UNTIL > 0:
-        logger.info(
-            "[llm-fallback] Anthropic recovered — resetting circuit "
-            "breaker (was %d consecutive exhaustions)",
-            _ANTHROPIC_EXHAUSTION_COUNT,
+        # §C.6 probe-back: once the cooldown lapses, cb_is_open() returns False
+        # and the NEXT call goes to Anthropic — that call IS the single probe.
+        # Its success lands here and returns all traffic to the primary.
+        _notify_failover(
+            "circuit-breaker",
+            "ANTHROPIC RECOVERED",
+            f"probe call succeeded after {_ANTHROPIC_EXHAUSTION_COUNT} "
+            f"exhaustion(s) — returning traffic to the primary",
         )
     _ANTHROPIC_EXHAUSTION_COUNT = 0
     _ANTHROPIC_CB_OPEN_UNTIL = 0.0
