@@ -231,9 +231,19 @@ regression history: `[[session-2026-07-13-audit-followup-writer-wire]]`.
 
 Every blueprint has `variant_type` (structural: single_clip / series_part /
 split_screen / storytime / watch_till_end / question_reveal) + `variant_payload`
-(per-variant JSONB). Source of truth: `genlab_core/variant_types.py`. Only
-`single_clip` implemented today; other variants ship per session in
-`[[variant-architecture-roadmap]]`. Every existing blueprint retroactively
+(per-variant JSONB). Source of truth: `genlab_core/variant_types.py`.
+**Three of six are implemented** (corrected 2026-09-12; this previously read
+"only `single_clip`"): `single_clip` (default), plus `split_screen`
+(`frame_compositor.py:462` `compose_split_screen`) and `storytime`
+(`frame_compositor.py:605` `compose_storytime`), both flag-gated and dispatched
+from `base_visual_render.py`. Remaining variants ship per session in
+`[[variant-architecture-roadmap]]`.
+
+Note the cost of that shape: each structural variant gets its own compositor
+method, so variants that are conceptually orthogonal become mutually exclusive
+in code. `storytime` needed a hand-written mutex against the narration path
+(`transformation_orchestrator.py:131,548,567`, `narration_degraded_reason=
+"storytime_mutex"`) for exactly this reason. Every existing blueprint retroactively
 defaults to `single_clip` + `{}` (migration `43c4084cf927`). Unknown variant
 strings fall back to `single_clip` with WARNING (rule #17 sibling).
 
@@ -486,12 +496,36 @@ paths remain wired as a fallback only. Do not add new writes here.
 - Video: yt-dlp (download), **FFmpeg (render — the ONLY render path)**.
 - Trends: pytrends (Google Trends unofficial wrapper)
 
-**short-video-maker is NOT wired.** `short_video_maker_url` exists in
-`settings.py` and `.env.example`, gaming's `niche.yaml` carries
-`use_short_video_maker: false`, and `ShortVideoMakerClient` has been removed from
-the codebase — **there is no consumer and no second render engine.** Docs under
-`docs/archive/` and `docs/superpowers/` describing it as live are historical
-records of 2026-03, not current architecture.
+**short-video-maker is wired but switched off** (corrected 2026-09-12; the
+previous wording here was wrong — see below). `ShortVideoMakerClient` was
+deleted, but gaming's renderer carries an **inline reimplementation** that is
+reachable end-to-end:
+
+```
+CriticalRush/niches/gaming/config/niche.yaml:18   feature_flags.use_short_video_maker: false
+pipeline_runner.py:260,285,363                    get_feature_flags() -> context["feature_flags"]
+render_gaming_video.py:213                        flags = context.get("feature_flags", {})
+render_gaming_video.py:360                        if flags.get("use_short_video_maker", False):
+render_gaming_video.py:362                        self._try_short_video_maker(...)
+render_gaming_video.py:820                        svm_url = settings.short_video_maker_url
+```
+
+So: **FFmpeg is the only render path in effect, not the only render path that
+exists.** Gaming is the only niche declaring the flag and it is `false`, so the
+branch never executes in prod. `_try_short_video_maker` fails safe (returns
+`None`, falls through to FFmpeg) but swallows at `logger.debug` — a rule #19
+shape, since a misconfigured Docker URL would be invisible.
+
+Docs under `docs/archive/` and `docs/superpowers/` describing short-video-maker
+as an active *integration* are historical records of 2026-03. The code path,
+however, is present — do not conclude from those docs' staleness that the wire
+is absent.
+
+> **Why this paragraph was wrong.** An earlier pass (commit `6f4e5b37`) asserted
+> "there is no consumer and no second render engine" after finding the client
+> class deleted, without grepping for a reader of `settings.short_video_maker_url`.
+> A correction is a claim and carries the original's burden of proof: before
+> editing a factual claim here, run the probe that would falsify the *replacement*.
 
 **Render-path rule.** FFmpeg is the only render path, so any future render
 integration must be **additive**: if it fails, the FFmpeg path must still produce
