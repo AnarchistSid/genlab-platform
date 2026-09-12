@@ -94,8 +94,39 @@ def _resolve_font() -> str:
 
 
 def _escape_drawtext(text: str) -> str:
-    """Escape single quotes + colon + backslash for FFmpeg drawtext."""
-    return text.replace("\\", "\\\\").replace("'", "\\'").replace(":", "\\:").replace(",", "\\,")
+    """Escape a word for use inside a single-quoted FFmpeg drawtext value.
+
+    T-14a. The apostrophe is the whole defect, and it was mis-escaped as
+    ``\\'``. Inside an FFmpeg-quoted token a backslash is LITERAL — it does not
+    escape — so ``'`` still terminates the quote. A word like ``Pope's`` closed
+    the ``text='...'`` quote early, which inverted quoting for the remainder of
+    the graph until the opening quote of ``enable='between(t,...)'`` was consumed
+    as a closing one, leaving the time value exposed as bare graph text. FFmpeg
+    then read it as a filter name:
+
+        [AVFilterGraph] No such filter: '0.000'
+
+    Reproduced 2026-09-12 with exactly that error string from a single
+    apostrophe, and cleared by the idiom below.
+
+    **This is content-dependent, not timing-dependent.** The three production
+    literals (``0.000``, ``23.700``, ``21.000``) are just whichever ``enable``
+    value happened to be exposed first, which is why movies rendered fine with
+    the identical style and segment count — its words had no apostrophes.
+
+    The correct idiom closes the quote, emits an escaped quote, and reopens:
+    ``'`` becomes ``'\\''``, so ``Pope's`` renders as ``text='Pope'\\''s'``.
+
+    Colons still need escaping even inside quotes — measured: ``text='a:b'``
+    fails with "No option name near 'b", while ``text='a\\:b'`` is accepted.
+    Commas are accepted either way; the escape is kept as it is harmless.
+    """
+    return (
+        text.replace("\\", "\\\\")
+        .replace("'", "'\\''")
+        .replace(":", "\\:")
+        .replace(",", "\\,")
+    )
 
 
 def _emphasis_color_for(emphasis_arm: str, style: str) -> str:
