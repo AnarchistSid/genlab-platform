@@ -1733,3 +1733,56 @@ never the **values** — `status_text: completed` with a zero payload, the same
 trap as the belt `openai` function. Fixed by `belt file upload` first, then
 passing the returned URI, and the measurement loop now asserts a non-zero
 duration before recording a row.
+
+---
+
+# NEXT-01 §1 — the "9 cuts" figure should NOT be withdrawn. The methods disagree.
+
+I reported that "the 9 cuts, 0.294/s figure matches no render measured today"
+and was instructed to withdraw it. **That instruction rests on my error.** Running
+both detectors on the SAME files — the discipline INV-01b's own E-03 established
+after a method returned 0 where another found 9:
+
+| file | `showinfo scene>0.3` | `shot-density-check` | ratio |
+|---|---|---|---|
+| ai_creators | **6** cuts · 0.191/s | **2** cuts · 0.064/s | **3.0×** |
+| movies | **12** cuts · **0.618/s** | **5** cuts · 0.258/s | **2.4×** |
+| gaming | **2** cuts · 0.108/s | **0** cuts · 0.000/s | — |
+
+**`showinfo` reads ~2.4–3× more cuts than `shot-density-check` on identical
+input**, both nominally at `scene > 0.3`.
+
+So the original "9 cuts, 0.294/s" was **method A on an earlier render**, and
+today's ai_creators on method A is **6 cuts / 0.191/s** — the same order, not a
+phantom. It was never a fabricated number; it is a number on a different scale.
+**Withdrawing it would encode a second error on top of my first.** The correct
+record is: *cross-method comparison is invalid*, and every cut figure must carry
+its detector.
+
+## The consequence that matters more than the bookkeeping
+
+**The verdict flips on at least one niche.** Target is 0.33–1.5 cuts/s:
+
+* movies at **0.618/s (showinfo) = PASS**
+* movies at **0.258/s (shot-density-check) = FAIL**
+
+The backlog's item 8 proposes wiring `shot-density-check` as a **blocking
+pre-publish gate**. On present evidence that gate would reject reels a second
+ffmpeg-based detector calls acceptable. **Resolve the discrepancy before it can
+block a publish** — otherwise the threshold is calibrated against one scale and
+enforced on another, and the first symptom will be reels failing a gate nobody
+can reproduce by hand.
+
+Likely causes, untested: a minimum-shot-duration filter, counting shot boundaries
+vs transitions, or a differing internal threshold despite the same parameter
+name. Not guessed at further here.
+
+## What DOES stand from the baseline
+
+Unchanged by the method question, because it is method-independent in direction:
+**all five niches fail the target on the detector that would enforce it**, and
+`longest_static` is severe — ai_creators **28.03s of a 31.4s reel** in one
+unbroken shot. The ranking also stands within a method: on shot-density-check
+movies is best (0.258) and ai_creators near-worst (0.064); on showinfo movies is
+best (0.618) and gaming worst (0.108). **ai_creators is not the well-cut niche on
+either detector**, which was the substantive point.
