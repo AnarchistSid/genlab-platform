@@ -81,27 +81,75 @@ _ANTHROPIC_EXHAUSTION_MARKERS = (
 )
 
 
-def should_fallback(exc: Exception) -> bool:
-    """True when the exception clearly indicates Anthropic exhaustion
-    or rate-limit (fallback-worthy). False for auth / network / other
-    errors that OpenAI can't help with.
+def _error_type_of(exc: Exception) -> str:
+    """Anthropic's own ``error.type`` discriminator, or "" when absent.
 
-    Recognises:
-      * `credit balance is too low` — 400 BadRequestError from exhausted
-        account (the 2026-07-18 exhaustion class)
-      * `insufficient credits` / `insufficient_quota` — variants
-      * SDK exception class names `RateLimitError` / `APIStatusError`
-
-    Rejects (re-raise):
-      * `401 unauthorized` — needs operator, OpenAI can't help
-      * `ConnectionError` — network layer, OpenAI would hit same DNS
-      * `invalid_request_error` shapes that aren't credit-exhaustion
+    The SDK models this as ``anthropic.types.shared.ErrorType``, a Literal
+    union that includes ``"billing_error"`` alongside ``"rate_limit_error"``,
+    ``"overloaded_error"`` and the rest. It is the authoritative signal and it
+    does not depend on prose.
     """
-    exc_name = type(exc).__name__
-    if exc_name in ("RateLimitError", "APIStatusError"):
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict):
+            return str(err.get("type") or "")
+    return ""
+
+
+def should_fallback(exc: Exception) -> bool:
+    """True only when Anthropic is EXHAUSTED — not merely unhappy.
+
+    Measured 2026-09-12 against real SDK error objects; the previous
+    implementation got two of six cases wrong, both consequentially:
+
+    * **A typed ``billing_error`` with a terse message returned False.**
+      Detection was purely substring-based on "credit balance is too low", so
+      the shape the SDK actually models — ``{"type": "billing_error",
+      "message": "Billing error"}`` — did not match and NO fallback fired. The
+      OpenAI fallback has never once fired in production (no OpenAI model
+      appears in ``pipeline_run_costs.by_model`` since 2026-06-14), and during
+      the 09-06→09-09 outage ``by_model`` carried only ``{"tts": …}`` — no
+      Claude, no OpenAI. This is a sufficient explanation for that window.
+    * **A 429 returned True.** Rate limiting is transient and retryable on the
+      primary; failing over moves traffic off Anthropic for a blip, and on the
+      day the primary is genuinely down that traffic stampedes the secondary.
+
+    So: the typed discriminator first, prose markers as a compatibility net for
+    older API shapes, and transient classes explicitly excluded.
+
+    Fails over on:
+      * ``error.type == "billing_error"`` — authoritative
+      * ``credit balance is too low`` / ``insufficient credits`` /
+        ``insufficient_quota`` — prose variants, kept for older responses
+
+    Does NOT fail over on (retry on the primary instead):
+      * 429 ``rate_limit_error`` · 529 ``overloaded_error`` · 5xx · timeouts
+      * 401 ``authentication_error`` — an operator problem; see
+        ``should_fallback_on_auth`` for the opt-in persistent-auth case
+      * connection errors — the secondary shares the same network
+    """
+    if _error_type_of(exc) == "billing_error":
         return True
     msg = str(exc).lower()
     return any(marker in msg for marker in _ANTHROPIC_EXHAUSTION_MARKERS)
+
+
+def should_fallback_on_auth(exc: Exception) -> bool:
+    """True for an authentication failure, when the caller has already retried.
+
+    A revoked or expired key is functionally exhaustion — the primary will not
+    serve again until an operator acts. Separated from
+    :func:`should_fallback` so the caller decides, because a FIRST auth failure
+    can be a transient control-plane blip and failing over on it would hide a
+    key rotation. Gated by ``GENLAB_LLM_FALLBACK_ON_AUTH`` (default on).
+    """
+    if os.environ.get("GENLAB_LLM_FALLBACK_ON_AUTH", "1").strip() == "0":
+        return False
+    return (
+        _error_type_of(exc) == "authentication_error"
+        or type(exc).__name__ == "AuthenticationError"
+    )
 
 
 # ── Circuit breaker API ──

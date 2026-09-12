@@ -38,13 +38,27 @@ class TestShouldFallback:
     def test_credit_balance_too_low(self):
         assert should_fallback(Exception("credit balance is too low")) is True
 
-    def test_ratelimit_class(self):
+    # FIX-LLMFB §1 (2026-09-12) INVERTED both of these, deliberately.
+    #
+    # They pinned name-based matching on SYNTHETIC classes, and that mechanism
+    # was the defect: it made a 429 fail over (transient throttling moving
+    # traffic off the primary) while a typed `billing_error` with a terse
+    # message did NOT (substring matching missed the shape the SDK actually
+    # models). Detection now keys on Anthropic's own `error.type`.
+    #
+    # The real-SDK contract lives in test_fallback_trigger_contract.py; these
+    # two are kept, inverted, so the change is visible rather than deleted.
+    def test_ratelimit_does_not_trigger_failover(self):
+        """Rate limiting is retryable on the primary. Failing over on a blip
+        moves traffic off Anthropic for no reason, and on the day the primary
+        is genuinely down it stampedes the secondary."""
         exc = type("RateLimitError", (Exception,), {})("429")
-        assert should_fallback(exc) is True
+        assert should_fallback(exc) is False
 
-    def test_apistatus_class(self):
+    def test_generic_server_error_does_not_trigger_failover(self):
+        """A 5xx is transient. The secondary cannot help and retry can."""
         exc = type("APIStatusError", (Exception,), {})("some server error")
-        assert should_fallback(exc) is True
+        assert should_fallback(exc) is False
 
     def test_auth_error_rejected(self):
         assert should_fallback(Exception("401 unauthorized")) is False
