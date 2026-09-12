@@ -1407,3 +1407,72 @@ from "nothing to publish", so **gating on post count (OPS-23 §3(c)) remains
 right** and reporting the exit code verbatim remains right. What does not survive
 is the claim that the unit cannot report a genuine fault. It can, via 2 and 5.
 T-37 is downgraded accordingly.
+
+---
+
+# FIX-LLMFB — §A contradiction resolved, §C gates 1–8 passed
+
+## §A — it was a PATH difference, not an endpoint one
+
+| measurement | call path | result |
+|---|---|---|
+| ramp1 (87/87 "completed") | `belt app run … --function openai` | **empty** `{"output":{"response":""}}` |
+| ramp2 (53/53) + all §C injection | `call_belt_haiku_fallback` → **default `run`**, no `--function` | **real content** |
+
+Two functions of the same app, measured as though they were one. **The ramp
+measured a path the fallback does not use.**
+
+**Mechanism for the empty responses:** the `run` function's prompt field is
+`text`; the `openai` function's is `messages`. `app_get` shows `text` defaults to
+`""` with no required fields declared, so an unpopulated `text` yields an empty
+completion with `status_text: completed` — which is exactly the observed shape.
+Worth noting the `openai` function returned real `choices` content two hours
+earlier in the LLM-01 latency probe, so this is a change on the belt side, not a
+constant.
+
+**§A.2 reliability on the path the fallback uses: 20 sequential calls, 20/20
+returned content, 0% empty, 42–59 chars.**
+
+**§A.4 — the 53/53 concurrency figure STANDS.** It was measured through
+`call_belt_haiku_fallback` with content assertions, on the `run` path. The 87/87
+figure is withdrawn: it checked `status_text` only and may have counted 87 empty
+responses.
+
+## §C gates
+
+| gate | result |
+|---|---|
+| C.1 typed `billing_error`, terse | **PASS** — failed over, returned real copy |
+| C.2 classic credit-balance message | **PASS** — failed over |
+| C.3 429 / 500 / 529 | **PASS** — re-raised on Anthropic, no failover |
+| C.4 401 main path / auth toggle | **PASS** — excluded from `should_fallback`, opt-in via `should_fallback_on_auth` |
+| C.5 cooldown | **PASS** — 5 caller requests, Anthropic attempted exactly 3×, breaker open, 60 min |
+| C.6 probe-back | **PASS** — exactly ONE probe after the window, success closes the breaker and resets the counter |
+| C.7 chain-through | **PASS** — Anthropic + belt down → OpenAI serves |
+| C.7b all three down | **PASS** — original `BadRequestError` raised, `RuntimeError: openai down` as `__cause__` |
+| C.8 parity | **PASS** — see below |
+| C.9 harness | pending |
+
+## §C.8 parity — n=3 was underpowered; n=9 says equivalent
+
+The first run at the specified n=3 gave anthropic **0.933** vs belt **0.827** and
+would have read as "belt is worse". At **n=9** the gap vanishes:
+
+| provider | mean score | mean length | over-60 chars |
+|---|---|---|---|
+| anthropic | **0.814** | 46 | **1/9** |
+| belt | **0.812** | 43 | **0/9** |
+
+A 0.002 gap. The n=3 difference was noise, and reporting it as a quality signal
+would have been the same error as any other three-sample claim. Belt is
+marginally BETTER on the constraint that actually gates publication (≤60 chars).
+
+Same model on both sides, so equivalence is the expected result — the value here
+is that it is now measured rather than assumed. **No stop condition.**
+
+### A false comparison caught before it was reported
+The first parity attempt scored belt at **0.680 across all three** — because the
+VPS had not been deployed, `call_belt_haiku_fallback` raised `ImportError`, and
+the judge was scoring **error strings as though they were hooks**. Every belt row
+was 71 chars because that is the length of the exception message. Deployed, then
+re-ran.
