@@ -159,7 +159,18 @@ PYARGS=(-q -p no:cacheprovider --timeout=300 "${DES[@]}")
 SETSID=""; command -v setsid >/dev/null 2>&1 && SETSID="setsid"
 
 run_one() {  # $1=worktree $2=logfile ; sequential only — never concurrent
-  ( cd "$1/genlab-core" && $SETSID nohup "$1/.venv/bin/python" -m pytest "${PYARGS[@]}" > "$2" 2>&1 < /dev/null & echo $! > "$2.pid" )
+  # T-61, second instance. The conftest write-block only exists at HEAD, and the
+  # BASE worktree is an OLD commit whose tests predate it — so the base run wrote
+  # a run_id='test_run' $10.00 row into PRODUCTION pipeline_run_costs at
+  # 10:57:28Z on 2026-09-12, while the abort added earlier checked only $WT_H.
+  # Guarding the head side alone is guarding the wrong side: the harness runs
+  # BOTH suites, and the older one has fewer protections by construction.
+  #
+  # So the block is environmental, not code-level: strip DATABASE_URL from the
+  # pytest environment. persist_run_cost already returns False without it, and
+  # tests that genuinely need a DSN set their own fake via monkeypatch. This
+  # holds for any base ref, however old, which a conftest check never can.
+  ( cd "$1/genlab-core" && env -u DATABASE_URL $SETSID nohup "$1/.venv/bin/python" -m pytest "${PYARGS[@]}" > "$2" 2>&1 < /dev/null & echo $! > "$2.pid" )
   local p; p=$(cat "$2.pid")
   while kill -0 "$p" 2>/dev/null; do sleep 10; done   # PID-captured; a pgrep -f pattern matches the waiter itself
   # T-55: prove pytest actually ran. A log with no summary line means the
