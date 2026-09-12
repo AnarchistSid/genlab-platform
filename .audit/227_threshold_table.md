@@ -730,3 +730,47 @@ three of four sampled sports failures were **loudness misses of ~2 LU**.
 queue policy is really an ai_creators + gaming intervention. ai_creators is the
 one niche with 0 DRAFTED deaths — all 18 renders survived to the queue, which is
 precisely why its queue saturates.
+
+---
+
+# OPS-24 §1.2 — VERIFIED (2026-09-12 09:05Z)
+
+**STEP 0 — a post-flip run definitely happened.** Approver **09:00:01 → 09:00:28Z**,
+`ExecMainStatus=0`, i.e. 18 minutes after the 08:42Z flip. Not a "not yet run".
+(Duration 27s vs the 3–24s typical earlier — consistent with ai_creators being
+examined again rather than short-circuited at the pause check.)
+
+| proof | result |
+|---|---|
+| (a) `AUTO-PAUSED niche` since 08:42Z | **0** |
+| (a) **positive control**, identical grep over 09-11 21:00 → 09-12 08:42 | **16** |
+| (b) `SELECT * FROM niche_pauses` | **0 rows** |
+| (c) env-sourced probe, `_connect: OK` | all five `paused=False` |
+
+**The positive control is what makes (a) meaningful.** The same grep over the
+pre-flip window returns 16, so the zero is a real absence of fires and not a
+broken pattern or an empty journal — T-20 satisfied rather than assumed.
+
+**STEP 2 — ai_creators is being evaluated again:**
+```
+[ai_creators] examined=9 approved=0 low_conf=0 rejected=1 idempotent=0
+              rollout_deferred=0 compliance_blocked=0 errors=8
+              dry_run=False disabled=False kill=False paused=False cap=False
+```
+`examined=9` against `examined=0 paused=True` during the lock-out, and
+`paused=False` asserted in the tally itself. The niche is out of the loop.
+
+**The slot blocker persists, exactly as expected and independent of the pause:**
+**8** × `no cap-available slot in next 7 days` on that run — which is also the
+`errors=8` count, the T-48 miscounting of routine queue saturation as
+per-blueprint errors.
+
+## Status
+**§1.2 VERIFIED.** The auto-pause loop is broken at the source: flag off, no new
+fires across a run that demonstrably executed, no rows, all niches unpaused.
+
+Remaining gate: **§1.5 at 12:05Z** (job `37cf43a9`) — `ca19f6a7`, slot 09-12
+06:30Z, in-window until 09-13 00:30Z. If it publishes, the loop is broken
+end-to-end. If ai_creators is re-paused before then, the flag change did not take.
+
+FIX-LOUD's precondition (§1.2) is now met.
