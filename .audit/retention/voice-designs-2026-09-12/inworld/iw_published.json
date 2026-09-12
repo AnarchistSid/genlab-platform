@@ -1,0 +1,137 @@
+[
+ {
+  "niche": "ai_creators",
+  "cand": 1,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-9eba7277",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-9eba7277",
+  "display_name": "genlab-ai_creators-v1-c1",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/c44uoit0.mp3",
+  "prompt": "Calm, precise voice, early thirties, neutral American accent. Measured and unhurried, the composed authority of a technology desk anchor. Warm but analytical, never breathless. Clear diction, subtle downward inflections conveying quiet expertise."
+ },
+ {
+  "niche": "ai_creators",
+  "cand": 2,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-68744142",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-68744142",
+  "display_name": "genlab-ai_creators-v1-c2",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/xp13d6ds.mp3",
+  "prompt": "Calm, precise voice, early thirties, neutral American accent. Measured and unhurried, the composed authority of a technology desk anchor. Warm but analytical, never breathless. Clear diction, subtle downward inflections conveying quiet expertise."
+ },
+ {
+  "niche": "ai_creators",
+  "cand": 3,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-7fb30b9e",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-7fb30b9e",
+  "display_name": "genlab-ai_creators-v1-c3",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/02z6bzqa.mp3",
+  "prompt": "Calm, precise voice, early thirties, neutral American accent. Measured and unhurried, the composed authority of a technology desk anchor. Warm but analytical, never breathless. Clear diction, subtle downward inflections conveying quiet expertise."
+ },
+ {
+  "niche": "gaming",
+  "cand": 1,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-c2060e9d",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-c2060e9d",
+  "display_name": "genlab-gaming-v1-c1",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/aqqz4b1q.mp3",
+  "prompt": "Energetic upbeat male voice, mid twenties, neutral American accent. Fast paced and genuinely excited, like a friend on voice chat reacting to a clutch play. Punchy consonants, wide pitch range, a grin audible in the tone. Never shouting."
+ },
+ {
+  "niche": "gaming",
+  "cand": 2,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-2c45a08e",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-2c45a08e",
+  "display_name": "genlab-gaming-v1-c2",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/jj9bg0w2.mp3",
+  "prompt": "Energetic upbeat male voice, mid twenties, neutral American accent. Fast paced and genuinely excited, like a friend on voice chat reacting to a clutch play. Punchy consonants, wide pitch range, a grin audible in the tone. Never shouting."
+ },
+ {
+  "niche": "gaming",
+  "cand": 3,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-e9a705a9",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-e9a705a9",
+  "display_name": "genlab-gaming-v1-c3",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/qpkx1p1n.mp3",
+  "prompt": "Energetic upbeat male voice, mid twenties, neutral American accent. Fast paced and genuinely excited, like a friend on voice chat reacting to a clutch play. Punchy consonants, wide pitch range, a grin audible in the tone. Never shouting."
+ },
+ {
+  "niche": "anime",
+  "cand": 1,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-99f514bb",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-99f514bb",
+  "display_name": "genlab-anime-v1-c1",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/nmg1w882.mp3",
+  "prompt": "Warm engaging female voice, late twenties, neutral American accent. Passionate and knowledgeable, the tone of a devoted fan explaining something she loves. Bright and expressive, real delight on emotional beats. Conversational, lifting at the payoff."
+ },
+ {
+  "niche": "anime",
+  "cand": 2,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-6b397f5c",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-6b397f5c",
+  "display_name": "genlab-anime-v1-c2",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/59vadgie.mp3",
+  "prompt": "Warm engaging female voice, late twenties, neutral American accent. Passionate and knowledgeable, the tone of a devoted fan explaining something she loves. Bright and expressive, real delight on emotional beats. Conversational, lifting at the payoff."
+ },
+ {
+  "niche": "anime",
+  "cand": 3,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-4d8cfb63",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-4d8cfb63",
+  "display_name": "genlab-anime-v1-c3",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/6lrbuzwk.mp3",
+  "prompt": "Warm engaging female voice, late twenties, neutral American accent. Passionate and knowledgeable, the tone of a devoted fan explaining something she loves. Bright and expressive, real delight on emotional beats. Conversational, lifting at the payoff."
+ },
+ {
+  "niche": "movies",
+  "cand": 1,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-00f25678",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-00f25678",
+  "display_name": "genlab-movies-v1-c1",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/fck1rzin.mp3",
+  "prompt": "Rich resonant male voice, forties, neutral American accent. Deep and cinematic, the texture of a film trailer narrator. Deliberate pacing, weighty pauses, strong low end resonance. Commanding and atmospheric, authoritative without parody."
+ },
+ {
+  "niche": "movies",
+  "cand": 2,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-40b0af3e",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-40b0af3e",
+  "display_name": "genlab-movies-v1-c2",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/6lpmp9v5.mp3",
+  "prompt": "Rich resonant male voice, forties, neutral American accent. Deep and cinematic, the texture of a film trailer narrator. Deliberate pacing, weighty pauses, strong low end resonance. Commanding and atmospheric, authoritative without parody."
+ },
+ {
+  "niche": "movies",
+  "cand": 3,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-3db3cd7b",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-3db3cd7b",
+  "display_name": "genlab-movies-v1-c3",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/d226khx2.mp3",
+  "prompt": "Rich resonant male voice, forties, neutral American accent. Deep and cinematic, the texture of a film trailer narrator. Deliberate pacing, weighty pauses, strong low end resonance. Commanding and atmospheric, authoritative without parody."
+ },
+ {
+  "niche": "sports",
+  "cand": 1,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-6dda37a6",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-6dda37a6",
+  "display_name": "genlab-sports-v1-c1",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/i1rk1oj7.mp3",
+  "prompt": "Confident punchy male voice, thirties, neutral American accent. Crisp assertive sports pundit delivery, rhythmic emphasis, sharp consonants. Authoritative and quick, building to emphatic peaks on the key moment. Tight clipped broadcast energy."
+ },
+ {
+  "niche": "sports",
+  "cand": 2,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-42b74aae",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-42b74aae",
+  "display_name": "genlab-sports-v1-c2",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/fxsx31az.mp3",
+  "prompt": "Confident punchy male voice, thirties, neutral American accent. Crisp assertive sports pundit delivery, rhythmic emphasis, sharp consonants. Authoritative and quick, building to emphatic peaks on the key moment. Tight clipped broadcast energy."
+ },
+ {
+  "niche": "sports",
+  "cand": 3,
+  "generated_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-d1bd94d9",
+  "published_voice_id": "default-vqta7uatpbesdwexabp1ia__design-voice-d1bd94d9",
+  "display_name": "genlab-sports-v1-c3",
+  "preview_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/cw83yjlo.mp3",
+  "prompt": "Confident punchy male voice, thirties, neutral American accent. Crisp assertive sports pundit delivery, rhythmic emphasis, sharp consonants. Authoritative and quick, building to emphatic peaks on the key moment. Tight clipped broadcast energy."
+ }
+]

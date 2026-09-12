@@ -137,3 +137,215 @@ niches:
       He knows they know. And he runs it anyway. That is the whole story of this season
       in a single possession, and it is why this team is still standing when nobody
       picked them in October. Eleven seconds. Watch it again.
+
+# ============================================================================
+# INWORLD (VOICE-02) — all 15 candidates PUBLISHED and round-tripped.
+#
+# Unlike the ElevenLabs section above, these voice IDs are STABLE and resolve:
+# every one was synthesized through inworld/text-to-speech-2 — the exact app
+# InfshTTS calls in production — and returned real audio (T-68). An ID that did
+# not round-trip would not appear here; 15/15 did.
+#
+# THE RETAINED AUDIO IS THE REFERENCE OF RECORD. Inworld voice design is a
+# research preview: "the API, schema, and supported parameters may change".
+# If the API drifts or an ID stops resolving, the .m4a under
+# .audit/retention/voice-designs-2026-09-12/inworld/norm/ is what defines the
+# voice — re-create against it on any provider. (prompt, seed, duration) is the
+# identity; the ID is only a convenience while it works.
+#
+# LOUDNESS CAVEAT: 7 of 15 normalised to >1 LU below the -14 target — every
+# movies and sports candidate, plus anime cand2. Cause is crest factor, the
+# FIX-LOUD mechanism: loudnorm cannot raise a wide-dynamic-range source to -14
+# without breaching the -1 dBTP ceiling, so it lands short. These samples are
+# audibly QUIETER, which is a property of the normalisation, NOT of the voice.
+# Do not let it bias a listening comparison.
+# ============================================================================
+
+inworld:
+  provider: inworld
+  design_app: inworld/voice-design@1n73x8hn
+  tts_app: inworld/text-to-speech-2   # the production path; IDs verified against it
+  seed: 42
+  prompt_cap_chars: 250   # T-40 — Inworld rejects longer; ElevenLabs has no cap
+  serialize: true         # T-40 — a 5-wide batch failed 4/5 with 429/503
+  rights: owned_channels_only   # commercial use CLEAR; SaaS not cleared
+  niches:
+    ai_creators:
+      profile: "AI calm desk"
+      wpm_band: "150-160"
+      design_prompt: >-
+        Calm, precise voice, early thirties, neutral American accent. Measured and
+        unhurried, the composed authority of a technology desk anchor. Warm but
+        analytical, never breathless. Clear diction, subtle downward inflections
+        conveying quiet expertise.
+      candidates:
+        - candidate: 1
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-9eba7277"
+          display_name: "genlab-ai_creators-v1-c1"
+          duration_secs: 12.1
+          normalised_lufs: -14.45
+          true_peak_dbtp: -1.45
+          on_target: true
+          round_tripped: true
+          retained_audio: "inworld/norm/ai_creators_cand1_9eba7277.m4a"
+        - candidate: 2
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-68744142"
+          display_name: "genlab-ai_creators-v1-c2"
+          duration_secs: 11.9
+          normalised_lufs: -14.42
+          true_peak_dbtp: -1.44
+          on_target: true
+          round_tripped: true
+          retained_audio: "inworld/norm/ai_creators_cand2_68744142.m4a"
+        - candidate: 3
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-7fb30b9e"
+          display_name: "genlab-ai_creators-v1-c3"
+          duration_secs: 11.8
+          normalised_lufs: -14.13
+          true_peak_dbtp: -1.39
+          on_target: true
+          round_tripped: true
+          retained_audio: "inworld/norm/ai_creators_cand3_7fb30b9e.m4a"
+    gaming:
+      profile: "energetic friend"
+      wpm_band: "175-190"
+      design_prompt: >-
+        Energetic upbeat male voice, mid twenties, neutral American accent. Fast paced
+        and genuinely excited, like a friend on voice chat reacting to a clutch play.
+        Punchy consonants, wide pitch range, a grin audible in the tone. Never shouting.
+      candidates:
+        - candidate: 1
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-c2060e9d"
+          display_name: "genlab-gaming-v1-c1"
+          duration_secs: 9.2
+          normalised_lufs: -14.32
+          true_peak_dbtp: -1.43
+          on_target: true
+          round_tripped: true
+          retained_audio: "inworld/norm/gaming_cand1_c2060e9d.m4a"
+        - candidate: 2
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-2c45a08e"
+          display_name: "genlab-gaming-v1-c2"
+          duration_secs: 9.1
+          normalised_lufs: -14.53
+          true_peak_dbtp: -1.47
+          on_target: true
+          round_tripped: true
+          retained_audio: "inworld/norm/gaming_cand2_2c45a08e.m4a"
+        - candidate: 3
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-e9a705a9"
+          display_name: "genlab-gaming-v1-c3"
+          duration_secs: 9.3
+          normalised_lufs: -14.7
+          true_peak_dbtp: -1.48
+          on_target: true
+          round_tripped: true
+          retained_audio: "inworld/norm/gaming_cand3_e9a705a9.m4a"
+    anime:
+      profile: "warm fan-expert"
+      wpm_band: "165-180"
+      design_prompt: >-
+        Warm engaging female voice, late twenties, neutral American accent. Passionate
+        and knowledgeable, the tone of a devoted fan explaining something she loves.
+        Bright and expressive, real delight on emotional beats. Conversational, lifting
+        at the payoff.
+      candidates:
+        - candidate: 1
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-99f514bb"
+          display_name: "genlab-anime-v1-c1"
+          duration_secs: 11.4
+          normalised_lufs: -14.43
+          true_peak_dbtp: -1.49
+          on_target: true
+          round_tripped: true
+          retained_audio: "inworld/norm/anime_cand1_99f514bb.m4a"
+        - candidate: 2
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-6b397f5c"
+          display_name: "genlab-anime-v1-c2"
+          duration_secs: 11.5
+          normalised_lufs: -15.16
+          true_peak_dbtp: -1.46
+          on_target: false
+          round_tripped: true
+          retained_audio: "inworld/norm/anime_cand2_6b397f5c.m4a"
+        - candidate: 3
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-4d8cfb63"
+          display_name: "genlab-anime-v1-c3"
+          duration_secs: 11.9
+          normalised_lufs: -14.59
+          true_peak_dbtp: -1.47
+          on_target: true
+          round_tripped: true
+          retained_audio: "inworld/norm/anime_cand3_4d8cfb63.m4a"
+    movies:
+      profile: "cinematic narrator"
+      wpm_band: "145-160"
+      design_prompt: >-
+        Rich resonant male voice, forties, neutral American accent. Deep and cinematic,
+        the texture of a film trailer narrator. Deliberate pacing, weighty pauses,
+        strong low end resonance. Commanding and atmospheric, authoritative without
+        parody.
+      candidates:
+        - candidate: 1
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-00f25678"
+          display_name: "genlab-movies-v1-c1"
+          duration_secs: 13.9
+          normalised_lufs: -15.48
+          true_peak_dbtp: -1.38
+          on_target: false
+          round_tripped: true
+          retained_audio: "inworld/norm/movies_cand1_00f25678.m4a"
+        - candidate: 2
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-40b0af3e"
+          display_name: "genlab-movies-v1-c2"
+          duration_secs: 12.6
+          normalised_lufs: -16.25
+          true_peak_dbtp: -1.41
+          on_target: false
+          round_tripped: true
+          retained_audio: "inworld/norm/movies_cand2_40b0af3e.m4a"
+        - candidate: 3
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-3db3cd7b"
+          display_name: "genlab-movies-v1-c3"
+          duration_secs: 13.5
+          normalised_lufs: -15.54
+          true_peak_dbtp: -1.34
+          on_target: false
+          round_tripped: true
+          retained_audio: "inworld/norm/movies_cand3_3db3cd7b.m4a"
+    sports:
+      profile: "punchy pundit"
+      wpm_band: "150-185"
+      design_prompt: >-
+        Confident punchy male voice, thirties, neutral American accent. Crisp assertive
+        sports pundit delivery, rhythmic emphasis, sharp consonants. Authoritative and
+        quick, building to emphatic peaks on the key moment. Tight clipped broadcast
+        energy.
+      candidates:
+        - candidate: 1
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-6dda37a6"
+          display_name: "genlab-sports-v1-c1"
+          duration_secs: 9.8
+          normalised_lufs: -15.32
+          true_peak_dbtp: -1.38
+          on_target: false
+          round_tripped: true
+          retained_audio: "inworld/norm/sports_cand1_6dda37a6.m4a"
+        - candidate: 2
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-42b74aae"
+          display_name: "genlab-sports-v1-c2"
+          duration_secs: 10.2
+          normalised_lufs: -15.32
+          true_peak_dbtp: -1.44
+          on_target: false
+          round_tripped: true
+          retained_audio: "inworld/norm/sports_cand2_42b74aae.m4a"
+        - candidate: 3
+          voice_id: "default-vqta7uatpbesdwexabp1ia__design-voice-d1bd94d9"
+          display_name: "genlab-sports-v1-c3"
+          duration_secs: 10.5
+          normalised_lufs: -15.35
+          true_peak_dbtp: -1.42
+          on_target: false
+          round_tripped: true
+          retained_audio: "inworld/norm/sports_cand3_d1bd94d9.m4a"
