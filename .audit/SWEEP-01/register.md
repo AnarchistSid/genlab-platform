@@ -170,3 +170,71 @@ why the job failed is deleted before the weekly cadence brings anyone back to lo
 all five niches back to the tuner without anyone understanding why the strategist stopped.
 Recommended order: (a) capture the strategist failure to a file, (b) fix it,
 (c) add the override expiry + age-at-read logging.
+
+# =====================================================================
+# §R2 §A + §B — 2026-09-12 ~21:10Z. Read-only + one dry-run (no persist).
+# =====================================================================
+
+## §A — The two gates are DIFFERENT quantities, SEQUENCED, and COUPLED.
+
+| | `gate_threshold_override` | `min_confidence` (publishing.yaml) |
+|---|---|---|
+| consumer | `auto_approval_gate.evaluate()` → `min_composite_score` | `auto_approver` step 4 |
+| compares | `extra["composite_score"]` vs threshold (`:277`) | `decision.confidence` vs 0.65 |
+| binds | **FIRST** — inside evaluate(), as one of 5 checks | SECOND — on evaluate()'s output |
+
+**They are not the same value.** Yesterday's 0.65 work is not overwritten.
+
+**But they are coupled, two ways:**
+1. `approved = len(failed) == 0` (`:459`). A failed composite check sets approved=False
+   outright — so the composite threshold decides approval before confidence is consulted.
+2. The composite check's confidence contribution is computed *relative to the threshold*:
+   `span = max(0.001, 1.0 - thr); conf = 0.7 + 0.3*min(1, (composite-thr)/span)`.
+   A LOWER threshold yields a HIGHER confidence for the identical blueprint. So the stale
+   override also inflates the number `min_confidence` then tests. (Diluted in the final
+   score, which is the mean across all 5 checks — do not over-read this second channel.)
+
+**Blast radius, measured on DISTINCT blueprints, last 30 days:**
+
+| niche | live override | tuner today | distinct approved in band | effect |
+|---|---|---|---|---|
+| sports | 0.25 | 0.50 | **16 of 16 (100%)** | every sports auto-approval in 30d clears ONLY because of the stale threshold |
+| movies | 0.38 | 0.48 | 0 of 15 | override has no practical effect |
+| gaming | 0.22 | 0.16 | 0 of 40 | override is STRICTER than calibration — conservative, no harm |
+
+**So: sports is the only niche materially affected, and it is affected totally.**
+Approval readings taken on sports need re-interpreting; gaming and movies do not.
+
+### Counting error caught mid-analysis (recorded, per T-20)
+I first reported "1192 of 1192 sports blueprints". Wrong by ~75x. `gate_examinations`
+logs **every evaluation**, and the auto-approver re-examines the same blueprint every
+30 min, 06:00–22:00 — one week shows 618 rows across **3** distinct blueprints. The
+contradiction with an earlier 14-day count (n=45) is what surfaced it. Any rate computed
+off this table MUST use `COUNT(DISTINCT blueprint_id)`.
+
+## §B — precondition ANSWERED, and it fails in composition.
+
+`scripts/run_strategist.py` does **not** write `reviewed_at` or `proposals_accepted`.
+Reports land PENDING and cannot become governing on their own. Precondition satisfied
+*in isolation*.
+
+**But:** `scripts/auto_accept_strategist_proposals.py:194,214` stamps
+`reviewed_at = NOW(), reviewed_by='auto'` on unreviewed reports, and runs on
+`genlab-strategist-apply.timer` — **daily 08:30 IST, next ~6h out**. A real re-run
+therefore becomes governing within hours, without an operator ever reviewing it.
+The precondition as posed ("does the re-run mark its own output reviewed?") answers
+*no*; the safe answer is *no, but a different timer will*. Another Class 6 instance.
+
+### Dry-run result (safe path taken)
+`run_strategist.py --dry-run` → **exit 0, 5/5 niches, 0 failures**, captured to
+`/opt/genlab/.runtime/strategist_diag/dryrun_20260912.log` (a file, not the journal).
+State collection is HEALTHY. `--dry-run` skips both the LLM call and the persist, so
+the failure (`ExecMainStatus=1`) is isolated to **the LLM call or the persist step**.
+Note all 5 niches report `proposals=0` even in dry-run — the collector finds nothing
+to propose, which is itself worth a look once the runner is fixed.
+
+**NOT taken:** a real re-run. It would be auto-accepted at 08:30 IST and become
+governing, changing what auto-publishes — which §B forbids for a diagnostic.
+Options for the operator: (a) mask `genlab-strategist-apply.timer` for the window,
+(b) real run then delete the report before 08:30 IST, (c) reproduce the LLM call
+in isolation without the persist.
