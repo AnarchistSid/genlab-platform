@@ -388,9 +388,26 @@ def escape_drawtext(text: str) -> str:
 
 
 def _escape_drawtext_simple(text: str) -> str:
-    """Escape text for FFmpeg drawtext filter (simple -vf mode)."""
+    """Escape text for FFmpeg drawtext filter (simple ``-vf`` mode).
+
+    T-14a sibling. This carried the same apostrophe defect as
+    ``caption_animator._escape_drawtext``: ``'`` was escaped as ``\\'``, but
+    inside an FFmpeg-quoted token a backslash is LITERAL, so the quote still
+    terminates the value. Anything after it is parsed as graph syntax, which is
+    how a caption time value ended up being read as a filter name
+    (``No such filter: '0.000'``).
+
+    Found by sweeping all seven drawtext escape helpers against the same hostile
+    strings rather than trusting that fixing one had fixed the class — this was
+    the only other one that failed, and it is live (called below).
+
+    ``'`` becomes ``'\\''`` — close the quote, emit an escaped quote, reopen.
+    Unlike the sibling ``escape_drawtext`` above, this does NOT substitute
+    U+2019: that renders cleanly but silently changes the text, which is the
+    quieter of the two failures.
+    """
     text = text.replace("\\", "\\\\")
-    text = text.replace("'", "\\'")
+    text = text.replace("'", "'\\''")
     text = text.replace(":", "\\:")
     text = text.replace("[", "\\[")
     text = text.replace("]", "\\]")
