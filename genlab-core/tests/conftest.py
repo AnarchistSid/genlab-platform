@@ -157,3 +157,20 @@ def _block_prod_cost_telemetry_writes(monkeypatch):
         cost_persist, "persist_run_cost", _fake_persist_run_cost, raising=True
     )
     yield recorded
+
+
+@pytest.fixture(autouse=True)
+def _disable_belt_llm_fallback_in_tests(monkeypatch):
+    """Keep the belt LLM fallback tier OFF for the whole suite.
+
+    FIX-LLMFB §B added belt Claude Haiku as fallback tier 1. It calls the real
+    `belt` CLI over the network and costs real money, so leaving it live turned
+    four existing fallback tests into paid network calls — a 14.7s unit-test run
+    that hit inference.sh. That is the same class as T-61's prod telemetry
+    writes: a test suite reaching a production system because nothing stopped it.
+
+    Default OFF here, so tests are hermetic and the chain behaves as it did
+    before (OpenAI tier only). A test that specifically exercises the belt tier
+    re-enables it in its own body; monkeypatch restores this afterwards.
+    """
+    monkeypatch.setenv("GENLAB_LLM_FALLBACK_BELT", "0")

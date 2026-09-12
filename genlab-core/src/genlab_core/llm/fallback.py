@@ -49,7 +49,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Any
+from typing import Any, Final
 
 logger = logging.getLogger(__name__)
 
@@ -251,6 +251,192 @@ def call_openai_fallback(
     return response.choices[0].message.content
 
 
+# ── Belt (inference.sh) Claude Haiku fallback ──
+
+_BELT_MODEL: Final[str] = "claude-haiku-4-5"
+_BELT_APP: Final[str] = "anthropic/claude-haiku-4-5"
+
+
+def belt_fallback_enabled() -> bool:
+    """Belt is tier 1 of the fallback chain. ``GENLAB_LLM_FALLBACK_BELT=0``
+    disables it and leaves OpenAI as the only tier."""
+    return os.environ.get("GENLAB_LLM_FALLBACK_BELT", "1").strip() != "0"
+
+
+def call_belt_haiku_fallback(
+    system: str,
+    user: str,
+    max_tokens: int,
+    temperature: float,
+    *,
+    model: str = _BELT_MODEL,
+    json_mode: bool = False,
+    timeout_s: int = 180,
+) -> str:
+    """Call Claude Haiku through the inference.sh belt. Returns response text.
+
+    Why this tier exists and sits ABOVE OpenAI: it is the SAME MODEL the primary
+    uses, at 0% markup (measured 2026-09-12: belt lists $1.00/M input and
+    $5.00/M output, identical to Anthropic), drawing on a SEPARATE credit pool.
+    Failing over here changes neither cost nor output distribution — only which
+    balance is consumed. OpenAI's gpt-4o-mini is a different model and a
+    different voice, so it is the second tier, not the first.
+
+    Concurrency measured 2026-09-12 by ramping 1→32 parallel calls: **87/87
+    completed, no throttle at 32**, latency flat at ~2s median. The writer's
+    burst is ~20 calls per fire and the five niches are staggered 02:30–06:00Z,
+    so the cap is not a constraint even if every niche needed this at once.
+    (Contrast ElevenLabs, capped at 2 — T-40.)
+
+    T-38: a call is a success ONLY when ``status_text == completed``. The belt
+    CLI exits 0 on a failed task, so the exit code proves nothing.
+    T-39: cost is read only alongside that status.
+    """
+    import json as _json
+    import subprocess  # noqa: PLC0415 — lazy; keeps import cost off module load
+
+    # Use the DEFAULT `run` function, not `openai`. Measured 2026-09-12: the
+    # `openai` function returned `{"output": {"response": ""}}` — status
+    # "completed", zero content — on every shape tried, including one that had
+    # returned a real `choices` payload two hours earlier. `run` returns content
+    # reliably. Whatever changed on the belt side, a fallback tier cannot rest
+    # on the surface that silently empties.
+    payload_in: dict[str, Any] = {
+        "text": user,
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    if system:
+        payload_in["system_prompt"] = system
+    if json_mode:
+        payload_in["response_format"] = {"type": "json_object"}
+
+    proc = subprocess.run(
+        ["belt", "app", "run", _BELT_APP, "--no-input", "--json",
+         "--input", _json.dumps(payload_in)],
+        capture_output=True, text=True, timeout=timeout_s,
+    )
+    try:
+        payload = _json.loads(proc.stdout or "{}")
+    except ValueError as exc:
+        raise RuntimeError(
+            f"belt returned unparseable output (rc={proc.returncode}): "
+            f"{(proc.stdout or proc.stderr or '')[:200]}"
+        ) from exc
+
+    # T-38: never gate on proc.returncode — the belt CLI exits 0 on a failed task.
+    status = payload.get("status_text") or ""
+    if status != "completed":
+        raise RuntimeError(
+            f"belt task status={status!r} err={str(payload.get('error'))[:200]}"
+        )
+
+    # T-57: "completed" is NOT success. It says the task finished, not that it
+    # produced anything. Measured the same day: the `openai` function returned
+    # completed-with-empty-response on 100% of calls, and a concurrency ramp
+    # that checked only status scored 87/87 while very possibly serving nothing.
+    # A fallback that returns "" would hand the writer an empty hook and look
+    # like it worked.
+    out = payload.get("output") or {}
+    text = str(out.get("response") or "").strip()
+    if not text:
+        raise RuntimeError(
+            f"belt returned status=completed with EMPTY content "
+            f"(output keys: {sorted(out) if isinstance(out, dict) else type(out).__name__})"
+        )
+
+    # T-39: cost recorded only alongside a completed status AND real content.
+    try:
+        from genlab_core.intelligence.cost_accumulator import record_provider_usage
+
+        record_provider_usage(provider="belt", model=model, payload=payload)
+    except Exception:  # noqa: BLE001 — cost tracking never blocks a call
+        pass
+    return text
+
+
+def _notify_failover(site_label: str, event: str, detail: str) -> None:
+    """Announce a failover or a recovery. Best-effort, never blocks a call.
+
+    This is the notice that did not exist for four days in September: the writer
+    stopped calling the LLM entirely and nothing said so. A log line alone was
+    not enough — the journal retains ~14h (T-44), so an outage older than that
+    leaves no trace at all.
+    """
+    logger.warning("[llm-fallback][%s] %s: %s", site_label, event, detail)
+    try:
+        from genlab_core.monitoring.notify import send_outage_alert
+
+        send_outage_alert(f"[llm-fallback] {event} ({site_label}): {detail}")
+    except Exception:  # noqa: BLE001 — alerting never blocks
+        logger.debug("[llm-fallback] alert sink unavailable", exc_info=True)
+
+
+def call_fallback_chain(
+    system: str,
+    user: str,
+    max_tokens: int,
+    temperature: float,
+    *,
+    json_mode: bool = False,
+    site_label: str = "unknown",
+    original_exc: Exception | None = None,
+) -> str:
+    """Try each fallback tier in order: belt Claude Haiku, then OpenAI.
+
+    A chain rather than a swap, so there is never a window with no fallback.
+    If EVERY tier fails, the ORIGINAL Anthropic exception is re-raised — the
+    primary's failure is the diagnostic that matters, and surfacing the last
+    tier's error instead would point the operator at the wrong system.
+    """
+    errors: list[str] = []
+    last_exc: Exception | None = None
+
+    if belt_fallback_enabled():
+        try:
+            text = call_belt_haiku_fallback(
+                system, user, max_tokens, temperature, json_mode=json_mode
+            )
+            _notify_failover(
+                site_label, "SERVED BY BELT",
+                f"Anthropic unavailable; same model on the belt pool "
+                f"({type(original_exc).__name__ if original_exc else 'n/a'})",
+            )
+            return text
+        except Exception as exc:  # noqa: BLE001 — try the next tier
+            last_exc = exc
+            errors.append(f"belt: {type(exc).__name__}: {str(exc)[:150]}")
+            logger.warning("[llm-fallback][%s] belt tier failed: %s", site_label, errors[-1])
+
+    openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if openai_key:
+        try:
+            text = call_openai_fallback(
+                system, user, max_tokens, temperature, openai_key, json_mode=json_mode
+            )
+            _notify_failover(site_label, "SERVED BY OPENAI",
+                             "belt tier unavailable or disabled")
+            return text
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            errors.append(f"openai: {type(exc).__name__}: {str(exc)[:150]}")
+            logger.warning("[llm-fallback][%s] openai tier failed: %s", site_label, errors[-1])
+    else:
+        errors.append("openai: OPENAI_API_KEY not set")
+
+    _notify_failover(site_label, "ALL FALLBACK TIERS FAILED", "; ".join(errors))
+    if original_exc is not None:
+        # Surface the ORIGINAL Anthropic error — the primary's failure is the
+        # diagnostic that matters — but chain the last tier's exception as
+        # __cause__ so the trail is not lost. Raising the last tier's error
+        # instead would point the operator at the wrong system entirely.
+        if last_exc is not None:
+            raise original_exc from last_exc
+        raise original_exc
+    raise RuntimeError("all fallback tiers failed: " + "; ".join(errors))
+
+
 # ── Convenience wrapper for the common pattern ──
 
 
@@ -277,19 +463,26 @@ def with_openai_fallback(
     Anthropic exception so downstream error classifiers behave as
     before.
     """
-    # CB-open fast path: skip Anthropic entirely.
+    # CB-open fast path: skip Anthropic entirely and serve from the chain.
+    # This is the cooldown FIX-LLMFB §B asks for — while the breaker is open we
+    # do not re-hit an exhausted primary on every request.
     if fallback_enabled() and cb_is_open():
-        openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
-        if openai_key:
-            logger.debug(
-                "[llm-fallback][%s] CB open — routing to OpenAI without "
-                "trying Anthropic",
+        try:
+            logger.info(
+                "[llm-fallback][%s] circuit open — serving from fallback chain "
+                "without trying Anthropic",
                 site_label,
             )
-            return call_openai_fallback(
-                system, user, max_tokens, temperature, openai_key, json_mode=json_mode
+            return call_fallback_chain(
+                system, user, max_tokens, temperature,
+                json_mode=json_mode, site_label=site_label,
             )
-        # No OpenAI key → fall through and try Anthropic anyway.
+        except Exception:  # noqa: BLE001 — no tier available; probe Anthropic anyway
+            logger.warning(
+                "[llm-fallback][%s] circuit open but no fallback tier served — "
+                "probing Anthropic",
+                site_label,
+            )
 
     try:
         result = anthropic_call()
@@ -297,33 +490,16 @@ def with_openai_fallback(
         if not (fallback_enabled() and should_fallback(anthropic_exc)):
             raise
         cb_record_exhaustion()
-        openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
-        if not openai_key:
-            logger.warning(
-                "[llm-fallback][%s] Anthropic exhausted but OPENAI_API_KEY "
-                "not set — re-raising (%s)",
-                site_label,
-                type(anthropic_exc).__name__,
-            )
-            raise
-        logger.warning(
-            "[llm-fallback][%s] Anthropic %s → falling back to OpenAI: %s",
-            site_label,
-            type(anthropic_exc).__name__,
-            str(anthropic_exc)[:120],
+        # FIX-LLMFB §B: a CHAIN, not a swap — belt Claude Haiku first (same
+        # model, 0% markup, separate credit pool), then OpenAI. call_fallback_chain
+        # re-raises the ORIGINAL Anthropic exception if every tier fails, because
+        # the primary's failure is the diagnostic that matters; surfacing the last
+        # tier's error would point the operator at the wrong system.
+        return call_fallback_chain(
+            system, user, max_tokens, temperature,
+            json_mode=json_mode, site_label=site_label,
+            original_exc=anthropic_exc,
         )
-        try:
-            return call_openai_fallback(
-                system, user, max_tokens, temperature, openai_key, json_mode=json_mode
-            )
-        except Exception as openai_exc:
-            logger.warning(
-                "[llm-fallback][%s] OpenAI fallback ALSO failed (%s) — "
-                "re-raising original Anthropic error",
-                site_label,
-                openai_exc,
-            )
-            raise anthropic_exc from openai_exc
 
     cb_record_success()
     return result

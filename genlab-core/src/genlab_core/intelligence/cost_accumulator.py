@@ -355,6 +355,54 @@ def record_openai_usage(model: str, response: Any) -> None:
         )
 
 
+def record_provider_usage(*, provider: str, model: str, payload: Any) -> None:
+    """Record a fallback-provider LLM call, attributed to that provider.
+
+    FIX-LLMFB §B. Belt-served spend draws on the inference.sh pool, not the
+    Anthropic one, so it must stay separately readable — otherwise a month of
+    failover looks like Anthropic spend that never happened, and neither
+    balance can be reasoned about.
+
+    The model key is prefixed (``belt:claude-haiku-4-5``) rather than recorded
+    under the bare model name, because the bare name is what the PRIMARY
+    records. Without the prefix the two pools merge in
+    ``pipeline_run_costs.by_model`` and the failover becomes invisible in
+    exactly the ledger an operator would check.
+
+    ``payload`` is the belt task envelope; usage lives under
+    ``output.usage`` in OpenAI-compatible shape. Absent usage is recorded as a
+    zero-token call so the CALL still appears — a silent omission would make a
+    served request look like no request.
+
+    Fail-open, at WARNING: cost tracking never breaks an LLM call (rule #19 —
+    not DEBUG, or the failure is invisible too).
+    """
+    try:
+        acc = get_accumulator()
+        if acc is None:
+            return
+        usage = {}
+        if isinstance(payload, dict):
+            out = payload.get("output") or {}
+            if isinstance(out, dict):
+                usage = out.get("usage") or {}
+        input_tokens = int((usage or {}).get("prompt_tokens", 0) or 0)
+        output_tokens = int((usage or {}).get("completion_tokens", 0) or 0)
+        acc.record_llm(
+            model=f"{provider}:{model}",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+    except Exception as exc:
+        logger.warning(
+            "[cost_accumulator] failed to record_llm for provider=%s model=%s "
+            "(cost tracking degraded): %s",
+            provider,
+            model,
+            exc,
+        )
+
+
 def record_tts_usage(chars: int, cost_per_1k_chars: float = 0.015) -> None:
     """Record a TTS synthesis to the active accumulator.
 
