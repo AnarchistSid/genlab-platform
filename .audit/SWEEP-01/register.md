@@ -123,3 +123,50 @@ prod, only to be capable of it. 6.1's live impact needs one prod query.
 - Class 5: ~12 remaining verifier scripts + post_deploy_verify.sh
 - The 59-flag enumeration (Class 1 second half) — only niche.yaml keys were scanned;
   env-var flags (`GENLAB_*`) were not.
+
+
+# =====================================================================
+# §R §2 RESULT — 2026-09-12 ~20:45Z. Read-only. VPS reachable; real code path used.
+# =====================================================================
+
+## 6.1 CORRECTED, then CONFIRMED LIVE on 3 of 5 niches.
+
+**First, the register's own overstatement.** I wrote the override "discards the tuner
+FOREVER". Wrong. `strategy_phase.py:158-169` selects the *latest reviewed report with
+accepted proposals*, `ORDER BY run_at DESC LIMIT 1`. A newer reviewed report supersedes
+it. The real defect is narrower and sharper: **there is no staleness bound on that
+query**, so if reports stop arriving, an arbitrarily old one governs indefinitely.
+
+**That is exactly what has happened.** Measured via `get_phase_config()` (the same
+function the gate calls), compared against `get_overrides_for_niche()` (the tuner):
+
+| niche | tuner today | governing override | governing report | effect |
+|---|---|---|---|---|
+| ai_creators | 0.50 | none | 2026-08-13 | tuner active |
+| anime | 0.50 | none | 2026-08-13 | tuner active |
+| gaming | 0.16 | **0.22** | 2026-08-13 | stricter than calibration |
+| movies | 0.48 | **0.38** | 2026-08-13 | more permissive |
+| sports | 0.50 | **0.25** | 2026-08-13 | **half as strict as calibration** |
+
+Every governing report is **30 days old**. sports and movies have been auto-approving
+against a materially more permissive composite gate than daily calibration computes.
+
+## NEW — root cause chain (found while answering §2; NOT in the original register)
+
+| # | finding | E |
+|---|---|---|
+| R.1 | `genlab-strategist.service` **is failing**: `Result=exit-code`, `ExecMainStatus=1`, last fire 2026-09-06 07:30 IST. Timer is healthy (`ActiveState=active`, `Persistent=yes`, next Sun 2026-09-13 07:30 IST) — the *timer* works, the *job* fails. | M |
+| R.2 | No strategist report has been written since **2026-08-16** (6 reports/niche total). Newest *governing* (reviewed + accepted) is 2026-08-13. So ~4 weeks with no new report and ~30 days with no new governing value. | M |
+| R.3 | Failure reason **UNMEASURABLE**. `genlab-strategist.service` has `StandardOutput=journal`, `StandardError=journal` and **no file artifact**; `journalctl -u genlab-strategist.service` returns "No entries" (41.9M total journal, rotated). A **weekly** job whose only diagnostic sink rotates faster than its own cadence is un-diagnosable by construction. What would prove it: re-run `scripts/run_strategist.py` manually capturing stdout/stderr to a file (a WRITE action — not taken, §2 is read-only). | M (config) / UNMEASURABLE (cause) |
+
+**The composition, stated plainly.** Four individually-correct mechanisms:
+timer retries weekly · query takes the latest reviewed report · tuner recalibrates daily ·
+gate prefers the deliberate operator value. Jointly: a failing job freezes a 30-day-old
+threshold that silently outranks daily calibration on three niches, and the evidence of
+why the job failed is deleted before the weekly cadence brings anyone back to look.
+
+**Fix scope unchanged from the brief, now with a prerequisite:** the strategist failure
+(R.1/R.3) must be diagnosed first — an expiry on the override would, on its own, hand
+all five niches back to the tuner without anyone understanding why the strategist stopped.
+Recommended order: (a) capture the strategist failure to a file, (b) fix it,
+(c) add the override expiry + age-at-read logging.
