@@ -1089,3 +1089,37 @@ T-06's 09-11 measurement **201**. These are not comparable as stated — differe
 bases, and the VPS head figure came from a run whose base was dead. Until the VPS
 re-run lands there is no clean cross-host baseline, and **T-06's "201 is the
 reference" should not be quoted as if it were one.**
+
+---
+
+# OPS-28 — VPS re-run: FAIL verdict is a FALSE RED
+
+```
+collected: base=11321 head=11321 delta=0
+executed:  base=11208 head=11208     skipped: 101/101 delta=0
+sets: (a) 163   (b) head-only 1   (c) base-only 1
+VERDICT: FAIL — 1 regression
+```
+
+Set (b)=1 **and** set (c)=1 — one test "regressed", a different one "recovered".
+Re-running both at HEAD, six times each, in isolation:
+
+| set | test | standalone at HEAD | in-suite | reads as |
+|---|---|---|---|---|
+| (b) | `test_classify_arm_linucb_wire::…test_linucb_wins_over_thompson_when_enabled` | **passes 6/6** | failed | order-dependent |
+| (c) | `test_ratchet_advancement::TestLogEmission::test_log_line_shape` | **fails 6/6** | passed | order-dependent |
+
+Both invert between isolated and in-suite runs. Neither is reachable from the
+diff — LinUCB arm classification and the ratchet advancer, against a loudness
+change in `validate_videos.py`. And the **Mac run over the identical range had
+set (b)=0**, so two full-suite runs of the same commits disagree.
+
+**Verdict on the verdict: this is not a regression.** It is an order-dependent
+test surfacing as one because the set-difference method attributes every in-suite
+failure to the diff → **T-60**, the counterpart to T-55: that was a false green,
+this is a false red.
+
+**FIX-LOUD's status:** gate 4 passes on the Mac with 11,208 executed per side and
+set (b) empty; the VPS FAIL is attributable to test-order instability, not to
+`0f78f5d7`. Stated as measured rather than resolved — a clean VPS PASS is still
+owed and depends on T-60.
