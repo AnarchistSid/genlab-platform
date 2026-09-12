@@ -1476,3 +1476,83 @@ VPS had not been deployed, `call_belt_haiku_fallback` raised `ImportError`, and
 the judge was scoring **error strings as though they were hooks**. Every belt row
 was 71 chars because that is the length of the exception message. Deployed, then
 re-ran.
+
+---
+
+# VOICE-01 — BLOCKED at §1. The picked IDs are previews, not voices.
+
+## §1 verification: IDs match the design call, and are still unusable
+
+All five operator picks match the design-call records exactly — verified against
+`el_manifest.json`, which is built from the design response's `previews`, not
+from filenames:
+
+| niche | cand | ID | matches design call | on_target | LUFS |
+|---|---|---|---|---|---|
+| ai_creators | 1 | `5Uy8rKNKEL66HNItX6fa` | ✅ | True | −14.89 |
+| anime | 3 | `z9JXrhW9p5CEcFe3fO39` | ✅ | True | −14.75 |
+| gaming | 1 | `Ki6E1Wj0tO1P1LoXBBmC` | ✅ | True | −14.21 |
+| movies | 3 | `b4cyxGj0m58HmArP40gw` | ✅ | True | −14.88 |
+| sports | 1 | `Q92B53vEsYCI4kjHfm2P` | ✅ | True | −14.37 |
+
+Confirmed from the manifest, not from the prompt: the two undershooting
+candidates are `ai_creators_cand3` (`WmzAAOfNI8VJqC8CLrS9`, −15.55) and
+`gaming_cand3` (`vkHASo1NhGhUIHzsYKpG`, −15.78). **Neither is among the picks**,
+so no re-normalisation is needed.
+
+## The blocker
+
+```
+belt app run elevenlabs/tts --input {... "voice_id": "5Uy8rKNKEL66HNItX6fa" ...}
+  status: failed
+  error:  A voice with voice_id '5Uy8rKNKEL66HNItX6fa' was not found.
+```
+
+Read-only check of the account: **21 voices, none of the five present, every one
+`category=premade`.** The design previews were never saved.
+
+**Root cause, and it dates to CAP-01 §1.** `inworld/voice-design` exposes two
+functions — `run` and **`publish`** — and CAP-01's plan said "publish one". The
+ElevenLabs app exposes only `run`, returning `previews`, and **has no publish
+function at all**. There is no belt app that publishes a designed ElevenLabs
+voice. So the ElevenLabs half of CAP-01 §1 produced listenable previews that
+were never going to be addressable, and nothing surfaced that until synthesis
+was attempted — the previews play fine, which is exactly what made it look done.
+
+**§3 and §4 cannot proceed.** There is nothing to wire the config to. Writing
+`voice_profile` with these IDs would produce a `voice not found` on every
+synthesis, fall through the cascade, and stamp `audio_provider` as the fallback
+tier — a silent quality regression dressed as a working config.
+
+## What survives: the picks are reproducible
+
+`seed: 42` was passed on every design call. Re-running the ai_creators prompt
+with the identical payload returns **the same three generations** — durations
+match to 2 d.p. (28.87 / 27.61 / 26.28) — with fresh IDs:
+
+| cand | original ID | re-run ID | duration |
+|---|---|---|---|
+| 1 | `5Uy8rKNKEL66HNItX6fa` | `M5qab1HGmOyQMsbk43PG` | 28.87s both |
+| 2 | `t90LXR7U3OLLhoF1GnrE` | `gDgZfKxU8EBJ4FBiqObo` | 27.61s both |
+| 3 | `WmzAAOfNI8VJqC8CLrS9` | `ueYWUmtJhf1wQ7GkbBb5` | 26.28s both |
+
+**Aditya's choices hold.** "ai_creators cand1" names a reproducible voice; only
+the identifier is ephemeral. He does not need to listen again.
+
+## Unblock, and why it needs an explicit go
+
+1. Re-run each niche's design with the stored prompt + `seed: 42` — 5 × $0.10.
+2. **Publish the picked candidate immediately**, in the same session, before the
+   preview expires.
+3. Wire the returned stable library IDs into `voice_profile`.
+
+Step 2 has no belt path. It requires `POST /v1/text-to-voice/create-voice`
+against the ElevenLabs API with the prod key — **a write to an external account**,
+creating five permanent voices. That is outside anything authorised so far, and
+it also touches the rights position, which was recorded specifically as
+"ElevenLabs **via belt** = paid channel". Whether the belt's ElevenLabs
+integration uses this account or inference.sh's is **unknown and untested** — if
+it is a different account, a voice published with our key may not be addressable
+from `elevenlabs/tts` at all, and synthesis would have to go direct too.
+
+Holding for an explicit decision rather than writing to the account.
