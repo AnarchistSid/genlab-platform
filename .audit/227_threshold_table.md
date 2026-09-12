@@ -635,3 +635,98 @@ on, and it is not in the original framing.
 
 Neither lever applied. #218's 09-13 slot is unaffected **unless T-29's ordering is
 adopted**, which as shown moves it to 09-14.
+
+---
+
+# OPS-25 §1 — queue policy, read-only numbers
+
+## §1.3 — config or code? Mostly CODE. Config-preferred is only reachable for the cap.
+
+| element | where | config? |
+|---|---|---|
+| 7-day lookahead | `auto_approver.py:179` `for day_offset in range(0, 8)` | **CODE — hardcoded literal** |
+| …and its MIRROR | `dashboard/server/core/publishing_queue.py:434`, identical `range(0, 8)` | **CODE — must change together** |
+| daily cap / multi-publish | `genlab-core/config/platform_caps.yaml` (`daily_post_cap`, `multi_publish.enabled`, `max_per_day_ceiling`) | ✅ **config** |
+| canonical slot | `canonical_slot_ist: str = "12:00"` default arg | code, caller-overridable |
+| ordering inside lookahead | **does not exist** — slots are first-come as the approver iterates | new code |
+| stale expiry | **does not exist** | new code |
+| intake throttle | **does not exist** | new code |
+
+**The mirror is the risk.** `_pick_next_available_slot` and
+`publishing_queue._next_available_slot` are two implementations of one contract
+(the docstring says so explicitly). A per-niche lookahead that lands in one and
+not the other puts the worker and the operator path on different queues — the
+shared-contract/N-implementers shape. Any FIX must touch both in the same commit.
+
+## §1.1 — what the queues become (3c904e01 keeps 09-13, as constrained)
+
+**ai_creators — news, 2-day lookahead, newest-first:** 2 survive, **5 expire**.
+
+| bp | conf | story created | verdict |
+|---|---|---|---|
+| `3c904e01` | 0.910 | 09-11 02:59 | **09-13** (constrained, #218) |
+| `1b3e0a5c` | 0.946 | 09-10 02:46 | **09-14** (newest of the rest; highest conf too — both rules agree) |
+| `b3d56b28` | 0.865 | 09-09 02:55 | expire |
+| `8419ee6d` | 0.813 | 09-09 02:54 | expire |
+| `f8242245` | 0.791 | 09-08 02:44 | expire |
+| `c5b0a152` | 0.812 | 09-07 03:01 | expire |
+| `5e6b48ab` | 0.893 | 09-07 03:01 | expire |
+
+**All five expiring are `degraded=true` with 0-char scripts, and all are 3–5 day
+old stories.** The freshness rule removes exactly the degraded backlog without
+naming degradation as a criterion — a genuine convergence, not a coincidence
+worth relying on.
+
+**gaming — mixed, 4-day, confidence then newest:** 4 survive, **3 expire**.
+09-13 `434fbe48` (0.883) · 09-14 `f89d7b52` (0.856) · 09-15 `566bd8be` (0.842) ·
+09-16 `7c3a4028` (0.840). Expire: `a7a3d9f8` (0.792), `44fb8c90` (0.792),
+`c5bdbb0d` (0.786). The 0.792 tie breaks on newest (`44fb8c90`), though both expire.
+
+**movies** (4-day) and **anime** (5-day) hold their single blueprint at 09-13. **sports** 0.
+
+### Resulting sequence
+
+| date | ai_creators | gaming | movies | anime | sports |
+|---|---|---|---|---|---|
+| 09-13 | `3c904e01` | `434fbe48` | `fea59c56` | `7d3795db` | — |
+| 09-14 | `1b3e0a5c` | `f89d7b52` | — | — | — |
+| 09-15 | *free* | `566bd8be` | — | — | — |
+| 09-16 | *free* | `7c3a4028` | — | — | — |
+| 09-17 | *free* | *free* | — | — | — |
+
+**8 of 16 expire (50%)**, and ai_creators has headroom from 09-15 — so the
+"no cap-available slot in next 7 days" refusal stops and today's 4 fresh
+candidates become schedulable. That, not drainage, is what the policy buys.
+
+## §1.2 — cost of over-rendering: **~$0.13/day. The cost argument does not hold.**
+
+7-day totals: **86 rendered, 6 published — a 7% publish rate.**
+
+| niche | rendered | published | dead at DRAFTED | $/run |
+|---|---|---|---|---|
+| ai_creators | 18 | 1 | 0 | $0.0355 |
+| gaming | 17 | 1 | 6 | $0.0388 |
+| movies | 19 | 1 | **17** | $0.0269 |
+| sports | 20 | 1 | **18** | $0.0211 |
+| anime | 12 | 2 | 9 | $0.0176 |
+
+**Total spend is $0.1430/day across all five niches** — 3% of the $5/day ceiling
+in `.claude/rules/optimization.md`. At a 93% waste rate the discarded portion is
+**~$0.13/day, ~$0.93/week.** TTS is $0.005–0.0075 per run; LLM dominates at
+$0.014–0.031.
+
+**So the throttle should not be justified on cost.** Two justifications survive:
+* **Bandit starvation** — unpublished renders produce no reward signal, so 93% of
+  generation teaches the learner nothing. This is §1's own stated rationale and
+  it stands.
+* **Queue saturation** — 4 qualifying/day against 1/day outflow is what fills the
+  lookahead and blocks fresh content.
+
+### The bigger yield problem is NOT the queue
+movies lose **17 of 19** and sports **18 of 20** at `DRAFTED` — they never reach
+the queue at all. Their content dies at the render gate, and §OPS-24 §4 showed
+three of four sampled sports failures were **loudness misses of ~2 LU**.
+**FIX-LOUD is worth more to movies and sports than any queue policy**, and the
+queue policy is really an ai_creators + gaming intervention. ai_creators is the
+one niche with 0 DRAFTED deaths — all 18 renders survived to the queue, which is
+precisely why its queue saturates.
