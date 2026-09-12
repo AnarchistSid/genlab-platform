@@ -1618,3 +1618,60 @@ our direct key is precisely the *unpaid* channel that position excluded.
   capability problem into a terms question, which is the operator's call.
 
 **Stopping as instructed. The remaining four were not published.**
+
+---
+
+# VOICE-01c — cascade made honest; designs made durable
+
+## §1 — the ElevenLabs tier could never have run, for TWO reasons
+
+I had found one (free plan). The second is worse and I had missed it: the
+`elevenlabs` **SDK is not installed on the production host**, and
+`build_tts_cascade` **appended the tier without consulting `.available`** — while
+the InfshTTS block directly above it gates on exactly that. So a tier that could
+not construct was listed as cascade depth, and the cascade misreported its own
+fallback capacity.
+
+**Decision: capability precondition, not a config kill-switch.** Recorded reason
+— the plan choice is open, and a precondition re-enables the tier automatically
+on upgrade whereas a disabled flag would need changing again and would likely be
+forgotten. `ElevenLabsTTS.available` now requires: key present → SDK importable →
+plan headroom ≥ 60,000 chars/month (≈400 chars × 5 niches × 30 days). Cached per
+process, one HTTP call per run, and **fails OPEN** on a network error so a
+transient cannot silently drop a working tier. Only a definite answer disables it.
+
+**Gate, on prod, through the real factory:**
+```
+CASCADE: ['infsh_inworld', 'openai_tts', 'edge_tts', 'gtts']
+[tts] ElevenLabs tier unavailable: SDK not installed (ELEVENLABS_API_KEY is set,
+      so this tier looks configured but cannot run)
+TTS: ElevenLabs provider SKIPPED — key present but tier cannot serve
+```
+The documented cascade in the factory docstring now states the measured reality
+rather than the aspiration; it had been stale since before FIX-T01.
+
+## §2 — the designs are now durable and provider-independent
+
+`genlab-core/config/voice_designs.yaml` (config, not code) records per niche: the
+exact design prompt, `seed: 42`, provider, the playbook WPM band, the picked
+candidate, its **duration as the identifier**, the normalised LUFS, and the
+retained preview filename.
+
+**Duration is the fingerprint, not the ID.** Preview IDs are ephemeral and live
+in the generating account; the identity of a chosen voice is
+`(prompt, seed, duration)`. Response ordering is not guaranteed, so the file
+records duration and the re-creation procedure matches on it.
+
+Retention: `.audit/retention/voice-designs-2026-09-12/` — all **15/15** normalised
+previews, both manifests, the profiles and the listen sheet, with a sha256
+manifest.
+
+**Manifest verified with both controls**, because the first attempt returned
+`OK: 0` — the paths were repo-relative and I verified from inside the directory,
+a false zero from my own instrument (T-20 again). Regenerated with consistent
+relative paths: **19/19 OK**; corrupting one byte of a picked preview produced
+`FAILED` on exactly that file; restoring returned 19/19.
+
+**Consequence:** whichever provider Aditya picks, the five voices are re-creatable
+from this file in minutes. For ElevenLabs no re-listen is needed — only a
+re-publish on a paid plan.

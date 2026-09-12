@@ -1,0 +1,139 @@
+# Voice designs — the durable record of Aditya's five picks.
+#
+# WHY THIS FILE EXISTS
+# The ElevenLabs voice-design app returns PREVIEWS, not voices. Preview IDs
+# are ephemeral and live in the generating account (inference.sh's), and ours
+# is a free plan that cannot hold a custom voice at all — so the IDs recorded
+# in CAP-01 resolve to nothing at synthesis time (T-68).
+#
+# What IS durable is the design itself. Every design call passed seed 42, and
+# re-running a stored prompt with that seed reproduces the same generations —
+# verified twice on ai_creators, durations matching to 2 d.p. So the identity
+# of a chosen voice is (prompt, seed, duration), not an ID.
+#
+# The picked candidate is therefore identified BY DURATION, not by position in
+# the response: ordering is not guaranteed, duration is the stable fingerprint.
+#
+# To re-create any voice: run elevenlabs/voice-design with `design_prompt` and
+# `seed`, match the preview whose duration equals `pick.duration_secs`, and
+# publish it IN THE SAME SESSION via
+#   POST /v1/text-to-voice/create-voice-from-preview
+# (previews expire; publishing requires a PAID plan).
+#
+# Aditya has already chosen these. Whichever provider is adopted, no re-listen
+# is needed for ElevenLabs — only a re-publish.
+
+provider: elevenlabs
+design_app: elevenlabs/voice-design@72pdv88t
+seed: 42
+preview_text_source: cap-01 30-second per-niche scripts (see preview_text below)
+
+niches:
+  ai_creators:
+    profile: "AI calm desk"
+    wpm_band: "150-160"   # playbook register
+    picked_candidate: 1
+    pick:
+      duration_secs: 28.87          # the stable fingerprint
+      ephemeral_preview_id: "5Uy8rKNKEL66HNItX6fa"  # NOT usable for synthesis
+      normalised_lufs: -14.89
+      on_target: true
+      retained_preview: "voices_el_norm/ai_creators_cand1_5Uy8rKNKEL66HNItX6fa.m4a"
+    design_prompt: >-
+      A calm, precise voice, early thirties, neutral American accent. Measured and
+      unhurried, with the composed authority of a technology desk anchor. Warm but
+      analytical, never breathless. Clear diction and subtle downward inflections at the
+      ends of statements, conveying credibility and quiet expertise.
+    preview_text: >-
+      Anthropic just shipped a change that most people scrolled straight past. Claude
+      can now run for hours on a single task without losing the thread. That sounds
+      incremental. It isn't. The limit on these tools was never raw intelligence, it was
+      memory across long work. Move that ceiling and you change what a single person can
+      build in a weekend. Here's what actually shifted, and what it means for anyone
+      building right now.
+  anime:
+    profile: "warm fan-expert"
+    wpm_band: "165-180"   # playbook register
+    picked_candidate: 3
+    pick:
+      duration_secs: 29.99          # the stable fingerprint
+      ephemeral_preview_id: "z9JXrhW9p5CEcFe3fO39"  # NOT usable for synthesis
+      normalised_lufs: -14.75
+      on_target: true
+      retained_preview: "voices_el_norm/anime_cand3_z9JXrhW9p5CEcFe3fO39.m4a"
+    design_prompt: >-
+      A warm, engaging female voice, late twenties, neutral American accent. Passionate
+      and knowledgeable, the tone of a devoted fan explaining something they genuinely
+      love. Bright and expressive, with real delight breaking through on emotional
+      beats. Conversational pacing that lifts in energy at the payoff.
+    preview_text: >-
+      This scene broke the entire fandom for a week, and it is only forty seconds long.
+      No dialogue. No music for the first half. Just a character finally putting down
+      something he has carried for eleven episodes. The studio storyboarded it in
+      silence on purpose, so when the score finally comes in, it lands like a physical
+      thing. If you have been putting this series off, start here. This is the moment
+      everyone was talking about.
+  gaming:
+    profile: "energetic friend"
+    wpm_band: "175-190"   # playbook register
+    picked_candidate: 1
+    pick:
+      duration_secs: 23.02          # the stable fingerprint
+      ephemeral_preview_id: "Ki6E1Wj0tO1P1LoXBBmC"  # NOT usable for synthesis
+      normalised_lufs: -14.21
+      on_target: true
+      retained_preview: "voices_el_norm/gaming_cand1_Ki6E1Wj0tO1P1LoXBBmC.m4a"
+    design_prompt: >-
+      An energetic, upbeat male voice, mid twenties, neutral American accent. Fast
+      paced, animated and genuinely excited, like a friend on voice chat reacting to a
+      clutch play. Punchy consonants, wide dynamic pitch range, a natural grin audible
+      in the tone. Enthusiastic but never shouting.
+    preview_text: >-
+      Okay you have to watch this one twice, because the first time you will not believe
+      what you just saw. One player, no shield, three seconds on the clock, and the
+      entire lobby has already written him off. Watch his left hand here. That is not
+      luck, that is two thousand hours of muscle memory firing at once. The chat
+      absolutely loses it. I have rewatched this eleven times and it still does not feel
+      real.
+  movies:
+    profile: "cinematic narrator"
+    wpm_band: "145-160"   # playbook register
+    picked_candidate: 3
+    pick:
+      duration_secs: 28.01          # the stable fingerprint
+      ephemeral_preview_id: "b4cyxGj0m58HmArP40gw"  # NOT usable for synthesis
+      normalised_lufs: -14.88
+      on_target: true
+      retained_preview: "voices_el_norm/movies_cand3_b4cyxGj0m58HmArP40gw.m4a"
+    design_prompt: >-
+      A rich, resonant male voice, forties, neutral American accent. Deep and cinematic,
+      the texture of a film trailer narrator. Deliberate pacing with weighty pauses and
+      strong low end resonance. Commanding and atmospheric, authoritative without
+      tipping into parody.
+    preview_text: >-
+      Every few years a trailer arrives that refuses to explain itself. No plot. No
+      names. Ninety seconds of images that do not add up, and one sound you cannot
+      place. The studio has said almost nothing. The director has said less. And in four
+      days it has done numbers that films with three times the marketing did not touch.
+      Something is happening here, and the silence around it is doing the work.
+  sports:
+    profile: "punchy pundit"
+    wpm_band: "150-185"   # playbook register
+    picked_candidate: 1
+    pick:
+      duration_secs: 23.72          # the stable fingerprint
+      ephemeral_preview_id: "Q92B53vEsYCI4kjHfm2P"  # NOT usable for synthesis
+      normalised_lufs: -14.37
+      on_target: true
+      retained_preview: "voices_el_norm/sports_cand1_Q92B53vEsYCI4kjHfm2P.m4a"
+    design_prompt: >-
+      A confident, punchy male voice, thirties, neutral American accent. Crisp and
+      assertive sports pundit delivery, rhythmic emphasis and sharp consonants.
+      Authoritative and quick, building to emphatic peaks on the key moment. Tight,
+      clipped broadcast energy.
+    preview_text: >-
+      Down by two. Eleven seconds left. And the coach calls the one play everybody in
+      the building already knows is coming. Watch the defense set up for it. They know.
+      He knows they know. And he runs it anyway. That is the whole story of this season
+      in a single possession, and it is why this team is still standing when nobody
+      picked them in October. Eleven seconds. Watch it again.

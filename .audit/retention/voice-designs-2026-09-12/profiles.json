@@ -1,0 +1,42 @@
+{
+ "ai_creators": {
+  "profile": "AI calm desk",
+  "wpm": 150,
+  "d": "A calm, precise voice, early thirties, neutral American accent. Measured and unhurried, with the composed authority of a technology desk anchor. Warm but analytical, never breathless. Clear diction and subtle downward inflections at the ends of statements, conveying credibility and quiet expertise.",
+  "s": "Anthropic just shipped a change that most people scrolled straight past. Claude can now run for hours on a single task without losing the thread. That sounds incremental. It isn't. The limit on these tools was never raw intelligence, it was memory across long work. Move that ceiling and you change what a single person can build in a weekend. Here's what actually shifted, and what it means for anyone building right now.",
+  "words": 73,
+  "est_sec": 29.2
+ },
+ "gaming": {
+  "profile": "energetic friend",
+  "wpm": 170,
+  "d": "An energetic, upbeat male voice, mid twenties, neutral American accent. Fast paced, animated and genuinely excited, like a friend on voice chat reacting to a clutch play. Punchy consonants, wide dynamic pitch range, a natural grin audible in the tone. Enthusiastic but never shouting.",
+  "s": "Okay you have to watch this one twice, because the first time you will not believe what you just saw. One player, no shield, three seconds on the clock, and the entire lobby has already written him off. Watch his left hand here. That is not luck, that is two thousand hours of muscle memory firing at once. The chat absolutely loses it. I have rewatched this eleven times and it still does not feel real.",
+  "words": 76,
+  "est_sec": 26.8
+ },
+ "anime": {
+  "profile": "warm fan-expert",
+  "wpm": 160,
+  "d": "A warm, engaging female voice, late twenties, neutral American accent. Passionate and knowledgeable, the tone of a devoted fan explaining something they genuinely love. Bright and expressive, with real delight breaking through on emotional beats. Conversational pacing that lifts in energy at the payoff.",
+  "s": "This scene broke the entire fandom for a week, and it is only forty seconds long. No dialogue. No music for the first half. Just a character finally putting down something he has carried for eleven episodes. The studio storyboarded it in silence on purpose, so when the score finally comes in, it lands like a physical thing. If you have been putting this series off, start here. This is the moment everyone was talking about.",
+  "words": 76,
+  "est_sec": 28.5
+ },
+ "movies": {
+  "profile": "cinematic narrator",
+  "wpm": 140,
+  "d": "A rich, resonant male voice, forties, neutral American accent. Deep and cinematic, the texture of a film trailer narrator. Deliberate pacing with weighty pauses and strong low end resonance. Commanding and atmospheric, authoritative without tipping into parody.",
+  "s": "Every few years a trailer arrives that refuses to explain itself. No plot. No names. Ninety seconds of images that do not add up, and one sound you cannot place. The studio has said almost nothing. The director has said less. And in four days it has done numbers that films with three times the marketing did not touch. Something is happening here, and the silence around it is doing the work.",
+  "words": 72,
+  "est_sec": 30.9
+ },
+ "sports": {
+  "profile": "punchy pundit",
+  "wpm": 175,
+  "d": "A confident, punchy male voice, thirties, neutral American accent. Crisp and assertive sports pundit delivery, rhythmic emphasis and sharp consonants. Authoritative and quick, building to emphatic peaks on the key moment. Tight, clipped broadcast energy.",
+  "s": "Down by two. Eleven seconds left. And the coach calls the one play everybody in the building already knows is coming. Watch the defense set up for it. They know. He knows they know. And he runs it anyway. That is the whole story of this season in a single possession, and it is why this team is still standing when nobody picked them in October. Eleven seconds. Watch it again.",
+  "words": 71,
+  "est_sec": 24.3
+ }
+}

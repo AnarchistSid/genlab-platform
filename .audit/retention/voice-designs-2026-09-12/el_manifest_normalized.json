@@ -1,0 +1,167 @@
+[
+ {
+  "niche": "ai_creators",
+  "cand": 1,
+  "voice_id": "5Uy8rKNKEL66HNItX6fa",
+  "dur": 28.87,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/3bttlrid.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/1deohb3f.m4a",
+  "out_lufs": -14.89,
+  "tp": -1.41,
+  "on_target": true
+ },
+ {
+  "niche": "ai_creators",
+  "cand": 2,
+  "voice_id": "t90LXR7U3OLLhoF1GnrE",
+  "dur": 27.61,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/yvhoqqpv.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/ikug1iud.m4a",
+  "out_lufs": -13.98,
+  "tp": -1.38,
+  "on_target": true
+ },
+ {
+  "niche": "ai_creators",
+  "cand": 3,
+  "voice_id": "WmzAAOfNI8VJqC8CLrS9",
+  "dur": 26.28,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/1n1mmnk5.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/0wvimku1.m4a",
+  "out_lufs": -15.55,
+  "tp": -1.4,
+  "on_target": false
+ },
+ {
+  "niche": "gaming",
+  "cand": 1,
+  "voice_id": "Ki6E1Wj0tO1P1LoXBBmC",
+  "dur": 23.02,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/nd512zid.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/e6lyzs3m.m4a",
+  "out_lufs": -14.21,
+  "tp": -1.46,
+  "on_target": true
+ },
+ {
+  "niche": "gaming",
+  "cand": 2,
+  "voice_id": "orN6g3okSWZyxonZVpx7",
+  "dur": 27.59,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/fszufak8.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/rlsh1bos.m4a",
+  "out_lufs": -14.29,
+  "tp": -1.39,
+  "on_target": true
+ },
+ {
+  "niche": "gaming",
+  "cand": 3,
+  "voice_id": "vkHASo1NhGhUIHzsYKpG",
+  "dur": 25.5,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/cczz2vae.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/dz4kwixm.m4a",
+  "out_lufs": -15.78,
+  "tp": -1.42,
+  "on_target": false
+ },
+ {
+  "niche": "anime",
+  "cand": 1,
+  "voice_id": "6XM2LyKvVAXkCZEjjedN",
+  "dur": 31.01,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/5oh9wqms.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/ayx5z825.m4a",
+  "out_lufs": -14.29,
+  "tp": -1.45,
+  "on_target": true
+ },
+ {
+  "niche": "anime",
+  "cand": 2,
+  "voice_id": "rOWnMSiiBimK5D2IulS1",
+  "dur": 31.77,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/h2m2rrf7.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/u01chhsq.m4a",
+  "out_lufs": -14.02,
+  "tp": -1.48,
+  "on_target": true
+ },
+ {
+  "niche": "anime",
+  "cand": 3,
+  "voice_id": "z9JXrhW9p5CEcFe3fO39",
+  "dur": 29.99,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/21yi9x5o.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/m4onvd7z.m4a",
+  "out_lufs": -14.75,
+  "tp": -1.43,
+  "on_target": true
+ },
+ {
+  "niche": "movies",
+  "cand": 1,
+  "voice_id": "4kq2DnZk8NEmc5keCoJI",
+  "dur": 31.77,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/8sg84iyc.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/tj26iy4g.m4a",
+  "out_lufs": -14.75,
+  "tp": -1.43,
+  "on_target": true
+ },
+ {
+  "niche": "movies",
+  "cand": 2,
+  "voice_id": "sE9HGPhPvuKtRxm45wvk",
+  "dur": 31.01,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/lvl4mgqe.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/34lbtb2n.m4a",
+  "out_lufs": -13.99,
+  "tp": -1.5,
+  "on_target": true
+ },
+ {
+  "niche": "movies",
+  "cand": 3,
+  "voice_id": "b4cyxGj0m58HmArP40gw",
+  "dur": 28.01,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/k8tw5l1j.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/o9kqqaw3.m4a",
+  "out_lufs": -14.88,
+  "tp": -1.44,
+  "on_target": true
+ },
+ {
+  "niche": "sports",
+  "cand": 1,
+  "voice_id": "Q92B53vEsYCI4kjHfm2P",
+  "dur": 23.72,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/ywj8ljqj.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/adeo4rt1.m4a",
+  "out_lufs": -14.37,
+  "tp": -1.42,
+  "on_target": true
+ },
+ {
+  "niche": "sports",
+  "cand": 2,
+  "voice_id": "3QrEhVOdXPZ2js3bPDZ4",
+  "dur": 24.27,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/no26hx0s.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/2z4ralg3.m4a",
+  "out_lufs": -14.19,
+  "tp": -1.48,
+  "on_target": true
+ },
+ {
+  "niche": "sports",
+  "cand": 3,
+  "voice_id": "V1HQcMn3HwbULjwhPf6X",
+  "dur": 23.96,
+  "url": "https://cloud.inference.sh/app/files/t/69vxdh4w/3172qy17.mp3",
+  "norm_url": "https://cloud.inference.sh/app/files/t/69vxdh4w/z1dd2egy.m4a",
+  "out_lufs": -14.46,
+  "tp": -1.45,
+  "on_target": true
+ }
+]

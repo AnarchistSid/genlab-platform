@@ -18,7 +18,23 @@ def build_tts_cascade():
     """Build TTSCascade with all available providers.
 
     Falls back gracefully:
-      InfshTTS (Inworld TTS-2, canary) → ElevenLabs → OpenAI → Edge-TTS → gTTS.
+      InfshTTS (Inworld TTS-2) → ElevenLabs → OpenAI → Edge-TTS → gTTS
+
+    **Documented order vs measured reality (2026-09-12).** FIX-T01 measured the
+    real head as ``infsh_inworld`` on every niche, and the ElevenLabs tier had
+    never been reached: ``character_count: 0``. Two independent reasons, both
+    now handled rather than described —
+
+      * the ``elevenlabs`` SDK is not installed on the production host, and this
+        factory appended the tier WITHOUT consulting ``.available`` (the
+        InfshTTS block above it does), so a tier that could not run was listed
+        as though it could;
+      * the configured key is on the free plan — 10,000 characters/month against
+        roughly 60,000 of need.
+
+    Both are now preconditions in ``ElevenLabsTTS.available``, so the cascade
+    reports the depth it actually has. If the account is upgraded and the SDK
+    installed, the tier re-enables itself with no code change.
 
     Always includes at least Edge-TTS + gTTS (free, no API key).
     """
@@ -56,8 +72,21 @@ def build_tts_cascade():
         try:
             from genlab_core.tts.providers import ElevenLabsTTS
 
-            providers.append(ElevenLabsTTS())
-            logger.debug("TTS: ElevenLabs provider added")
+            # 2026-09-12: CONSULT `.available` — this block appended the tier
+            # unconditionally while the InfshTTS block directly above it gated
+            # on `.available`. The inconsistency is why a tier with no SDK
+            # installed and a free-plan key sat in the cascade for months,
+            # failing at synthesis and making the cascade misreport its own
+            # depth. `.available` now also checks plan headroom.
+            el_tier = ElevenLabsTTS()
+            if el_tier.available:
+                providers.append(el_tier)
+                logger.debug("TTS: ElevenLabs provider added")
+            else:
+                logger.info(
+                    "TTS: ElevenLabs provider SKIPPED — key present but tier "
+                    "cannot serve (see the [tts] line above for the reason)"
+                )
         except Exception as exc:
             logger.warning("TTS: ElevenLabs provider FAILED to construct: %s", exc)
 

@@ -64,6 +64,68 @@ def _file_size_mb(path: Path) -> float:
         return 0.0
 
 
+# Minimum characters of monthly headroom for the ElevenLabs tier to count as a
+# usable fallback. ~400 chars per reel × 5 niches × 30 days ≈ 60,000; a tier that
+# cannot cover a month is a tier that fails mid-month, which is worse than one
+# that never engages because it fails unpredictably.
+_ELEVENLABS_MIN_HEADROOM_CHARS: int = 60_000
+_ELEVENLABS_PLAN_CACHE: dict[str, bool] = {}
+
+
+def _elevenlabs_plan_can_serve(api_key: str) -> bool:
+    """Can this ElevenLabs plan serve a month of production volume?
+
+    One HTTP call per process, cached. Fails OPEN (returns True) when the
+    subscription cannot be read: a transient network error must not silently
+    drop a tier that may be perfectly good. Only a definite answer disables it.
+    """
+    cached = _ELEVENLABS_PLAN_CACHE.get(api_key)
+    if cached is not None:
+        return cached
+
+    verdict = True
+    try:
+        import json as _json
+        import urllib.request
+
+        req = urllib.request.Request(
+            "https://api.elevenlabs.io/v1/user/subscription",
+            headers={
+                "xi-api-key": api_key,
+                # Rule #25: never the default Python-urllib UA.
+                "User-Agent": "GenLab/1.0 (+https://github.com/anarchistsid/GenLab)",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            sub = _json.loads(resp.read().decode())
+        tier = str(sub.get("tier") or "unknown")
+        limit = int(sub.get("character_limit") or 0)
+        used = int(sub.get("character_count") or 0)
+        headroom = max(0, limit - used)
+        verdict = headroom >= _ELEVENLABS_MIN_HEADROOM_CHARS
+        if verdict:
+            logger.info(
+                "[tts] ElevenLabs tier ENABLED — tier=%s headroom=%d chars "
+                "(need >=%d)", tier, headroom, _ELEVENLABS_MIN_HEADROOM_CHARS,
+            )
+        else:
+            logger.warning(
+                "[tts] ElevenLabs tier SKIPPED — tier=%s headroom=%d chars, "
+                "below the %d needed for a month of volume. The key is set, so "
+                "this tier would otherwise look configured while exhausting "
+                "mid-month.",
+                tier, headroom, _ELEVENLABS_MIN_HEADROOM_CHARS,
+            )
+    except Exception as exc:  # noqa: BLE001 — fail OPEN, see docstring
+        logger.warning(
+            "[tts] ElevenLabs subscription check failed (%s) — keeping the tier "
+            "enabled rather than dropping it on a transient error", exc,
+        )
+    _ELEVENLABS_PLAN_CACHE[api_key] = verdict
+    return verdict
+
+
+
 class ElevenLabsTTS:
     """ElevenLabs TTS provider.
 
@@ -101,14 +163,43 @@ class ElevenLabsTTS:
 
     @property
     def available(self) -> bool:
+        """True only when this tier could actually serve the month's volume.
+
+        Measured 2026-09-12, and it was a decoration on two counts at once:
+
+        * The ``elevenlabs`` SDK is **not installed** on the production host, so
+          construction or synthesis fails — yet ``build_tts_cascade`` appended
+          this tier without consulting ``available`` at all (the InfshTTS tier
+          directly above it does check). It sat in the cascade and fell through
+          on use.
+        * The configured key is on the **free** plan: 10,000 characters/month
+          against roughly 60,000 of real need (~400 chars × 5 niches × 30 days),
+          no custom-voice capability, and ``character_count: 0`` — it has never
+          once been reached.
+
+        A tier that would exhaust in about five days is not a fallback, and a
+        cascade that lists it is lying about its own depth. So availability now
+        includes a capability precondition rather than just "a key exists".
+
+        Deliberately a precondition and not a config kill-switch: the plan
+        decision is open, and if the account is upgraded this tier re-enables
+        itself with no further change. The check is cached per process — one
+        HTTP call per run, not per synthesis — and fails OPEN on a network
+        error, because a transient failure to ask should not silently drop a
+        working tier. Insufficient headroom, definitively established, skips it.
+        """
         if not self._api_key:
             return False
         try:
             import elevenlabs  # noqa: F401
-
-            return True
         except ImportError:
+            logger.warning(
+                "[tts] ElevenLabs tier unavailable: SDK not installed "
+                "(ELEVENLABS_API_KEY is set, so this tier looks configured "
+                "but cannot run)"
+            )
             return False
+        return _elevenlabs_plan_can_serve(self._api_key)
 
     def estimate_cost(self, text: str) -> float:
         return round(len(text) * _ELEVENLABS_COST_PER_CHAR, 4)
