@@ -1556,3 +1556,65 @@ it is a different account, a voice published with our key may not be addressable
 from `elevenlabs/tts` at all, and synthesis would have to go direct too.
 
 Holding for an explicit decision rather than writing to the account.
+
+---
+
+# VOICE-01b §1 — the account question, answered. NEGATIVE branch.
+
+## Reproducibility: confirmed twice
+Re-running the stored ai_creators prompt with `seed: 42` returned the same three
+generations on both attempts — durations **26.28 / 27.61 / 28.87**, matching the
+recorded values exactly. cand1 was identified **by duration**, not by position.
+**Aditya's picks are reproducible and he does not need to listen again.**
+
+## Publishing is impossible, and not for the reason expected
+
+Three measurements, each narrowing it:
+
+1. **Publish a belt-designed preview with our key** →
+   `No voice preview found with generated_voice_id '0QSrKwW2iEq4yHuypKXh'` — for
+   a preview created *seconds* earlier. (Endpoint found by probing:
+   `/v1/text-to-voice/create-voice-from-preview` returns 422 on an empty body,
+   i.e. it exists; the 404 earlier was my wrong path.)
+2. **Create our own preview, to separate "accounts differ" from "previews
+   expire"** → `403 feature_not_available: Creating a voice through the API is
+   only available on a paid plan.`
+3. **Subscription check** → `tier: free`, `character_limit: 10000`,
+   `character_count: 0`, `can_use_instant_voice_cloning: False`. TTS with a
+   *premade* voice works (HTTP 200, 27 KB).
+
+**Our ElevenLabs account is on the FREE plan and cannot hold a custom voice at
+all.** The belt's previews live in inference.sh's paid account. This is not
+merely two accounts — it is one account that is structurally incapable of the
+operation, so no amount of publishing effort on our side resolves it.
+
+## What this closes
+
+**§2's option (a) — "read the direct-account terms and proceed if clear" — is
+dead.** Not on terms, on capability: a free plan cannot create the voice. It
+would need a paid upgrade first, and only then would the terms question arise.
+The recorded rights position said "ElevenLabs **via belt** = paid channel", and
+our direct key is precisely the *unpaid* channel that position excluded.
+
+## Two things worth knowing about the live cascade
+
+* `ELEVENLABS_API_KEY` is set in prod and the cascade builds its ElevenLabs tier
+  whenever that variable exists — on a **free key with a 10,000 character monthly
+  cap**. At roughly 400 characters a reel, five niches daily, that is ~60,000
+  characters a month: the tier would exhaust in about five days if it were ever
+  reached.
+* `character_count: 0` says it has **never been used this period**, consistent
+  with FIX-T01's measurement that `infsh_inworld` is the real head. The
+  ElevenLabs tier is a token presence, not a working fallback.
+
+## Options, laid out and not acted on
+* **(b) Inworld** — `inworld/voice-design` has the `publish` function ElevenLabs
+  lacks, and Inworld is already the live cascade head. But its terms were
+  recorded as **NOT READ**, so its output is `eval_only` and cannot ship until
+  that is resolved.
+* **(c) Stay on the current `infsh_inworld` voice** — costs nothing, changes
+  nothing, and keeps the five designed voices as an unused asset.
+* **(d) Upgrade the ElevenLabs plan** — not in scope here; it converts a
+  capability problem into a terms question, which is the operator's call.
+
+**Stopping as instructed. The remaining four were not published.**
