@@ -1215,3 +1215,113 @@ through it anyway, twice.
 **A gate advertised as read-only had a production write side-effect.** The fix
 must be write-side (an autouse fixture pointing the storage backend at a mock for
 the whole suite), not a reader filter. Cleanup of the five rows needs operator go.
+
+---
+
+# CONTENT-01 §B.0–B.2 — caption path decision
+
+## B.0 — what actually runs (measured from renders, not config)
+
+Config matches CLAUDE.md: `whisper_sync.enabled` is **true** on ai_creators
+(BlackboxBrief/config/visuals.yaml:48, active line, trailing comment) and
+**false** on the other four. **The renders disagree with what that implies.**
+
+`caption_animator` is the path that executes, on every niche that reaches
+captions — **including ai_creators, where whisper is enabled.**
+`RenderWhisperCaptions` appears only as a registered stage name with no
+execution evidence anywhere. **The doc's framing is corrected by the renders.**
+
+And it failed everywhere, not just on gaming:
+
+| niche | caption render failures | errors |
+|---|---|---|
+| ai_creators | **8** | `'0.000'` `'0.700'` `'22.400'` |
+| sports | **5** | `'0.000'` `'7.583'` |
+| movies | **1** | `'1.400'` |
+| gaming | 1 | — |
+| anime | 0 (not reached) | — |
+
+**Zero caption renders succeeded anywhere.** No double-burn — nothing ever
+succeeded to burn twice. T-14a was never a gaming defect; it was total.
+
+After deploying the fix, re-running `apply_captions` on real retained renders
+with deliberately hostile text (apostrophe, colon, CJK):
+
+| niche | source | dur | result |
+|---|---|---|---|
+| ai_creators | `fc75d2348dcf4766` | 31.4s | **PASS** (1 corrupt source skipped) |
+| sports | `b9cbbe53c56128e8` | 19.4s | **PASS** |
+| movies | `4716a873da7241b9` | 19.4s | **PASS** |
+| anime | `0104e54fd5c32c93` | 16.8s | **PASS** |
+| gaming | `metal_slug_…` | 18.6s | **PASS** |
+
+**5/5, from 0/5.**
+
+**Separate defect found:** 2 of 5 recent ai_creators renders are **truncated MP4s**
+(`moov atom not found`, 12 MB, no duration). `caption_animator` handled it
+correctly — skipped with a log rather than crashing. Filed as T-64.
+
+## B.1 — the script dependency does not bind, and here is why
+
+| niche | blueprints (7d) | with `narration_script` | `audio_provider` stamped |
+|---|---|---|---|
+| ai_creators | 18 | **3** (max 359 chars) | 6 |
+| gaming | 17 | **0** | 8 |
+| sports | 20 | **0** | 6 |
+| movies | 19 | **0** | 4 |
+| anime | 12 | **0** | 3 |
+
+All five renders carry real AAC audio at ≈ −14 LUFS. Transcribed with
+faster-whisper 1.2.1 (`base`):
+
+| niche | dur | words | lang p | transcript opening |
+|---|---|---|---|---|
+| ai_creators | 31.4s | 60 | 0.98 | "Modern medicine… would collapse without effective antibiotics…" |
+| anime | 16.8s | 27 | 0.78 | "The finale is here and Rago is about to carry this whole… **W or L take.**" |
+| gaming | 45.1s | 79 | 0.99 | "Music BEEP BEEP … he's targeting specific people… same MO…" |
+| movies | 19.3s | 26 | 0.99 | "…DC fans' patience with that character. **Follow, we watch so you don't…**" |
+| sports | 19.3s | 29 | 0.97 | "Dana drawing a line in the sand with Francis… **We clip every moment.**" |
+
+**Every niche transcribes usefully.** Nothing is silence or nonsense.
+
+Two things this surfaced that the framing did not anticipate:
+
+1. **anime, movies and sports are already speaking GenLab's own copy.** The tails
+   are our CTAs — "W or L take", "Follow, we watch so you don't", "We clip every
+   moment". The audio *is* narration; only the `narration_script` field is empty.
+   gaming and ai_creators carry source-clip speech instead.
+2. **That copy is unrecoverable.** The blueprint stores no `caption_segments`,
+   `tts_text` or `audio_script` — the only text key is `narration_script`, empty
+   on those four. The system wrote the words, spoke them, and kept no record.
+   Filed as T-65.
+
+**The decisive correction: whisper transcription needs no script.** A script is
+required for forced *alignment*, not for transcription — whisper produces
+word-level timestamps from audio alone. B.1's premise assumed the two were the
+same thing. They are not, and that is what unblocks the choice.
+
+## B.2 — DECISION: (a) whisper everywhere now
+
+Reason, in one line: **every niche already has speech that transcribes cleanly,
+and transcription has no script dependency**, so the staged option (b) would wait
+on §4 for a capability that is available today.
+
+* **(b) rejected** — it defers four niches behind narration scripts they do not
+  need for word-level timing.
+* **(c) rejected** — `caption_animator` divides duration into equal segments
+  (`_segment_time_ranges`), which cannot produce karaoke timing without
+  reimplementing the alignment whisper already does.
+
+**Losing path: `caption_animator` is KEPT, not retired, with a stated condition.**
+It is the only thing producing captions today and was broken until hours ago.
+It becomes the fallback for whisper-empty or low-confidence output
+(`min_confidence: 0.3` already exists in the ai_creators block). **Removal
+condition: once all five niches pass §C's gate on the whisper path for seven
+consecutive days, caption_animator's wire is deleted.** Two live paths with no
+owner is how T-14a survived; this one has an owner and an exit.
+
+**Upgrade path, recorded so it is not lost:** when §4 gives each niche a
+`narration_script`, switch those niches from transcription to forced alignment
+against the known text — strictly more accurate, and it removes the risk of
+captioning a mis-transcription. That is an improvement to the chosen path, not a
+change of path.
