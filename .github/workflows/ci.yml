@@ -26,7 +26,7 @@ jobs:
     # attack vector; own-repo pushes are trusted).
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           version: "0.10.x" # U-18: pin uv consistently across workflows
@@ -64,7 +64,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           version: "0.10.x" # U-18: pin uv consistently across workflows
@@ -171,7 +171,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           version: "0.10.x"
@@ -242,7 +242,7 @@ jobs:
     # attack vector; own-repo pushes are trusted).
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           version: "0.10.x"
@@ -279,7 +279,7 @@ jobs:
     # attack vector; own-repo pushes are trusted).
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # 2026-06-29: run gitleaks directly instead of via gitleaks-action@v3.
