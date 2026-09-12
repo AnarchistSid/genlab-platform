@@ -69,6 +69,30 @@ def persist_run_cost(
         need to handle failures — the run report is the source of
         truth, this table is an aggregated convenience.
     """
+    # T-61, third instance. Two previous guards did not hold:
+    #   * conftest pops DATABASE_URL at IMPORT time — 82 test files monkeypatch
+    #     it back, and this function reads os.environ at CALL time;
+    #   * an autouse fixture patches this symbol — but a test that SPAWNS A
+    #     SUBPROCESS gets a fresh interpreter with no monkeypatch, and if that
+    #     child loads .env itself it has a live DSN again.
+    # Both are in-process defences against an out-of-process write.
+    #
+    # pytest exports PYTEST_CURRENT_TEST into os.environ for the duration of each
+    # test, and a spawned child INHERITS it. So the guard belongs here, at the
+    # writer, where it is true regardless of how many process boundaries the call
+    # crossed. Measured cost of not having it: a run_id='test_run' row at $10.00
+    # written into production three separate times today — 34x a real day's total
+    # spend, landing under niche_id='gaming' and corrupting that niche's figure.
+    if os.environ.get("PYTEST_CURRENT_TEST") and os.environ.get(
+        "GENLAB_ALLOW_TEST_COST_WRITES", ""
+    ).strip() != "1":
+        logger.debug(
+            "[cost_persist] refusing to write under pytest (run_id=%r) — set "
+            "GENLAB_ALLOW_TEST_COST_WRITES=1 to override deliberately",
+            run_id,
+        )
+        return False
+
     if not run_id or not niche_id:
         logger.warning(
             "[cost_persist] skipping write — empty run_id=%r or niche_id=%r",

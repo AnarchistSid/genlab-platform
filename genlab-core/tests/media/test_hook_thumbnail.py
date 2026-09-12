@@ -10,6 +10,8 @@
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -318,6 +320,15 @@ class TestPrependIntroToComposite:
             ) is False
 
     def test_subprocess_success_returns_true(self, tmp_path):
+        """A zero exit AND a playable artifact returns True.
+
+        T-64 (2026-09-12) changed this contract. It previously asserted that
+        returncode 0 alone meant success, which is how a 12 MB file with no moov
+        atom — unopenable by anything — was reported as a successful concat. The
+        exit code says the process ended, not that it produced something usable.
+        `_is_playable` is stubbed here because the subprocess is mocked and no
+        real file is written; the inverse case is pinned in the test below.
+        """
         composite = tmp_path / "c.mp4"
         intro = tmp_path / "i.mp4"
         composite.write_bytes(b"fake")
@@ -325,13 +336,45 @@ class TestPrependIntroToComposite:
         with patch(
             "genlab_core.media.hook_thumbnail.shutil.which",
             return_value="/opt/ffmpeg",
-        ), patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stderr="", stdout="",
-            )
+        ), patch(
+            "genlab_core.media.hook_thumbnail.subprocess.run",
+            return_value=SimpleNamespace(returncode=0, stderr=""),
+        ), patch(
+            "genlab_core.media.hook_thumbnail._is_playable",
+            return_value=True,
+        ):
             assert prepend_intro_to_composite(
                 str(composite), str(intro), str(tmp_path / "o.mp4"),
             ) is True
+
+    def test_zero_exit_but_unplayable_output_returns_false(self, tmp_path):
+        """T-64: the case that shipped silently for months.
+
+        ffmpeg exits 0, writes a truncated file with no moov atom, and the old
+        contract called that success. Downstream it surfaced only as an absence:
+        the caption stage probed 0.0s, built an empty filter chain, skipped
+        politely, and the reel lost the intro it had paid for with nothing said.
+        """
+        composite = tmp_path / "c.mp4"
+        intro = tmp_path / "i.mp4"
+        composite.write_bytes(b"fake")
+        intro.write_bytes(b"fake")
+        out = tmp_path / "o.mp4"
+        out.write_bytes(b"truncated-no-moov")
+        with patch(
+            "genlab_core.media.hook_thumbnail.shutil.which",
+            return_value="/opt/ffmpeg",
+        ), patch(
+            "genlab_core.media.hook_thumbnail.subprocess.run",
+            return_value=SimpleNamespace(returncode=0, stderr=""),
+        ), patch(
+            "genlab_core.media.hook_thumbnail._is_playable",
+            return_value=False,
+        ):
+            assert prepend_intro_to_composite(
+                str(composite), str(intro), str(out),
+            ) is False
+        assert not out.exists(), "the unusable artifact must be removed, not left on disk"
 
     def test_subprocess_timeout_returns_false(self, tmp_path):
         composite = tmp_path / "c.mp4"

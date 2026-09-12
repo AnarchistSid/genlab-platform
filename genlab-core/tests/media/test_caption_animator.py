@@ -105,7 +105,14 @@ class TestFontsize:
 
 class TestEscapeDrawtext:
     def test_single_quote(self) -> None:
-        assert _escape_drawtext("it's") == "it\\'s"
+        # T-14a (2026-09-12) INVERTED this. It pinned ' -> \' , which is the
+        # defect: inside an FFmpeg-quoted token a backslash is LITERAL, so the
+        # quote still terminates `text='...'` and everything after it is parsed
+        # as graph syntax. That is how a caption time value came to be read as a
+        # filter name — "No such filter: '0.000'" — and it broke every caption
+        # render on every niche for a day. The correct idiom closes the quote,
+        # emits an escaped quote, and reopens.
+        assert _escape_drawtext("it's") == "it'\\''s"
 
     def test_colon(self) -> None:
         assert _escape_drawtext("v:1") == "v\\:1"
