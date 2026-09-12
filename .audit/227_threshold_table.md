@@ -511,3 +511,127 @@ score gaps.
 which is precisely why their new candidates get "no cap-available slot in next 7
 days". Sports at 0 explains why its 5 candidates matter and why 4 being `DRAFTED`
 is the live constraint there.
+
+---
+
+# OPS-24 §1 — auto-pause loop broken (2026-09-12 08:42Z)
+
+## Writes made (two, both sanctioned)
+
+**1. Flag.** `/opt/genlab/.env:188` `GENLAB_AUTO_PAUSE_ON_HEALTH_CRITICAL` **1 → 0**.
+* **Prod-only — T-09 again.** The flag appears in no committed file; `.env` is
+  gitignored. Repo corrected: added to `.env.example` with both defects
+  documented and the four supporting knobs, so the next reader sees why it is 0.
+* T-31 applied: counted ACTIVE non-comment matches before editing (active=1,
+  commented=0) and re-read the same line after. Backup `.env.bak.20260912T084224Z`.
+* Consumers load `EnvironmentFile=/opt/genlab/.env` (auto-approver, health-monitor,
+  daily-verify all verified), so it takes effect on each timer start — no restart.
+* Env-sourced read-back: `GENLAB_AUTO_PAUSE_ON_HEALTH_CRITICAL = '0'`, enabled=False.
+
+**2. Pause cleared** via `niche_pause.unpause()` — the same function the dashboard
+DELETE route calls. No raw SQL. Archived first (T-43 by hand) to
+`/opt/genlab/.audit-retention/2026-09-12/pause-archive/`:
+
+```
+ai_creators | paused_until 2026-09-12 10:00:21Z | created_at 2026-09-12 06:00:10Z
+reason:    auto_paused_health_critical: Reach dropped ∞x: 48h avg 0 vs 14d baseline 5. Probable shadowban.
+paused_by: system:account_health_check
+```
+
+Post-clear, env-sourced probe (`_connect: OK`): all five `paused=False`, `row=None`;
+`SELECT count(*) FROM niche_pauses` → **0**.
+
+**Rule #29:** VPS HEAD `1b66168e` vs origin `88c036fa` — `git diff --stat` excluding
+`.audit` is **empty**, so the gap is documentation-only and the flag's reader is deployed.
+
+## §1.2 — NOT YET VERIFIABLE (stated, not claimed)
+The flip landed 08:42Z; the last approver run was **08:30Z**, before it. "0
+AUTO-PAUSED since the flip" is true only because **no run has occurred**. The
+first post-flip run is 09:00Z. Scheduled separately.
+
+Note the skip path logs at `logger.debug(...)`, which will not appear at the
+journal's default level — so "quote the flag-off line" may be unobtainable by
+design. The observable proof is the absence of new `AUTO-PAUSED` lines plus a
+still-empty `niche_pauses` across a run that definitely happened. (Rule #19
+sibling: the disabled path is invisible.)
+
+---
+
+# OPS-24 §4 — the four DRAFTED sports candidates
+
+| bp | conf | stage it stopped at |
+|---|---|---|
+| `83b99a2c` | 0.858 | `render:compositor_failed:pre_render_quality:hook_equals_title` |
+| `a5b6144e` | 0.850 | `render:validation_failed:loudness_off:**-15.83 LUFS**` |
+| `5e6592f1` | 0.801 | `render:validation_failed:loudness_off:**-15.98 LUFS**` |
+| `f37c6614` | 0.766 | `render:validation_failed:loudness_off:**-16.07 LUFS**` |
+
+**Three of four died on loudness**, all 1.8–2.1 LU under target. The fourth hit
+the pre-render hook gate (hook == title).
+
+**Neither the caption_animator class nor T-14b** — `error_message` is populated
+and specific on every row, so nothing was swallowed. This is a real, visible
+render failure.
+
+**Connected to CAP-01 §1 tonight**: the same shape appeared in voice
+normalisation, where 2 of 15 ElevenLabs previews landed at −15.55 and −15.78
+against a −14 target and were flagged `on_target: False`. A ~1.8 LU undershoot is
+the common failure. Prior session finding applies: `loudnorm` alone does not
+reliably hit target; the two-pass + `alimiter` form does.
+
+---
+
+# OPS-24 §5 — the premise is refuted; report before anyone acts on it
+
+> "Fresh narrated content now waits a week behind older degraded content."
+
+**Not true for ai_creators.** Its two narrated, non-degraded blueprints are already
+at the FRONT:
+
+| slot | bp | degraded | conf | script |
+|---|---|---|---|---|
+| **09-13** | `3c904e01` | false | 0.910 | **356** |
+| **09-14** | `1b3e0a5c` | false | 0.946 | **260** |
+| 09-15 | `b3d56b28` | true | 0.865 | 0 |
+| 09-16 | `8419ee6d` | true | 0.813 | 0 |
+| 09-17 | `f8242245` | true | 0.791 | 0 |
+| 09-18 | `c5b0a152` | true | 0.812 | 0 |
+| 09-19 | `5e6b48ab` | true | 0.893 | 0 |
+
+Degraded content is already behind narrated content.
+
+## Consequence of applying T-29's ordering: **#218 slips a day**
+Under `degraded=false → conf desc → approval time`, `1b3e0a5c` (0.946) outranks
+`3c904e01` (0.910), so **#218's candidate moves 09-13 → 09-14**. The reorder also
+promotes `5e6b48ab` (degraded, 0.893) from 09-19 to rank 3, ahead of four other
+degraded rows — confidence outranks recency among the degraded set.
+
+**The ordering rule is only discriminating for ai_creators.** gaming, anime and
+movies are all `degraded=false` with **0-char scripts** — narration is effectively
+ai_creators-only today, so for them the rule collapses to confidence-only. Gaming's
+reshuffle: `434fbe48` (0.883) 09-19 → rank 1; `c5bdbb0d` (0.786) 09-13 → rank 7.
+
+## Cap lever — and the number that actually matters
+Queue depth: ai_creators **7**, gaming **7**, anime 1, movies 1, sports 0
+(16 total, out to 09-19). At N=3, ai_creators and gaming qualify.
+
+Drain from a standing start, ignoring inflow:
+
+| | 1/day | 2/day until depth < 3 |
+|---|---|---|
+| ai_creators (7) | 09-13 → **09-19** (7 days) | 09-13 → **09-16** (4 days) |
+| gaming (7) | 09-13 → **09-19** (7 days) | 09-13 → **09-16** (4 days) |
+
+**But inflow makes this the wrong frame.** Today ai_creators produced **4**
+candidates all clearing 0.65, and gaming 2. Against an outflow of **1/day**, the
+queue gains ~3/day and is **structurally saturated forever** — which is precisely
+why every new ai_creators candidate is refused with "no cap-available slot in next
+7 days". At 2/day the net is still positive for ai_creators (+2/day).
+
+**So the cap lever does not drain the queue; it only slows the fill.** Unless
+either the 7-day lookahead is extended or intake is throttled, no cap value in the
+1–2/day range clears a +3/day inflow. That is the number the decision should turn
+on, and it is not in the original framing.
+
+Neither lever applied. #218's 09-13 slot is unaffected **unless T-29's ordering is
+adopted**, which as shown moves it to 09-14.
