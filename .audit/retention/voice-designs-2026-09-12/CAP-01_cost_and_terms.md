@@ -254,3 +254,48 @@ applies" means silence cannot be read as permission at that scale. Flag
 
 Not legal advice; a summary of published terms read on 2026-09-12. Counsel review
 before the SaaS phase, and re-read when voice design leaves research preview.
+
+---
+
+# Part 4 — ElevenLabs FREE tier is NON-COMMERCIAL (VOICE-03 §0). Read 2026-09-12.
+
+**Verbatim, ElevenLabs Terms of Use:**
+> "if you access or use our Services free of charge (such a user, a **'Free
+> User'**), you may only use the Services for **non-commercial purposes**"
+
+Ownership is *not* tier-dependent — "users retain all rights in and to your
+Output" applies to both. **Use is.** We own those files and may not use them
+commercially.
+
+Corroborating: the pricing page lists **"Commercial License"** as a **Starter**
+feature (**$6/month**, not the ~$22 estimated), i.e. it is absent below that tier.
+
+## Consequences, stated plainly
+
+* **The fifteen retained ElevenLabs previews are REFERENCE-ONLY.** They were
+  generated on the free account measured earlier (`tier: free`,
+  `character_limit: 10000`). They cannot ship on any owned channel.
+* **Aditya's original five ElevenLabs picks were never production-ready** — and
+  not for the reason found first. VOICE-01 was blocked on *addressability*
+  (previews unpublishable, account can't hold custom voices). This is a second,
+  independent blocker on *rights*. Either alone would have stopped it.
+* **They must not be cloned onto another provider for production.** Cloning a
+  voice whose source audio we may only use non-commercially does not launder the
+  restriction, and every clone-capable provider puts source-rights clearance on
+  the customer. `voice_designs.yaml`'s ElevenLabs section keeps the *prompts* and
+  `seed: 42`, which are ours and carry no such limit — regenerating on a paid
+  plan is clean; reusing the free-tier audio is not.
+* **`eval_only` stands for all ElevenLabs output** until a paid plan exists.
+
+## What this does NOT invalidate
+The ElevenLabs design *prompts* and the `(prompt, seed, duration)` identity in
+`voice_designs.yaml`. Those are our own text. On a $6/month Starter plan the five
+voices regenerate and publish cleanly, and Aditya would not need to re-listen —
+the reproducibility test already proved seed stability.
+
+**Revised cost of the ElevenLabs option: $6/month, not ~$22.** That materially
+changes §5's "nothing clears the bar" fallback: the voices Aditya already liked
+are six dollars away, with the caveat that the *current* files still cannot be
+used and must be regenerated under the paid plan.
+
+Not legal advice; a summary of published terms read 2026-09-12.
