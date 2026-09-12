@@ -1123,3 +1123,95 @@ this is a false red.
 set (b) empty; the VPS FAIL is attributable to test-order instability, not to
 `0f78f5d7`. Stated as measured rather than resolved — a clean VPS PASS is still
 owed and depends on T-60.
+
+---
+
+# LLM-01 §A — route the writer through belt Haiku: the numbers
+
+## A.1 — Markup: **0%**
+
+| model | belt | Anthropic list | markup |
+|---|---|---|---|
+| claude-haiku-4-5 | **$1.00**/M in · **$5.00**/M out · $0.10 cache read · $1.25 cache write | $1.00 / $5.00 / $0.10 / $1.25 | **0%** |
+| claude-sonnet-4-6 | **$3.00**/M in · **$15.00**/M out · $0.30 / $3.75 | $3.00 / $15.00 / $0.30 / $3.75 | **0%** |
+
+It is a direct API passthrough priced at list. **There is no saving and no
+penalty** — the case is pool consolidation only, exactly as §D states.
+
+## A.2 — Token volume: **NOT RECORDABLE FROM THIS SCHEMA**
+
+`pipeline_run_costs.by_model` stores **USD only** — `{"claude-haiku-4-5-20251001": 0.0022}`.
+There are no prompt/completion token columns anywhere in the table. **The
+per-blueprint token counts §A.2 asks for cannot be produced from existing data**,
+and I am not going to infer them and present them as measured.
+
+What IS measurable — daily LLM spend by niche:
+
+| day | ai_creators | anime | gaming | movies | sports | **real total** |
+|---|---|---|---|---|---|---|
+| 09-12 | 0.1044 | 0.0245 | 0.0397* | 0.0413 | 0.0502 | **$0.2601** |
+| 09-11 | 0.0803 | 0.0412 | 0.0942 | 0.0387 | 0.0388 | **$0.2932** |
+| 09-10 | 0.0283 | 0.0344 | 0.0852 | 0.0603 | 0.0193 | **$0.2275** |
+
+\\* gaming 09-12 reads $10.0397 raw; $10.00 is the T-61 fixture, excluded.
+
+**≈ $0.26/day, ≈ $7.90/month.** At 0% markup the belt figure is identical.
+(LLM spend is $0.00 on 09-06 → 09-09 — the Anthropic credit-exhaustion window,
+which is the outage this migration is meant to prevent recurring.)
+
+## A.3 — Latency: belt adds ~1s/call, ~2x
+
+| path | run 1 | run 2 | avg |
+|---|---|---|---|
+| direct Anthropic | 0.97s | 0.75s | **0.86s** |
+| belt passthrough | 2.09s | 1.41s | **1.75s** |
+
+Identical prompt and params, same host, both returned the same hook
+(`"3 SECONDS LEFT AND HE PULLS OFF THE IMPOSSIBLE 🎮"`).
+
+**Caveat that matters for the decision:** the belt timing includes `belt` CLI
+subprocess spawn, so it is an upper bound on the network overhead, not a
+measurement of it. A direct HTTP call to the belt endpoint would be faster.
+
+**Against the pipeline budget:** at ~$0.0045/call, gaming's $0.0942 day is ~20
+writer calls per fire. Twenty extra seconds against fire durations measured today
+of **8–33 minutes** (anime 8m, gaming 12m, movies 17m, sports 21m, ai 32m) is
+**under 2%**. Latency is not a blocker.
+
+## A.4 — Rate limits: **not published**
+
+`app_get` exposes no rate-limit or concurrency field — the same gap as ElevenLabs
+before T-40 established its cap of 2 empirically. The app offers two functions:
+`run` (native) and `openai` (Chat Completions compatible, supports `max_tokens`,
+`temperature`, `prompt_cache_key`, `reasoning_effort`). **Haiku's concurrency cap
+must be measured before a five-niche burst relies on it** — that measurement is
+part of §B/§C, not §A.
+
+## A.5 — DECISION LINE (operator's, not mine)
+
+* **Markup 0%** — cost-neutral, no saving to weigh.
+* **Latency +~1s/call, <2% of a fire** — within budget.
+* **Rate limit unknown** — must be established before rollout.
+* The case rests entirely on **removing the second credit pool** as an outage
+  source (four days of $0.00 LLM spend on 09-06→09-09 show that outage is real),
+  not on economics or quality.
+
+**Reported, not acted on.** No migration performed.
+
+---
+
+# T-61 — my own gate wrote $10 of fixtures into prod telemetry
+
+Five `test_*` rows, **$10.0088**, written **10:09:04–10:30:37 UTC on 09-12** — the
+window of my VPS `baseline_compare` runs. One is `run_id='test_run'`, `$10.00`,
+`claude-sonnet-4-6`: the same fixture that produced T-21 in the first place.
+Real spend that day was **$0.2956**, so the fixtures are **34x** a real day.
+
+`9bed1094` filtered `test_` rows **in the reader**. That hides them from budget
+readers; it does not stop the write. The harness flags the vector on every run —
+`2 file(s) import prod storage with no mock in-file` — and I ran 11,208 tests
+through it anyway, twice.
+
+**A gate advertised as read-only had a production write side-effect.** The fix
+must be write-side (an autouse fixture pointing the storage backend at a mock for
+the whole suite), not a reader filter. Cleanup of the five rows needs operator go.
