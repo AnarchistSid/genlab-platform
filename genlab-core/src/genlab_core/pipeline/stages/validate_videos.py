@@ -207,7 +207,7 @@ class ValidateVideos:
                         "re-normalising assembled asset",
                         ",".join(loud_issues),
                     )
-                    relouded = self._fix_loudness(Path(video_path))
+                    relouded = self._fix_loudness(Path(video_path), loud_issues)
                     if relouded is not None:
                         remaining = self._check_loudness(relouded)
                         if remaining:
@@ -631,21 +631,45 @@ class ValidateVideos:
         return issues
 
     @staticmethod
-    def _fix_loudness(path: Path) -> Path | None:
-        """Re-normalise the FINAL assembled asset, video stream untouched.
+    def _fix_loudness(path: Path, issues: list[str] | None = None) -> Path | None:
+        """Repair the FINAL assembled asset, video stream untouched.
 
-        ``loudnorm`` ALONE CANNOT FIX THIS, which is worth stating because the
-        obvious repair silently fails. Measured 2026-09-10 on the real asset:
-        the file was already at -13.97 LUFS against a -14.0 target, so loudnorm
-        applied essentially no gain change and the true peak moved +3.42 ->
-        +3.27 dBTP. Single-pass loudnorm's ``TP=`` constrains its own output
-        gain; it is not a limiter, and it will not pull down inter-sample peaks
-        in an asset whose integrated loudness is already correct.
+        **Apply only the correction the measurement asked for.** Running both
+        stages unconditionally is what broke this: measured 2026-09-12 on three
+        real sports renders, every one entered at I=-14.5x (in spec) with
+        TP=-0.72 (over by 0.28 dB), and left at I=-15.83/-15.98/-16.07 — a
+        passing integrated loudness converted into a failing one while fixing
+        the peak. The gate then blocked all three as ``loudness_off``, and the
+        error named the symptom the repair had introduced.
 
-        So the chain ends in a real true-peak limiter. The limit is set 0.5 dB
-        below the gate (-1.5 dBFS for a -1.0 dBTP ceiling) because limiting to
-        exactly the threshold lands on it: with ``limit=0.891`` the same asset
-        measured -0.98 dBTP, which fails ``> -1.0`` by two hundredths.
+        The mechanism: ``loudnorm`` targeting -14 from -14.5 applies about
+        +0.5 dB, which pushes material into the limiter that follows, and the
+        limiter's gain reduction then drags integrated loudness down ~1.3 LU
+        with nothing to restore it. Neither filter is wrong; running the pair
+        when only the peak was out of spec is.
+
+        Measured on the same three assets with the limiter ALONE, no loudnorm
+        (ceiling sweep -1.3 to -2.0 dBFS, all passing):
+
+            ceiling -1.5 dBFS -> I=-14.62/-14.60/-14.58, TP=-1.20  PASS
+
+        so the existing ceiling is retained unchanged; only the chain is now
+        conditional.
+
+        Two properties of the tooling that make this non-obvious and are worth
+        recording, both measured the same day:
+
+        * ``alimiter`` limits SAMPLE peaks, not TRUE peaks. Limiting to
+          -1.2 dBFS yielded -0.95 dBTP — still over the -1.0 gate.
+        * The AAC re-encode regenerates overshoot. A flat -0.38 dB attenuation
+          moved true peak only 0.13 dB (-0.72 -> -0.85), not the 0.38 dB the
+          arithmetic predicts. Plain attenuation therefore cannot be trusted to
+          hit a true-peak target; a limiter with headroom under the gate can.
+
+        The ceiling stays 0.5 dB below the gate (-1.5 dBFS for a -1.0 dBTP
+        ceiling) because limiting to exactly the threshold lands on it: with
+        ``limit=0.891`` an earlier asset measured -0.98 dBTP, failing ``> -1.0``
+        by two hundredths.
 
         ``-c:v copy`` matters: the video has already been encoded, captioned
         and validated for colour. Re-encoding it to repair audio would risk a
@@ -654,15 +678,32 @@ class ValidateVideos:
         """
         import subprocess
 
+        issues = issues or []
+        peak_over = any(i.startswith("true_peak_over") for i in issues)
+        loud_off = any(i.startswith("loudness_off") for i in issues)
+        # No issue list supplied (legacy callers) → repair both, old behaviour.
+        if not peak_over and not loud_off:
+            peak_over = loud_off = True
+
+        chain: list[str] = []
+        if loud_off:
+            chain.append(
+                f"loudnorm=I={SPEC['target_lufs']}:TP={SPEC['max_true_peak']}:LRA=7"
+            )
+        if peak_over or loud_off:
+            # Always end on the limiter: loudnorm can itself raise peaks.
+            chain.append(f"alimiter=limit={_LIMITER_CEILING:.4f}:level=disabled")
+
         out = path.with_name(f"{path.stem}_ln{path.suffix}")
+        logger.info(
+            "[ValidateVideos] loudness repair for %s — issues=%s chain=%s",
+            path.name, ",".join(issues) or "(none)", "+".join(chain),
+        )
         try:
             subprocess.run(
                 ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(path),
                  "-c:v", "copy",
-                 # 0.5 dB of headroom under the gate; see docstring.
-                 "-af", (f"loudnorm=I={SPEC['target_lufs']}:"
-                         f"TP={SPEC['max_true_peak']}:LRA=7,"
-                         f"alimiter=limit={_LIMITER_CEILING:.4f}:level=disabled"),
+                 "-af", ",".join(chain),
                  "-c:a", "aac", "-b:a", "192k",
                  "-ar", str(SPEC["audio_sample_rate"]),
                  "-ac", str(SPEC["audio_channels"]), str(out)],
