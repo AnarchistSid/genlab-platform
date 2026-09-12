@@ -1675,3 +1675,61 @@ relative paths: **19/19 OK**; corrupting one byte of a picked preview produced
 **Consequence:** whichever provider Aditya picks, the five voices are re-creatable
 from this file in minutes. For ElevenLabs no re-listen is needed — only a
 re-publish on a paid plan.
+
+---
+
+# MOTION-01 §1 — measured baseline. The brief's premise is wrong in both directions.
+
+## Measured, `anarchistsid/shot-density-check`, one real render per niche
+
+| niche | duration | cuts | cuts/s | avg shot | median | **longest static** |
+|---|---|---|---|---|---|---|
+| ai_creators | 31.4s | **2** | **0.064** | 10.47s | 2.58s | **28.03s** |
+| anime | 16.8s | 1 | 0.059 | 8.40s | 16.01s | 16.01s |
+| gaming | 18.6s | **0** | 0.000 | 18.60s | 18.60s | 18.60s |
+| movies | 19.4s | **5** | **0.258** | 3.23s | 2.61s | 9.77s |
+| sports | 19.4s | 2 | 0.103 | 6.47s | 2.61s | 16.00s |
+
+Target: 0.33–1.5 cuts/s, longest static ≤ 4s. **All five FAIL.**
+
+**Two corrections to the brief.** It states "three of five ship zero cuts; only
+ai_creators cuts (9, 0.294/s)".
+
+* **ai_creators is not the good one — it is among the worst.** 2 cuts at
+  0.064/s, with a **28.03-second static stretch in a 31.4-second reel**. Nearly
+  the entire flagship reel is one unbroken shot.
+* **movies is the best of the five** at 0.258/s, not a zero-cut niche. It is
+  still below target, but it is 4× ai_creators.
+
+Only gaming matches its description (literally 0 cuts). The "9 cuts, 0.294/s"
+figure does not correspond to any render measured today.
+
+## §1 code read — the zero-cut cause is architectural, not a discarded-clip bug
+
+* **One clip per story, by signature.** `base_visual_render._compose_frame(self,
+  clip_path: Path, ...)` — singular, throughout. The renderer is not throwing
+  away clips the fetcher returned.
+* **`top_n_per_run: 5` is five STORIES, not five clips per story.** The fetcher
+  returns one video per story; there is no multi-clip pool to cut between.
+* **So the free fix hoped for in §1 does not exist.** This is not a renderer or
+  config defect — nothing is being discarded. Multi-clip cutting requires new
+  sourcing, which is what §2 and §5 are for.
+
+## The "dual render path" is a single path
+
+`short_video_maker_url` appears in `settings.py`, `.env.example` and gaming's
+`niche.yaml` as **`use_short_video_maker: false`** — and has **no consumer
+anywhere in the codebase**. Built-never-wired. Every render measured above came
+from FFmpeg because FFmpeg is the only live path; there is no second engine to
+compare against.
+
+## Method note — a false zero caught before it was reported
+
+The first baseline run returned **0.0 duration on all five**, which would have
+read as "the renders are unreadable". Cause: **belt does not upload local file
+paths**; the app completed and reported `could not read duration`. My earlier
+probe had "confirmed" local upload worked by printing the output **keys** and
+never the **values** — `status_text: completed` with a zero payload, the same
+trap as the belt `openai` function. Fixed by `belt file upload` first, then
+passing the returned URI, and the measurement loop now asserts a non-zero
+duration before recording a row.

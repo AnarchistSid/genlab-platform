@@ -1,0 +1,77 @@
+[
+ {
+  "niche": "ai_creators",
+  "uri": "https://cloud.inference.sh/t/69vxdh4w/41r4vno2.mp4",
+  "duration_seconds": 31.41,
+  "cut_count": 2,
+  "cuts_per_second": 0.0637,
+  "avg_shot_seconds": 10.47,
+  "median_shot_seconds": 2.577,
+  "longest_static_seconds": 28.033,
+  "longest_static_at": 0.8,
+  "findings": [
+   "0.064 cuts/sec is below the 0.33 target \u2014 roughly one cut every 16s. Short-form usually cuts every 1-3s to hold attention.",
+   "longest unbroken shot is 28.0s starting at 0.8s, over the 4.0s limit \u2014 this is where a viewer scrolls."
+  ]
+ },
+ {
+  "niche": "anime",
+  "uri": "https://cloud.inference.sh/t/69vxdh4w/lhjqdozp.mp4",
+  "duration_seconds": 16.81,
+  "cut_count": 1,
+  "cuts_per_second": 0.0595,
+  "avg_shot_seconds": 8.405,
+  "median_shot_seconds": 16.01,
+  "longest_static_seconds": 16.01,
+  "longest_static_at": 0.8,
+  "findings": [
+   "0.059 cuts/sec is below the 0.33 target \u2014 roughly one cut every 17s. Short-form usually cuts every 1-3s to hold attention.",
+   "longest unbroken shot is 16.0s starting at 0.8s, over the 4.0s limit \u2014 this is where a viewer scrolls."
+  ]
+ },
+ {
+  "niche": "gaming",
+  "uri": "https://cloud.inference.sh/t/69vxdh4w/pid30hpi.mp4",
+  "duration_seconds": 18.6,
+  "cut_count": 0,
+  "cuts_per_second": 0,
+  "avg_shot_seconds": 18.6,
+  "median_shot_seconds": 18.6,
+  "longest_static_seconds": 18.6,
+  "longest_static_at": 0,
+  "findings": [
+   "0.000 cuts/sec is below the 0.33 target \u2014 roughly one cut every 19s. Short-form usually cuts every 1-3s to hold attention.",
+   "longest unbroken shot is 18.6s starting at 0.0s, over the 4.0s limit \u2014 this is where a viewer scrolls."
+  ]
+ },
+ {
+  "niche": "movies",
+  "uri": "https://cloud.inference.sh/t/69vxdh4w/4retlue1.mp4",
+  "duration_seconds": 19.41,
+  "cut_count": 5,
+  "cuts_per_second": 0.2576,
+  "avg_shot_seconds": 3.235,
+  "median_shot_seconds": 2.61,
+  "longest_static_seconds": 9.767,
+  "longest_static_at": 6.733,
+  "findings": [
+   "0.258 cuts/sec is below the 0.33 target \u2014 roughly one cut every 4s. Short-form usually cuts every 1-3s to hold attention.",
+   "longest unbroken shot is 9.8s starting at 6.7s, over the 4.0s limit \u2014 this is where a viewer scrolls."
+  ]
+ },
+ {
+  "niche": "sports",
+  "uri": "https://cloud.inference.sh/t/69vxdh4w/ilytuo1c.mp4",
+  "duration_seconds": 19.41,
+  "cut_count": 2,
+  "cuts_per_second": 0.103,
+  "avg_shot_seconds": 6.47,
+  "median_shot_seconds": 2.61,
+  "longest_static_seconds": 16,
+  "longest_static_at": 0.8,
+  "findings": [
+   "0.103 cuts/sec is below the 0.33 target \u2014 roughly one cut every 10s. Short-form usually cuts every 1-3s to hold attention.",
+   "longest unbroken shot is 16.0s starting at 0.8s, over the 4.0s limit \u2014 this is where a viewer scrolls."
+  ]
+ }
+]
