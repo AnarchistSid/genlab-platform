@@ -1,11 +1,11 @@
-"""T-21 filter: rows whose run_id starts with ``test_`` are health-check
+"""LLM cost predictive alerting.
+
+T-21 filter: rows whose run_id starts with ``test_`` are health-check
 probes (~$0.0022 every 30 min) and test fixtures, not pipeline spend. They are
 legitimate telemetry but must never reach a budget or runway reader -- one
 fixture row at $10.00 was 32x a real day's spend and the guard did not notice.
 Filtered in the READER, not suppressed at the writer, so the probes stay
 queryable.
-"""
-"""LLM cost predictive alerting.
 
 Motivating incident (2026-07-23): Anthropic credit exhausted at some
 point during the day and stayed unnoticed until the writer + LLM
