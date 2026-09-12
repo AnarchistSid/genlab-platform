@@ -98,9 +98,36 @@ class RenderWhisperCaptions:
                     or story.get("title", "")
                 ).strip()
             else:
+                # T-65 / B.3 (2026-09-12): prefer the text that was ACTUALLY
+                # SPOKEN over the hook.
+                #
+                # ``align_words`` aligns the AUTHORED string against whisper's
+                # output and returns None once more than 30% of words fail to
+                # match, at which point the caller drops to WPM timing. Aligning
+                # the hook against narration audio therefore fell back every
+                # single time on any niche whose voice-over is not the hook —
+                # which, measured 2026-09-12, is anime, movies and sports: their
+                # reels speak caption copy plus a CTA, not the hook. The stage's
+                # own storytime branch already recognised this hazard for one
+                # variant; it is general.
+                #
+                # ``spoken_text`` is stamped by GenerateAudio and is the exact
+                # TTS input, so alignment matches instead of degrading. Hook and
+                # title remain the fallback for historical blueprints, where the
+                # field is None.
                 caption_text = (
-                    media.get("hook_text") or story.get("hook") or story.get("title", "")
+                    str(media.get("spoken_text") or "").strip()
+                    or media.get("hook_text")
+                    or story.get("hook")
+                    or story.get("title", "")
                 ).strip()
+                if media.get("spoken_text"):
+                    logger.info(
+                        "[WHISPER_CAPTIONS] aligning against spoken_text "
+                        "(%d chars) rather than hook — story %d",
+                        len(caption_text),
+                        i,
+                    )
 
             if not caption_text:
                 stats["skipped"] += 1

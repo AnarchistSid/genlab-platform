@@ -146,6 +146,29 @@ class GenerateAudio:
                 skipped += 1
                 continue
 
+            # T-65: keep the exact string handed to TTS. Until now the system
+            # wrote copy, spoke it, and kept no record of it — no
+            # ``caption_segments``, ``tts_text`` or ``audio_script`` key existed
+            # anywhere, and ``narration_script`` is empty on four of five
+            # niches. Measured 2026-09-12: transcribing anime/movies/sports
+            # reels returns GenLab's own CTAs ("W or L take", "Follow, we watch
+            # so you don't", "We clip every moment"), so the words were ours and
+            # the only surviving copy was the audio itself.
+            #
+            # Three things this unblocks, in order of value:
+            #   * forced alignment for whisper captions — ``align_words`` aligns
+            #     the AUTHORED text against whisper output and returns None past
+            #     a 30% mismatch, so aligning the hook against narration audio
+            #     falls back to WPM every time. With the real spoken text it
+            #     aligns properly.
+            #   * transcript-vs-intent as a free quality signal.
+            #   * reward attribution and reproduction of a good reel.
+            #
+            # Optional field, None on historical rows, never crash on absence —
+            # the FIX-T01 ``audio_provider`` shape.
+            media_pre = bp.setdefault("media", {})
+            media_pre["spoken_text"] = script
+
             # Skip if audio already exists
             media = bp.setdefault("media", {})
             if media.get("audio_path") and Path(media["audio_path"]).exists():

@@ -364,7 +364,53 @@ def prepend_intro_to_composite(
     except Exception as exc:  # noqa: BLE001
         logger.warning("[hook_thumbnail] concat error: %s", exc)
         return False
+
+    # T-64 (2026-09-12): a zero exit is not evidence the file is usable.
+    # `a9308ff9…_reel_with_intro.mp4` is 12 MB on disk with `moov atom not
+    # found` and no duration, and the run logged neither a concat failure nor a
+    # raised wire — i.e. this returned True for a file nothing can open. An
+    # unfinalised MP4 has its payload but no moov index, and ffmpeg can still
+    # exit 0 on the write.
+    #
+    # Downstream the corruption surfaces only as an absence: the caption stage
+    # probes a 0.0s duration, builds an empty filter chain and politely skips,
+    # so the reel silently loses the intro it paid for and nothing says why.
+    # Verify the artifact instead of the exit code (T-57).
+    if not _is_playable(output_path):
+        logger.warning(
+            "[hook_thumbnail] concat exited 0 but produced an UNPLAYABLE file "
+            "(no moov / zero duration): %s — treating as failure",
+            output_path,
+        )
+        try:
+            Path(output_path).unlink(missing_ok=True)
+        except Exception:  # noqa: BLE001
+            pass
+        return False
     return True
+
+
+def _is_playable(path: str) -> bool:
+    """True when ffprobe can read a positive duration from ``path``.
+
+    A truncated MP4 — written but never finalised, so the moov atom is missing —
+    fails here while passing a returncode check. Any probe failure is treated as
+    unplayable: this gates an artifact that has already been written, so the safe
+    answer on doubt is to reject it.
+    """
+    try:
+        from genlab_core.media.ffmpeg import get_ffprobe_binary
+
+        r = subprocess.run(
+            [get_ffprobe_binary(), "-v", "error", "-show_entries",
+             "format=duration", "-of", "default=nw=1:nk=1", str(path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        if r.returncode != 0:
+            return False
+        return float((r.stdout or "0").strip() or 0) > 0
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def generate_hook_thumbnail(

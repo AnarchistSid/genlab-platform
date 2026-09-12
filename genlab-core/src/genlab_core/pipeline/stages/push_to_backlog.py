@@ -2667,6 +2667,13 @@ class PushToBacklog:
                         "audio_fallback_reason": (
                             media.get("audio_fallback_reason") or None
                         ),
+                        # T-65 (2026-09-12): the exact string handed to TTS.
+                        # Stamped in GenerateAudio (15); this is stage 21, so it
+                        # is the same six-stage pass-through that killed
+                        # narration_audio_path and needed FIX-T01's gate for
+                        # audio_provider. Same shape, same reason, same None on
+                        # historical rows.
+                        "spoken_text": (media.get("spoken_text") or None),
                         "priority_score": _apply_engagement_boost(
                             story.get("final_score")
                             if story.get("final_score") is not None
