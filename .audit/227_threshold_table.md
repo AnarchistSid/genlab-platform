@@ -878,3 +878,69 @@ per-blueprint `error`. The `errors=8` figure will read 8 indefinitely.
 **0.924** has been refused for six days, while the queue holds five degraded
 0-char blueprints at 0.791–0.893. First-come scheduling, not merit — which is the
 concrete case for T-53's ordering plus expiry.
+
+---
+
+# OPS-27 §A — FIX-LOUD deployed; harness result INVALID
+
+## A.1 Deploy — clean, rule #29 satisfied
+* VPS before **`1b66168e`**; working tree **87 untracked, ZERO modified tracked files**
+  (the five `publishing.yaml` are committed, so no dirt blocked the pull).
+* `git pull --ff-only` → fast-forward, 4 files, `validate_videos.py` +81/−20.
+* **Parity: VPS `635f91896c6d6a33f7fc2f76b857757c1ec5fedd` == origin/main.** Dirt
+  unchanged at 87 untracked.
+* No restart needed: render runs in `genlab-pipeline-*` oneshot units, which
+  import fresh at each timer fire.
+* Deployed module verified to carry the change (`_fix_loudness(path, issues)` at
+  :634, `peak_over`/`loud_off` at :682–683) — not inferred from the commit.
+
+## A.3 Gate — 3/3 clear, through the DEPLOYED module
+
+| asset | in I | in TP | issues found | out I | out TP | gate |
+|---|---|---|---|---|---|---|
+| a8378e94 | −14.54 | −0.72 | `['true_peak_over:-0.72dBTP']` | **−14.62** | **−1.20** | **PASS** |
+| b9cbbe53 | −14.55 | −0.72 | `['true_peak_over:-0.72dBTP']` | **−14.60** | **−1.20** | **PASS** |
+| fb419f20 | −14.51 | −0.72 | `['true_peak_over:-0.72dBTP']` | **−14.58** | **−1.20** | **PASS** |
+
+**A.4 recorded:** the gate found **`true_peak_over` only** on all three. The
+`loudness_off:−15.83LUFS` in `error_message` was created by the old repair, which
+reported the error it had just introduced.
+
+### The ±0.5 LU criterion is NOT met, and cannot be
+Outputs land at **−14.58 to −14.62** — inside the shipped ±1.0 tolerance, outside
+the ±0.5 §A.3 asked for. This is not a tuning miss:
+
+```
+source I = −14.54, TP = −0.72  →  crest 13.82 dB
+I ≥ −14.5 AND TP ≤ −1.0  requires crest ≤ 13.5 dB
+```
+
+**±0.5 LU and TP ≤ −1 dBTP are not simultaneously satisfiable on this material**
+without dynamic compression — which is exactly what caused the original defect.
+Reported rather than met. `reel-spec-check` not run as a separate pass; the
+deployed `_check_loudness` is the gate that rejected these and it now passes them.
+
+## A.2 — `baseline_compare.sh`: **result INVALID, not a PASS**
+
+It printed `VERDICT: PASS`. **No test ran.** Both pytest logs contain exactly one
+line: `setsid: command not found` — macOS has no `setsid`, so `run_one` never
+launched pytest. The harness then grepped for failures (0), counted collected
+(**base=0 head=0**), computed empty sets, and declared PASS.
+
+It guards inversion, skip-delta and import isolation, but **never asserts that a
+single test executed**. → **T-55 (High)**. This is the T-20 shape *inside the
+instrument built to prevent T-20*, and it is the strongest argument yet that a
+harness needs a positive control on itself.
+
+Three further portability defects found getting there → **T-56**: the `/opt/genlab`
+default `SRC`; the raw-prefix import-isolation check that FALSE-ABORTS under any
+`/tmp` parent on macOS (`/tmp` → `/private/tmp`); and hardcoded world-writable
+`/tmp/bc_*.log` paths.
+
+**T-21 rider: `pipeline_run_costs` 652 → 652.** Stable — but **vacuous**, because
+no test executed. It proves nothing about T-21's fix either way. **The harness
+stays frozen; T-21's unfreeze remains unverified.**
+
+Earlier sessions' gate-4 PASS from this harness should be re-checked: if it ran on
+Linux, `setsid` existed and the result stands; if it ran on the Mac, it has the
+same defect.
