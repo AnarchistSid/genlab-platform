@@ -184,3 +184,97 @@ different days, not two minutes apart. No fold-in required; `6092026c` stands.
 Mitigated, not eliminated: both jobs gate on `ExecMainExitTimestamp` at STEP 0,
 so that case reports "not yet run" rather than a false zero — which is the whole
 point of the three-meanings gate.
+
+---
+
+## FIX-T23 gate 2 (18:35Z fire) + T-26 obs 1 — 2026-09-11/12
+
+**STEP 0 (M):** publisher 18:35:01 → 18:45:08 UTC, 10m07s, Result=success.
+Third duration sample (prior: 4m53s @06:35Z, 12m00s @12:05Z).
+
+### Gate 2 — PASSED
+4 post IDs, anime blueprint `aeff4e14`, slot 18:00Z, published 18:44–18:45Z.
+
+| niche | post_id | status | pub | scheduled_for | stale_at | in window? |
+|---|---|---|---|---|---|---|
+| anime | instagram:17925963714184715 | SUCCESS | 18:44 | 18:00Z | 09-12 12:00Z | ✅ |
+| anime | youtube:FSNjcxnOyj4 | SUCCESS | 18:44 | 18:00Z | 09-12 12:00Z | ✅ |
+| anime | facebook:1585787566657906 | SUCCESS | 18:44 | 18:00Z | 09-12 12:00Z | ✅ |
+| anime | threads:18036935789831548 | SUCCESS | 18:45 | 18:00Z | 09-12 12:00Z | ✅ |
+
+**Precision on the gain (I):** the 18:00Z slot would NOT have been lost without
+FIX-T23 — it was future at 12:05Z but still inside its 18h window at 06:35Z on
+09-12. What the 18:35Z fire bought is **same-day publication instead of
+next-day**. Timeliness, not rescue. `audio_provider` is NULL on this blueprint
+(`tier = -`) though `degraded=false` — FIX-T01's field is not populated on the
+anime path.
+
+### T-26 observation 1 of 7 — 2026-09-11, MECHANISM CONFIRMED
+The FULL run **does** execute the retry pass. Measured:
+```
+18:40:01  retry_pass: [publish] Retrying 1 failed platform(s) for blueprint 9c9927e3: ['threads']
+18:40:02  retry_pass: [publish] Retry FAILED: movies/threads (TRANSIENT):
+          Threads: video container creation failed (VIDEO):
+          Param text must be at most 500 characters long.
+```
+Code read (`publish_all_platforms.py:380,710`) is now confirmed by observation:
+`_run_retry_pass` fires on the full path. **1 of 7 observations toward removing
+`genlab-publisher-retry.timer`.**
+
+**Two NEW defects surfaced by that line (out of scope — filed, not fixed):**
+* **T-34 — Threads captions exceed the 500-char API limit.** movies/threads fails
+  at container creation on length. CLAUDE.md documents Twitter ≤280 but carries
+  no Threads 500 rule, and the caption builder does not enforce one.
+* **T-35 — a permanent failure is classified TRANSIENT.** A 500-char overflow
+  fails identically on every retry; tagging it TRANSIENT guarantees repeat
+  attempts that cannot succeed. Retry classification must distinguish
+  length/validation errors from network transients.
+
+### ai_creators was PAUSED (M) — a confound on every ai_creators reading
+`[publish] niche=ai_creators — niche is paused (PR #577 emergency-stop),
+skipping fresh publish + retry pass`. Auto-approver logged
+`[ai_creators] examined=0 ... paused=True` from ≤13:00Z through 18:35Z on 09-11 —
+**it was never evaluated**, so its zeros in that window are not gate results.
+`niche_pauses` is now empty; the sweeper deleted 2 expired rows at 02:00:02Z on
+09-12; all five niches read `paused=False`. **#218 is not blocked going forward.**
+
+### STEP 4 — 06:35Z 09-12 prediction
+Due and in-window at the next fire: gaming `76d4d9de` (slot 09-12 06:30Z,
+"Grand Theft Auto V" — note bare title), sports `2f663eb9` (slot 09-12 06:30Z),
+gaming `2cb13852` (slot 09-11 19:00Z, stale_at 09-12 13:00Z).
+Future-blocked: `f89d7b52` 09-13 · `566bd8be` 09-14 · `a7a3d9f8` 09-15 ·
+`7c3a4028` 09-16 · `c5bdbb0d` 09-17 · `44fb8c90` 09-18.
+Gate tally for the run: 23 × schedule_gate, 14 × Stale.
+
+---
+
+## FOUR INSTRUMENT DEFECTS found while running this check (all M)
+
+Each would have produced a confident wrong reading. All four are now corrected
+in the 06:32Z and 06:57Z jobs.
+
+1. **`genlab-pipeline@<niche>.service` does not exist.** Real units are
+   `genlab-pipeline-{ai,gaming,sports,movies,anime}`. `genlab-pipeline-ai-creators`
+   is also a phantom.
+2. **`systemctl show` returns `Result=success` for a unit that does not exist**
+   (`LoadState=not-found`). My STEP 0 gate in both scheduled jobs would have
+   read a green light on five phantom units and proceeded. **Always print
+   LoadState beside Result.** → **T-36**.
+3. **The publisher declares `SuccessExitStatus=0 1 3 4`.** The 18:35Z fire
+   exited **1** and systemd recorded **success**. `Result=success` is therefore
+   NOT a valid completion gate for this unit — print `ExecMainStatus`. This is
+   rule #26's remedy applied so widely it now masks genuine failures. → **T-37**.
+4. **`psql -U genlab` fails** ("role genlab does not exist") and defaults to port
+   **5433**. Working DSN is `DATABASE_URL` in `/opt/genlab/.env` → **127.0.0.1:5432,
+   user `genlab_app`**. This is the 5432/5433 ambiguity from A-0058, still live.
+
+## Schedule facts that invalidated the 04:32Z job (M)
+* Pipelines are **staggered**, not a single 02:30Z fire:
+  **ai 02:30Z · movies 03:30Z · gaming 04:00Z · sports 05:00Z · anime 06:00Z.**
+* Auto-approver `OnCalendar=*-*-* 06..22:00,30:00 UTC` — **no runs 22:30→06:00.**
+* Therefore at 04:32Z zero approvals could exist from any overnight fire, and
+  only 3 of 5 niches had fired. The prediction was structurally impossible.
+  Job moved to **06:32Z** (after both 06:00/06:30 approver passes, before the
+  06:35Z publisher) — the only window where it can be made.
+* Anime fires 06:00Z and the approver runs 06:00/06:30, so anime is structurally
+  one cycle behind and may legitimately publish at 12:05Z rather than 06:35Z.
