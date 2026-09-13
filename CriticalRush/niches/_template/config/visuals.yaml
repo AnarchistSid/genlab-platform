@@ -86,7 +86,13 @@ ffmpeg:
 animation:
   word_by_word:
     whisper_sync:
-      enabled: true
+      # SWEEP-01 §D (2026-09-12): was `true`, which handed every niche
+      # scaffolded from this template the whisper canary ON — against the
+      # documented policy ("ai_creators is the CANARY … do not extend to
+      # other niches without a canary-vs-baseline retention read").
+      # All four live niches other than ai_creators run `false`; the
+      # template now matches the policy, not the canary.
+      enabled: false
       model_size: "base"
       fallback: "wpm"
       silence_threshold_db: -40

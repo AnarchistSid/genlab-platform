@@ -238,3 +238,89 @@ governing, changing what auto-publishes — which §B forbids for a diagnostic.
 Options for the operator: (a) mask `genlab-strategist-apply.timer` for the window,
 (b) real run then delete the report before 08:30 IST, (c) reproduce the LLM call
 in isolation without the persist.
+
+# =====================================================================
+# §R3 — 2026-09-13 ~04:10Z. Masked re-run ABORTED (see below); root cause found.
+# =====================================================================
+
+## §A — the re-run was unnecessary. The strategist FIXED ITSELF, and the real cause is elsewhere.
+
+State changed between §R2 and §R3. Measured at 04:04Z on 2026-09-13:
+  * `genlab-strategist.service`  fired 07:30 IST today -> **Result=success, ExecMainStatus=0**,
+    exited 07:38:13 (≈8 min, consistent with real LLM calls).
+  * `genlab-strategist-apply.service` fired 08:30 IST -> **Result=success, ExecMainStatus=0**.
+The `ExecMainStatus=1` of 2026-09-06 did not recur. **There is no longer a failure to
+reproduce**, so the real re-run was not performed — it would have exercised a healthy path.
+
+`systemctl mask` FAILED: "File /etc/systemd/system/genlab-strategist-apply.timer already
+exists" — mask creates a /dev/null symlink and refuses when a real unit file occupies the
+path. **`stop` achieved the goal** (ActiveState=inactive, NEXT="-"). Timer restored and
+verified: NEXT = Mon 2026-09-14 08:30 IST.
+*Generalises: `mask` is not available for units with a real file at that path; `stop` +
+`disable` is the working idiom, and the "is it masked?" check must read ActiveState, not
+assume the mask succeeded.*
+
+## ROOT CAUSE — why fresh reports never supersede (this is the real defect)
+
+Both jobs succeeded hours ago, yet the governing override is STILL the 2026-08-13 report
+(gaming 0.22 / sports 0.25 / movies 0.38 — unchanged). Measured reason:
+
+**Every strategist_report since 2026-08-16 has `reviewed_at = NULL`.**
+The 2026-08-13 batch all carry the identical timestamp `2026-08-15 06:04:43` — the
+signature of the one-time backfill, not of ongoing behaviour.
+
+`auto_accept_strategist_proposals.py::_mark_completed_reports` stamps `reviewed_at` **only
+when every proposal is triaged** (`COUNT(DISTINCT idx) over accepted ∪ rejected >=
+length(proposals)`). Its own docstring: *"Reports with even one un-triaged proposal
+(usually operator_gate punts) stay NULL — operator still owes those."*
+
+Measured triage state of every report since 2026-08-16: **all have un-triaged proposals.**
+Today's: ai_creators 4 props/0 triaged, sports 7/4, movies 8/3.
+
+**So `auto_accept` is not buggy. This is a Class 6 composition defect:**
+  * `auto_accept` correctly leaves operator-gated proposals for a human — correct.
+  * `strategy_phase` correctly requires a *reviewed* report before honouring an override — correct.
+  * the operator has not triaged since 2026-08-15 — not a defect.
+  * **Jointly:** the override freezes at the last fully-triaged report and silently
+    outranks daily calibration, indefinitely, with no surface showing the age.
+
+The earlier framing ("the strategist is broken") was wrong. The strategist is fine.
+The freeze is caused by a *human-triage dependency* that nothing surfaces or bounds.
+
+**This changes the §C fix.** An expiry alone treats the symptom. The options are:
+  (a) bound the override by age (§C as briefed) — still correct, still needed;
+  (b) have `strategy_phase` prefer the newest report with an accepted gate_threshold
+      regardless of full-triage state — changes what "reviewed" guarantees;
+  (c) surface un-triaged proposal age on Mission Control so the human dependency is visible.
+(a) + (c) together are the minimum. (b) should not be taken without deciding what
+`reviewed_at` is supposed to mean.
+
+## §D — `_template` audit: whisper_sync was ONE of ELEVEN drifted keys.
+
+Fixed: `whisper_sync.enabled: true -> false` (with rationale in-file).
+
+**The remaining ten — every one disagrees with ALL FOUR live niches. Reported, not fixed:**
+
+| key | _template | live niches | consequence for a new niche |
+|---|---|---|---|
+| `ffmpeg.preset` | `slow` | all four `medium` | slower encode on a 4 GB VPS (CLAUDE.md documents `fast` — a third value again) |
+| `ffmpeg.timeout_seconds` | `120` | all four `600` | **compounds with the above: slowest preset + 1/5th the timeout = near-certain render timeout** |
+| `channel_handle` | `@framedrift` | per-channel | **a new niche publishes attributing FrameDrift's handle** |
+| `feature_flags.platforms_enabled` | 6 entries | all four 5 | enables a 6th platform; rule #23 scopes to 4 |
+| `pipeline.max_items_per_run` | `4` | all four `10` | |
+| `pipeline.min_score_threshold` | `0.42` | `0.2`–`0.25` | |
+| `video_sourcing.top_n_per_run` | `5` | all four `15` | |
+| `video_sourcing.…min_composite_score` | `0.3` | `0.15`–`0.32` | |
+| `video_sourcing.…velocity_threshold` | `600` | `80`–`400` | 1.5–7.5× stricter |
+| `freshness.max_story_age_hours` | `72` | movies `1440`, anime `720` | |
+
+Taken together a niche scaffolded today would render past its own timeout, publish under
+another channel's handle, target an out-of-scope platform, and filter so aggressively it
+would likely produce zero blueprints — while looking correctly configured.
+**This is the SaaS "new brand = new YAML" path.** The operator's prediction that one drift
+implies others was right by a factor of ten.
+
+## §E — filed, and it is NOT the next failure along; it was a red herring
+Dry-run showed `proposals=0` for all five niches. The real 07:30 run produced 4–8 proposals
+each. `proposals=0` is an artifact of `--dry-run` skipping the LLM, not a health signal.
+Nothing to investigate. (Recorded so the earlier note is not acted on.)
