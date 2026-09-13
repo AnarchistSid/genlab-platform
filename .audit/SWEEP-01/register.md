@@ -396,3 +396,83 @@ read for sports in July" requires the persisted inputs above. **Not determinable
   (iii) fix the engagement input — if July's step change is a defect, this restores the
         pre-July ~1.0 scores and 0.50 becomes reachable again on its own.
   (iii) is the only option that fixes the cause; (ii) is the safe interim.
+
+# =====================================================================
+# §R5 §A — RSS hypothesis REFUTED; the defect is bigger. READ-ONLY. 2026-09-13 ~04:35Z.
+# §0's checks still had not fired (06:20Z / 06:55Z). §B/§C/§D held.
+# =====================================================================
+
+## The hypothesis as briefed is REFUTED, but the underlying diagnosis is CONFIRMED and WIDER.
+
+**Not RSS.** Sports does not source from YouTube RSS. Its stage 1 is
+`FetchScoreBatHighlights`, and its scored blueprints come overwhelmingly from
+`reddit:*` (formula1, hockey, baseball, boxing, Cricket, MMA) plus `youtube_trending`.
+
+**Not sports-specific, and not source-specific.** Composite spread, last 30 days:
+
+| niche | n | min | median | max | spread |
+|---|---|---|---|---|---|
+| ai_creators | 60 | 0.366 | 0.834 | 1.000 | **0.634 — healthy** |
+| gaming | 63 | 0.294 | 0.392 | 0.480 | 0.186 |
+| anime | 35 | 0.420 | 0.542 | 0.542 | 0.122 |
+| **movies** | 86 | 0.550 | 0.550 | 0.550 | **0.000** |
+| **sports** | 71 | 0.473 | 0.480 | 0.484 | **0.011** |
+
+**Movies is the proof.** All 86 blueprints score 0.5497–0.5500 across EVERY source:
+
+| source | n | min | max |
+|---|---|---|---|
+| reddit:movies | 28 | 0.5498 | 0.5499 |
+| reddit:horror | 18 | 0.5500 | 0.5500 |
+| **youtube_trending** | 14 | 0.5497 | 0.5497 |
+| reddit:marvelstudios | 8 | 0.5499 | 0.5499 |
+| tmdb_trailer | 8 | 0.5497 | 0.5497 |
+| reddit:DC_Cinematic | 7 | 0.5500 | 0.5500 |
+
+`youtube_trending` goes through the **YouTube Data API**, which *does* return
+`likeCount`/`viewCount` — and it produces the same constant as the Reddit paths.
+**So the engagement input is not missing because of the fetcher; it is not reaching the
+scorer at all, on any path, for these niches.**
+
+## What this means
+
+`composite = velocity x trend x relevance x engagement_factor`. With velocity saturated
+(sports `view_velocity` 3736 vs threshold 400), relevance binary 1.0, and engagement at
+its 0.5 floor, the composite degenerates to `0.5 x niche_constant`:
+movies 0.55, sports ~0.48, anime ~0.54. The observed values fit that exactly.
+
+**For three of five niches the composite score is effectively a constant.** Everything
+downstream that ranks, gates or learns on composite is therefore inert for those niches:
+the auto-approval floor, the LinUCB `composite_score` feature, and any prioritisation by
+score. They have been comparing every blueprint against an identical number.
+
+**Sports has been publishing only because two defects cancelled**: a frozen 0.25 override
+sitting below a floor created by a dead engagement input. Neither is safe alone.
+
+## Corrected §A answers
+1. **Field lists** — `fetch_scorebat.py` populates title/url/source_url/canonical_url and
+   `clip_url=None`; no engagement fields. `fetch_reddit_clips.py` likewise. But this does
+   NOT explain the defect, because `youtube_trending` (API path, engagement available)
+   yields the same constant.
+2. **Sourcing switch date** — the 2026-07 collapse is a COMPOSITION shift, not a fetcher
+   change: `reddit:*` sources (already ~0.48 in July) came to dominate the sports mix,
+   while `youtube_trending` sports fell separately from 0.903 (Jul) to 0.474 (Aug/Sep).
+   Two effects, not one.
+3. **Other niches** — YES. movies spread 0.000, anime 0.122. Sports is not special; it is
+   the niche where a stale override happened to sit near the constant.
+4. **Live API re-fetch** — NOT RUN. It was designed to test "did the fetcher drop
+   like_count", a question the movies/youtube_trending result already answers: the API
+   path produces the constant too. Re-fetching would confirm YouTube still returns likes,
+   which is not in doubt. The real question is where engagement is lost between fetch and
+   `CompositeScorer` — a code-path trace, not an API call.
+
+## Revised recommendation
+- §B (persist composite inputs) is now **the prerequisite for everything**, not a nice-to-have.
+  Without it this cannot be localised beyond "somewhere between fetch and scorer".
+- §C's expiry: gaming/movies still safe *for the expiry specifically* (movies' 0.550
+  constant clears both 0.38 and 0.48), but note movies' score is meaningless either way.
+- §D's tuner clamp (`p90-p10 < 0.05` => "distribution pinned, input defect likely") would
+  have caught movies (spread 0.000) and sports (0.011) immediately. Its value just went up:
+  it is the detector for this entire class.
+- The sports threshold decision is now **premature**. Fix the engagement input first; a
+  threshold tuned against a constant is meaningless whichever number is chosen.
