@@ -476,3 +476,80 @@ sitting below a floor created by a dead engagement input. Neither is safe alone.
   it is the detector for this entire class.
 - The sports threshold decision is now **premature**. Fix the engagement input first; a
   threshold tuned against a constant is meaningless whichever number is chosen.
+
+# =====================================================================
+# §R6 §A — the trace. Seam FOUND. READ-ONLY. 2026-09-13 ~04:45Z.
+# §0's checks still had not fired (06:20Z / 06:55Z). §B/§C/§D held.
+# =====================================================================
+
+## CORRECTION to my own §R5 conclusion (second retraction this sweep)
+
+R5 concluded: "engagement is not reaching CompositeScorer on any path for these niches."
+**That is wrong for movies, sports and anime — they never call CompositeScorer at all.**
+
+`CompositeScorer` has exactly ONE production call site: `trending_video_fetcher.py:1639`,
+inside `FetchTrendingVideos`. It scores YouTube videos only. `reddit:*`, `scorebat` and
+`tmdb_trailer` stories never reach it.
+
+**Each niche's own Layer-2 ScoringStrategy computes its own `composite_score`:**
+  * `BlackboxBrief/bb_strategies/_scoring.py:1030`  -> ai_creators (spread 0.634, HEALTHY)
+  * `SpliceReel/sr_strategies/scoring.py:139`       -> movies     (spread 0.000, CONSTANT)
+  * `trending_video_fetcher.py:1680`                -> the YouTube path, any niche
+
+The R5 arithmetic ("0.5 engagement floor x niche constant") fit by coincidence: the 0.5 in
+movies is the **per-dimension default**, not the engagement floor. Two different 0.5s.
+*Lesson: an arithmetic fit is not a mechanism. I had a formula that reproduced the number
+and did not check that the code implementing it was even on the path.*
+
+## The seam, for movies — file and line
+
+`SpliceReel/sr_strategies/scoring.py:102-141`
+```
+weighted_sum = sum(scores[dim] * weights[dim] for dim in
+                   (timeliness, magnitude, engagement_potential, novelty))
+final_score  = weighted_sum * lifecycle_mult * franchise_mult
+composite_score = final_score          # :139
+```
+Measured config: weights {timeliness .25, magnitude .35, engagement_potential .25,
+novelty .15} sum = 1.00; lifecycle `unknown` = 1.0; franchise `default` = 1.0.
+
+Each dimension **falls back to 0.5 when its input field is absent**:
+  * `_score_magnitude` — `score = 0.5  # baseline`, only moves if `item["rt_score"]` present
+  * `_score_novelty`   — `return item.get("novelty_score", 0.5)`
+  * `_score_engagement_potential` — same shape
+
+Solving the observed value: with magnitude/engagement/novelty at 0.5 (contributing 0.375),
+timeliness must contribute 0.1747 => **t ~= 0.70**. So **three of four dimensions are pinned
+at their defaults and only timeliness varies** — by ~0.0003 in the final score, which is
+exactly the observed 0.5497-0.5500 spread.
+
+**Movies' composite is a constant because the story objects reaching the scorer carry none
+of `rt_score`, `novelty_score`, or the engagement inputs.** The scorer is working as
+written; it is being fed stories without the fields it scores.
+
+## Why ai_creators is exempt (the one sentence)
+ai_creators runs a *different implementation* (`bb_strategies/_scoring.py`) against story
+objects produced by its own RSS+YouTube research path, which populates the fields that
+implementation reads — so its dimensions vary and its composite spreads 0.366-1.000.
+**The exemption is not that BB is correct and the others are broken; it is that BB's scorer
+and BB's fetcher were built against the same story schema, and the others were not.**
+Classic shared-contract / N-implementers divergence (the parent class already in the register).
+
+## What remains UNMEASURABLE without §B
+Which dimension is at default on any *given* blueprint. `scores` is returned by `score_item`
+(`:132`) but only `composite_score`/`score` survive into `blueprints.extra` — the per-dimension
+breakdown is discarded at persist time. The attribution above is solved arithmetically from
+one observed value plus the config, **not read from data**. §B must persist `scores` (the
+whole dict) alongside the composite, not only the multiplied terms.
+
+## Per-niche status of the trace
+| niche | scorer | status |
+|---|---|---|
+| ai_creators | `bb_strategies/_scoring.py` | healthy, spread 0.634 |
+| movies | `sr_strategies/scoring.py:139` | **seam found** — 3 of 4 dims at default |
+| sports | `cw_strategies/scoring.py` | same shape, NOT yet read line-by-line |
+| anime | `fd_strategies/scoring.py` | same shape, NOT yet read line-by-line |
+| gaming | `score_gaming_clips.py` + `ViralityScoring` | different path; spread 0.186, least affected |
+
+Sports and anime are strongly implied by identical spread signatures but were not traced
+line-by-line this pass — recorded as INFERRED, not measured.
