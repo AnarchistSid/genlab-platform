@@ -324,3 +324,75 @@ implies others was right by a factor of ten.
 Dry-run showed `proposals=0` for all five niches. The real 07:30 run produced 4–8 proposals
 each. `proposals=0` is an artifact of `--dry-run` skipping the LLM, not a health signal.
 Nothing to investigate. (Recorded so the earlier note is not acted on.)
+
+# =====================================================================
+# §R4 §B — sports composite decomposition. READ-ONLY. 2026-09-13 ~04:20Z.
+# §0's two checks had NOT fired (06:20Z / 06:55Z, ~2h out). §C and §D held.
+# =====================================================================
+
+## Distribution — sports blueprints, last 30 days (n=71)
+
+| min | p25 | p50 | p75 | max |
+|---|---|---|---|---|
+| 0.473 | 0.479 | **0.480** | 0.482 | **0.484** |
+
+Total spread **0.011**. That is not a quality distribution; it is a pinned value.
+**Not one of 71 reaches the calibrated 0.50.** The frozen 0.25 override is the only
+reason sports publishes at all.
+
+## Is 0.50 reachable? — NO as the system currently scores, YES historically.
+
+All-time sports (n=232): `>=0.25` 232 · `>=0.32` 232 · `>=0.50` **121** · best_ever 2.000.
+So 0.50 *was* routinely cleared. Monthly medians locate the collapse precisely:
+
+| month | n | min | median | max |
+|---|---|---|---|---|
+| 2026-05 | 57 | 0.677 | **1.000** | 1.000 |
+| 2026-06 | 57 | 0.647 | 0.967 | 2.000 |
+| 2026-07 | 25 | 0.483 | **0.483** | 1.118 |
+| 2026-08 | 64 | 0.474 | 0.480 | 0.484 |
+| 2026-09 | 29 | 0.473 | 0.480 | 0.484 |
+
+**Sports composite collapsed in July 2026** from ~1.0 to ~0.48 and has been pinned since.
+
+## Which component drags it — engagement_factor, at its floor. (INFERRED, see caveat.)
+
+`composite = velocity_score x trend_multiplier x niche_relevance x engagement_factor`
+Constants (measured): `engagement_floor = 0.5`, `target_like_ratio = 0.03`.
+Latest sports blueprint: `view_velocity = 3736.4` against `velocity_threshold = 400`
+=> `velocity_score = min(9.34, 1.0)` = **1.0, saturated**. `niche_relevance` = 1.0 (binary).
+Observed composite 0.4775 ≈ **0.5 x 0.955**, i.e. engagement_factor sitting exactly on its
+0.5 floor with a trend multiplier just under 1.
+
+**Therefore 0.50 is structurally unreachable for sports while engagement is at floor:**
+velocity is already maxed and cannot contribute more, relevance is binary and already 1,
+so the ceiling is `engagement_floor x trend` ≈ 0.48. The calibrated 0.50 sits *just above*
+the maximum a zero-engagement sports clip can attain. **The tuner's 0.50 is as wrong as the
+override's 0.25 is stale** — the operator's hypothesis is confirmed.
+
+### CAVEAT — this decomposition is INFERRED, not MEASURED, and cannot be measured today
+`like_count` / `view_count` / `engagement_score` / `trend_multiplier` are **not persisted**.
+Only `view_velocity` survives into `blueprints.extra`. The composite's own inputs are
+discarded at score time, so no score can be decomposed after the fact — the arithmetic
+above is the only available route and rests on the formula being applied as written.
+**New finding (Class 1 sibling): a score is retained without its inputs.** Any future
+"why did this score?" question is unanswerable by construction. Persisting the component
+values at score time is cheap and would have made this a measurement.
+
+### Secondary observation
+~0 like/view ratio across 71 consecutive clips is more plausibly a broken engagement input
+than 71 genuinely unliked sports clips — note the collapse is a step change in July, not a
+drift. Distinguishing "sports clips really have no likes" from "like_count stopped being
+read for sports in July" requires the persisted inputs above. **Not determinable today.**
+
+## The decision, framed for Aditya — an expiry must NOT make it silently
+* Ship §C's expiry on **gaming and movies only** (0 affected — mechanism proven, no consequence).
+* **Sports must be excluded** from the expiry until this is decided, because the expiry would
+  restore 0.50, and 0.50 rejects **100% of sports output as currently scored**. Sports would
+  stop publishing entirely the moment the mechanism ships.
+* The three options are unchanged, but the evidence now favours the third:
+  (i) accept sports pausing — costs all sports publishing;
+  (ii) set a reachable sports value (~0.40 clears today's 0.473-0.484 band with headroom);
+  (iii) fix the engagement input — if July's step change is a defect, this restores the
+        pre-July ~1.0 scores and 0.50 becomes reachable again on its own.
+  (iii) is the only option that fixes the cause; (ii) is the safe interim.
