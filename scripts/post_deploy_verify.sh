@@ -183,12 +183,26 @@ note "8. Writer wire — recent captions carry credit marker"
 # 5-15/day and the 24h window may catch a lull. If no publishes have
 # happened, we can't judge — pass with a note. Below-threshold
 # fires only when there ARE publishes AND >20% lack the marker.
-# 2026-07-21: pass DATABASE_URL explicitly via `env` to the subprocess.
-# `sudo -u genlab` strips the parent env by default → the Python heredoc
-# below fell through to `dbname=genlab` and hit the non-existent Unix
-# socket, silent-passing the check every time. Same class-of-bug as
+# 2026-07-21: `sudo -u genlab` strips the parent env by default → the Python
+# heredoc below fell through to `dbname=genlab`, hit the non-existent Unix
+# socket, and silent-passed the check every time. Same class-of-bug as
 # scripts/verify_writer_wire_and_flip_l4.sh fixed 2026-07-14 → `9ebc4023`.
-attribution_check=$(sudo -u genlab env DATABASE_URL="$DB_URL" $VENV - <<'PY' 2>&1 || echo "PY_ERROR"
+#
+# DASH-01 §0 (2026-09-15): the original fix passed the DSN as
+# `sudo -u genlab env DATABASE_URL="$DB_URL" …`, and **sudo logs the full
+# command line to journald**. That put the genlab_app password into the
+# journal, into the dashboard's alert body, and into any screenshot of it —
+# 2 lines found, emitted under genlab-pipeline-{sports,movies}.
+#
+# The child now sources the env file itself, so the secret never appears as
+# an argument. `set -a` exports everything the file defines; the subshell
+# keeps that out of this script's environment.
+# Rule: a secret passed as an argv element is a secret in the process table
+# and in every logger that records command lines.
+attribution_check=$(sudo -u genlab bash -c '
+  set -a; . '"$GENLAB"'/.env; set +a
+  exec '"$VENV"' -
+' <<'PY' 2>&1 || echo "PY_ERROR"
 import os, psycopg
 dsn = os.environ.get("DATABASE_URL") or "dbname=genlab"
 try:
