@@ -143,3 +143,39 @@ def test_pytest_guard_does_not_disable_belt_in_production(
     monkeypatch.delenv("GENLAB_ALLOW_TEST_BELT_CALLS", raising=False)
     assert mod._belt_primary_enabled() is True
     assert os.environ.get("PYTEST_CURRENT_TEST") is None
+
+
+def test_belt_tier_order_honours_the_requested_model() -> None:
+    """A caller asking for Haiku must get Haiku first, not a silent upgrade.
+
+    Found by gate 2 on 2026-09-14: a fixed Sonnet-first list routed
+    music_mood_llm_fit, dynamic_matcher and chart_data_extract — all of which
+    construct the client with Haiku — to Sonnet instead. ~20x the input cost on
+    calls budgeted at ~$0.00004, plus a behaviour change.
+    """
+    haiku_first = mod._belt_tiers_for("claude-haiku-4-5-20251001")
+    assert haiku_first[0][0] == "anthropic/claude-haiku-4-5", haiku_first
+    assert haiku_first[1][0] == "anthropic/claude-sonnet-4-6", (
+        "the other model must remain as a second tier so one being down degrades"
+    )
+
+    sonnet_first = mod._belt_tiers_for("claude-sonnet-4-6")
+    assert sonnet_first[0][0] == "anthropic/claude-sonnet-4-6", sonnet_first
+
+    # Unknown / empty model falls back to Sonnet-first rather than crashing.
+    assert mod._belt_tiers_for("")[0][0] == "anthropic/claude-sonnet-4-6"
+
+
+def test_haiku_client_actually_calls_the_haiku_app(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End-to-end through complete(), not just the ordering helper."""
+    belt = _Belt(_res(ok=True, response="from haiku"))
+    monkeypatch.setattr("genlab_core.integrations.belt_client.run_app", belt)
+    c = _client()
+    c._model = "claude-haiku-4-5-20251001"
+    out = mod.AnthropicLLMClient.complete(c, system="s", user="u", max_tokens=10)
+    assert out == "from haiku"
+    assert belt.apps == ["anthropic/claude-haiku-4-5"], (
+        f"a Haiku client must hit the Haiku app first; got {belt.apps}"
+    )

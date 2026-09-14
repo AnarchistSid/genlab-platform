@@ -91,10 +91,27 @@ logger = logging.getLogger(__name__)
 # function returned 330 chars of valid JSON in 7.6s for $0.0014. The `openai`
 # function returned empty on every shape tried, which is why `run` is used here.
 # At ~40 writer calls per niche-fire that is ~$0.06/niche, ~$0.28/day for five.
-_BELT_TIERS: tuple[tuple[str, str], ...] = (
-    ("anthropic/claude-sonnet-4-6", "belt:claude-sonnet-4-6"),
-    ("anthropic/claude-haiku-4-5", "belt:claude-haiku-4-5"),
-)
+_BELT_SONNET = ("anthropic/claude-sonnet-4-6", "belt:claude-sonnet-4-6")
+_BELT_HAIKU = ("anthropic/claude-haiku-4-5", "belt:claude-haiku-4-5")
+
+
+def _belt_tiers_for(model: str) -> tuple[tuple[str, str], ...]:
+    """Belt tiers ordered to HONOUR the model the caller asked for.
+
+    2026-09-14, found by gate 2: a fixed Sonnet-first list silently upgraded
+    every caller to Sonnet, including the three that explicitly construct
+    `AnthropicLLMClient(model=claude-haiku-4-5-…)` — `music_mood_llm_fit`,
+    `dynamic_matcher`, and `chart_data_extract` (via the default). That is ~20×
+    the input cost on calls whose own docstrings budget "~150 input + ~15 output
+    tokens ≈ $0.00004", and it changes behaviour: Sonnet answered "none" for a
+    subject-extraction Haiku was tuned for.
+
+    The requested model leads; the other stays as the second tier so a single
+    model being unavailable still degrades rather than stops.
+    """
+    if "haiku" in (model or "").lower():
+        return (_BELT_HAIKU, _BELT_SONNET)
+    return (_BELT_SONNET, _BELT_HAIKU)
 
 # Kill switch. Set to "0" to restore the pre-2026-09-14 order (Anthropic direct
 # first) without a deploy — the direct path below is unchanged and still works
@@ -246,7 +263,8 @@ class AnthropicLLMClient:
         # unchanged. If every belt tier fails and both direct accounts are
         # empty, the original Anthropic error still surfaces exactly as before.
         if _belt_primary_enabled():
-            for _app, _label in _BELT_TIERS:
+            _tiers = _belt_tiers_for(self._model)
+            for _app, _label in _tiers:
                 _text = _call_belt_tier(
                     _app, _label, system, user, max_tokens, temperature
                 )
@@ -255,7 +273,7 @@ class AnthropicLLMClient:
             logger.warning(
                 "[llm-belt] all %d belt tier(s) failed — falling through to "
                 "the direct providers (which may themselves be unfunded)",
-                len(_BELT_TIERS),
+                len(_tiers),
             )
 
         # Circuit breaker: if we've hit exhaustion 3× recently, go
