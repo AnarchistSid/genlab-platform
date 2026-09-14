@@ -124,3 +124,63 @@ download. That is the end of the funnel, and it is why sports output is 32/month
 7. composite pins at 0.48 on Reddit's missing engagement data
 
 Steps 3 and 5 are both live, both one-line-ish, and both invisible to every existing metric.
+
+# =====================================================================
+# SOURCE-03 §1b — THE MECHANISM, and my third wrong hypothesis in this thread.
+# 2026-09-14 ~07:15Z. READ-ONLY.
+# =====================================================================
+
+## §2's underscore hypothesis: REFUTED, and the field is not lost
+`StoryCandidate` (`pipeline/models.py:80-88`) **explicitly allows extra fields**, with
+`_trending_video` named in the docstring as a scratch key that "keeps working unchanged".
+Nothing strips it. No `startswith("_")` filter exists anywhere in `genlab-core/src` or
+`ClutchWire`. The field survives the boundary.
+
+## The actual mechanism: the flag is not YouTube-specific
+`intel/reddit_fetcher.py:123`:
+```python
+"_trending_video": is_video and bool(video_url),
+```
+**Reddit video posts carry `_trending_video: True` as well** — as do tmdb_trailers,
+twitch_clips, steam_trailers, anime_promos and generated_backfill (all set it literally).
+
+So in `cw_strategies/scoring.py:199-203`:
+```python
+video_stories = [s for s in above if s.get("_trending_video")]
+above = (video_stories + rest)[:top_n]        # top_clips_per_run = 5
+```
+**every** candidate is a "video story". The video-first cut therefore does nothing to
+prefer YouTube highlights over Reddit posts — both land in `video_stories`, whose order is
+the earlier `final_score` sort. The top 5 by score win, and Reddit wins them.
+
+`trending_bypassed = 0` is consistent: every flagged story scored >= 0.30, so none needed
+the threshold bypass. The counter was accurate the whole time.
+
+**The protection is real, correctly implemented, and aimed at the wrong distinction.** It
+separates video from non-video, when what sports needs is highlight from discussion.
+
+## Three wrong mechanisms in one thread, each refuted by the next read
+1. "the bypass is dead / a broken mechanism" — wrong; the counter means "none needed it".
+2. "`_trending_video` is lost between fetcher and scorer" — wrong; extras are allowed and
+   nothing strips underscores.
+3. Correct: the flag is set by *every* video fetcher, so video-first cannot discriminate.
+
+Each hypothesis was proposed before reading the adjacent file. The pattern is mine, not the
+codebase's: I inferred a mechanism from a symptom, then tested it, three times, when reading
+`reddit_fetcher.py` at the start would have answered it. **Read every producer of a field
+before theorising about its consumer.**
+
+## The fix is a design choice, not a repair
+Nothing is broken. Two options:
+1. **Make the protection source-aware** — prefer `source == "youtube_trending"` (or a new
+   `is_highlight` field) in the top-N cut, so league highlights outrank discussion posts by
+   construction. Narrow, immediate, and it restores May's mix.
+2. **Fix the scorer** — the sports dimensions (recency, community_signal, magnitude,
+   novelty) assume ESPN metadata, and the 2026-07-14 comment says YouTube trending stories
+   "all score near 0" for lack of it. Today they clear 0.30 but still lose to Reddit. Scoring
+   highlights on their own merits is the deeper fix and the slower one.
+(1) unblocks the format now; (2) is the ARCH-02-shaped answer.
+
+## Still to do from this brief
+§3 yt-dlp update + the wrapper's version check + the ScoreBat re-test; §4 the re-measured
+funnel with a `trending_recognised` counter alongside `trending_bypassed`; §5 the rest.
