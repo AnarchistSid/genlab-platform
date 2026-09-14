@@ -1002,8 +1002,13 @@ def write_video_content(
             else ""
         )
         + "OUTPUT FORMAT — strictly enforced:\n"
-        "Respond ONLY with valid JSON. ALL SIX KEYS ARE REQUIRED and must\n"
-        "have non-empty string values:\n"
+        # NARR-04 (2026-09-13): was "ALL SIX KEYS ARE REQUIRED". The list below
+        # is seven keys when narration is enabled and eight for question_reveal,
+        # so the literal count contradicted the very contract the model is held
+        # to — in the same prompt that then marks a seventh field REQUIRED. No
+        # number is better than a wrong one: the list is the declaration.
+        "Respond ONLY with valid JSON. EVERY KEY LISTED BELOW IS REQUIRED and\n"
+        "must have non-empty string values:\n"
         "  - hook\n"
         "  - instagram_caption  ← REQUIRED, never empty, never omit\n"
         "  - twitter_content\n"
