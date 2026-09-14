@@ -42,3 +42,40 @@ Filed, not worked around.
 * §4 record updates — CLAUDE.md still says Anthropic is primary.
 * §2 gates 2–5: the three Tier A siblings, a real 02:30Z fire, and whisper ≥ 0.9 after the
   publisher. Phase 0's ai_creators gate cannot close until that fire runs.
+
+# =====================================================================
+# §2 GATE 2 — PASS, after a defect the gate itself caught. 2026-09-14 ~04:00Z.
+# =====================================================================
+
+## First run exposed a defect in e2ad877b (shipped one hour earlier)
+The hardcoded `(Sonnet, Haiku)` tier list silently upgraded every Tier A caller to
+Sonnet, including the three that explicitly ask for Haiku:
+`music_mood_llm_fit:209`, `dynamic_matcher:97`, `chart_data_extract:107` (default).
+
+**It was not only a cost defect (~20x on calls budgeted at $0.00004) — it broke output.**
+`dynamic_matcher.extract_subject("Nintendo Switch 2 console review and teardown")`:
+  * on Sonnet  -> 4-char response `"none"` -> **RESULT: None** (no affiliate subject)
+  * on Haiku   -> **RESULT: 'Nintendo Switch 2'**
+Affiliate matching would have silently stopped finding subjects. Revenue-affecting, and
+invisible: `extract_subject` returning None is its documented fail-open path.
+
+Fixed in `9a65ceef`: `_belt_tiers_for(model)` leads with the requested model, keeps the
+other as second tier. Two pins added, including an end-to-end `complete()` assertion.
+
+## Gate 2 result, post-fix — all three siblings on belt, correct model
+```
+chart_data_extract   [llm-belt] served by belt:claude-haiku-4-5 (195 chars)
+                     -> ChartData(title='Switch Launch Quarter Sales',
+                                  bars=[('Switch 2', 4.2), ('Switch (original)', 3.1)])
+music_mood_llm_fit   [llm-belt] served by belt:claude-haiku-4-5 (184 chars)
+                     -> MoodSuggestion(top_mood='hype', confidence=0.92)
+dynamic_matcher      [llm-belt] served by belt:claude-haiku-4-5 (17 chars)
+                     -> 'Nintendo Switch 2'
+```
+All four Tier A callers (writer + 3 siblings) now observed served by belt through their
+real callers, each on the model it asked for, with Anthropic unfunded throughout.
+
+## Lesson for the record
+A gate that runs the REAL caller found a defect that every unit test missed, because the
+unit tests stub `run_app` and assert on the app name I chose — they encode my assumption.
+Only the real caller carried its own model preference into the call.
