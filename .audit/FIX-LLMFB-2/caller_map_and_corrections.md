@@ -83,3 +83,48 @@ T-233's runway guard reading that field (it currently reports healthy at zero), 
 on the first unfunded fire. Belt balance is directly readable via `belt balance` (minus the
 $5 reservation hold per running task); Anthropic's is not, so the probe call is the
 instrument.
+
+# =====================================================================
+# §0 + §3 partial inventory — 2026-09-14 ~03:00Z. READ-ONLY.
+# =====================================================================
+
+## §0 — top-up had NOT landed at 02:56Z [Measured]
+Live probe as genlab with the prod key:
+`ANTHROPIC: FAILED BadRequestError error.type=invalid_request_error :: 'Your credit balance…'`
+The ai fire was still running (ExecMainExitTimestamp empty at 02:55Z).
+
+### NEW HAZARD found by that probe — the type check never matches [Measured]
+Anthropic returns **`error.type = "invalid_request_error"`** for credit exhaustion, NOT
+`"billing_error"`. `ad6b4d18` ("detect Anthropic exhaustion by error.type, not by prose")
+keys on `billing_error`, whose docstring calls it "the authoritative signal [that] does not
+depend on prose". **It never fires in production.** The thing actually detecting exhaustion
+is the prose fallback immediately below it:
+```
+if _error_type_of(exc) == "billing_error":   # never true for real exhaustion
+    return True
+msg = str(exc).lower()
+return any(marker in msg for marker in _ANTHROPIC_EXHAUSTION_MARKERS)   # <- this fires
+```
+**Latent hazard:** the prose markers look redundant next to a typed check and are exactly
+what a tidying refactor would delete. Deleting them silently disables all failover.
+The type check should keep `billing_error` AND add `invalid_request_error` gated on the
+credit prose, or the markers need a comment saying they are load-bearing. Filed.
+
+## §3 — Tier B inventory, TWO of ten classified properly
+
+| module | LLM path | on failure | log level | consumer | decision |
+|---|---|---|---|---|---|
+| `scheduling/auto_approval_gate` | **shadow-mode**; gate calls `ensemble_decide(..., enable_llm_judge=False)`; judge itself is opt-in via `GENLAB_LLM_JUDGE_ENABLED` | returns; gate decision unaffected | **WARNING + exc_info** | none — rule decision is authoritative | **KEEP RAW, with reason.** Not load-bearing, already loud. The brief's "look hardest" case does not apply — this one is built correctly. |
+| `learning/hook_classifier` | load-bearing scorer | **returns `None`** | **DEBUG** (rule #19) | `conformal_router.py:220,459` reads `hook_classifier_score` with **`default=0.5`** | **MIGRATE + elevate to WARNING.** This is the real "silent default" case: on an outage the router makes decisions on a neutral 0.5 that is indistinguishable from a measured score, and nothing above DEBUG says so. |
+
+**Remaining eight NOT yet classified** (`rationale_classifier`, `shadow_reviewer`,
+`intelligence/anthropic_client`, `first_comment_question`, `llm/router`, `llm/batch`,
+`auto_experiment_parser`, plus `llm/errors` which is definitions only). Crude counts were
+taken and are not sound enough to decide on — a per-module read of the actual failure path
+is needed, as the two above demonstrate: the counts ranked `auto_approval_gate` as the
+highest risk and the real read reversed it.
+
+**Method note for the rest:** classify by (i) what the failure path RETURNS, (ii) at what
+LOG LEVEL, (iii) whether a downstream consumer substitutes a default for the absent value.
+(iii) is the one that matters — `hook_classifier` is dangerous not because it returns None
+but because `conformal_router` turns that None into 0.5.
