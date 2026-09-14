@@ -898,6 +898,15 @@ class TrendingVideoFetcher:
             if not v.channel_id and meta.get("channel_id"):
                 v.channel_id = meta["channel_id"]
             v.search_query = meta.get("source", "channel_subscription")
+            # SOURCE-05 (2026-09-14): mark the ENRICHED subscribed-channel
+            # videos as highlights. de72cb1b set `is_highlight` only on the
+            # `rss_fallback` construction below — the path taken when
+            # videos.list enrichment misses an ID — so the videos that actually
+            # flow (these, with real view/like counts from videos.list) were
+            # still defaulting to False and the highlight-first cut had nothing
+            # to reserve slots for. Caught before the first fire that would
+            # have used it.
+            v.is_highlight = True
 
         # Fallback: create stub TrendingVideos for RSS videos that
         # didn't get enriched (e.g. YouTube API quota exhausted).
