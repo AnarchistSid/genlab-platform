@@ -9,6 +9,7 @@ All content references what's actually IN the video — not generic templates.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import random
@@ -369,6 +370,35 @@ def _complete_and_parse_json(
         # JSON parsed cleanly; verify required fields are present + non-empty.
         # Missing/empty fields trigger a re-prompt rather than silently
         # cascading into downstream fallbacks.
+        # NARR-04 §2 (2026-09-13): make the response boundary readable on every
+        # fire. This is the one boundary the NARR-03 trace could not read: four
+        # gates downstream were provably sound, so the defect had to be here,
+        # and settling that took a full day of exclusion. Logging the response's
+        # KEYS (never its content) turns that into one grep.
+        #
+        # `attempt` is the load-bearing field: attempt=1 means the model omitted
+        # a required field and the re-prompt recovered it — the retry doing its
+        # job, which is invisible in the artifact because the recovered response
+        # looks identical to a first-attempt success.
+        #
+        # There is no prompt-template version in this codebase, so the system
+        # prompt's hash stands in: it changes exactly when the template changes,
+        # which is what a version number would have told us.
+        try:
+            _sys_sha = hashlib.sha256(system.encode("utf-8")).hexdigest()[:8]
+            logger.info(
+                "[%s] writer response: attempt=%d model=%s sys_sha=%s "
+                "chars=%d keys=%s",
+                niche_id,
+                attempt,
+                getattr(llm_client, "_model", "unknown"),
+                _sys_sha,
+                len(response or ""),
+                sorted(parsed.keys()),
+            )
+        except Exception:  # noqa: BLE001 — observability must never break the writer
+            pass
+
         # NARR-04 (2026-09-13): the required set is PER-CALL, not the module
         # frozenset. `narration_script` is required only when the caller asked
         # for it — the same condition the prompt branches on when it appends
