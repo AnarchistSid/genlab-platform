@@ -302,6 +302,7 @@ def _complete_and_parse_json(
     max_tokens: int,
     temperature: float,
     niche_id: str,
+    extra_required_fields: frozenset[str] = frozenset(),
 ) -> dict:
     """Call the LLM and parse its JSON response, retrying once on parse
     failure OR on missing-required-field.
@@ -368,7 +369,20 @@ def _complete_and_parse_json(
         # JSON parsed cleanly; verify required fields are present + non-empty.
         # Missing/empty fields trigger a re-prompt rather than silently
         # cascading into downstream fallbacks.
-        missing = sorted(k for k in _REQUIRED_LLM_FIELDS if not str(parsed.get(k, "")).strip())
+        # NARR-04 (2026-09-13): the required set is PER-CALL, not the module
+        # frozenset. `narration_script` is required only when the caller asked
+        # for it — the same condition the prompt branches on when it appends
+        # "narration_script  ← REQUIRED for narration-enabled niches". Before
+        # this, the prompt said REQUIRED and nothing enforced it: when the
+        # model omitted the field, `missing` stayed empty, no retry fired,
+        # nothing logged, "" propagated to GenerateAudio, and TTS read the
+        # caption aloud. Intermittent success was voluntary model compliance.
+        #
+        # It must NOT go in the module-level frozenset: that is global, and
+        # the four non-narration niches would then retry twice and WARN on
+        # every story forever.
+        required_fields = _REQUIRED_LLM_FIELDS | extra_required_fields
+        missing = sorted(k for k in required_fields if not str(parsed.get(k, "")).strip())
         if missing and attempt == 0:
             last_missing = missing
             last_err = None
@@ -1052,6 +1066,14 @@ def write_video_content(
             max_tokens=1200,
             temperature=0.65,
             niche_id=niche_id,
+            # NARR-04: same condition the prompt branches on above when it
+            # marks narration_script REQUIRED. Read from the same variable so
+            # prompt-side and code-side cannot drift apart again.
+            extra_required_fields=(
+                frozenset({"narration_script"})
+                if narration_target_seconds is not None
+                else frozenset()
+            ),
         )
 
         # Normalize smart quotes to ASCII equivalents (prevents FFmpeg drawtext issues)
