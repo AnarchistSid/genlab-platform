@@ -74,6 +74,104 @@ from genlab_core.llm.fallback import (
 
 logger = logging.getLogger(__name__)
 
+# ── LLM-PRIMARY-01 (2026-09-14): inference.sh is the PRIMARY LLM provider ──
+#
+# On 2026-09-14 both direct providers were empty at once — Anthropic returned
+# 400 "credit balance is too low", OpenAI 429 "no credits remaining" — and the
+# failover chain worked perfectly with nowhere to fail over to. Content
+# generation stopped on every niche. Belt held $102 of credit the writer could
+# not reach, because `call_fallback_chain` was never wired into this client.
+#
+# So the order inverts: belt first, direct providers as optional fallbacks that
+# only matter when belt is down AND they happen to be funded. Belt carries
+# claude-sonnet-4-6 at list price ($3/M in, $15/M out — 0% markup), so the
+# writer keeps the same model it has always used.
+#
+# Measured before shipping (2026-09-14, task 5qa90xj3…): Sonnet via the `run`
+# function returned 330 chars of valid JSON in 7.6s for $0.0014. The `openai`
+# function returned empty on every shape tried, which is why `run` is used here.
+# At ~40 writer calls per niche-fire that is ~$0.06/niche, ~$0.28/day for five.
+_BELT_TIERS: tuple[tuple[str, str], ...] = (
+    ("anthropic/claude-sonnet-4-6", "belt:claude-sonnet-4-6"),
+    ("anthropic/claude-haiku-4-5", "belt:claude-haiku-4-5"),
+)
+
+# Kill switch. Set to "0" to restore the pre-2026-09-14 order (Anthropic direct
+# first) without a deploy — the direct path below is unchanged and still works
+# whenever those accounts are funded.
+_BELT_PRIMARY_ENV = "GENLAB_LLM_BELT_PRIMARY"
+
+
+def _belt_primary_enabled() -> bool:
+    # OFF under pytest unless explicitly opted in. Without this the belt tier
+    # runs first in every test that exercises `complete()`, which (a) makes
+    # REAL billed subprocess calls from the suite, and (b) breaks ~20 existing
+    # tests that mock the Anthropic path and assert on its call count. Same
+    # guard shape as the T-61 cost-write block in `intelligence/cost_persist`.
+    # Measured: the suite went 2.3s -> 114s before this guard was added.
+    if os.environ.get("PYTEST_CURRENT_TEST") and os.environ.get(
+        "GENLAB_ALLOW_TEST_BELT_CALLS", ""
+    ).strip() != "1":
+        return False
+    return os.environ.get(_BELT_PRIMARY_ENV, "1").strip() not in ("0", "false", "False")
+
+
+def _call_belt_tier(
+    app: str,
+    label: str,
+    system: str,
+    user: str,
+    max_tokens: int,
+    temperature: float,
+) -> str | None:
+    """One belt tier. Returns assistant text, or None so the caller tries the next.
+
+    Asserts BOTH that the task completed AND that the payload carries content.
+    `run_app` already rejects a non-completed status, but a completed task with
+    an empty `response` is the specific trap this codebase has hit four times:
+    `status_text == "completed"` alone has never been sufficient evidence that
+    work happened.
+    """
+    from genlab_core.integrations.belt_client import run_app
+
+    result = run_app(
+        app,
+        {
+            "system_prompt": system,
+            "text": user,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        },
+        timeout_seconds=180,
+    )
+    if not result.ok:
+        logger.warning("[llm-belt] %s failed: %s", label, (result.error or "")[:200])
+        return None
+
+    text = ((result.output or {}).get("response") or "") if result.output else ""
+    if not str(text).strip():
+        # Completed-but-empty. Loud, because this is the shape that reads as
+        # success everywhere else.
+        logger.warning(
+            "[llm-belt] %s returned status=completed with an EMPTY response "
+            "(task=%s) — treating as failure and trying the next tier",
+            label,
+            result.task_id,
+        )
+        return None
+
+    try:
+        from genlab_core.intelligence.cost_accumulator import record_provider_usage
+
+        record_provider_usage(provider="belt", model=label, payload=result.output)
+    except Exception as exc:  # noqa: BLE001 — attribution never breaks a call
+        logger.warning("[llm-belt] cost attribution failed for %s: %s", label, exc)
+
+    logger.info(
+        "[llm-belt] served by %s (task=%s, %d chars)", label, result.task_id, len(text)
+    )
+    return str(text)
+
 
 class AnthropicLLMClient:
     """Adapter: .complete(system, user, max_tokens, temperature) -> str
@@ -142,6 +240,24 @@ class AnthropicLLMClient:
 
         Raises on network / auth errors that OpenAI also can't help with.
         """
+        # LLM-PRIMARY-01: belt tiers FIRST. Each returns None on any failure —
+        # including completed-but-empty — so the loop falls through to the next
+        # tier and finally to the direct providers below, whose logic is
+        # unchanged. If every belt tier fails and both direct accounts are
+        # empty, the original Anthropic error still surfaces exactly as before.
+        if _belt_primary_enabled():
+            for _app, _label in _BELT_TIERS:
+                _text = _call_belt_tier(
+                    _app, _label, system, user, max_tokens, temperature
+                )
+                if _text is not None:
+                    return _text
+            logger.warning(
+                "[llm-belt] all %d belt tier(s) failed — falling through to "
+                "the direct providers (which may themselves be unfunded)",
+                len(_BELT_TIERS),
+            )
+
         # Circuit breaker: if we've hit exhaustion 3× recently, go
         # straight to OpenAI. Reset when Anthropic recovers.
         if _fallback_enabled() and _cb_is_open():
