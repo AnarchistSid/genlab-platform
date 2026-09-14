@@ -60,3 +60,7 @@ thresholds:
   min_clip_score: 0.30
   min_compilation_score: 0.45
   top_clips_per_run: 5
+  # SOURCE-04 (2026-09-14): reserve slots for declared highlights (subscribed
+  # league RSS, ScoreBat). 4 of 5 leaves one slot for a discussion post that
+  # genuinely outscores. Set 0 to restore the pre-2026-09-14 behaviour.
+  highlight_slot_min: 4

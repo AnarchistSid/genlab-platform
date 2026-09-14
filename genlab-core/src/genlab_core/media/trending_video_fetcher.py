@@ -273,6 +273,17 @@ class TrendingVideo:
     license: str
     tags: list[str] = field(default_factory=list)
     description_snippet: str = ""
+    # SOURCE-04 (2026-09-14): declared, typed "this clip is a highlight".
+    #
+    # Deliberately NOT `_trending_video`, and deliberately NOT reusing
+    # `is_official_channel`. `_trending_video` means "has a video" and is set by
+    # SIX fetchers (reddit, tmdb, twitch, steam, anime_promos, backfill), which
+    # is why sports' video-first top-N cut selected nothing in particular and
+    # Reddit discussion posts took all five slots for two months.
+    # `is_official_channel` means "from a trusted channel" — a TRUST signal.
+    # Overloading either with a CONTENT claim is the mistake that produced the
+    # collapse; this field carries the content claim alone.
+    is_highlight: bool = False
 
     @property
     def age_hours(self) -> float:
@@ -373,6 +384,7 @@ class TrendingVideo:
             "video_source": "trending",
             "video_id": self.video_id,
             "is_official_channel": self.is_official_channel,
+            "is_highlight": self.is_highlight,
             # Trending videos already have proven engagement — scale with velocity
             "source_mention_count": min(5, max(1, int(self.view_velocity / 500))),
             # Pre-filled clip info so DownloadTopVideos can skip re-sourcing
@@ -939,6 +951,9 @@ class TrendingVideoFetcher:
                         view_velocity=estimated_velocity,
                         download_url=f"https://www.youtube.com/watch?v={vid_id}",
                         is_official_channel=True,  # Subscribed channel = trusted
+                        # SOURCE-04: subscribed league channels are the
+                        # highlight feed for sports; the mostPopular chart is not.
+                        is_highlight=True,
                         license="youtube",
                         description_snippet=meta.get("description_snippet", ""),
                     )

@@ -196,11 +196,37 @@ class SportScoringStrategy(BaseScoringStrategy):
         )
 
         top_n = self._thresholds.get("top_clips_per_run", 20)
-        if len(above) > top_n:
-            # Video-first: trending video stories must survive the top-N cut.
+        # SOURCE-04 (2026-09-14): HIGHLIGHT-first, not video-first.
+        #
+        # The video-first cut below was a no-op. `_trending_video` means "has a
+        # video" and is set by six fetchers — reddit, tmdb, twitch, steam,
+        # anime_promos, backfill — so every candidate landed in `video_stories`
+        # and the order fell back to `final_score`. Reddit discussion posts
+        # outscore YouTube highlights on the sports dimensions (which assume
+        # ESPN metadata highlights lack), so Reddit took all five slots from
+        # July onward. Measured: youtube_trending 189/month in May -> 5 in
+        # September, while the fetcher still returns ~25 action clips per run.
+        #
+        # `is_highlight` is a declared content claim set only by sources that
+        # know they carry highlights (subscribed league RSS today, ScoreBat when
+        # it returns). `highlight_slot_min` reserves slots for them so a
+        # genuinely hot discussion post can still take one, but cannot take all.
+        highlight_min = int(self._thresholds.get("highlight_slot_min", 0) or 0)
+        highlights = [s for s in above if s.get("is_highlight")]
+        others = [s for s in above if not s.get("is_highlight")]
+        if highlight_min > 0 and highlights:
+            reserved = highlights[: min(highlight_min, top_n)]
+            filler = [s for s in (others + highlights[len(reserved) :])]
+            above = (reserved + filler)[:top_n]
+        elif len(above) > top_n:
+            # No highlight sources present (or the knob is off): preserve the
+            # previous video-first behaviour so the other four niches are
+            # unchanged by this commit.
             video_stories = [s for s in above if s.get("_trending_video")]
             rest = [s for s in above if not s.get("_trending_video")]
             above = (video_stories + rest)[:top_n]
+
+        highlights_selected = sum(1 for s in above if s.get("is_highlight"))
 
         context["stories"] = above
         context.setdefault("run_stats", {})["scoring"] = {
@@ -208,6 +234,12 @@ class SportScoringStrategy(BaseScoringStrategy):
             "scored_count": len(above),
             "dropped_count": dropped,
             "trending_bypassed": trending_bypassed,
+            # SOURCE-04: `trending_bypassed` alone cannot distinguish "none
+            # needed the bypass" from "none were recognised" — it emits 0 for
+            # both. These two make the denominator visible.
+            "trending_recognised": sum(1 for c in scored if c.get("_trending_video")),
+            "highlights_recognised": sum(1 for c in scored if c.get("is_highlight")),
+            "highlights_selected": highlights_selected,
             "top_score": above[0]["final_score"] if above else 0,
         }
 
