@@ -306,6 +306,7 @@ class TrendingVideo:
             "view_velocity": round(self.view_velocity, 1),
             "download_url": self.download_url,
             "is_official_channel": self.is_official_channel,
+            "is_highlight": self.is_highlight,
             "license": self.license,
             "niche_id": self.niche_id,
             "search_query": self.search_query,
