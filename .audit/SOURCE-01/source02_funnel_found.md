@@ -53,3 +53,74 @@ wired to a field they no longer carry. That single clause is the most likely cau
 ## Not yet done
 §3 ScoreBat probes (v3 token / yt-dlp against a current embed), §4 niche-fit on belt,
 §5 `to_story()` `like_count`.
+
+# =====================================================================
+# SOURCE-03 §1 — CORRECTION + two live defects. 2026-09-14 ~07:00Z.
+# =====================================================================
+
+## Correcting my own "the bypass is dead" claim
+The predicate is `c.get("_trending_video")` (`cw_strategies/scoring.py:192`), and that field
+IS emitted by `TrendingVideo.to_story()`. The counter is:
+```python
+trending_bypassed = sum(1 for c in scored
+                        if c.get("_trending_video") and c["final_score"] < min_score)
+```
+It counts trending videos scoring BELOW threshold. **`0` therefore means "no trending video
+needed the bypass" — which reads as health, not failure.** My "a working counter reporting a
+broken mechanism" framing was wrong about this counter.
+
+## But the conclusion survives, by a different mechanism
+The top-N cut is explicitly video-first (`scoring.py:199-203`):
+```python
+video_stories = [s for s in above if s.get("_trending_video")]
+rest          = [s for s in above if not s.get("_trending_video")]
+above = (video_stories + rest)[:top_n]        # top_clips_per_run = 5
+```
+So with 14 trending videos among the 21 scored, **all 5 slots should be trending.**
+
+Measured, today's fire — the 5 that reached `DownloadTopVideos`:
+```
+[1/5] Viggo Björck sets up Burnside for a shorty …      (reddit:hockey)
+[2/5] Why the Sedin twins will never quit on Vancouver  (reddit:hockey)
+[3/5] ON THIS DAY!! Terence Crawford moves up two …     (reddit:boxing)
+[4/5] Jai Opetaia and David Benavidez meet face to face (reddit:boxing)
+      direct_url: v.redd.it/… , v.redd.it/… , v.redd.it/… , youtu.be/…
+```
+**Not one F1/FIBA/MLB highlight.** Video-first selection did not put a single trending video
+in the top 5, on a fire where 14 were present and passed relevance and quality.
+
+**Therefore `_trending_video` is absent (or falsy) on those stories by the time scoring
+runs.** Same class as `narration_script`: a field the producer sets and the consumer cannot
+find. And it explains `trending_bypassed = 0` for the OTHER reason — not "none needed the
+bypass" but "none were recognised as trending at all". The two readings are
+indistinguishable from the counter alone, which is why the counter could not have caught it.
+
+**NOT directly confirmed.** I have not yet read a story dict at the scorer's input. That is
+the one decisive test and it is the next thing to do: log or dump `_trending_video` presence
+for the scorer's input set on one fire.
+
+## SECOND LIVE DEFECT — yt-dlp is 90+ days stale and failing Reddit downloads
+```
+yt-dlp failed for https://v.redd.it/8fckyoodlaph1:
+  WARNING: Your yt-dlp version (2026.06.06.234447) is older than 90 days!
+yt-dlp failed for https://v.redd.it/t04r7b2v3cph1:  (same)
+```
+Two of the four Reddit clips failed to download on this fire. The wrapper reports
+`[ensure_yt_dlp_environment] yt-dlp wrapper already current` — **the wrapper is current; the
+yt-dlp binary it wraps is not.** A freshness check that reports "current" about the wrapper
+rather than the tool is its own finding, and it is why a 90-day-stale downloader has been
+running unnoticed.
+
+This compounds: the only stories reaching download are Reddit, and half of those fail to
+download. That is the end of the funnel, and it is why sports output is 32/month.
+
+## Revised chain (third revision — each step measured)
+1. fetch healthy — 25 action clips/run, 140 from league RSS
+2. filters/caps working — 14 trending survive relevance + quality
+3. **`_trending_video` lost before scoring** -> video-first cut selects none of them
+4. Reddit talk takes all 5 slots
+5. **yt-dlp 90+ days stale** -> ~half the Reddit clips fail to download
+6. scorebat disabled 07-14 (yt-dlp couldn't render its URLs — same tool, same era)
+7. composite pins at 0.48 on Reddit's missing engagement data
+
+Steps 3 and 5 are both live, both one-line-ish, and both invisible to every existing metric.
