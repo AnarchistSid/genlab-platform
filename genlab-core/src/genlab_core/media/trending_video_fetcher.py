@@ -385,6 +385,15 @@ class TrendingVideo:
             "video_id": self.video_id,
             "is_official_channel": self.is_official_channel,
             "is_highlight": self.is_highlight,
+            # SOURCE-05 (2026-09-14): to_story() emitted view_count but NOT
+            # like_count, while to_dict() emitted both. CompositeScorer computes
+            # engagement_score = like_count/view_count / target_like_ratio, so a
+            # missing like_count floors engagement_factor at 0.5 and the
+            # composite degenerates to a constant — the sports 0.48 pin measured
+            # in SWEEP-01. The value is present on live API items (180791,
+            # 42996, 115503) and populated by the videos.list enrichment; only
+            # this boundary dropped it.
+            "like_count": self.like_count,
             # Trending videos already have proven engagement — scale with velocity
             "source_mention_count": min(5, max(1, int(self.view_velocity / 500))),
             # Pre-filled clip info so DownloadTopVideos can skip re-sourcing
