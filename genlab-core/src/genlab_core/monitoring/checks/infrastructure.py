@@ -643,6 +643,34 @@ def check_git_ownership_drift() -> list[Alert]:
     return alerts
 
 
+# Below this, belt cannot be assumed to be serving. Not zero: a balance that
+# rounds to nothing mid-run is already degraded.
+_BELT_MIN_BALANCE_USD = 0.50
+
+
+def _belt_is_primary() -> bool:
+    """Whether belt serves LLM writes first. Lazy import: monitoring must not
+    hard-depend on the writing package."""
+    try:
+        from genlab_core.writing.llm_client import _belt_primary_enabled
+
+        return _belt_primary_enabled()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[check_anthropic_credit] belt-primary probe failed: %s", exc)
+        return False
+
+
+def belt_balance_usd() -> float | None:
+    """Belt balance in USD, or None when unknown. None is NOT zero."""
+    try:
+        from genlab_core.integrations.belt_client import balance_usd
+
+        return balance_usd()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[check_anthropic_credit] belt balance probe failed: %s", exc)
+        return None
+
+
 def check_anthropic_credit() -> list[Alert]:
     """Probe Anthropic API with a minimal request to detect credit exhaustion.
 
@@ -697,27 +725,66 @@ def check_anthropic_credit() -> list[Alert]:
             # Only alert on the exhaustion-class exceptions; auth/network
             # errors are separately investigated + would just add noise.
             if should_fallback(api_exc):
+                # Severity depends on whether the PRIMARY provider is up.
+                # Since LLM-PRIMARY-01 belt (inference.sh) serves writes
+                # first and Anthropic is a fallback tier, so Anthropic at
+                # zero is no longer an outage on its own. Before this,
+                # Mission Control showed a red CRITICAL while belt held
+                # $105.81 and every write succeeded -- red the operator
+                # learns to scroll past.
+                #
+                # `balance_usd()` returns None for UNKNOWN, which is treated
+                # as degraded: an unprobeable primary is not a healthy one.
+                belt_primary = _belt_is_primary()
+                belt_balance = belt_balance_usd() if belt_primary else None
+                belt_serving = belt_primary and (belt_balance or 0) > _BELT_MIN_BALANCE_USD
+
+                if belt_serving:
+                    severity = "warning"
+                    impact = (
+                        f"FALLBACK tier only. belt is primary and funded "
+                        f"(${belt_balance:.2f}), so writes continue. Anthropic "
+                        "is unavailable as a fallback until credit is topped up."
+                    )
+                    fix = (
+                        "No action required for continuity -- belt is serving. "
+                        "Top up Anthropic to restore the fallback tier: "
+                        "https://console.anthropic.com/settings/billing"
+                    )
+                else:
+                    severity = "critical"
+                    why = (
+                        "belt is not primary"
+                        if not belt_primary
+                        else f"belt balance is {belt_balance if belt_balance is not None else 'UNKNOWN'}"
+                    )
+                    impact = (
+                        f"NO funded LLM provider ({why}). Writer + "
+                        "auto_approval_gate + persona_engine will produce 0 "
+                        "blueprints, not degraded ones."
+                    )
+                    fix = (
+                        "Top up Anthropic at "
+                        "https://console.anthropic.com/settings/billing "
+                        "AND/OR fund belt (`belt balance`; HOME must be "
+                        "/opt/genlab or it reports 'not logged in')."
+                    )
                 alerts.append(
                     Alert(
                         check="anthropic_credit_exhausted",
-                        severity="critical",
+                        severity=severity,
                         message=(
                             "Anthropic API probe returned exhaustion signal: "
                             f"{type(api_exc).__name__}: {str(api_exc)[:200]}. "
-                            "Writer + auto_approval_gate + persona_engine "
-                            "will silently degrade to OpenAI fallback until "
-                            "credit is topped up. Fallback is 7-8x cheaper "
-                            "per token but may produce lower-creative-quality "
-                            "hooks."
+                            f"{impact}"
                         ),
                         details={
                             "exception_type": type(api_exc).__name__,
                             "error_snippet": str(api_exc)[:500],
+                            "belt_primary": belt_primary,
+                            "belt_balance_usd": belt_balance,
                         },
-                        auto_fix=(
-                            "Top up Anthropic API credits at "
-                            "https://console.anthropic.com/settings/billing"
-                        ),
+                        auto_fix=fix,
                     )
                 )
     except Exception as exc:  # noqa: BLE001 — monitor must never crash

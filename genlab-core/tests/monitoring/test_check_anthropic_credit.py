@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from genlab_core.monitoring.checks import infrastructure as infra
 from genlab_core.monitoring.checks.infrastructure import check_anthropic_credit
 
 
@@ -41,8 +42,14 @@ class TestAnthropicCredit:
         assert alerts == []
 
     def test_exhaustion_returns_critical_alert(self, monkeypatch):
-        """`credit balance is too low` triggers CRITICAL alert."""
+        """`credit balance is too low` triggers CRITICAL alert.
+
+        Severity is belt-aware since 2026-09-15, and this stays CRITICAL
+        because ``_belt_primary_enabled()`` is False under pytest. Asserting
+        that explicitly rather than relying on the coincidence.
+        """
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-fake")
+        monkeypatch.setattr(infra, "_belt_is_primary", lambda: False)
         with patch("anthropic.Anthropic") as MockClient:
             instance = MockClient.return_value
             instance.messages.create.side_effect = _FakeExhaustionError()
@@ -128,3 +135,47 @@ class TestAnthropicCredit:
             "probe must stay at max_tokens=1 — bumping this multiplies "
             "the annual cost linearly"
         )
+
+
+class TestAnthropicSeverityIsBeltAware:
+    """Anthropic is a FALLBACK tier since LLM-PRIMARY-01.
+
+    On 2026-09-15 Mission Control showed ANTHROPIC_CREDIT_EXHAUSTED as a red
+    CRITICAL while belt held $105.81 and every write succeeded. A CRITICAL that
+    does not mean "things are broken" trains the operator to scroll past the
+    ones that do.
+    """
+
+    @staticmethod
+    def _probe_exhausted(monkeypatch, *, primary: bool, balance):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-fake")
+        monkeypatch.setattr(infra, "_belt_is_primary", lambda: primary)
+        monkeypatch.setattr(infra, "belt_balance_usd", lambda: balance)
+        with patch("anthropic.Anthropic") as MockClient:
+            MockClient.return_value.messages.create.side_effect = _FakeExhaustionError()
+            return check_anthropic_credit()
+
+    def test_belt_primary_and_funded_downgrades_to_warning(self, monkeypatch):
+        alerts = self._probe_exhausted(monkeypatch, primary=True, balance=105.81)
+        assert len(alerts) == 1
+        assert alerts[0].severity == "warning"
+        assert "105.81" in alerts[0].message
+        assert alerts[0].details["belt_balance_usd"] == 105.81
+
+    def test_belt_primary_but_broke_stays_critical(self, monkeypatch):
+        alerts = self._probe_exhausted(monkeypatch, primary=True, balance=0.0)
+        assert alerts[0].severity == "critical"
+        assert "NO funded LLM provider" in alerts[0].message
+
+    def test_unknown_belt_balance_is_treated_as_degraded_not_funded(self, monkeypatch):
+        """None means UNKNOWN. An unprobeable primary is not a healthy one --
+        reading None as 'fine' would hide a total write outage behind a
+        warning."""
+        alerts = self._probe_exhausted(monkeypatch, primary=True, balance=None)
+        assert alerts[0].severity == "critical"
+        assert "UNKNOWN" in alerts[0].message
+
+    def test_belt_not_primary_stays_critical(self, monkeypatch):
+        alerts = self._probe_exhausted(monkeypatch, primary=False, balance=999.0)
+        assert alerts[0].severity == "critical"
+        assert "belt is not primary" in alerts[0].message

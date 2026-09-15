@@ -173,6 +173,53 @@ def run_app(
     )
 
 
+def balance_usd() -> float | None:
+    """Belt account balance in USD, or None if it cannot be determined.
+
+    None means "unknown" -- NOT "zero". Callers deciding severity must treat
+    unknown as "assume degraded", never as "assume funded".
+
+    Measured 2026-09-15: `belt balance --json` emits
+    ``{"balance": 10581423226, "balance_dollars": 105.81423226}`` -- credits
+    and dollars side by side, same 100_000_000-credits-per-dollar scale as
+    ``task_cost_usd``. The CLI also prints an update-available banner to
+    stdout, so the JSON must be located by line, not by parsing all of stdout.
+
+    HOME matters: belt reads its credentials from ``$HOME/.belt`` and the
+    systemd units set ``HOME=/opt/genlab``. Probing under any other HOME
+    returns "not logged in", which reads exactly like an auth failure.
+    """
+    binary = _belt_binary()
+    if not binary:
+        return None
+    try:
+        proc = subprocess.run(
+            [binary, "balance", "--json"],
+            capture_output=True, text=True, timeout=20,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[belt_client] balance probe failed: %s", exc)
+        return None
+    for line in reversed(proc.stdout.strip().splitlines()):
+        line = line.strip()
+        if not (line.startswith("{") and line.endswith("}")):
+            continue
+        try:
+            parsed = json.loads(line)
+        except ValueError:
+            continue
+        # An error payload parses as clean JSON too. Checking for the field
+        # is what distinguishes data from a well-formed failure.
+        if "error" in parsed:
+            logger.warning("[belt_client] balance: %s", parsed["error"])
+            return None
+        if "balance_dollars" in parsed:
+            return float(parsed["balance_dollars"])
+        if "balance" in parsed:
+            return float(parsed["balance"]) / 100_000_000
+    return None
+
+
 def task_cost_usd(task_id: str) -> float | None:
     """Look up the charged cost for a completed belt task.
 

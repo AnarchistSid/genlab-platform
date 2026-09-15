@@ -51,6 +51,7 @@ from genlab_core.monitoring.checks.bandit_engagement import (
     check_learning_loops_silent_fail,
     detect_dead_pollers,
 )
+from genlab_core.monitoring.checks.bandit_regret import check_bandit_regret_signal
 from genlab_core.monitoring.checks.infrastructure import (
     _attempt_warp_restart,
     _check_warp_port_listening,
@@ -63,7 +64,6 @@ from genlab_core.monitoring.checks.infrastructure import (
     check_swap,
     check_warp_health,
 )
-from genlab_core.monitoring.checks.bandit_regret import check_bandit_regret_signal
 from genlab_core.monitoring.checks.llm_cost import check_llm_cost
 from genlab_core.monitoring.checks.pipeline import (
     _FETCHER_STAGES_TO_MONITOR,
@@ -277,6 +277,89 @@ def write_alerts_to_db(alerts: list[Alert]) -> int:
         return 0
 
 
+# Check names that a FULL run re-measures from live system state on every
+# cycle. If one of these does NOT fire, its condition is measurably clear,
+# so any open alert for it is resolved immediately.
+#
+# Why this exists alongside resolve_stale_alerts(): that one resolves on AGE
+# (>24h) and relies on "it'll be re-created if still active". That keeps
+# persistent conditions visible, but it means an alert whose condition was
+# FIXED stays red for up to 24 hours. On 2026-09-15 permissions drift and
+# git ownership were repaired and post-deploy-verify was returning 0, while
+# Mission Control still showed SERVICE_DOWN and GIT_OWNERSHIP_DRIFT as
+# unresolved CRITICALs -- red the operator has to learn to ignore, which is
+# how real alerts get missed.
+#
+# Only these names are eligible. Per-niche and archival checks ("we archived
+# N drafts") are events, not conditions, and must never be auto-resolved by
+# absence.
+#
+# SAFETY INVARIANT: run_all_checks() wraps no individual check in try/except,
+# so if it returns at all, every check completed. "Absent from the result"
+# therefore means "measured clear", never "raised and was swallowed". If that
+# ever changes -- if someone adds a per-check try/except -- this function
+# starts resolving alerts for checks that crashed, and
+# test_no_per_check_exception_swallowing_in_run_all_checks fails first.
+_CONDITION_RESOLVABLE: frozenset[str] = frozenset(
+    {
+        "anthropic_credit_exhausted",
+        "disk_pressure",
+        "foreign_host_write",
+        "git_drift",
+        "git_drift_yaml",
+        "git_ownership_drift",
+        "llm_budget_exceeded",
+        "llm_budget_runway_low",
+        "llm_cost_runaway",
+        "media_root_missing",
+        "service_down",
+        "swap_pressure",
+        "warp_down",
+        "warp_port_closed",
+        "warp_unreachable",
+    }
+)
+
+
+def resolve_cleared_conditions(alerts: list[Alert], *, full_run: bool) -> int:
+    """Resolve open alerts whose check re-ran this cycle and found nothing.
+
+    ``full_run`` must be False for a ``--niche`` run: those skip the
+    system-wide checks entirely, so absence proves nothing and resolving
+    would clear alerts nobody re-measured.
+    """
+    if not full_run:
+        return 0
+    fired = {a.check for a in alerts}
+    cleared = sorted(_CONDITION_RESOLVABLE - fired)
+    if not cleared:
+        return 0
+    try:
+        conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id="all")
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE pipeline_alerts SET resolved_at = NOW() "
+            "WHERE resolved_at IS NULL AND check_name = ANY(%s)",
+            (cleared,),
+        )
+        resolved = cur.rowcount
+        conn.commit()
+        conn.close()
+        if resolved:
+            logger.info(
+                "Resolved %d alert(s) whose condition re-measured clear: %s",
+                resolved,
+                ", ".join(cleared),
+            )
+        return resolved
+    except Exception as exc:
+        # WARNING, not a silent 0 (rule #19). A silent failure here is
+        # indistinguishable from "nothing to resolve", and the symptom --
+        # permanent red on Mission Control -- is exactly what this fixes.
+        logger.warning("resolve_cleared_conditions failed: %s", exc, exc_info=True)
+        return 0
+
+
 def resolve_stale_alerts() -> int:
     """Auto-resolve alerts older than 24h (they'll be re-created if still active)."""
     try:
@@ -432,6 +515,13 @@ def main() -> None:
 
     # Write to DB
     written = write_alerts_to_db(alerts)
+
+    # Resolve alerts whose condition this run re-measured as clear. Runs
+    # AFTER the write so a still-firing check re-raises first and is
+    # excluded from the cleared set by construction.
+    cleared = resolve_cleared_conditions(alerts, full_run=args.niche is None)
+    if cleared:
+        logger.info("Resolved %d alert(s) on cleared condition", cleared)
 
     # Deliver critical alerts to the configured webhook (R-01) — without this,
     # alerts only land in a table nothing reads and nobody is paged.
