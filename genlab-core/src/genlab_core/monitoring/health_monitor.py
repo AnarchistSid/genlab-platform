@@ -322,32 +322,72 @@ _CONDITION_RESOLVABLE: frozenset[str] = frozenset(
 
 
 def resolve_cleared_conditions(alerts: list[Alert], *, full_run: bool) -> int:
-    """Resolve open alerts whose check re-ran this cycle and found nothing.
+    """Reconcile open alerts against what this run actually measured.
+
+    Two cases, both of which leave stale red on Mission Control otherwise:
+
+    * CLEARED -- the check ran and did not fire, so its condition is clear.
+    * DE-ESCALATED -- the check fired at a LOWER severity than the open row.
+      write_alerts_to_db dedups by keeping the highest open severity, which
+      correctly suppresses duplicate noise but means a critical can never be
+      replaced by the warning that supersedes it. Measured 2026-09-15: after
+      ANTHROPIC_CREDIT_EXHAUSTED was retargeted to warning (belt primary and
+      funded), the old criticals would have stayed red for a further 24h until
+      age-resolution, describing an outage that was not happening.
 
     ``full_run`` must be False for a ``--niche`` run: those skip the
-    system-wide checks entirely, so absence proves nothing and resolving
-    would clear alerts nobody re-measured.
+    system-wide checks entirely, so absence proves nothing and resolving would
+    clear alerts nobody re-measured.
     """
     if not full_run:
         return 0
     fired = {a.check for a in alerts}
     cleared = sorted(_CONDITION_RESOLVABLE - fired)
-    if not cleared:
+
+    # De-escalation: for each resolvable check that DID fire, resolve open
+    # rows whose severity outranks what we just measured.
+    rank = {"critical": 3, "warning": 2, "info": 1}
+    deescalated: list[tuple[str, int]] = []
+    for alert in alerts:
+        if alert.check not in _CONDITION_RESOLVABLE:
+            continue
+        now_rank = rank.get(alert.severity, 0)
+        if now_rank:
+            deescalated.append((alert.check, now_rank))
+
+    if not cleared and not deescalated:
         return 0
     try:
         conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id="all")
         cur = conn.cursor()
-        cur.execute(
-            "UPDATE pipeline_alerts SET resolved_at = NOW() "
-            "WHERE resolved_at IS NULL AND check_name = ANY(%s)",
-            (cleared,),
-        )
-        resolved = cur.rowcount
+        resolved = 0
+        if cleared:
+            cur.execute(
+                "UPDATE pipeline_alerts SET resolved_at = NOW() "
+                "WHERE resolved_at IS NULL AND check_name = ANY(%s)",
+                (cleared,),
+            )
+            resolved += cur.rowcount
+        for check_name, now_rank in deescalated:
+            cur.execute(
+                "UPDATE pipeline_alerts SET resolved_at = NOW() "
+                "WHERE resolved_at IS NULL AND check_name = %s "
+                "AND CASE severity WHEN 'critical' THEN 3 WHEN 'warning' THEN 2 "
+                "  WHEN 'info' THEN 1 ELSE 0 END > %s",
+                (check_name, now_rank),
+            )
+            if cur.rowcount:
+                logger.info(
+                    "De-escalated %d open alert(s) for %s — now reported lower",
+                    cur.rowcount,
+                    check_name,
+                )
+                resolved += cur.rowcount
         conn.commit()
         conn.close()
-        if resolved:
+        if resolved and cleared:
             logger.info(
-                "Resolved %d alert(s) whose condition re-measured clear: %s",
+                "Reconciled %d alert(s); conditions measured clear: %s",
                 resolved,
                 ", ".join(cleared),
             )
@@ -513,15 +553,17 @@ def main() -> None:
     # Run checks
     alerts = run_all_checks(niche_id=args.niche)
 
-    # Write to DB
-    written = write_alerts_to_db(alerts)
-
-    # Resolve alerts whose condition this run re-measured as clear. Runs
-    # AFTER the write so a still-firing check re-raises first and is
-    # excluded from the cleared set by construction.
+    # Reconcile open alerts against what we just measured. Runs BEFORE the
+    # write: write_alerts_to_db dedups against the highest OPEN severity, so a
+    # de-escalated alert's new row is dropped unless the outranking row is
+    # resolved first. The cleared set is computed from the in-memory `alerts`
+    # list, not the DB, so this ordering cannot mask a still-firing check.
     cleared = resolve_cleared_conditions(alerts, full_run=args.niche is None)
     if cleared:
-        logger.info("Resolved %d alert(s) on cleared condition", cleared)
+        logger.info("Reconciled %d stale alert(s) against measured state", cleared)
+
+    # Write to DB
+    written = write_alerts_to_db(alerts)
 
     # Deliver critical alerts to the configured webhook (R-01) — without this,
     # alerts only land in a table nothing reads and nobody is paged.

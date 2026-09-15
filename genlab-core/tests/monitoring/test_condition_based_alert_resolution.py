@@ -75,8 +75,12 @@ def test_a_still_firing_check_is_not_resolved(monkeypatch) -> None:
     class _Cur:
         rowcount = 0
 
-        def execute(self, _sql, params=None):
-            captured["names"] = list(params[0]) if params else []
+        def execute(self, sql, params=None):
+            # Only the cleared-set UPDATE uses `= ANY(%s)`. De-escalation
+            # issues one UPDATE per check with a scalar name, and capturing
+            # those too would overwrite the list with a string.
+            if params and "ANY(%s)" in sql:
+                captured["names"] = list(params[0])
 
     class _Conn:
         def cursor(self):
@@ -119,4 +123,88 @@ def test_no_per_check_exception_swallowing_in_run_all_checks() -> None:
         "not fire' and that inference is now unsound. Either remove the "
         "try/except, or make run_all_checks return the set of checks that "
         "actually completed and resolve only from that."
+    )
+
+
+class TestDeEscalation:
+    """A critical must be replaceable by the warning that supersedes it.
+
+    write_alerts_to_db dedups by keeping the highest OPEN severity. That
+    correctly suppresses duplicate noise, but it also means a check that starts
+    reporting a lower severity can never displace its own stale critical --
+    exactly what happened when ANTHROPIC_CREDIT_EXHAUSTED was retargeted to
+    warning while belt held $105.81.
+    """
+
+    @staticmethod
+    def _capture(monkeypatch):
+        calls: list[tuple] = []
+
+        class _Cur:
+            rowcount = 1
+
+            def execute(self, sql, params=None):
+                calls.append((" ".join(sql.split()), params))
+
+        class _Conn:
+            def cursor(self):
+                return _Cur()
+
+            def commit(self):
+                pass
+
+            def close(self):
+                pass
+
+        monkeypatch.setattr(hm, "pg_connect", lambda *a, **k: _Conn())
+        return calls
+
+    def test_lower_severity_resolves_the_outranking_open_row(self, monkeypatch) -> None:
+        calls = self._capture(monkeypatch)
+        warning = Alert(
+            check="anthropic_credit_exhausted",
+            severity="warning",
+            message="fallback tier only; belt funded",
+        )
+        hm.resolve_cleared_conditions([warning], full_run=True)
+        deesc = [c for c in calls if "CASE severity" in c[0]]
+        assert deesc, "no de-escalation UPDATE was issued for a warning-level alert"
+        sql, params = deesc[0]
+        assert params == ("anthropic_credit_exhausted", 2), (
+            "must resolve rows strictly outranking warning (rank 2)"
+        )
+        assert "> %s" in sql, "must be strictly-greater, or it resolves its own new row"
+
+    def test_same_severity_is_not_de_escalated(self, monkeypatch) -> None:
+        """A still-critical check must keep its open critical — dedup's job."""
+        calls = self._capture(monkeypatch)
+        crit = Alert(
+            check="anthropic_credit_exhausted", severity="critical", message="no provider"
+        )
+        hm.resolve_cleared_conditions([crit], full_run=True)
+        deesc = [c for c in calls if "CASE severity" in c[0]]
+        assert deesc and deesc[0][1] == ("anthropic_credit_exhausted", 3), (
+            "rank 3 with a strict > means nothing outranks it — correct no-op"
+        )
+
+
+def test_reconcile_runs_before_write_in_main() -> None:
+    """Ordering is load-bearing, not stylistic.
+
+    If write_alerts_to_db runs first, the de-escalated alert's new lower row is
+    dropped by dedup against the critical this function is about to resolve —
+    and the operator sees neither.
+    """
+    import re
+
+    src = inspect.getsource(hm.main)
+    # Match assignments, not prose: the explanatory comment above the call
+    # names write_alerts_to_db first, and a substring search finds that.
+    resolve_at = re.search(r"^\s+\w+ = resolve_cleared_conditions\(", src, re.M)
+    write_at = re.search(r"^\s+\w+ = write_alerts_to_db\(", src, re.M)
+    assert resolve_at and write_at, (
+        f"call sites not found — resolve={bool(resolve_at)} write={bool(write_at)}"
+    )
+    assert resolve_at.start() < write_at.start(), (
+        "resolve_cleared_conditions must run BEFORE write_alerts_to_db"
     )
