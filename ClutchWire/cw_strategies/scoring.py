@@ -170,6 +170,31 @@ class SportScoringStrategy(BaseScoringStrategy):
                 )
         stories = visual_passed
 
+        # PUBLISH-03 §1: dump what a YouTube-sourced story actually carries at
+        # THIS boundary. On 2026-09-14, 13 YouTube highlights passed relevance
+        # and the quality gate and won none of the five slots, and no blueprint
+        # existed from them to inspect afterwards — so the only place the two
+        # fields can be observed is here, on the way in.
+        # `is_highlight` drives the highlight-first cut; `like_count` drives
+        # CompositeScorer's engagement term (absent -> engagement floors at 0.5
+        # and the composite pins at a constant, measured 0.4823 across the set).
+        for _s in stories:
+            _src = str(_s.get("source") or "")
+            if "youtube" not in _src.lower() and "channel" not in str(
+                _s.get("search_query") or ""
+            ).lower():
+                continue
+            logger.info(
+                "[sports][boundary] source=%s search_query=%s is_highlight=%r "
+                "like_count=%r view_count=%r title=%.40s",
+                _src or "(none)",
+                _s.get("search_query") or "(none)",
+                _s.get("is_highlight"),
+                _s.get("like_count"),
+                _s.get("view_count"),
+                str(_s.get("title") or ""),
+            )
+
         scored = [self.score_item(s) for s in stories]
         scored.sort(key=lambda c: c["final_score"], reverse=True)
 
@@ -244,12 +269,26 @@ class SportScoringStrategy(BaseScoringStrategy):
         }
 
         logger.info(
+            # SOURCE-04/PUBLISH-03: the denominators belong HERE, not only in
+            # run_stats. `trending_bypassed` emits 0 both when nothing needed
+            # the bypass and when nothing was recognised — indistinguishable
+            # without a count of what WAS recognised. On 2026-09-14 the sports
+            # fire printed "0 bypassed", 13 YouTube highlights had passed
+            # relevance and the quality gate, and all five slots still went to
+            # Reddit. The counter that would have said why was in run_stats,
+            # which nobody reads at 00:30.
             "[sports] Scored %d -> %d stories (dropped %d below %.2f; "
-            "%d trending-video stories bypassed threshold)",
+            "trending_recognised=%d bypassed=%d | highlights_recognised=%d "
+            "selected=%d of top_n=%d, slot_min=%d)",
             len(stories),
             len(above),
             dropped,
             min_score,
+            sum(1 for c in scored if c.get("_trending_video")),
             trending_bypassed,
+            sum(1 for c in scored if c.get("is_highlight")),
+            highlights_selected,
+            top_n,
+            highlight_min,
         )
         return context
