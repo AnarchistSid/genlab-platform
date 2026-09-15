@@ -29,6 +29,7 @@ import os
 import random
 import sys
 import time
+from datetime import UTC
 
 from genlab_core.publishing.blueprint_selector import select_blueprint
 from genlab_core.publishing.crash_recovery import (
@@ -94,6 +95,54 @@ EXIT_ALL_FAILED = 2  # real signal — every platform failed on the chosen bluep
 EXIT_DAILY_CAP = 3  # benign — already published today
 EXIT_LOCK_HELD = 4  # benign — concurrent run, next timer retry
 EXIT_UNEXPECTED = 5  # real signal — unhandled exception in run_publish
+
+# RUN-03 (2026-09-15): partial success is NOT an incident.
+#
+# Same wire value as EXIT_SUCCESS deliberately — systemd only reads the number,
+# and rule #26 says exit non-zero only when a genuine incident needs paging. The
+# distinct NAME exists so the rollup below can say which case it is in the log.
+EXIT_PARTIAL = 0
+
+# The codes are identifiers, not a severity scale. Aggregating them with max()
+# ranked DAILY_CAP (3, benign) above ALL_FAILED (2, real) and NO_BLUEPRINTS (1,
+# benign) above SUCCESS (0). On 2026-09-15 four niches published 19/20 platform
+# cells and the run exited 1, because one niche had no fresh blueprint —
+# systemd read that as a service failure and fired OnFailure.
+_BENIGN_EXITS = frozenset({EXIT_NO_BLUEPRINTS, EXIT_DAILY_CAP, EXIT_LOCK_HELD})
+_REAL_EXITS = frozenset({EXIT_ALL_FAILED, EXIT_UNEXPECTED})
+
+
+def _rollup_exit(per_niche: list[tuple[str, int]]) -> int:
+    """Aggregate per-niche exit codes by MEANING, not numeric order.
+
+    * any niche published  -> EXIT_PARTIAL (0), WARN naming the rest
+    * nothing published, something really broke -> the worst real code
+    * nothing published, all benign -> the first benign code (unchanged)
+    """
+    if not per_niche:
+        return EXIT_SUCCESS
+    succeeded = [n for n, c in per_niche if c == EXIT_SUCCESS]
+    real = [(n, c) for n, c in per_niche if c in _REAL_EXITS]
+    benign = [(n, c) for n, c in per_niche if c in _BENIGN_EXITS]
+
+    if succeeded:
+        if real or benign:
+            logger.warning(
+                "[publish] PARTIAL: published %s; did not publish %s — exiting 0 "
+                "because at least one niche shipped (rule #26: non-zero is for "
+                "incidents that need paging, not for a quiet niche)",
+                ", ".join(succeeded),
+                ", ".join(f"{n}({c})" for n, c in real + benign),
+            )
+        return EXIT_PARTIAL
+    if real:
+        worst = max(c for _, c in real)
+        logger.error(
+            "[publish] NOTHING published and a real failure occurred: %s",
+            ", ".join(f"{n}({c})" for n, c in real),
+        )
+        return worst
+    return benign[0][1] if benign else EXIT_SUCCESS
 
 
 # ---------------------------------------------------------------------------
@@ -787,7 +836,7 @@ def main() -> int:
     # multiple connection pools (P21)
     shared_client = BacklogClient()
 
-    total_exit = 0
+    per_niche_exits: list[tuple[str, int]] = []
     # 2026-07-22 anti-fingerprint (item C): inter-niche jitter breaks
     # Meta's "5 Pages publishing in the same clockwork rhythm" detector.
     # Historical: publisher fires at 12:05 IST once daily, processes
@@ -853,7 +902,7 @@ def main() -> int:
                 enabled_platforms=niche_enabled,
                 retry_only=args.retry_only,
             )
-            total_exit = max(total_exit, exit_code)
+            per_niche_exits.append((nid, exit_code))
         except Exception as exc:
             # 2026-07-23: preserve traceback to a durable file BEFORE
             # exiting. Journal rotation eats the stderr output within
@@ -867,13 +916,13 @@ def main() -> int:
             )
             try:
                 import traceback as _tb
-                from datetime import datetime as _dt, timezone as _tz
+                from datetime import datetime as _dt
                 from pathlib import Path as _Path
 
                 error_path = _Path("/opt/genlab/.runtime/publisher_last_error.txt")
                 error_path.parent.mkdir(parents=True, exist_ok=True)
                 with error_path.open("w") as f:
-                    f.write(f"{_dt.now(_tz.utc).isoformat()}\n")
+                    f.write(f"{_dt.now(UTC).isoformat()}\n")
                     f.write(f"niche_id: {nid}\n")
                     f.write(f"ERROR: {exc}\n\n")
                     _tb.print_exc(file=f)
@@ -888,11 +937,11 @@ def main() -> int:
             # lump it in with the BENIGN "no blueprints today" exit code
             # and the SuccessExitStatus allowlist in the systemd unit
             # would silence the OnFailure alert.
-            total_exit = max(total_exit, EXIT_UNEXPECTED)
+            per_niche_exits.append((nid, EXIT_UNEXPECTED))
         finally:
             lock.release()
 
-    return total_exit
+    return _rollup_exit(per_niche_exits)
 
 
 if __name__ == "__main__":
