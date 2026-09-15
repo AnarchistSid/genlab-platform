@@ -184,3 +184,62 @@ class TestRepairChainIsTruePeakAware:
         from genlab_core.pipeline.stages.validate_videos import SPEC
 
         assert audio_loudness.NORMALISE_TARGET_TRUE_PEAK_DBTP < SPEC["max_true_peak"]
+
+
+class TestRepairIsTwoPass:
+    """The repair must MEASURE the asset, not predict it.
+
+    PUBLISH-04 made loudnorm unconditional and called it single-pass. That
+    fixed true-peak failures by creating loudness failures:
+
+        input        -14.57 LUFS  -0.72 dBTP   fail (true peak)
+        single-pass  -15.83 LUFS  -2.61 dBTP   FAIL (loudness_off)
+        two-pass     -14.40 LUFS  -1.80 dBTP   passes both
+
+    All four sports renders on the 09:31Z fire failed the new way. The anime
+    asset that motivated PUBLISH-04 passed single-pass (-14.08 -> -14.30) purely
+    by luck of where it started.
+    """
+
+    def test_repair_runs_the_analysis_pass(self) -> None:
+        import inspect
+
+        from genlab_core.pipeline.stages.validate_videos import ValidateVideos
+
+        src = inspect.getsource(ValidateVideos._fix_loudness)
+        assert "_measure_loudness" in src, (
+            "the repair must run an analysis pass; single-pass loudnorm predicts "
+            "its targets and can miss integrated loudness by >1 LU"
+        )
+        assert "loudnorm_filter(measured=measured)" in src, (
+            "measured values must be threaded into the filter, or the analysis "
+            "pass is computed and thrown away"
+        )
+
+    def test_analysis_failure_warns_rather_than_silently_degrading(self) -> None:
+        import inspect
+
+        from genlab_core.pipeline.stages.validate_videos import ValidateVideos
+
+        src = inspect.getsource(ValidateVideos._fix_loudness)
+        # Normalise implicit string concatenation + line wrapping before
+        # matching: the message is split across source lines, so a contiguous
+        # phrase match fails against code that is perfectly correct.
+        flat = " ".join(src.split())
+        assert "single-pass" in flat and "logger.warning" in flat, (
+            "a silent single-pass fallback is indistinguishable from a working "
+            "two-pass repair until the gate fails (rule #19)"
+        )
+
+    def test_two_pass_filter_carries_every_measured_field(self) -> None:
+        """A missing field makes linear mode silently revert to dynamic."""
+        from genlab_core.media import audio_loudness
+
+        measured = {
+            "input_i": "-14.57", "input_tp": "-0.72", "input_lra": "6.90",
+            "input_thresh": "-24.83", "target_offset": "1.47",
+        }
+        f = audio_loudness.loudnorm_filter(measured=measured)
+        for key in ("measured_I", "measured_TP", "measured_LRA",
+                    "measured_thresh", "offset", "linear=true"):
+            assert key in f, f"{key} missing from the two-pass filter"

@@ -716,8 +716,46 @@ class ValidateVideos:
         #
         # `peak_over` / `loud_off` are still computed: they drive the log line
         # so the reason for a repair stays visible.
+        # PUBLISH-05 (2026-09-15): TWO-PASS, and this corrects PUBLISH-04.
+        #
+        # Making loudnorm unconditional fixed true-peak failures and introduced
+        # loudness failures, because the call was SINGLE-pass — the mode whose
+        # own warning says the target "may miss by >1 LU". It missed by 1.8:
+        #
+        #   input        -14.57 LUFS  -0.72 dBTP   fail (true peak)
+        #   single-pass  -15.83 LUFS  -2.61 dBTP   FAIL (loudness_off)  <- traded
+        #   two-pass     -14.40 LUFS  -1.80 dBTP   passes both
+        #
+        # All 4 sports renders on the 09:31Z fire failed this way. PUBLISH-04's
+        # anime case passed (-14.08 -> -14.30) only because single-pass happened
+        # to land there; one passing sample again described a narrower case than
+        # it appeared to.
+        #
+        # The analysis pass measures the actual asset, so linear mode can hit
+        # both targets instead of predicting them. Fail-open to single-pass with
+        # a WARNING when analysis fails — degraded is better than no repair, but
+        # it must not be silent (rule #19).
+        measured = None
+        try:
+            from genlab_core.media.post_render_transform import _measure_loudness
+
+            measured = _measure_loudness(
+                path,
+                audio_loudness.TARGET_LUFS,
+                audio_loudness.TARGET_LRA,
+                audio_loudness.NORMALISE_TARGET_TRUE_PEAK_DBTP,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[ValidateVideos] loudness analysis raised: %s", exc)
+        if not measured:
+            logger.warning(
+                "[ValidateVideos] loudness analysis pass failed for %s — falling "
+                "back to single-pass, which can miss integrated loudness by >1 LU "
+                "and may swap a true_peak_over failure for a loudness_off one",
+                path.name,
+            )
         chain: list[str] = [
-            audio_loudness.loudnorm_filter(),
+            audio_loudness.loudnorm_filter(measured=measured),
             # Always end on the limiter: loudnorm can itself raise peaks.
             audio_loudness.limiter_filter(),
         ]
