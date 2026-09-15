@@ -94,3 +94,79 @@ def test_source_reads_both_env_vars_and_warns_when_none_usable() -> None:
             f"{fragment!r} missing from download_top_videos — the resolver this "
             f"pin protects is no longer the one in production."
         )
+
+
+class TestWarpProxyYieldsToCookies:
+    """WARP and cookies solve the same problem; together they lose.
+
+    WARP exists to defeat "Sign in to confirm you're not a bot" from a
+    datacenter IP. Cookies defeat the same wall without relocating us, so once
+    cookies are present WARP contributes only a foreign exit node. Measured
+    2026-09-15 on the four URLs the sports fire failed to fetch:
+
+        video          direct                    via WARP
+        t7m12y_xvr0    Downloading 1 format(s)   ERROR: "The uploader has not
+        owZ01TVfc-0    Downloading 1 format(s)    made this video available in
+        QmzCd5GGBiw    Downloading 1 format(s)    your country"
+        NK7AfP_wi8M    Downloading 1 format(s)
+
+    4/4 direct, 0/4 proxied. Two consecutive sports fires produced zero
+    blueprints on this.
+    """
+
+    @staticmethod
+    def _decide(warp: str, has_cookies: bool, explicit_env: str) -> str:
+        """The decision as implemented in _build_ytdlp_cmd."""
+        if warp and has_cookies and not explicit_env:
+            return ""
+        return warp
+
+    def test_warp_skipped_when_cookies_are_available(self) -> None:
+        assert self._decide("socks5://127.0.0.1:40000", True, "") == ""
+
+    def test_warp_kept_when_no_cookies(self) -> None:
+        """Without cookies WARP is still the only bot-wall defence there is."""
+        warp = "socks5://127.0.0.1:40000"
+        assert self._decide(warp, False, "") == warp
+
+    def test_explicit_operator_proxy_always_wins(self) -> None:
+        """YT_DLP_PROXY is a deliberate choice and must never be overridden."""
+        warp = "socks5://1.2.3.4:9050"
+        assert self._decide(warp, True, warp) == warp
+
+
+class TestErrorCapture:
+    """Report the ERROR line, not whatever stderr starts with.
+
+    yt-dlp leads stderr with a stale-version WARNING, so the truncated message
+    was always that warning and never the failure. Every download failure in
+    this pipeline was logged as a version complaint, which sent this
+    investigation after a stale-version theory twice while the real causes --
+    the bot wall, then a geo-blocking proxy -- stayed invisible.
+    """
+
+    @staticmethod
+    def _extract(raw: str) -> str:
+        errs = [ln.strip() for ln in raw.splitlines() if ln.strip().startswith("ERROR:")]
+        return "; ".join(errs) if errs else raw
+
+    def test_version_warning_does_not_mask_the_real_error(self) -> None:
+        raw = (
+            "WARNING: Your yt-dlp version (2026.06.06.234447) is older than 90 days!\n"
+            "         It is strongly recommended to always use the latest version.\n"
+            "         You installed yt-dlp with pip or using the wheel\n"
+            "ERROR: [youtube] t7m12y_xvr0: The uploader has not made this video "
+            "available in your country\n"
+        )
+        got = self._extract(raw)
+        assert got.startswith("ERROR:")
+        assert "available in your country" in got
+        assert "older than 90 days" not in got
+
+    def test_multiple_errors_are_all_kept(self) -> None:
+        raw = "ERROR: first thing\nnoise\nERROR: second thing\n"
+        assert self._extract(raw) == "ERROR: first thing; ERROR: second thing"
+
+    def test_falls_back_to_raw_when_no_error_line(self) -> None:
+        """Never return empty — a blank reason is worse than a noisy one."""
+        assert self._extract("something odd happened") == "something odd happened"

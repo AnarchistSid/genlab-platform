@@ -276,18 +276,6 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
         "15",
     ]
 
-    # Route through Cloudflare WARP SOCKS proxy when available.
-    # WARP uses Cloudflare's network which has better IP reputation than
-    # data-center IPs, bypassing YouTube's "Sign in to confirm" wall.
-    warp_proxy = os.environ.get("YT_DLP_PROXY", "")
-    if not warp_proxy and os.path.exists("/run/cloudflare-warp"):
-        # Default WARP SOCKS proxy port (we configured this to 40000)
-        warp_proxy = "socks5://127.0.0.1:40000"
-    if warp_proxy:
-        cmd.extend(["--proxy", warp_proxy])
-
-    cmd.append(url)
-
     # Use cookies if available. The file should contain at least
     # __Secure-3PAPISID and PREF (captured from a fresh browser session).
     #
@@ -337,6 +325,42 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
             [c for c in _cookie_candidates if c],
         )
 
+    # Route through Cloudflare WARP SOCKS proxy when available.
+    # WARP uses Cloudflare's network which has better IP reputation than
+    # data-center IPs, bypassing YouTube's "Sign in to confirm" wall.
+    warp_proxy = os.environ.get("YT_DLP_PROXY", "")
+    if not warp_proxy and os.path.exists("/run/cloudflare-warp"):
+        # Default WARP SOCKS proxy port (we configured this to 40000)
+        warp_proxy = "socks5://127.0.0.1:40000"
+    # SOURCE-08 (2026-09-15): cookies beat WARP, and using both loses.
+    #
+    # WARP exists to defeat "Sign in to confirm you're not a bot" from a
+    # datacenter IP. Real cookies defeat the same wall AND do not relocate us,
+    # so once cookies are present WARP adds nothing but a foreign exit node.
+    # Measured against the four URLs the 07:55Z sports fire failed to fetch:
+    #
+    #   video          direct                     via WARP
+    #   t7m12y_xvr0    Downloading 1 format(s)    ERROR: "The uploader has not
+    #   owZ01TVfc-0    Downloading 1 format(s)     made this video available in
+    #   QmzCd5GGBiw    Downloading 1 format(s)     your country"
+    #   NK7AfP_wi8M    Downloading 1 format(s)
+    #
+    # 4/4 direct, 0/4 proxied. Sports produced zero blueprints on two
+    # consecutive fires for exactly this reason.
+    #
+    # An explicit YT_DLP_PROXY is an operator decision and is always honoured.
+    if warp_proxy and has_real_cookies and not os.environ.get("YT_DLP_PROXY"):
+        logger.info(
+            "[download] cookies present — skipping WARP proxy (it geo-blocks; "
+            "cookies already clear the bot wall). Set YT_DLP_PROXY to force it."
+        )
+        warp_proxy = ""
+    if warp_proxy:
+        cmd.extend(["--proxy", warp_proxy])
+
+    cmd.append(url)
+
+
     # Use browser TLS impersonation via curl_cffi (real Chrome fingerprint)
     try:
         import curl_cffi  # noqa: F401
@@ -363,10 +387,19 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
                 if "[F2]" in _line:
                     logger.info("[download] %s", _line.strip())
             return {"success": True, "duration": elapsed, "error": ""}
-        ytdlp_error = (result.stderr or result.stdout or "unknown error").strip()
+        # SOURCE-08: log the ERROR line, not whatever stderr happens to start
+        # with. yt-dlp leads stderr with "WARNING: Your yt-dlp version ... is
+        # older than 90 days", so the truncated message was ALWAYS that warning
+        # and never the failure. Every download failure in this pipeline has
+        # been recorded as a version complaint, which sent this investigation
+        # after a stale-version theory twice while the real causes -- first the
+        # bot wall, then a geo-blocking proxy -- stayed invisible.
+        _raw = (result.stderr or result.stdout or "unknown error").strip()
+        _errs = [ln.strip() for ln in _raw.splitlines() if ln.strip().startswith("ERROR:")]
+        ytdlp_error = "; ".join(_errs) if _errs else _raw
         if len(ytdlp_error) > 500:
             ytdlp_error = ytdlp_error[:500] + "..."
-        logger.warning("yt-dlp failed for %s: %s", url, ytdlp_error[:200])
+        logger.warning("yt-dlp failed for %s: %s", url, ytdlp_error[:300])
     except subprocess.TimeoutExpired:
         elapsed = time.monotonic() - t0
         ytdlp_error = "download timed out"
