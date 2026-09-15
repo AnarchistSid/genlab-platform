@@ -288,21 +288,54 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
 
     cmd.append(url)
 
-    # Use cookies if available. .youtube_cookies.txt should contain at least
-    # __Secure-3PAPISID and PREF (captured from a fresh browser session)
-    cookies_path = os.path.join(project_root, ".youtube_cookies.txt")
+    # Use cookies if available. The file should contain at least
+    # __Secure-3PAPISID and PREF (captured from a fresh browser session).
+    #
+    # SOURCE-07 (2026-09-15): resolve the path from the environment, first
+    # non-EMPTY file wins. This used to hardcode
+    # ``{project_root}/.youtube_cookies.txt`` while prod maintained two:
+    #
+    #   YT_DLP_COOKIES=/opt/genlab/.youtube_cookies.txt      0 bytes, Jul 1
+    #   YT_DLP_COOKIES_FILE=/opt/genlab/.runtime/yt_cookies.txt
+    #                                        7063 bytes, 22 youtube.com entries
+    #
+    # The hardcoded path resolved to the EMPTY one, so `has_real_cookies` was
+    # False on every call and `--cookies` was never passed, while gaming's
+    # clip_sourcer kept the other file fresh (last write 13:05 the same day).
+    # Measured consequence on the 07:29Z sports fire: 0/5 downloaded, every
+    # URL returning "Sign in to confirm you're not a bot", VideoGate dropping
+    # all 5 stories, zero blueprints.
+    #
+    # Existence is not enough -- the empty file exists. Emptiness is the test,
+    # which is why the loop continues past a present-but-blank candidate
+    # instead of selecting it and giving up.
+    _cookie_candidates = [
+        os.environ.get("YT_DLP_COOKIES_FILE", "").strip(),
+        os.environ.get("YT_DLP_COOKIES", "").strip(),
+        os.path.join(project_root, ".youtube_cookies.txt"),
+    ]
+    cookies_path = ""
     has_real_cookies = False
-    if os.path.exists(cookies_path):
+    for _cand in _cookie_candidates:
+        if not _cand or not os.path.exists(_cand):
+            continue
         try:
-            with open(cookies_path) as fh:
+            with open(_cand) as fh:
                 content = fh.read()
-            has_real_cookies = any(
-                line.strip() and not line.startswith("#") for line in content.splitlines()
-            )
         except OSError:
-            pass
-        if has_real_cookies:
-            cmd.extend(["--cookies", cookies_path])
+            continue
+        if any(line.strip() and not line.startswith("#") for line in content.splitlines()):
+            cookies_path, has_real_cookies = _cand, True
+            break
+    if has_real_cookies:
+        cmd.extend(["--cookies", cookies_path])
+    else:
+        # rule #17/#19: a silent miss here looks identical to bot-blocking.
+        logger.warning(
+            "[download] no non-empty cookie file among %s — YouTube will "
+            "likely answer 'Sign in to confirm you are not a bot'",
+            [c for c in _cookie_candidates if c],
+        )
 
     # Use browser TLS impersonation via curl_cffi (real Chrome fingerprint)
     try:
