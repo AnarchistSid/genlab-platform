@@ -115,9 +115,13 @@ class TestWarpProxyYieldsToCookies:
     """
 
     @staticmethod
-    def _decide(warp: str, has_cookies: bool, force: str = "") -> str:
+    def _decide(warp: str, has_cookies: bool, force: str = "",
+                url: str = "https://www.youtube.com/watch?v=x") -> str:
         """The decision as implemented in _build_ytdlp_cmd."""
-        if warp and has_cookies and force != "1":
+        host = url.split("/")[2].lower() if "://" in url else ""
+        is_youtube = any(host == d or host.endswith("." + d)
+                         for d in ("youtube.com", "youtu.be", "googlevideo.com"))
+        if warp and has_cookies and is_youtube and force != "1":
             return ""
         return warp
 
@@ -181,3 +185,55 @@ class TestErrorCapture:
     def test_falls_back_to_raw_when_no_error_line(self) -> None:
         """Never return empty — a blank reason is worse than a noisy one."""
         assert self._extract("something odd happened") == "something odd happened"
+
+
+class TestProxyDecisionIsPerHost:
+    """The cookie jar is YouTube's; it buys nothing on another host.
+
+    SOURCE-08 skipped WARP whenever a cookie file existed. Right for YouTube
+    (WARP geo-blocks it, measured 0/4), wrong for Reddit, which blocks
+    datacenter IPs outright and which WARP was the only thing defeating.
+
+    Measured on the 11:12Z movies fire, all candidates v.redd.it:
+
+        ERROR: [generic] Unable to download webpage: HTTP Error 403: Blocked
+        0/5 downloaded, stories=0, blueprints=0
+
+    A regression I introduced and did not see for two fires, because the runs
+    in between happened to draw YouTube URLs. Host-blind rules hide behind
+    whatever the input mix happens to be.
+    """
+
+    WARP = "socks5://127.0.0.1:40000"
+
+    def test_youtube_with_cookies_skips_warp(self) -> None:
+        d = TestWarpProxyYieldsToCookies._decide
+        assert d(self.WARP, True, url="https://www.youtube.com/watch?v=abc") == ""
+        assert d(self.WARP, True, url="https://youtu.be/abc") == ""
+
+    def test_reddit_keeps_warp_even_with_cookies(self) -> None:
+        """The regression. Reddit 403s from a datacenter IP without WARP."""
+        d = TestWarpProxyYieldsToCookies._decide
+        assert d(self.WARP, True, url="https://v.redd.it/5o4umbq4qlph1") == self.WARP
+
+    def test_other_hosts_keep_warp(self) -> None:
+        d = TestWarpProxyYieldsToCookies._decide
+        for u in ("https://clips.twitch.tv/x", "https://www.tiktok.com/@a/video/1",
+                  "https://cdn.example.com/a.mp4"):
+            assert d(self.WARP, True, url=u) == self.WARP, u
+
+    def test_lookalike_host_does_not_match(self) -> None:
+        """notyoutube.com must not be treated as youtube.com."""
+        d = TestWarpProxyYieldsToCookies._decide
+        assert d(self.WARP, True, url="https://notyoutube.com/watch?v=x") == self.WARP
+
+    def test_source_gates_on_host(self) -> None:
+        """Guard the guard: the shipped decision must consult the URL."""
+        import inspect
+
+        from genlab_core.media import download_top_videos as dtv
+
+        src = " ".join(inspect.getsource(dtv._download_video).split())
+        assert "_is_youtube" in src and "youtu.be" in src, (
+            "the WARP skip is host-blind again — it will 403 every Reddit URL"
+        )

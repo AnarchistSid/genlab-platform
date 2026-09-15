@@ -362,15 +362,41 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
     # shipped, which is how this was caught rather than discovered next fire.
     #
     # Forcing a proxy now takes a flag that can only have been set on purpose.
+    # SOURCE-09 (2026-09-15): the cookies-beat-WARP rule is PER-HOST.
+    #
+    # SOURCE-08 skipped WARP whenever a cookie file existed. That is right for
+    # YouTube and wrong for everything else: the cookie file is a YOUTUBE cookie
+    # jar, and it does nothing for another host. Reddit blocks datacenter IPs
+    # outright, and WARP's Cloudflare exit is what got us past that.
+    #
+    # Measured on the 11:12Z movies fire, whose candidates were all v.redd.it:
+    #
+    #   ERROR: [generic] Unable to download webpage: HTTP Error 403: Blocked
+    #
+    # 0/5 downloaded, stories=0, blueprints=0 — a regression I introduced in
+    # SOURCE-08 and did not see for two fires because the runs before it drew
+    # YouTube URLs.
+    #
+    #   youtube + cookies -> skip WARP  (cookies clear the bot wall; WARP
+    #                                    geo-blocks, 0/4 measured)
+    #   anything else     -> keep WARP  (cookies are irrelevant; WARP is the
+    #                                    only thing defeating the datacenter block)
+    _host = url.split("/")[2].lower() if "://" in url else ""
+    _is_youtube = any(
+        _host == d or _host.endswith("." + d)
+        for d in ("youtube.com", "youtu.be", "googlevideo.com")
+    )
     if (
         warp_proxy
         and has_real_cookies
+        and _is_youtube
         and os.environ.get("GENLAB_YT_DLP_FORCE_PROXY", "") != "1"
     ):
         logger.info(
-            "[download] cookies present — skipping WARP proxy (it geo-blocks; "
-            "cookies already clear the bot wall). Set GENLAB_YT_DLP_FORCE_PROXY=1 "
-            "to force it."
+            "[download] youtube + cookies — skipping WARP proxy for %s (WARP "
+            "geo-blocks; cookies already clear the bot wall). Non-youtube hosts "
+            "keep WARP. Set GENLAB_YT_DLP_FORCE_PROXY=1 to force it.",
+            _host,
         )
         warp_proxy = ""
     if warp_proxy:
