@@ -525,6 +525,33 @@ class TrendingVideoFetcher:
         video_ids = list(candidates.keys())
         detailed = self._fetch_video_details(video_ids, niche_id)
         for v in detailed:
+            # SOURCE-06 (2026-09-15): carry PROVENANCE forward across the
+            # re-enrichment.
+            #
+            # `_fetch_video_details` builds brand-new TrendingVideos from the
+            # videos.list response via `_parse_video(item, "detail")`. The
+            # replacement below used the candidates dict for its KEYS only, so
+            # every field the source path had set on the candidate object was
+            # discarded -- including `is_highlight`, which the subscribed-
+            # channel merge loop sets to True a few frames earlier.
+            #
+            # Measured on the 2026-09-15 05:00Z sports fire: 16 subscribed
+            # channels yielded 102 videos, and all 14 that reached scoring
+            # carried `search_query='detail'` and `is_highlight=False`, so
+            # `highlights_recognised=0` and the highlight-first cut
+            # (slot_min=4) had nothing to reserve. The flag was being set
+            # correctly and destroyed one function later.
+            #
+            # videos.list is authoritative for STATS (view/like/duration) and
+            # knows nothing about which source produced the candidate, so only
+            # the provenance fields are restored.
+            prior = candidates.get(v.video_id)
+            if prior is not None:
+                v.is_highlight = v.is_highlight or prior.is_highlight
+                # "detail" is _parse_video's own placeholder, never a real
+                # source, so it must not overwrite a genuine provenance value.
+                if prior.search_query and prior.search_query != "detail":
+                    v.search_query = prior.search_query
             candidates[v.video_id] = v
 
         # Filter and score. Track per-reason rejection counts so the summary
