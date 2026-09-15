@@ -42,6 +42,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from genlab_core.media import audio_loudness
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,9 +52,13 @@ logger = logging.getLogger(__name__)
 # per-invocation via the GENLAB_LOUDNESS_TARGET_LUFS env var. A track quieter than
 # this plays visibly softer in the feed on partial-volume mobile — hold-rate
 # hurts (per audit QB-2026-08 F-QB-0301 and amended §1 correction 3).
-_DEFAULT_LOUDNESS_TARGET_LUFS = -14.0
-_DEFAULT_LOUDNESS_RANGE = 7.0  # LRA target — matches EBU R128 broadcast norm
-_DEFAULT_TRUE_PEAK_DBTP = -1.5  # headroom for lossy transcoders
+# PUBLISH-03 §2 (2026-09-15): these were three independent constants that the
+# ValidateVideos gate never saw. The producer normalised to -1.5 dBTP while the
+# gate demanded <= -1.0, agreeing only by luck. They now derive from the gate.
+# See media/audio_loudness.py for the measurement and the derivation.
+_DEFAULT_LOUDNESS_TARGET_LUFS = audio_loudness.TARGET_LUFS
+_DEFAULT_LOUDNESS_RANGE = audio_loudness.TARGET_LRA
+_DEFAULT_TRUE_PEAK_DBTP = audio_loudness.NORMALISE_TARGET_TRUE_PEAK_DBTP
 
 
 def _measure_loudness(
@@ -95,7 +101,8 @@ def _normalize_loudness_in_place(
 ) -> None:
     """Apply EBU R128 loudnorm to ``video_path`` in-place. Fail-open.
 
-    Uses ffmpeg `-af loudnorm=I=-14:LRA=7:TP=-1.5`. Runs single-pass (dynamic
+    Uses ffmpeg `-af loudnorm=...,alimiter=...` with every value derived from
+    the ValidateVideos gate (media/audio_loudness.py). Runs single-pass (dynamic
     normalisation) — two-pass would give more accurate targeting but doubles
     render time and single-pass is within ±1 LU of target for content in the
     -30 to -14 LUFS range we're correcting from. If either the transcode or
@@ -120,25 +127,29 @@ def _normalize_loudness_in_place(
     tp = float(os.environ.get("GENLAB_TRUE_PEAK_DBTP", _DEFAULT_TRUE_PEAK_DBTP))
 
     normalized = video_path.with_suffix(video_path.suffix + ".loudnorm.tmp.mp4")
-    filter_spec = f"loudnorm=I={target_lufs}:LRA={lra}:TP={tp}"
-    if two_pass:
-        measured = _measure_loudness(video_path, target_lufs, lra, tp)
-        if measured:
-            filter_spec = (
-                f"loudnorm=I={target_lufs}:LRA={lra}:TP={tp}"
-                f":measured_I={measured['input_i']}"
-                f":measured_TP={measured['input_tp']}"
-                f":measured_LRA={measured['input_lra']}"
-                f":measured_thresh={measured['input_thresh']}"
-                f":offset={measured['target_offset']}"
-                ":linear=true:print_format=summary"
-            )
-        else:
-            logger.warning(
-                "[%s] loudnorm analysis pass failed — falling back to "
-                "single-pass (target may miss by >1 LU)",
-                niche_id,
-            )
+    measured = _measure_loudness(video_path, target_lufs, lra, tp) if two_pass else None
+    if two_pass and not measured:
+        logger.warning(
+            "[%s] loudnorm analysis pass failed — falling back to single-pass. "
+            "Dynamic mode's true-peak limiting is predictive, not measured: "
+            "output can exceed its own TP target (measured 0.6 dB on "
+            "2026-09-15) as well as missing integrated loudness by >1 LU. The "
+            "alimiter below is what keeps this under the %.1f dBTP gate.",
+            niche_id,
+            audio_loudness.GATE_MAX_TRUE_PEAK_DBTP,
+        )
+    # PUBLISH-03 §2: ALWAYS end on the limiter. Before today this ran only in
+    # the ValidateVideos repair path — i.e. only after the gate had already
+    # failed a file — so the normal render path ended on loudnorm with nothing
+    # after it, and single-pass overshoot reached the gate unchecked.
+    filter_spec = ",".join(
+        [
+            audio_loudness.loudnorm_filter(
+                measured=measured, target_lufs=target_lufs, lra=lra, target_tp=tp
+            ),
+            audio_loudness.limiter_filter(),
+        ]
+    )
     cmd = [
         "ffmpeg", "-y",
         "-i", str(video_path),

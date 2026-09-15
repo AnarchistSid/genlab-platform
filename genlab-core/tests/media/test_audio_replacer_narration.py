@@ -12,7 +12,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from genlab_core.media.audio_replacer import (
     AudioMixSpec,
     build_audio_mix_filtergraph,
@@ -84,8 +83,19 @@ class TestNarrationPath:
             include_narration=True, target_lufs=-14.0,
         )
         assert "loudnorm=I=-14" in graph
-        # Reused ffmpeg_utils.build_loudnorm_filter defaults
-        assert "TP=-1.5" in graph
+        # PUBLISH-03 §2 (2026-09-15): TP is no longer a literal here. It was an
+        # independent -1.5 that the ValidateVideos gate never saw; it now derives
+        # from the gate ceiling. Assert the DERIVATION, not the number, so this
+        # test cannot pin a value that has drifted away from the gate again.
+        from genlab_core.media import audio_loudness
+        from genlab_core.pipeline.stages.validate_videos import SPEC
+
+        assert f"TP={audio_loudness.NORMALISE_TARGET_TRUE_PEAK_DBTP}" in graph
+        assert audio_loudness.NORMALISE_TARGET_TRUE_PEAK_DBTP < SPEC["max_true_peak"], (
+            "narration audio must normalise BELOW the gate the render is judged by"
+        )
+        # LRA 11 here vs 7.0 in the post-render pass is a real divergence that
+        # no measurement resolves yet — pinned as-is rather than guessed at.
         assert "LRA=11" in graph
 
     def test_music_pre_ducked_when_narration_present(self):

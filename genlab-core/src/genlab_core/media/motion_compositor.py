@@ -43,6 +43,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from genlab_core.media import audio_loudness
+
 logger = logging.getLogger(__name__)
 
 
@@ -208,7 +210,11 @@ def build_concat_filtergraph(
             parts.append(
                 f"[{bed_input_index}:a]"
                 f"atrim=duration={bed_duration_s:.3f},asetpts=N/SR/TB,"
-                f"loudnorm=I={bed_lufs}:TP=-1.5:LRA=11,"
+                # TP from the shared spec (PUBLISH-03 §2). I stays bed_lufs:
+                # a music bed is deliberately ducked well under the -14 LUFS
+                # programme target, so its integrated loudness is not shared.
+                f"loudnorm=I={bed_lufs}"
+                f":TP={audio_loudness.NORMALISE_TARGET_TRUE_PEAK_DBTP}:LRA=11,"
                 f"{aformat_expr}[a{i}]"
             )
         else:

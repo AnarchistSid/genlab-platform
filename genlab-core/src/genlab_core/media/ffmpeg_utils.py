@@ -21,6 +21,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from genlab_core.media import audio_loudness
 from genlab_core.media.ffmpeg import get_ffmpeg_binary, get_ffprobe_binary
 
 logger = logging.getLogger(__name__)
@@ -499,11 +500,22 @@ def build_drawtext(
 
 
 def build_loudnorm_filter(
-    target_i: float = -14.0,
-    target_tp: float = -1.5,
+    target_i: float = audio_loudness.TARGET_LUFS,
+    target_tp: float = audio_loudness.NORMALISE_TARGET_TRUE_PEAK_DBTP,
     target_lra: float = 11.0,
 ) -> str:
-    """Build loudnorm audio filter string."""
+    """Build loudnorm audio filter string.
+
+    PUBLISH-03 §2: ``target_tp`` derives from the ValidateVideos gate ceiling
+    (see media/audio_loudness.py). It was an independent -1.5 that the gate
+    never saw. Live callers -- audio_replacer (narration) and
+    build_narration_mix_filter -- pass only ``target_i``, so this default is
+    what the narration path actually normalises to.
+
+    ``target_lra`` is NOT unified: 11.0 here against 7.0 in the post-render
+    pass is a real divergence, but LRA changes audible dynamics and no
+    measurement justifies picking one yet. Tracked, not guessed.
+    """
     return f"loudnorm=I={target_i}:TP={target_tp}:LRA={target_lra}"
 
 

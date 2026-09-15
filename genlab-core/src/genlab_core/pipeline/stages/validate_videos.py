@@ -39,6 +39,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from genlab_core.media import audio_loudness
 from genlab_core.media.ffmpeg import get_ffmpeg_binary, get_ffprobe_binary
 from genlab_core.media.video_validator import check_vmaf
 from genlab_core.pipeline.stage_context import StageContext
@@ -138,15 +139,19 @@ SPEC = {
     # candidate: body -13.91 LUFS / -1.31 dBTP (correct), appended intro
     # +3.42 dBTP (clipping), in the first three seconds where the hook lives.
     # Third instance of the append-after-normalize class.
-    "target_lufs": -14.0,
+    "target_lufs": audio_loudness.TARGET_LUFS,
     "lufs_tolerance": 1.0,
-    "max_true_peak": -1.0,
+    "max_true_peak": audio_loudness.GATE_MAX_TRUE_PEAK_DBTP,
 }
 
-# Limiter ceiling in linear amplitude, 0.5 dB under SPEC["max_true_peak"].
-# Limiting to exactly the gate threshold lands ON it: measured -0.98 dBTP
-# against a -1.0 ceiling, which fails by two hundredths of a dB.
-_LIMITER_CEILING = 10 ** ((SPEC["max_true_peak"] - 0.5) / 20)
+# PUBLISH-03 §2 (2026-09-15): the 0.5 dB margin this used to hardcode was too
+# small. loudnorm overshoots its own TP target by a measured 0.6 dB in
+# single-pass mode, which is how a movies render reached the gate at -0.93
+# dBTP against a -1.0 ceiling. The margin now lives in audio_loudness beside
+# the measurement that sets it, and the PRODUCER applies the same limiter so
+# this repair path stops being the only thing standing between loudnorm and
+# the gate.
+_LIMITER_CEILING = audio_loudness.LIMITER_CEILING_LINEAR
 
 
 class ValidateVideos:
@@ -593,7 +598,7 @@ class ValidateVideos:
         try:
             proc = subprocess.run(
                 ["ffmpeg", "-hide_banner", "-nostats", "-i", str(path),
-                 "-af", "loudnorm=I=-14:TP=-1.0:LRA=7:print_format=json",
+                 "-af", audio_loudness.loudnorm_filter() + ":print_format=json",
                  "-f", "null", "-"],
                 capture_output=True, text=True, timeout=300,
             )
@@ -688,11 +693,14 @@ class ValidateVideos:
         chain: list[str] = []
         if loud_off:
             chain.append(
-                f"loudnorm=I={SPEC['target_lufs']}:TP={SPEC['max_true_peak']}:LRA=7"
+                # Not SPEC["max_true_peak"]: targeting the gate value exactly
+                # leaves no room for loudnorm's own overshoot. This is the
+                # derived normalisation target, 1.0 dB under the gate.
+                audio_loudness.loudnorm_filter()
             )
         if peak_over or loud_off:
             # Always end on the limiter: loudnorm can itself raise peaks.
-            chain.append(f"alimiter=limit={_LIMITER_CEILING:.4f}:level=disabled")
+            chain.append(audio_loudness.limiter_filter())
 
         out = path.with_name(f"{path.stem}_ln{path.suffix}")
         logger.info(
