@@ -126,3 +126,61 @@ def test_the_literal_scan_actually_sees_code() -> None:
     """Guard the guard: a tokenize failure would make the scan above vacuous."""
     lines = _code_lines(_SRC / "media" / "post_render_transform.py")
     assert len(lines) > 100, f"tokenize returned {len(lines)} tokens — scan is dead"
+
+
+class TestRepairChainIsTruePeakAware:
+    """A true-peak failure cannot be repaired by a sample-peak-only chain.
+
+    2026-09-15. _fix_loudness ran loudnorm only when the issue list contained
+    `loudness_off`. For a pure `true_peak_over` it applied alimiter alone --
+    and alimiter caps SAMPLE peaks, while inter-sample peaks ride above them by
+    more the harder it works.
+
+    Measured on an anime asset that arrived clipping at +0.63 dBTP:
+
+        input                      -14.08 LUFS  +0.63 dBTP   fail
+        limiter only  (old)        -14.17 LUFS  -0.63 dBTP   STILL FAILS
+        loudnorm + limiter (new)   -14.30 LUFS  -2.23 dBTP   passes
+
+    Limiting to a -2.0 dBFS sample ceiling left 1.37 dB of inter-sample
+    overshoot. All four anime renders on the 08:13Z fire failed this way --
+    "0 passed (0 auto-fixed), 4 failed" with a repair attempted on every one.
+
+    It survived earlier because the movies and ai_creators assets repaired the
+    same morning arrived at -0.93 and -0.64 dBTP, near enough that the limiter
+    alone cleared the gate. The 0.3-0.45 dB margin measured there was overshoot
+    on LOUDNORM output and never generalised to heavily-limited output.
+    """
+
+    @staticmethod
+    def _chain_for(issues: list[str]) -> str:
+        import inspect
+
+        from genlab_core.pipeline.stages.validate_videos import ValidateVideos
+
+        return inspect.getsource(ValidateVideos._fix_loudness)
+
+    def test_loudnorm_is_unconditional(self) -> None:
+        """Not gated on loudness_off. The gate it must satisfy is true peak."""
+        src = self._chain_for(["true_peak_over:+0.63dBTP"])
+        assert "chain: list[str] = [" in src, (
+            "the repair chain must be built unconditionally; a conditional "
+            "loudnorm means a pure true-peak failure gets a sample-peak-only "
+            "repair, which measurably cannot fix it"
+        )
+        assert "if loud_off:\n            chain.append(" not in src, (
+            "loudnorm is conditional again — see the +0.63 dBTP measurement above"
+        )
+
+    def test_limiter_still_runs_after_loudnorm(self) -> None:
+        from genlab_core.media import audio_loudness
+
+        chain = ",".join([audio_loudness.loudnorm_filter(), audio_loudness.limiter_filter()])
+        assert chain.index("loudnorm") < chain.index("alimiter")
+
+    def test_repair_target_sits_under_the_gate(self) -> None:
+        """The repair must aim below the threshold it has to clear."""
+        from genlab_core.media import audio_loudness
+        from genlab_core.pipeline.stages.validate_videos import SPEC
+
+        assert audio_loudness.NORMALISE_TARGET_TRUE_PEAK_DBTP < SPEC["max_true_peak"]

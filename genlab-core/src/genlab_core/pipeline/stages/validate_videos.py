@@ -690,17 +690,37 @@ class ValidateVideos:
         if not peak_over and not loud_off:
             peak_over = loud_off = True
 
-        chain: list[str] = []
-        if loud_off:
-            chain.append(
-                # Not SPEC["max_true_peak"]: targeting the gate value exactly
-                # leaves no room for loudnorm's own overshoot. This is the
-                # derived normalisation target, 1.0 dB under the gate.
-                audio_loudness.loudnorm_filter()
-            )
-        if peak_over or loud_off:
+        # PUBLISH-04 (2026-09-15): loudnorm runs ALWAYS, not only for
+        # loudness_off. It is the one true-peak-aware stage in the chain --
+        # alimiter caps SAMPLE peaks and inter-sample peaks ride well above
+        # them, the more so the harder it is working.
+        #
+        # A true-peak-only repair therefore could not fix a true-peak problem.
+        # Measured on 25e4ed6ced2810fe_reel_with_intro.mp4, an anime asset that
+        # arrived clipping at +0.63 dBTP:
+        #
+        #   chain                       I (LUFS)   TP (dBTP)
+        #   input                        -14.08      +0.63     fail
+        #   limiter only  (old)          -14.17      -0.63     FAIL   <- still
+        #   loudnorm + limiter (new)     -14.30      -2.23     pass
+        #
+        # Limiting to -2.0 dBFS sample peak left 1.37 dB of inter-sample
+        # overshoot. All 4 anime renders on the 08:13Z fire failed this way:
+        # "0 passed (0 auto-fixed), 4 failed" with a repair attempted on each.
+        #
+        # Why this was not caught by the movies/ai_creators repairs earlier
+        # today: those arrived at -0.93 and -0.64 dBTP, close enough that the
+        # limiter alone cleared the gate. The margin measured there (0.3-0.45
+        # dB) was overshoot on loudnorm output, not on heavily-limited output,
+        # and did not generalise to a clipping input.
+        #
+        # `peak_over` / `loud_off` are still computed: they drive the log line
+        # so the reason for a repair stays visible.
+        chain: list[str] = [
+            audio_loudness.loudnorm_filter(),
             # Always end on the limiter: loudnorm can itself raise peaks.
-            chain.append(audio_loudness.limiter_filter())
+            audio_loudness.limiter_filter(),
+        ]
 
         out = path.with_name(f"{path.stem}_ln{path.suffix}")
         logger.info(
