@@ -115,9 +115,9 @@ class TestWarpProxyYieldsToCookies:
     """
 
     @staticmethod
-    def _decide(warp: str, has_cookies: bool, explicit_env: str) -> str:
+    def _decide(warp: str, has_cookies: bool, force: str = "") -> str:
         """The decision as implemented in _build_ytdlp_cmd."""
-        if warp and has_cookies and not explicit_env:
+        if warp and has_cookies and force != "1":
             return ""
         return warp
 
@@ -129,10 +129,21 @@ class TestWarpProxyYieldsToCookies:
         warp = "socks5://127.0.0.1:40000"
         assert self._decide(warp, False, "") == warp
 
-    def test_explicit_operator_proxy_always_wins(self) -> None:
-        """YT_DLP_PROXY is a deliberate choice and must never be overridden."""
+    def test_env_set_proxy_does_NOT_defeat_the_skip(self) -> None:
+        """The bug in the first cut of this fix.
+
+        Exempting YT_DLP_PROXY as "an operator decision" silently defeated the
+        whole change: prod .env already sets it to the SAME WARP address the
+        implicit branch computes. Only an explicit force flag may override.
+        """
+        warp = "socks5://127.0.0.1:40000"
+        assert self._decide(warp, True) == "", (
+            "an env-configured WARP address must not count as a deliberate override"
+        )
+
+    def test_force_flag_is_the_only_override(self) -> None:
         warp = "socks5://1.2.3.4:9050"
-        assert self._decide(warp, True, warp) == warp
+        assert self._decide(warp, True, force="1") == warp
 
 
 class TestErrorCapture:

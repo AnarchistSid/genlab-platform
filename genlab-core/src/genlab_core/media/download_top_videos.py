@@ -348,11 +348,29 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
     # 4/4 direct, 0/4 proxied. Sports produced zero blueprints on two
     # consecutive fires for exactly this reason.
     #
-    # An explicit YT_DLP_PROXY is an operator decision and is always honoured.
-    if warp_proxy and has_real_cookies and not os.environ.get("YT_DLP_PROXY"):
+    # Cookies win over ANY proxy, including an explicit YT_DLP_PROXY.
+    #
+    # The first cut of this exempted YT_DLP_PROXY as "an operator decision".
+    # That carve-out silently defeated the whole fix: prod .env already sets
+    #
+    #     YT_DLP_PROXY=socks5://127.0.0.1:40000
+    #
+    # which is the SAME WARP address the implicit branch computes. The env
+    # value is the WARP default written into config, not a considered override,
+    # and nothing distinguishes the two. Verified against the deployed code in
+    # the real environment -- it reported "WARP would be USED" after the fix
+    # shipped, which is how this was caught rather than discovered next fire.
+    #
+    # Forcing a proxy now takes a flag that can only have been set on purpose.
+    if (
+        warp_proxy
+        and has_real_cookies
+        and os.environ.get("GENLAB_YT_DLP_FORCE_PROXY", "") != "1"
+    ):
         logger.info(
             "[download] cookies present — skipping WARP proxy (it geo-blocks; "
-            "cookies already clear the bot wall). Set YT_DLP_PROXY to force it."
+            "cookies already clear the bot wall). Set GENLAB_YT_DLP_FORCE_PROXY=1 "
+            "to force it."
         )
         warp_proxy = ""
     if warp_proxy:
