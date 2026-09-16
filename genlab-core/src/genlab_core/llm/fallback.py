@@ -179,8 +179,7 @@ def should_fallback_on_auth(exc: Exception) -> bool:
     if os.environ.get("GENLAB_LLM_FALLBACK_ON_AUTH", "1").strip() == "0":
         return False
     return (
-        _error_type_of(exc) == "authentication_error"
-        or type(exc).__name__ == "AuthenticationError"
+        _error_type_of(exc) == "authentication_error" or type(exc).__name__ == "AuthenticationError"
     )
 
 
@@ -249,8 +248,60 @@ def call_openai_fallback(
     model: str = "gpt-4o-mini",
     json_mode: bool = False,
 ) -> str:
-    """Call OpenAI as writer/gate/reply fallback. Returns the response
-    text as a string.
+    """Fallback LLM call. Tries BELT (inference.sh Claude Haiku) first, then OpenAI.
+
+    2026-09-17: the belt tier had been defined in this module since 2026-09-12 and
+    had **zero consumers** -- all ten call sites imported `call_openai_fallback`
+    and went straight to OpenAI. When the OpenAI balance hit zero the auto-approver
+    threw `RateLimitError` on every borderline blueprint (137 tracebacks in 24h),
+    approved nothing for days, so nothing got a `scheduled_for`, so the publisher
+    found nothing due and all five channels stopped.
+
+    Routing belt-first HERE rather than editing ten call sites is deliberate: the
+    tier was missed once per site already, and a shared helper cannot be missed
+    per site. The historical name is kept so no caller has to change; the
+    docstring carries the truth.
+
+    Belt is the same model as the primary at 0% markup on a separate credit pool,
+    so failing over changes neither cost nor output distribution -- only which
+    balance is consumed. OpenAI's gpt-4o-mini is a different model and a different
+    voice, which is why it is tier 2.
+    """
+    if belt_fallback_enabled():
+        try:
+            return call_belt_haiku_fallback(
+                system,
+                user,
+                max_tokens,
+                temperature,
+                json_mode=json_mode,
+            )
+        except Exception as exc:  # noqa: BLE001 — belt down must not lose the call
+            # WARNING, not debug: a silently-dead tier is what produced this bug.
+            logger.warning(
+                "[llm-fallback] belt tier failed (%s: %s) — falling through to OpenAI",
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
+    if not api_key:
+        raise RuntimeError("LLM fallback exhausted: belt unavailable and no OPENAI_API_KEY set")
+    return _call_openai_direct(
+        system, user, max_tokens, temperature, api_key, model=model, json_mode=json_mode
+    )
+
+
+def _call_openai_direct(
+    system: str,
+    user: str,
+    max_tokens: int,
+    temperature: float,
+    api_key: str,
+    *,
+    model: str = "gpt-4o-mini",
+    json_mode: bool = False,
+) -> str:
+    """Tier 2. Call OpenAI directly. Returns the response text as a string.
 
     Mirrors shape of `genlab_core.llm.router._call_openai`. Reuses the
     cost accumulator so fallback spend is visible on the same ledger
@@ -350,9 +401,19 @@ def call_belt_haiku_fallback(
         payload_in["response_format"] = {"type": "json_object"}
 
     proc = subprocess.run(
-        ["belt", "app", "run", _BELT_APP, "--no-input", "--json",
-         "--input", _json.dumps(payload_in)],
-        capture_output=True, text=True, timeout=timeout_s,
+        [
+            "belt",
+            "app",
+            "run",
+            _BELT_APP,
+            "--no-input",
+            "--json",
+            "--input",
+            _json.dumps(payload_in),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=timeout_s,
     )
     try:
         payload = _json.loads(proc.stdout or "{}")
@@ -365,9 +426,7 @@ def call_belt_haiku_fallback(
     # T-38: never gate on proc.returncode — the belt CLI exits 0 on a failed task.
     status = payload.get("status_text") or ""
     if status != "completed":
-        raise RuntimeError(
-            f"belt task status={status!r} err={str(payload.get('error'))[:200]}"
-        )
+        raise RuntimeError(f"belt task status={status!r} err={str(payload.get('error'))[:200]}")
 
     # T-57: "completed" is NOT success. It says the task finished, not that it
     # produced anything. Measured the same day: the `openai` function returned
@@ -436,7 +495,8 @@ def call_fallback_chain(
                 system, user, max_tokens, temperature, json_mode=json_mode
             )
             _notify_failover(
-                site_label, "SERVED BY BELT",
+                site_label,
+                "SERVED BY BELT",
                 f"Anthropic unavailable; same model on the belt pool "
                 f"({type(original_exc).__name__ if original_exc else 'n/a'})",
             )
@@ -452,8 +512,7 @@ def call_fallback_chain(
             text = call_openai_fallback(
                 system, user, max_tokens, temperature, openai_key, json_mode=json_mode
             )
-            _notify_failover(site_label, "SERVED BY OPENAI",
-                             "belt tier unavailable or disabled")
+            _notify_failover(site_label, "SERVED BY OPENAI", "belt tier unavailable or disabled")
             return text
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
@@ -511,13 +570,16 @@ def with_openai_fallback(
                 site_label,
             )
             return call_fallback_chain(
-                system, user, max_tokens, temperature,
-                json_mode=json_mode, site_label=site_label,
+                system,
+                user,
+                max_tokens,
+                temperature,
+                json_mode=json_mode,
+                site_label=site_label,
             )
         except Exception:  # noqa: BLE001 — no tier available; probe Anthropic anyway
             logger.warning(
-                "[llm-fallback][%s] circuit open but no fallback tier served — "
-                "probing Anthropic",
+                "[llm-fallback][%s] circuit open but no fallback tier served — probing Anthropic",
                 site_label,
             )
 
@@ -533,8 +595,12 @@ def with_openai_fallback(
         # the primary's failure is the diagnostic that matters; surfacing the last
         # tier's error would point the operator at the wrong system.
         return call_fallback_chain(
-            system, user, max_tokens, temperature,
-            json_mode=json_mode, site_label=site_label,
+            system,
+            user,
+            max_tokens,
+            temperature,
+            json_mode=json_mode,
+            site_label=site_label,
             original_exc=anthropic_exc,
         )
 

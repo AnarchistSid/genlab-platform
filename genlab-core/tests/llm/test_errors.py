@@ -79,28 +79,19 @@ class TestClassNameFallback:
         class APIConnectionError(Exception):
             pass
 
-        assert (
-            classify_llm_error(APIConnectionError("DNS failure"))
-            == LLM_ERROR_CONNECTION
-        )
+        assert classify_llm_error(APIConnectionError("DNS failure")) == LLM_ERROR_CONNECTION
 
     def test_api_timeout_error_class(self):
         class APITimeoutError(Exception):
             pass
 
-        assert (
-            classify_llm_error(APITimeoutError("timed out"))
-            == LLM_ERROR_TIMEOUT
-        )
+        assert classify_llm_error(APITimeoutError("timed out")) == LLM_ERROR_TIMEOUT
 
     def test_bad_request_error_class(self):
         class BadRequestError(Exception):
             pass
 
-        assert (
-            classify_llm_error(BadRequestError("malformed body"))
-            == LLM_ERROR_INVALID_REQUEST
-        )
+        assert classify_llm_error(BadRequestError("malformed body")) == LLM_ERROR_INVALID_REQUEST
 
     def test_our_circuit_open_error(self):
         class CircuitOpenError(Exception):

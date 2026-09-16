@@ -11,11 +11,9 @@ from __future__ import annotations
 import time
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import genlab_core.llm.fallback as fb_module
+import pytest
 from genlab_core.llm.fallback import (
-    call_openai_fallback,
     cb_is_open,
     cb_record_exhaustion,
     cb_record_success,
