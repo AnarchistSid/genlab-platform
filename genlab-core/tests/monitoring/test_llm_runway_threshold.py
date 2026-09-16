@@ -11,12 +11,12 @@ fired once.
 These simulate the low-balance state rather than waiting for a seventh outage
 to validate a guard against outages.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.monitoring.checks import llm_cost
 
 
@@ -27,9 +27,12 @@ def budget(monkeypatch):
 
 
 def _run(mtd: float, daily: float):
-    with patch.object(llm_cost, "_fetch_month_to_date_llm_spend", return_value=mtd), \
-         patch.object(llm_cost, "_fetch_daily_llm_costs",
-                      return_value=[(f"d{i}", daily) for i in range(14)]):
+    with (
+        patch.object(llm_cost, "_fetch_month_to_date_llm_spend", return_value=mtd),
+        patch.object(
+            llm_cost, "_fetch_daily_llm_costs", return_value=[(f"d{i}", daily) for i in range(14)]
+        ),
+    ):
         return llm_cost.check_llm_budget_runway()
 
 
@@ -67,12 +70,15 @@ class TestSevenDayWarning:
         assert alerts and alerts[0].check == "llm_budget_exceeded"
         assert alerts[0].severity == "critical"
 
-    @pytest.mark.parametrize("mtd,expected", [
-        (3.00, None),        # ~20 days
-        (7.90, "warning"),   # ~6 days
-        (9.50, "warning"),   # ~1.4 days
-        (9.75, "critical"),  # ~0.7 days
-    ])
+    @pytest.mark.parametrize(
+        "mtd,expected",
+        [
+            (3.00, None),  # ~20 days
+            (7.90, "warning"),  # ~6 days
+            (9.50, "warning"),  # ~1.4 days
+            (9.75, "critical"),  # ~0.7 days
+        ],
+    )
     def test_escalation_ladder(self, budget, mtd, expected):
         alerts = _run(mtd=mtd, daily=0.35)
         got = alerts[0].severity if alerts else None

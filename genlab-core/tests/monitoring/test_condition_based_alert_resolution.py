@@ -102,9 +102,7 @@ def test_a_still_firing_check_is_not_resolved(monkeypatch) -> None:
     assert "anthropic_credit_exhausted" not in captured["names"], (
         "a check that fired this cycle must never be in the cleared set"
     )
-    assert "service_down" in captured["names"], (
-        "a check that did NOT fire should be resolved"
-    )
+    assert "service_down" in captured["names"], "a check that did NOT fire should be resolved"
 
 
 def test_no_per_check_exception_swallowing_in_run_all_checks() -> None:
@@ -178,9 +176,7 @@ class TestDeEscalation:
     def test_same_severity_is_not_de_escalated(self, monkeypatch) -> None:
         """A still-critical check must keep its open critical — dedup's job."""
         calls = self._capture(monkeypatch)
-        crit = Alert(
-            check="anthropic_credit_exhausted", severity="critical", message="no provider"
-        )
+        crit = Alert(check="anthropic_credit_exhausted", severity="critical", message="no provider")
         hm.resolve_cleared_conditions([crit], full_run=True)
         deesc = [c for c in calls if "CASE severity" in c[0]]
         assert deesc and deesc[0][1] == ("anthropic_credit_exhausted", 3), (

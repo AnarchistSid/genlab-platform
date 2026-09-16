@@ -17,8 +17,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from genlab_core.monitoring.checks.pipeline import check_source_diversity
 
 
@@ -151,5 +149,6 @@ class TestExported:
 
     def test_reachable_from_facade(self):
         from genlab_core.monitoring import health_monitor
+
         assert "check_source_diversity" in health_monitor.__all__
         assert callable(health_monitor.check_source_diversity)

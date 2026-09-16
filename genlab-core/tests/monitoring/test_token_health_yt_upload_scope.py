@@ -80,9 +80,7 @@ class TestTokeninfoHelper:
 
 
 class TestCheckYoutubeUploadScopeIntegration:
-    def test_token_exchange_path_missing_upload_scope_returns_error(
-        self, monkeypatch
-    ) -> None:
+    def test_token_exchange_path_missing_upload_scope_returns_error(self, monkeypatch) -> None:
         """Token-exchange fallback path: refresh succeeds, but response `scope`
         omits any upload-capable scope. Must return status=error, not healthy."""
         monkeypatch.setenv("YOUTUBE_CLIENT_ID", "id")
@@ -108,14 +106,13 @@ class TestCheckYoutubeUploadScopeIntegration:
             with patch("requests.post", return_value=token_resp):
                 result = check_youtube()
 
-        assert result["status"] == "error", (
-            f"Missing upload scope MUST return error, got: {result}"
+        assert result["status"] == "error", f"Missing upload scope MUST return error, got: {result}"
+        assert (
+            "upload scope" in result["message"].lower()
+            or "re-authorize" in result["message"].lower()
         )
-        assert "upload scope" in result["message"].lower() or "re-authorize" in result["message"].lower()
 
-    def test_token_exchange_path_with_upload_scope_returns_healthy(
-        self, monkeypatch
-    ) -> None:
+    def test_token_exchange_path_with_upload_scope_returns_healthy(self, monkeypatch) -> None:
         """Happy path regression: token-exchange fallback returns healthy
         when refresh succeeds AND upload scope is granted."""
         monkeypatch.setenv("YOUTUBE_CLIENT_ID", "id")

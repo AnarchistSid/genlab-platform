@@ -41,17 +41,17 @@ class TestIGBusinessAccountCheck:
         monkeypatch.setenv("META_ACCESS_TOKEN", "fake-token")
         monkeypatch.setenv("META_FB_PAGE_ID", "12345")
 
-        verify_response = _mock_resp({
-            "id": "12345",
-            "name": "TestPage",
-            # NO instagram_business_account field
-        })
+        verify_response = _mock_resp(
+            {
+                "id": "12345",
+                "name": "TestPage",
+                # NO instagram_business_account field
+            }
+        )
         with patch("requests.get", return_value=verify_response):
             result = check_meta_token()
 
-        assert result["status"] == "error", (
-            f"Missing IG account MUST return error, got: {result}"
-        )
+        assert result["status"] == "error", f"Missing IG account MUST return error, got: {result}"
         assert "not linked" in result["message"] or "IG business" in result["message"]
 
     def test_empty_ig_business_account_returns_error(self, monkeypatch) -> None:
@@ -60,11 +60,13 @@ class TestIGBusinessAccountCheck:
         monkeypatch.setenv("META_ACCESS_TOKEN", "fake-token")
         monkeypatch.setenv("META_FB_PAGE_ID", "12345")
 
-        verify_response = _mock_resp({
-            "id": "12345",
-            "name": "TestPage",
-            "instagram_business_account": {},  # empty
-        })
+        verify_response = _mock_resp(
+            {
+                "id": "12345",
+                "name": "TestPage",
+                "instagram_business_account": {},  # empty
+            }
+        )
         with patch("requests.get", return_value=verify_response):
             result = check_meta_token()
 
@@ -76,11 +78,13 @@ class TestIGBusinessAccountCheck:
         monkeypatch.setenv("META_ACCESS_TOKEN", "fake-token")
         monkeypatch.setenv("META_FB_PAGE_ID", "12345")
 
-        verify_response = _mock_resp({
-            "id": "12345",
-            "name": "TestPage",
-            "instagram_business_account": None,
-        })
+        verify_response = _mock_resp(
+            {
+                "id": "12345",
+                "name": "TestPage",
+                "instagram_business_account": None,
+            }
+        )
         with patch("requests.get", return_value=verify_response):
             result = check_meta_token()
 
@@ -92,14 +96,16 @@ class TestIGBusinessAccountCheck:
         monkeypatch.setenv("META_ACCESS_TOKEN", "fake-token")
         monkeypatch.setenv("META_FB_PAGE_ID", "12345")
 
-        verify_response = _mock_resp({
-            "id": "12345",
-            "name": "TestPage",
-            "instagram_business_account": {
-                "id": "17841400000000000",
-                "username": "test_creator",
-            },
-        })
+        verify_response = _mock_resp(
+            {
+                "id": "12345",
+                "name": "TestPage",
+                "instagram_business_account": {
+                    "id": "17841400000000000",
+                    "username": "test_creator",
+                },
+            }
+        )
         debug_response = _mock_resp({"data": {"expires_at": 0}})
 
         with patch("requests.get", side_effect=[verify_response, debug_response]):

@@ -35,9 +35,7 @@ class TestOwnershipDrift:
     def test_single_drifted_file_warns(self):
         """Even 1 mis-owned file is a signal — early warning."""
         with patch("subprocess.run") as m:
-            m.return_value = _make_find_result(
-                0, "/opt/genlab/.git/objects/a1/23abcdef\n"
-            )
+            m.return_value = _make_find_result(0, "/opt/genlab/.git/objects/a1/23abcdef\n")
             alerts = check_git_ownership_drift()
         assert len(alerts) == 1
         assert alerts[0].severity == "warning"

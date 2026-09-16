@@ -87,6 +87,36 @@ UPLOAD_COST: int = 1_600
 # remove this constraint entirely. Deferred; not blocked on this.
 HARD_STOP_PCT: float = 1.00
 
+# ── Upload reserve (2026-09-17) ─────────────────────────────────────────
+# The gate below was first-come-first-served: a 100-unit search competed on
+# equal terms with a 1,600-unit upload. But fetching runs BEFORE publishing in
+# the pipeline, so fetch spends the budget uploads need, and the day's LAST
+# niches get refused. On 2026-09-16 that took YouTube off anime and movies at
+# "9430/10000 units, 94.3%" -- 1,430 units of fetch-side spend was enough to
+# deny a 1,600-unit upload.
+#
+# The two costs are not equally recoverable. A refused search degrades to the
+# `mostPopular` chart (video_list, 1 unit) or to yesterday's cache; a refused
+# upload loses the publish window entirely and cannot be re-run until tomorrow.
+# So uploads get a reserved floor that non-upload operations may not spend into.
+#
+# Reserve shrinks as the day's uploads land: after all EXPECTED_UPLOADS_PER_DAY
+# have gone out, the full remaining budget is available to fetch again.
+EXPECTED_UPLOADS_PER_DAY: int = 5  # one reel per channel per day (CLAUDE.md)
+
+
+def upload_reserve_enabled() -> bool:
+    """``GENLAB_YOUTUBE_UPLOAD_RESERVE=0`` restores first-come-first-served."""
+    return os.environ.get("GENLAB_YOUTUBE_UPLOAD_RESERVE", "1").strip() != "0"
+
+
+def expected_uploads_per_day() -> int:
+    raw = os.environ.get("GENLAB_YOUTUBE_EXPECTED_UPLOADS", "").strip()
+    if raw.isdigit():
+        return int(raw)
+    return EXPECTED_UPLOADS_PER_DAY
+
+
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
 OPERATION_COSTS: dict[str, int] = {
@@ -292,6 +322,28 @@ class YouTubeQuotaTracker:
             # Global hard-stop check (existing behavior, always runs)
             if (self._used + cost) > self._hard_stop:
                 return False
+
+            # Upload reserve: non-upload ops may not spend into the budget the
+            # day's remaining uploads need. Uploads themselves skip this check
+            # -- they ARE the reserve -- and are already bounded by the
+            # hard-stop above.
+            if operation != "upload" and upload_reserve_enabled():
+                remaining_uploads = max(0, expected_uploads_per_day() - self._upload_count)
+                reserve = remaining_uploads * UPLOAD_COST
+                if (self._used + cost) > (self._hard_stop - reserve):
+                    logger.warning(
+                        "YouTube quota: refusing %r (%d units) at %d/%d — would "
+                        "spend into the %d-unit reserve held for %d remaining "
+                        "upload(s). Fetch should fall back to the mostPopular "
+                        "chart (1 unit) or cache; publishing takes priority.",
+                        operation,
+                        cost,
+                        self._used,
+                        self._hard_stop,
+                        reserve,
+                        remaining_uploads,
+                    )
+                    return False
 
             # PR #538: per-niche cap check. Two-of-two required:
             # (a) caller supplied niche_id, AND

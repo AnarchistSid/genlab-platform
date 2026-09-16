@@ -28,7 +28,23 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from genlab_core.monitoring.youtube_quota import YouTubeQuotaTracker
+
+
+@pytest.fixture(autouse=True)
+def _no_upload_reserve(monkeypatch):
+    """Opt out of the 2026-09-17 upload reserve.
+
+    These tests pin an ORTHOGONAL property: that per-niche enforcement does not
+    leak into the no-niche_id path. They do it by filling the global budget with
+    fetch-side ops and zero uploads -- which is precisely the starvation shape
+    the upload reserve now refuses, so they would fail for a reason that has
+    nothing to do with what they are pinning. Disabling the reserve here keeps
+    each test measuring the one thing it names.
+    """
+    monkeypatch.setenv("GENLAB_YOUTUBE_UPLOAD_RESERVE", "0")
+
 
 # ── backward compat (niche_id omitted) ─────────────────────────────
 

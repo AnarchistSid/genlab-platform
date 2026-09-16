@@ -19,7 +19,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from genlab_core.monitoring.checks.pipeline import check_source_starvation
 
 
@@ -39,41 +38,45 @@ class TestStandardFetcherPath:
     """Niches that use FetchTrendingVideos (gaming/sports/movies/ai_creators)."""
 
     def test_trending_videos_healthy_no_alert(self, run_dir):
-        (run_dir / "trending_videos.json").write_text(json.dumps(
-            [{"channel_name": f"c{i}"} for i in range(5)]
-        ))
+        (run_dir / "trending_videos.json").write_text(
+            json.dumps([{"channel_name": f"c{i}"} for i in range(5)])
+        )
         alerts = check_source_starvation(
-            [_report(run_dir, stories_count=5)], "gaming",
+            [_report(run_dir, stories_count=5)],
+            "gaming",
         )
         assert alerts == []
 
     def test_trending_videos_low_but_stories_ok_no_alert(self, run_dir):
         """If trending_videos < 3 BUT stories_count >= 3, treat as
         healthy (alt-source fetch succeeded, e.g. RSS)."""
-        (run_dir / "trending_videos.json").write_text(json.dumps(
-            [{"channel_name": "c1"}]  # only 1 trending
-        ))
+        (run_dir / "trending_videos.json").write_text(
+            json.dumps(
+                [{"channel_name": "c1"}]  # only 1 trending
+            )
+        )
         alerts = check_source_starvation(
-            [_report(run_dir, stories_count=5)], "gaming",
+            [_report(run_dir, stories_count=5)],
+            "gaming",
         )
         assert alerts == []
 
     def test_both_low_warns(self, run_dir):
-        (run_dir / "trending_videos.json").write_text(json.dumps(
-            [{"channel_name": "c1"}]
-        ))
+        (run_dir / "trending_videos.json").write_text(json.dumps([{"channel_name": "c1"}]))
         alerts = check_source_starvation(
-            [_report(run_dir, stories_count=1)], "gaming",
+            [_report(run_dir, stories_count=1)],
+            "gaming",
         )
         assert len(alerts) == 1
         assert alerts[0].check == "source_starvation"
 
     def test_single_source_warns(self, run_dir):
-        (run_dir / "trending_videos.json").write_text(json.dumps(
-            [{"channel_name": "SameChannel"} for _ in range(5)]
-        ))
+        (run_dir / "trending_videos.json").write_text(
+            json.dumps([{"channel_name": "SameChannel"} for _ in range(5)])
+        )
         alerts = check_source_starvation(
-            [_report(run_dir, stories_count=5)], "gaming",
+            [_report(run_dir, stories_count=5)],
+            "gaming",
         )
         assert any(a.check == "single_source" for a in alerts)
 
@@ -88,7 +91,8 @@ class TestAnimeAltSourcePath:
         empty [] but stories_count is 3+ from RSS/promos."""
         (run_dir / "trending_videos.json").write_text("[]")
         alerts = check_source_starvation(
-            [_report(run_dir, stories_count=3)], "anime",
+            [_report(run_dir, stories_count=3)],
+            "anime",
         )
         assert alerts == []
 
@@ -97,14 +101,16 @@ class TestAnimeAltSourcePath:
         file exists. If alt sources produced stories, healthy."""
         # No trending_videos.json written
         alerts = check_source_starvation(
-            [_report(run_dir, stories_count=5)], "anime",
+            [_report(run_dir, stories_count=5)],
+            "anime",
         )
         assert alerts == []
 
     def test_no_trending_manifest_and_no_stories_warns(self, run_dir):
         """Both signals starve: real starvation, do warn."""
         alerts = check_source_starvation(
-            [_report(run_dir, stories_count=0)], "anime",
+            [_report(run_dir, stories_count=0)],
+            "anime",
         )
         assert len(alerts) == 1
         assert alerts[0].check == "source_starvation"
@@ -113,7 +119,8 @@ class TestAnimeAltSourcePath:
         """Both signals starve, warn."""
         (run_dir / "trending_videos.json").write_text("[]")
         alerts = check_source_starvation(
-            [_report(run_dir, stories_count=0)], "anime",
+            [_report(run_dir, stories_count=0)],
+            "anime",
         )
         assert len(alerts) == 1
 
@@ -143,6 +150,7 @@ class TestFailModes:
         check; return no alerts."""
         (run_dir / "trending_videos.json").write_text("{malformed")
         alerts = check_source_starvation(
-            [_report(run_dir, stories_count=5)], "anime",
+            [_report(run_dir, stories_count=5)],
+            "anime",
         )
         assert alerts == []

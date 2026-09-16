@@ -35,9 +35,7 @@ class TestAnthropicCredit:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-fake")
         with patch("anthropic.Anthropic") as MockClient:
             instance = MockClient.return_value
-            instance.messages.create.return_value = MagicMock(
-                content=[MagicMock(text="hi")]
-            )
+            instance.messages.create.return_value = MagicMock(content=[MagicMock(text="hi")])
             alerts = check_anthropic_credit()
         assert alerts == []
 
@@ -126,14 +124,11 @@ class TestAnthropicCredit:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-fake")
         with patch("anthropic.Anthropic") as MockClient:
             instance = MockClient.return_value
-            instance.messages.create.return_value = MagicMock(
-                content=[MagicMock(text="hi")]
-            )
+            instance.messages.create.return_value = MagicMock(content=[MagicMock(text="hi")])
             check_anthropic_credit()
         call = instance.messages.create.call_args
         assert call.kwargs["max_tokens"] == 1, (
-            "probe must stay at max_tokens=1 — bumping this multiplies "
-            "the annual cost linearly"
+            "probe must stay at max_tokens=1 — bumping this multiplies the annual cost linearly"
         )
 
 
