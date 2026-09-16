@@ -1,14 +1,15 @@
 """Pin Phase 2.C SLO forecast pure functions."""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
 import pytest
+
 from genlab_core.monitoring.slo_forecast import (
-    _classify_verdict,
+    SloForecast,
     _ewma,
     _linear_slope,
+    _classify_verdict,
     bucket_by_day,
     compute_forecast,
 )

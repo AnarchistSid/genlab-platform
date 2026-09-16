@@ -12,7 +12,6 @@ OPS-02 Step 2. Two defects in the path built to end silent failures:
      2026-08-03 and 08-22 spanned up to 24h each; had the webhook been set they
      would have delivered ~250 messages saying the same thing.
 """
-
 from __future__ import annotations
 
 import json
@@ -20,6 +19,7 @@ import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from genlab_core.monitoring import health_monitor as hm
 from genlab_core.monitoring.alerts import Alert
 
@@ -53,9 +53,8 @@ class TestDeliveryIsVerified:
     def test_non_2xx_is_a_failure_not_a_delivery(self, state, status, caplog):
         """The exact defect: a revoked Slack webhook 404s and this used to
         report success."""
-        with (
-            caplog.at_level(logging.WARNING),
-            patch("requests.post", return_value=_resp(status, "no_service")),
+        with caplog.at_level(logging.WARNING), patch(
+            "requests.post", return_value=_resp(status, "no_service")
         ):
             assert hm.notify([_crit()]) is False
         assert str(status) in caplog.text
@@ -69,7 +68,9 @@ class TestDeliveryIsVerified:
         assert not state.exists(), "a failed delivery recorded throttle state"
 
     def test_transport_exception_still_handled(self, state, caplog):
-        with caplog.at_level(logging.WARNING), patch("requests.post", side_effect=OSError("dns")):
+        with caplog.at_level(logging.WARNING), patch(
+            "requests.post", side_effect=OSError("dns")
+        ):
             assert hm.notify([_crit()]) is False
         assert "failed" in caplog.text.lower()
 
@@ -78,7 +79,7 @@ class TestThrottle:
     def test_same_set_is_not_re_notified(self, state):
         with patch("requests.post", return_value=_resp(200)) as post:
             assert hm.notify([_crit()]) is True
-            assert hm.notify([_crit()]) is False  # throttled
+            assert hm.notify([_crit()]) is False      # throttled
             assert hm.notify([_crit()]) is False
         assert post.call_count == 1, "a persisting condition paged more than once"
 
@@ -104,10 +105,9 @@ class TestThrottle:
     def test_throttle_fails_open(self, state, monkeypatch, caplog):
         """A broken throttle must page, never suppress."""
         monkeypatch.setattr(hm, "_NOTIFY_STATE_PATH", "/proc/nonexistent/x.json")
-        with (
-            caplog.at_level(logging.WARNING),
-            patch("requests.post", return_value=_resp(200)) as post,
-        ):
+        with caplog.at_level(logging.WARNING), patch(
+            "requests.post", return_value=_resp(200)
+        ) as post:
             assert hm.notify([_crit()]) is True
         assert post.called, "an unreadable throttle state suppressed the page"
 
@@ -115,10 +115,8 @@ class TestThrottle:
 class TestSeverityRouting:
     def test_warning_alerts_do_not_page(self, state):
         with patch("requests.post") as post:
-            assert (
-                hm.notify([Alert(check="zero_blueprints", severity="warning", message="m")])
-                is False
-            )
+            assert hm.notify([Alert(check="zero_blueprints", severity="warning",
+                                    message="m")]) is False
         assert not post.called
 
     def test_no_url_is_a_noop(self, state, monkeypatch):

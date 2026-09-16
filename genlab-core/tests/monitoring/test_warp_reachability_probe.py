@@ -61,7 +61,9 @@ class TestWarpReachabilityProbe:
         with patch("subprocess.run", side_effect=calls):
             alerts = check_warp_health()
 
-        assert not alerts, f"Healthy WARP must produce no alerts. Got: {[a.check for a in alerts]}"
+        assert not alerts, (
+            f"Healthy WARP must produce no alerts. Got: {[a.check for a in alerts]}"
+        )
 
     def test_port_closed_short_circuits_probe(self, monkeypatch) -> None:
         """When port 40000 isn't listening, we skip the probe entirely

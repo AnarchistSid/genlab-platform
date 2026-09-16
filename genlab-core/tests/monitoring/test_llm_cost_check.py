@@ -30,9 +30,9 @@ class TestRunawaySpikeDetection:
     def test_zero_baseline_returns_no_alerts(self, monkeypatch):
         """When all history days are $0, we can't compute a ratio.
         Skip rather than divide-by-zero."""
-        from datetime import UTC, datetime
-
         from genlab_core.monitoring.checks import llm_cost
+
+        from datetime import UTC, datetime
 
         today = datetime.now(UTC).strftime("%Y-%m-%d")
         with patch.object(
@@ -49,9 +49,9 @@ class TestRunawaySpikeDetection:
             assert llm_cost.check_llm_cost_runaway() == []
 
     def test_normal_day_no_alert(self, monkeypatch):
-        from datetime import UTC, datetime
-
         from genlab_core.monitoring.checks import llm_cost
+
+        from datetime import UTC, datetime
 
         today = datetime.now(UTC).strftime("%Y-%m-%d")
         with patch.object(
@@ -70,9 +70,9 @@ class TestRunawaySpikeDetection:
     def test_below_absolute_floor_no_alert(self, monkeypatch):
         """Even a 100× ratio doesn't alert if today's absolute cost
         is under $1 — avoids noise on genuinely cheap days."""
-        from datetime import UTC, datetime
-
         from genlab_core.monitoring.checks import llm_cost
+
+        from datetime import UTC, datetime
 
         today = datetime.now(UTC).strftime("%Y-%m-%d")
         with patch.object(
@@ -91,9 +91,9 @@ class TestRunawaySpikeDetection:
     def test_5x_spike_fires_warning(self, monkeypatch):
         """The exact shape of today's incident: $10 vs $0.002 median
         would fire a WARNING with 5000× ratio."""
-        from datetime import UTC, datetime
-
         from genlab_core.monitoring.checks import llm_cost
+
+        from datetime import UTC, datetime
 
         today = datetime.now(UTC).strftime("%Y-%m-%d")
         with patch.object(
@@ -231,6 +231,7 @@ class TestAutoFixValuesNotWhitelisted:
     def test_investigate_prefix_not_in_whitelist(self):
         from genlab_core.observability.alert_auto_resolver import (
             _AUTO_FIX_COMPLETED_PREFIXES,
+            _AUTO_FIX_COMPLETED_VALUES,
         )
 
         for prefix in _AUTO_FIX_COMPLETED_PREFIXES:

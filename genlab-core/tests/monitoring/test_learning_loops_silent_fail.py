@@ -64,7 +64,9 @@ class TestLateRewardDeadDetection:
         assert "0 late_reward_deltas rows" in alerts[0].message
 
     def test_stays_quiet_when_rows_flowing(self):
-        conn = _mock_pg_conn({"late_reward_deltas": {"n": 15, "latest": "2026-08-11T10:00:00"}})
+        conn = _mock_pg_conn(
+            {"late_reward_deltas": {"n": 15, "latest": "2026-08-11T10:00:00"}}
+        )
         with patch(
             "genlab_core.monitoring.checks.bandit_engagement.pg_connect",
             return_value=conn,
@@ -75,7 +77,9 @@ class TestLateRewardDeadDetection:
 
 class TestOutcomeCalibrationDeadDetection:
     def test_alerts_when_zero_outcome_rows_in_48h(self):
-        conn = _mock_pg_conn({"auto_approval_calibration": {"n": 0}})
+        conn = _mock_pg_conn(
+            {"auto_approval_calibration": {"n": 0}}
+        )
         with patch(
             "genlab_core.monitoring.checks.bandit_engagement.pg_connect",
             return_value=conn,
@@ -121,7 +125,9 @@ class TestStrategistApplyDeadDetection:
 
 class TestRewardPipelineFlowDetection:
     def test_alerts_when_publishes_but_no_rewards(self):
-        conn = _mock_pg_conn({"publishing_analytics": {"n": 50}, "pending_feedback": {"n": 0}})
+        conn = _mock_pg_conn(
+            {"publishing_analytics": {"n": 50}, "pending_feedback": {"n": 0}}
+        )
         with patch(
             "genlab_core.monitoring.checks.bandit_engagement.pg_connect",
             return_value=conn,
@@ -134,7 +140,9 @@ class TestRewardPipelineFlowDetection:
     def test_stays_quiet_when_low_publish_volume(self):
         """<20 publishes in 3d means "not enough to expect reward closure"
         — avoids false-alarming on genuinely-paused publishing."""
-        conn = _mock_pg_conn({"publishing_analytics": {"n": 5}, "pending_feedback": {"n": 0}})
+        conn = _mock_pg_conn(
+            {"publishing_analytics": {"n": 5}, "pending_feedback": {"n": 0}}
+        )
         with patch(
             "genlab_core.monitoring.checks.bandit_engagement.pg_connect",
             return_value=conn,
@@ -143,7 +151,9 @@ class TestRewardPipelineFlowDetection:
         assert alerts == []
 
     def test_stays_quiet_when_rewards_flowing(self):
-        conn = _mock_pg_conn({"publishing_analytics": {"n": 50}, "pending_feedback": {"n": 20}})
+        conn = _mock_pg_conn(
+            {"publishing_analytics": {"n": 50}, "pending_feedback": {"n": 20}}
+        )
         with patch(
             "genlab_core.monitoring.checks.bandit_engagement.pg_connect",
             return_value=conn,
@@ -156,7 +166,9 @@ class TestIgMetricRegressionDetection:
     def test_alerts_when_majority_ig_posts_zero_views(self):
         """Detects the Meta API deprecation class-of-bug (e.g. `plays`
         removed in v22 → fetcher returns 0 for every IG post)."""
-        conn = _mock_pg_conn({"WITH recent_ig": {"zero_view": 15, "total": 20}})
+        conn = _mock_pg_conn(
+            {"WITH recent_ig": {"zero_view": 15, "total": 20}}
+        )
         with patch(
             "genlab_core.monitoring.checks.bandit_engagement.pg_connect",
             return_value=conn,
@@ -169,7 +181,9 @@ class TestIgMetricRegressionDetection:
     def test_stays_quiet_below_50pct_zero_view(self):
         """Natural distribution has some 0-view posts — only alarm on
         clearly-anomalous majority."""
-        conn = _mock_pg_conn({"WITH recent_ig": {"zero_view": 3, "total": 20}})
+        conn = _mock_pg_conn(
+            {"WITH recent_ig": {"zero_view": 3, "total": 20}}
+        )
         with patch(
             "genlab_core.monitoring.checks.bandit_engagement.pg_connect",
             return_value=conn,
@@ -180,7 +194,9 @@ class TestIgMetricRegressionDetection:
     def test_stays_quiet_below_min_sample_size(self):
         """<10 IG posts in the 3-10d window means not enough data to
         distinguish real regression from small-sample noise."""
-        conn = _mock_pg_conn({"WITH recent_ig": {"zero_view": 5, "total": 8}})
+        conn = _mock_pg_conn(
+            {"WITH recent_ig": {"zero_view": 5, "total": 8}}
+        )
         with patch(
             "genlab_core.monitoring.checks.bandit_engagement.pg_connect",
             return_value=conn,
@@ -273,9 +289,7 @@ class TestArtifactFreshness:
         import time
 
         (tmp_path / "replay-oldest.json").write_text("{}")
-        os.utime(
-            tmp_path / "replay-oldest.json", (time.time() - 40 * 86400, time.time() - 40 * 86400)
-        )
+        os.utime(tmp_path / "replay-oldest.json", (time.time() - 40 * 86400, time.time() - 40 * 86400))
         (tmp_path / "replay-newer.json").write_text("{}")
         # newer file at current time — should count as latest
 
@@ -298,7 +312,6 @@ class TestArtifactFreshness:
         from genlab_core.monitoring.checks.bandit_engagement import (
             _ARTIFACT_FRESHNESS_MANIFEST,
         )
-
         service_names = [entry[2] for entry in _ARTIFACT_FRESHNESS_MANIFEST]
         assert "genlab-cross-niche-transfer" in service_names, (
             "Manifest must include cross-niche-transfer — writes weekly "

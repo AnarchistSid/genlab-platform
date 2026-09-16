@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 
 def _write_artifact(dir_: Path, filename: str, per_arm: list[dict]) -> Path:
     """Write a synthetic replay-*-all.json for testing."""
@@ -72,7 +74,6 @@ class TestFiringThreshold:
         # window. Using 2 days ago.
         import os as _os
         import time as _time
-
         old_path = dir_ / "replay-20260720-all.json"
         two_days_ago = _time.time() - (2 * 86400)
         _os.utime(old_path, (two_days_ago, two_days_ago))
