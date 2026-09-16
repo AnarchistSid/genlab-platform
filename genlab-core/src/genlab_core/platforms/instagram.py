@@ -317,7 +317,21 @@ class InstagramClient:
             new_tags = [t for t in payload.hashtags if t.lower() not in existing_tags]
             if new_tags:
                 caption = f"{caption}\n\n{' '.join(new_tags)}"
-        caption = caption[:2200]
+        # Was `caption[:2200]` -- a tail cut, and captions are assembled with
+        # the credit line and hashtags LAST, so an over-limit caption lost its
+        # attribution silently and after Layer 4 had already passed it.
+        from genlab_core.platforms.caption_fit import fit_caption
+
+        _fit = fit_caption(caption, 2200, platform="instagram")
+        if _fit.changed:
+            self._log.warning(
+                "[IG] caption %d chars > 2200 — fitted (hashtags_dropped=%s, "
+                "credit_preserved=%s)",
+                len(caption),
+                _fit.dropped_hashtags,
+                _fit.credit_preserved,
+            )
+        caption = _fit.text
 
         # Platform-specific options
         ig_specific = payload.platform_specific

@@ -34,8 +34,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import requests
-
 from genlab_core.config.tuning import get_tuning_config
 from genlab_core.platforms.meta_http import get_shared_session
 from genlab_core.platforms.models import PublishPayload, PublishResult, TokenStatus
@@ -43,6 +41,9 @@ from genlab_core.platforms.models import safe_json as _safe_json
 from genlab_core.ratelimit.token_bucket import TokenBucket
 
 logger = logging.getLogger(__name__)
+
+# Threads API hard limit on the `text` param. Over this the API 400s outright.
+_THREADS_CAPTION_LIMIT = 500
 
 # 2026-07-22 anti-fingerprint (item B + A): shared Meta HTTP session
 # with User-Agent header + X-App-Usage capture hook. Threads also
@@ -217,6 +218,28 @@ class ThreadsClient:
         if payload.hashtags:
             hashtags_str = " ".join(payload.hashtags)
             caption = f"{caption}\n\n{hashtags_str}".strip()
+
+        # Enforce the 500-char cap the comment above has described since
+        # 2026-07-11 without anything actually applying it. Threads rejects
+        # over-limit text outright ("Param text must be at most 500 characters
+        # long") -- that hard failure dropped movies on 09-15 + 09-11 and gaming
+        # on 09-14. It has to happen HERE, after the hashtag block is appended,
+        # because that append is what pushes the caption over; note it also
+        # lands after the Layer 4 check above, which is why fit_caption
+        # preserves the credit line rather than tail-cutting it away.
+        from genlab_core.platforms.caption_fit import fit_caption
+
+        _fit = fit_caption(caption, _THREADS_CAPTION_LIMIT, platform="threads")
+        if _fit.changed:
+            self._log.warning(
+                "[Threads] caption %d chars > %d — fitted (hashtags_dropped=%s, "
+                "credit_preserved=%s)",
+                len(caption),
+                _THREADS_CAPTION_LIMIT,
+                _fit.dropped_hashtags,
+                _fit.credit_preserved,
+            )
+        caption = _fit.text
 
         # First-frame brightness observability + auto-fix. Threads uses
         # IG Reels' feed icon behavior — dark first frame = black tile
