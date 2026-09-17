@@ -150,3 +150,20 @@ pipeline:
   # produces 1.86 blueprints/day on average so this is marginal lift
   # not a starvation fix — main effect is reducing variance.
   url_dedup_ttl_days: 3
+
+# RENDER-01 §3 — the craft renderer, beside the old one, not instead of it.
+#
+# `engine` is WHAT PUBLISHES. `dual` is a separate question -- "also render the
+# other engine and keep it" -- because conflating the two is how a shadow
+# renderer publishes by accident.
+#
+# For the three-fire trial: legacy PUBLISHES exactly as today, craft renders
+# beside it and is written out for review. After three side-by-sides Aditya has
+# approved, engine flips to craft (RENDER-01 §5) and legacy stays available for
+# one week before retiring on a recorded date.
+#
+# FFmpeg producing a publishable reel standalone is the standing guarantee
+# (CLAUDE.md render-path rule); legacy IS that guarantee until craft earns it.
+render:
+  engine: legacy
+  dual: true

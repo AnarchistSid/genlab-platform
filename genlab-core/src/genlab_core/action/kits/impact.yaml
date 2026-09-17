@@ -52,3 +52,40 @@ notes: >
   Proven end to end on WWE hard-cam, which is the WORST input for this kit:
   wide framing forced a 3.0x punch-in. UFC/boxing cage-side footage should need
   far less magnification and read better unchanged.
+
+# ── Measured constants (RENDER-01 §1) ────────────────────────────────────────
+# Every number here came from measuring a specific artifact. The comment names
+# it, so a future change can re-measure rather than re-guess.
+measured:
+  full_bleed_floor_1080p: 1.7778   # 1920/1080: widest crop that still fills
+                                   # 1080x1920. Bit three times before it was
+                                   # named. It is a FUNCTION of source height --
+                                   # 720p needs 2.667x -- so code derives it.
+  torso_box_target: 0.465          # reference VFX edit; UFC official 0.474,
+                                   # WWE hard-cam 0.172 (the rejected input)
+  torso_floor: 0.30                # below this a clip is not an ACTION input
+  aura_band_subject_frac: 0.251    # band width as a share of SUBJECT height,
+                                   # from CONTENT-15. Cap by frame-width share:
+                                   # this transferred fine at 1.78x and became
+                                   # 40% of frame width at 2.50x.
+  aura_band_frame_width_cap: 0.114 # reference's own band as a share of frame
+  matte_feather_px: 18             # 34 hid a jagged birefnet edge; SAM2's edge
+                                   # is clean, so 18 is enough
+  matte_area_band: [0.12, 0.55]    # in CROP space. Above 0.55 the tracker has a
+                                   # garment, not a person.
+  subject_vote_frames: 10          # a rule that flips with a 33ms shift is not
+                                   # a rule; majority over the last N frames
+  subject_vote_min_margin: 0.80
+  subject_body_area_floor: 0.04    # a silhouette smaller than this is residue
+  flash_finish_tolerance_frames: 3
+  drawing_pose_iou_gate: 0.60      # wrong-fighter floor measured at 0.291;
+                                   # self-IoU 1.000, scale-invariant to 0.986
+  drawing_max_tries: 3             # then NO drawing: a missing flash beats a
+                                   # flash showing a different fight
+  tail_live_frames: 12             # the segment ends on the footage
+  aura_fade_frames: 6
+  quiet_run_max_s: 0.80
+  cuts_per_s_band: [0.33, 1.50]    # REEL scope only. A SEGMENT is one shot by
+                                   # selection (zero cuts is a criterion).
+  bpm_period_note: "150 BPM = exactly 12 frames at 30fps; ask the generator for
+    a tempo whose period is a whole number of frames and the grid is integer"

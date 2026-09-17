@@ -187,3 +187,34 @@ def scan(path: str, frame_fn: Callable, matte_fn: Callable, *,
                                   reason=reason))
     scored.sort(key=lambda w: (not w.eligible, -w.subject_frames_frac, -w.motion))
     return scored
+
+
+def finish_frame(opponent_centroid_y: list[float], frame_indices: list[int]) -> int:
+    """The frame where the loser starts to GO DOWN -- the strike that ends it.
+
+    Anchors move with the window, so a flash must be tied to the EVENT and never
+    to a frame offset. ACTION-UFC-04 anchored its drawing flash to peak motion
+    and, once the window was re-picked to start at the finish, the flash fired on
+    frames 93-95 -- the last three frames of the segment, on the follow-through
+    rather than the strike, and over the live ending the segment is supposed to
+    end on.
+
+    The signal is the opponent's silhouette centroid falling: while he is
+    standing it is flat, and when he is dropped it rises down-frame fast. The
+    finish is the frame of steepest sustained descent, which is the moment the
+    strike lands rather than the moment he lands.
+
+    Centroids come from the same silhouettes the subject vote uses, so the
+    selector's idea of "the opponent" and the renderer's cannot diverge.
+    """
+    if len(opponent_centroid_y) < 3:
+        return frame_indices[0] if frame_indices else 0
+    y = np.asarray(opponent_centroid_y, float)
+    k = min(3, len(y))
+    sm = np.convolve(np.pad(y, (k // 2, k // 2), mode="edge"), np.ones(k) / k, "valid")
+    grad = np.diff(sm)
+    i = int(np.argmax(grad))
+    logger.info("[finish] steepest opponent descent %+.3f between frames %d and %d "
+                "-> finish frame %d", float(grad[i]), frame_indices[i],
+                frame_indices[i + 1], frame_indices[i])
+    return frame_indices[i]

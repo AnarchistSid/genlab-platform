@@ -126,3 +126,38 @@ def test_impact_names_a_subject_METHOD_not_a_colour():
     sel = d["subject"]["selection"]
     assert sel["method"] == "upright_on_last_frame"
     assert sel["hold_across_annotations"] is True
+
+
+def test_measured_constants_live_in_the_kit_not_in_code():
+    """RENDER-01 §1: no literals in code. Every measured number is config."""
+    import pathlib
+
+    import yaml
+
+    reg = __import__("genlab_core.action.kits.registry", fromlist=["x"])
+    d = yaml.safe_load((pathlib.Path(reg.__file__).parent / "impact.yaml").read_text())
+    m = d["measured"]
+    for key in ("full_bleed_floor_1080p", "torso_box_target", "matte_area_band",
+                "subject_vote_frames", "drawing_pose_iou_gate", "tail_live_frames",
+                "cuts_per_s_band"):
+        assert key in m, f"{key} missing from the kit's measured block"
+    assert abs(m["full_bleed_floor_1080p"] - 1920 / 1080) < 1e-3
+    assert m["matte_area_band"] == [0.12, 0.55]
+    assert m["drawing_pose_iou_gate"] > 0.291, (
+        "the pose gate must sit above the measured wrong-fighter floor")
+
+
+def test_kit_constants_agree_with_the_code_that_still_holds_them():
+    """Where a constant exists in both places, they must not drift apart."""
+    import pathlib
+
+    import yaml
+    from genlab_core.action.silhouette_subject import MIN_BODY_FRAC, VOTE_FRAMES
+    from genlab_core.action.source_score import FULL_BLEED_FLOOR_1080P, TORSO_FLOOR
+
+    reg = __import__("genlab_core.action.kits.registry", fromlist=["x"])
+    m = yaml.safe_load((pathlib.Path(reg.__file__).parent / "impact.yaml").read_text())["measured"]
+    assert abs(m["full_bleed_floor_1080p"] - FULL_BLEED_FLOOR_1080P) < 1e-3
+    assert m["torso_floor"] == TORSO_FLOOR
+    assert m["subject_vote_frames"] == VOTE_FRAMES
+    assert m["subject_body_area_floor"] == MIN_BODY_FRAC
