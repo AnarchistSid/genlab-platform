@@ -297,3 +297,21 @@ the deploy gate in §4 cannot be satisfied inside a working session.
 sound -- it is the suite that is slow, and slow for a reason worth removing.
 Until then, run the baseline overnight or scope it to the packages a change
 touches.
+
+---
+
+# Packet log
+
+## 2026-09-17T17:44:56Z — `genlab-prod` key revocation CONFIRMED
+
+Aditya confirmed on the dashboard, in the RENDER-01 Part 6 packet message. The
+standing precondition — "the exposed key is revoked before the first dual fire
+runs on prod" — is **met** as of this timestamp.
+
+Chain of custody for the record: the key was exposed in a screenshot of the
+"your new api key" dialog during the Part 3 browser session (my error, flagged
+at the time). The replacement was written to `/opt/genlab/.env` and verified
+live (`using_api_key: True`, `auth_status: ok`, control call returned a
+balance with the session hidden). What remained open until now was whether the
+OLD key had been revoked at the provider, which is dashboard state I cannot
+observe. It has been.
