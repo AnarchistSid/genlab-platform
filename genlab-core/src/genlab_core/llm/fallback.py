@@ -46,6 +46,7 @@ everyone.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -351,6 +352,71 @@ def belt_fallback_enabled() -> bool:
     return os.environ.get("GENLAB_LLM_FALLBACK_BELT", "1").strip() != "0"
 
 
+def _extract_json(text: str) -> str:
+    """Return the first complete JSON value embedded in ``text``.
+
+    OpenAI has a real structured-output mode (``response_format``) that
+    guarantees the body is nothing but JSON. Anthropic has no equivalent, so the
+    belt tier returns the object wrapped in whatever prose the model felt like
+    ("Here is my verdict:\n{...}\nLet me know..."). Callers that did
+    ``json.loads(raw)`` against OpenAI therefore started throwing the moment
+    belt became tier 1:
+
+      [gate] LLM judge failed (using rule-based) — reason=unknown:
+      Extra data: line 5 column 1 (char 130)
+
+    which is a SILENT quality regression, not an outage -- the gate caught it
+    and fell back to rule-based scoring, so the pass still reported errors=0
+    while discarding the judge's verdict on half the blueprints it examined.
+
+    Scans for a balanced object/array while respecting string literals and
+    escapes, so a brace inside a reason string cannot terminate it early.
+    Returns the original text unchanged when nothing parses -- the caller's own
+    error is more informative than one invented here.
+    """
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = stripped.strip("`").strip()
+        if stripped.lower().startswith("json"):
+            stripped = stripped[4:].strip()
+    try:
+        json.loads(stripped)
+        return stripped
+    except ValueError:
+        pass
+
+    for opener, closer in (("{", "}"), ("[", "]")):
+        start = stripped.find(opener)
+        if start == -1:
+            continue
+        depth, in_str, esc = 0, False, False
+        for i in range(start, len(stripped)):
+            ch = stripped[i]
+            if esc:
+                esc = False
+                continue
+            if ch == "\\" and in_str:
+                esc = True
+                continue
+            if ch == '"':
+                in_str = not in_str
+                continue
+            if in_str:
+                continue
+            if ch == opener:
+                depth += 1
+            elif ch == closer:
+                depth -= 1
+                if depth == 0:
+                    candidate = stripped[start : i + 1]
+                    try:
+                        json.loads(candidate)
+                        return candidate
+                    except ValueError:
+                        break
+    return text
+
+
 def call_belt_haiku_fallback(
     system: str,
     user: str,
@@ -450,6 +516,9 @@ def call_belt_haiku_fallback(
     # like it worked.
     out = payload.get("output") or {}
     text = str(out.get("response") or "").strip()
+    if json_mode and text:
+        # Anthropic has no structured-output mode; unwrap the prose.
+        text = _extract_json(text)
     if not text:
         raise RuntimeError(
             f"belt returned status=completed with EMPTY content "

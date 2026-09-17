@@ -126,3 +126,59 @@ class TestEmptyUserPrompt:
         self._payload(monkeypatch)
         with pytest.raises(ValueError, match="both empty"):
             fb.call_belt_haiku_fallback("", "   ", 8, 0.0)
+
+
+class TestJsonModeUnwrapping:
+    """Anthropic has no structured-output mode; OpenAI does.
+
+    Callers doing json.loads(raw) worked against OpenAI's response_format and
+    started throwing "Extra data: line 5 column 1" the moment belt became tier
+    1. The gate caught it and fell back to rule-based scoring, so the pass still
+    reported errors=0 while silently discarding the judge's verdict.
+    """
+
+    REAL = '{"approved": false, "reason": "virality_score=0.0; hook is generic"}'
+
+    @pytest.mark.parametrize(
+        "wrapped",
+        [
+            REAL,
+            f"Here is my verdict:\n{REAL}\nLet me know if you need more.",
+            f"```json\n{REAL}\n```",
+            f"```\n{REAL}\n```",
+            f"Sure!\n\n```json\n{REAL}\n```\n\nHappy to explain.",
+        ],
+    )
+    def test_json_survives_whatever_prose_the_model_adds(self, wrapped):
+        import json
+
+        assert json.loads(fb._extract_json(wrapped))["approved"] is False
+
+    def test_a_brace_inside_a_string_does_not_terminate_early(self):
+        import json
+
+        raw = '{"approved": true, "reason": "score {high} and } odd"}'
+        out = json.loads(fb._extract_json(f"verdict:\n{raw}\nthanks"))
+        assert out["reason"] == "score {high} and } odd"
+
+    def test_arrays_are_extracted_too(self):
+        import json
+
+        assert json.loads(fb._extract_json("here: [1, 2, 3] done")) == [1, 2, 3]
+
+    def test_unparseable_text_is_returned_unchanged(self):
+        """The caller's own error names the real problem better than a guess."""
+        assert fb._extract_json("no json here at all") == "no json here at all"
+
+    def test_json_mode_off_leaves_the_body_untouched(self, monkeypatch):
+        seen = {}
+
+        class _Proc:
+            returncode = 0
+            stdout = '{"status_text":"completed","output":{"response":"prose {a:1} more"}}'
+            stderr = ""
+
+        monkeypatch.setattr("subprocess.run", lambda cmd, *a, **k: _Proc())
+        out = fb.call_belt_haiku_fallback("s", "u", 8, 0.0, json_mode=False)
+        assert out == "prose {a:1} more"
+        seen.clear()
