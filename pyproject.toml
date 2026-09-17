@@ -42,6 +42,11 @@ exclude = [
     "_reference/",
     "Socioboard-5.0/",
     ".venv/",
+    # Frozen pre-port oracles: verbatim copies of approved implementations, kept
+    # so the port-equivalence gates have a fixed point to measure against. They
+    # must stay byte-identical to the deliverable they came from, so nothing may
+    # reformat them -- `ruff format` on the test tree already rewrote them once.
+    "**/tests/**/_oracle/",
 ]
 
 [tool.ruff.lint]

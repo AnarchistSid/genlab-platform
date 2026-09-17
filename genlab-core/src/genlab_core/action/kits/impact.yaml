@@ -89,3 +89,56 @@ measured:
                                    # selection (zero cuts is a criterion).
   bpm_period_note: "150 BPM = exactly 12 frames at 30fps; ask the generator for
     a tempo whose period is a whole number of frames and the grid is integer"
+
+# ── Port 4 effect constants (RENDER-01) ──────────────────────────────────────
+# Distinct from `effects:` above, which lists which effects this kit RUNS.
+# These are their measured parameters, each carrying the artifact it came from.
+# A number without a source is a guess wearing a decimal point.
+effect_constants:
+  world_luma_target:   {value: 37.1,  source: "reference KiIKPGdvNSE, hit window"}
+  subject_luma_target: {value: 76.9,  source: "reference KiIKPGdvNSE, hit window"}
+  contrast_ratio:      {value: 2.07,  source: "subject/world on the same frames"}
+  world_sat:           {value: 0.22,  source: "CONTENT-15 grade solve"}
+  subject_sat:         {value: 1.15,  source: "CONTENT-15 grade solve"}
+  ambient_red:         {value: 0.018, source: "cage/ropes survive as red shapes, not black"}
+  vignette_amt:        {value: 0.30,  source: "ACTION-UFC-04 solve; WWE used 0.62"}
+  feather_px:          {value: 18,    source: "34 hid a jagged birefnet edge; SAM2 edge is clean"}
+  band_w:              {value: 0.251, source: "reference band width / subject height"}
+  band_frame_cap:      {value: 0.1135, source: "reference band / frame width — the invariant that survives a shot-size change"}
+  band_peak:           {value: 0.085, source: "reference peak position / subject height"}
+  peak_frame_cap:      {value: 0.0385, source: "reference peak / frame width"}
+  core_luma:           {value: 125,   source: "reference white-hot core"}
+  intensity_exponent:  {value: 4.2,   source: "grid search vs the reference's four band numbers"}
+  scroll_px_s:         {value: 250.0, source: "CONTENT-12 upward scroll"}
+  displace_px:         {value: 34.0,  source: "two-octave turbulence amplitude"}
+  aura_gain:           {value: 0.78,  source: "grid search"}
+  white_px:            {value: 8.0,   source: "core radius at full white"}
+  bloom_mix:           {value: 0.26,  source: "grid search"}
+  limb_weight:         {value: 0.7,   source: "torso 1.0 / limbs 0.7 — CONTENT-12"}
+  inner_spill_px:      {value: 18.0,  source: "aura bleeding INTO the body"}
+  inner_spill_amount:  {value: 0.30,  source: "a glow stopping at the silhouette is a sticker"}
+  # 1.95 is what EVERY approved render used: both v10_build.py and w2_build4.py call
+  # mega_bolt() without len_per_h, taking its signature default. Its docstring claims
+  # 0.834 ("the reference's largest component") and the port first shipped THAT -- the
+  # sentence rather than the code -- for bolts 2.34x shorter than anything approved.
+  # Whether 0.834 is the better value is an open question for the operator, not a
+  # change to make inside a port.
+  bolt_len_per_h:      {value: 1.95,  source: "v8_look.mega_bolt default; the value every approved render ran"}
+  bolt_core_px:        {value: 14,    source: "reference mean thickness 69 px at scale"}
+  bolt_glow_px:        {value: 60,    source: "reference glow extent"}
+  bolts_per_strike:    {value: 2,     source: "1-2 per strike; 3 read as a cage"}
+  bolt_afterglow:      {value: 0.45,  source: "1 frame after the 2-frame stroke"}
+  debris_count:        {value: 150,   source: "CONTENT-12"}
+  debris_mat_frac:     {value: 0.45,  source: "share of particles that are grey mat rather than hot orange"}
+  debris_life_frames:  {value: [20, 38], source: "15-25f visible after masking behind the subject"}
+  flash_halo:          {value: 0.85,  source: "v6_look.body_flash: orange halo screened around the flashing body"}
+  flash_frames:        {value: 2,     source: "matte to white"}
+  shimmer_frames:      {value: 10,    source: "after the hit"}
+  fast_blur_px:
+    value: 12.0
+    source: px both approved builds pass to motion_blur on the frames before the finish
+  fast_px:             {value: 12,    source: "centroid motion that earns trails"}
+  trail_opacities:     {value: [0.35, 0.20, 0.10], source: "3 ghosts"}
+  bloom_thresh:        {value: 0.85,  source: "highlights only"}
+  bloom_hot_frac:      {value: 0.055, source: "damp when the frame is already 5.5% hot"}
+  head_halo:           {value: 0.4,   source: "halo resumes below the jaw"}
