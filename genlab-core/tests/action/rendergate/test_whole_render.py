@@ -25,6 +25,21 @@ MEASURED RESULT after the fix (96 frames, WWE v6 hit3s):
 The residual is `push()`'s float->uint8 round-trip: a value sitting at x.5
 rounds either way on a 1e-7 difference. It is not in the effects.
 
+THE 35 dB GATE IS TOO LOOSE, MEASURED
+-------------------------------------
+Mutation check, dropping `bloom` entirely from the compose chain:
+
+    PSNR                     74.70 dB     -- still TWICE the stated gate
+    worst frame                5 / 255
+    frames bit-exact          59 / 96
+
+So PSNR >= 35 dB would have passed a render with an effect missing. It is a
+weak instrument here because the frames are graded dark (world luma ~37/255)
+and `bloom` only touches highlights above 0.85, so a whole missing effect moves
+very few pixels. The assertions below are therefore on WORST-FRAME LEVELS and
+BIT-EXACT COUNT, which both catch the mutation; PSNR is kept only because the
+packet named it.
+
 OPT-IN: two full renders at ~220 s each. Set GENLAB_RENDER_GATE=1 to run.
 """
 
@@ -104,6 +119,10 @@ def test_whole_pipeline_render_matches_the_approved_segment(tmp_path):
     psnr = 10 * np.log10(255.0**2 / max(mse, 1e-12))
     exact = int(sum(1 for i in range(len(port)) if diff[i].max() == 0.0))
 
+    # PSNR first because the packet named it -- but it is the weakest of the
+    # three: a render with `bloom` dropped entirely still scores 74.70 dB.
     assert psnr >= PSNR_GATE, f"PSNR {psnr:.2f} dB below the {PSNR_GATE} dB gate"
-    assert worst <= MAX_LEVELS, f"worst frame differs by {worst} levels"
-    assert exact >= 80, f"only {exact}/96 frames bit-exact"
+    # These two are what actually bite. Measured: correct port 2 levels / 85
+    # exact; bloom dropped 5 levels / 59 exact.
+    assert worst <= MAX_LEVELS, f"worst frame differs by {worst} levels (bloom-dropped: 5)"
+    assert exact >= 80, f"only {exact}/96 frames bit-exact (bloom-dropped: 59)"

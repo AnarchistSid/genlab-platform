@@ -64,19 +64,43 @@ def test_every_verdict_carries_its_signals_and_a_reason():
     assert v.signals.speech_ratio == 0.72 and v.reason
 
 
-@pytest.mark.parametrize("sig,expected", [
-    (s(speech=0.80, motion=3.0, face=0.85), "TALK"),
-    (s(speech=0.05, motion=18.0, face=0.10), "ACTION"),
-    (s(speech=0.00, motion=0.1, face=0.00), "STILL"),
-])
+@pytest.mark.parametrize(
+    "sig,expected",
+    [
+        (s(speech=0.80, motion=3.0, face=0.85), "TALK"),
+        (s(speech=0.05, motion=18.0, face=0.10), "ACTION"),
+        (s(speech=0.00, motion=0.1, face=0.00), "STILL"),
+    ],
+)
 def test_the_three_clear_cases(sig, expected):
     assert classify(sig).treatment == expected
 
 
-@pytest.mark.xfail(reason="TREAT-01's hand-labelled 20-clip corpus (15 sports + 5 "
-                          "gaming) is not on disk; the >=18/20 gate cannot run "
-                          "until it exists. Thresholds here are provisional.",
-                   strict=True)
+@pytest.mark.xfail(
+    reason=(
+        "TWO blockers, not one -- recorded 2026-09-17 while assembling the corpus.\n"
+        "\n"
+        "(a) THE CLIPS. The gate wants 20 hand-labelled clips (15 sports + 5 gaming). "
+        "The only real source material on disk is TWO distinct clips: one 754 s UFC "
+        "fight and one 71.6 s Dana White interview. Everything else is a render OF "
+        "those two. Four defensible labels can be cut from them (2 ACTION, 2 TALK) "
+        "and that is not a 20-clip corpus; manufacturing the other 16 by slicing the "
+        "same two sources would produce a gate that passes and measures nothing.\n"
+        "\n"
+        "(b) THE UNIT. `measure()` takes `motion_fn` INJECTED, and no canonical "
+        "implementation exists. So ACTION_MOTION_MIN = 6.0 has no defined unit: an "
+        "ffmpeg scene-score reading of the same UFC footage lands at 0.20-0.31, two "
+        "orders of magnitude off, which says nothing about the clip and everything "
+        "about measuring the wrong quantity. Labelling a corpus against an undefined "
+        "measure would bake that confusion into fixtures.\n"
+        "\n"
+        "To flip this: land a canonical motion_fn with its unit stated, then pull 20 "
+        "clips from the niche fetchers (which already return exactly this material "
+        "daily) and label them. Thresholds here stay provisional until both exist."
+    ),
+    strict=True,
+)
 def test_labelled_corpus_gate():
     from pathlib import Path
+
     assert Path("genlab-core/tests/fixtures/treat01_corpus.json").exists()
