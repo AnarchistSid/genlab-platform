@@ -168,7 +168,6 @@ def test_matte_module_constants_match_the_kit():
     import pathlib
 
     import yaml
-
     from genlab_core.action.matte import MATTE_AREA_BAND
 
     reg = __import__("genlab_core.action.kits.registry", fromlist=["x"])

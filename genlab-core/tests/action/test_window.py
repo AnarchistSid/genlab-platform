@@ -119,3 +119,32 @@ def test_the_criterion_is_measured_against_garment_not_raw_foreground():
     assert frac == 1.0, (
         f"a fighter holding half the garment in frame must count as held, got "
         f"{frac}")
+
+
+def test_a_replay_montage_is_rejected_by_the_zero_cut_rule():
+    """Motion ALONE returned a replay montage on the UFC clip -- maximum motion,
+    no continuity, nothing for SAM2 to track. Cuts are what reject it."""
+    montage = W.WindowScore(start_s=330.0, motion=99.0, cuts=4,
+                            subject_hue=225.0, subject_frames_frac=1.0,
+                            eligible=False, reason="cuts")
+    assert montage.cuts > 0
+    assert not montage.eligible, "a montage passed on motion alone"
+
+
+def test_a_re_entangled_window_is_rejected_on_subject_hold():
+    """Measured at t=675.5: ~0.6s past the finish the pair re-entangles, the
+    vote flips back to the loser, and the subject stops being separable."""
+    frames = [_pair(False) for _ in range(6)] + [_pair(True) for _ in range(2)]
+    hue, frac = W._subject_hold([f[0] for f in frames], [f[1] for f in frames])
+    assert frac < W.MIN_SUBJECT_FRAMES, (
+        f"held {frac:.2f}; a window where the subject is only separable at the "
+        f"end must not be eligible")
+
+
+def test_the_eligible_window_and_the_rejected_one_differ_only_in_hold():
+    """Both have motion and zero cuts. Identity is what separates them -- which
+    is the whole reason it became a criterion."""
+    good = W.WindowScore(674.9, 11.4, 0, 225.0, 1.00, True, "")
+    bad = W.WindowScore(675.5, 11.4, 0, 225.0, 0.50, False, "holds only 50%")
+    assert good.motion == bad.motion and good.cuts == bad.cuts
+    assert good.eligible and not bad.eligible

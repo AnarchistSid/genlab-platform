@@ -166,3 +166,24 @@ def test_side_by_side_bodies_still_use_posture():
     v = _vote(_both_standing)
     assert v.hue_deg == NAVY
     assert not any("stacked" in fv.reason for fv in v.verdicts)
+
+
+def test_a_one_frame_shift_must_not_change_the_answer():
+    """THE must-not. The garment-geometry rule flipped eight times across 0.7s
+    of real footage; a rule that changes with a 33ms shift is not a rule.
+
+    Same scene, vote window slid by one frame in each direction.
+    """
+    scenes = [_standing_over_downed() for _ in range(12)]
+    answers = []
+    for offset in (0, 1, 2):                     # -33ms, base, +33ms at 30fps
+        window = scenes[offset:offset + 10]
+        # Bind the iterator as a default arg: a bare closure over a loop
+        # variable is B023, and would read whichever window ran last.
+        v = choose_subject_by_vote(
+            list(range(10)),
+            lambda _f, it=iter(window): next(it),
+            vote_frames=10)
+        answers.append(v.hue_deg)
+    assert len(set(answers)) == 1, f"answer moved with a 1-frame shift: {answers}"
+    assert answers[0] == NAVY
