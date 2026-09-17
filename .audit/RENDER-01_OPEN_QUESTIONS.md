@@ -169,3 +169,89 @@ as though it were meaningful.
 clips from the niche fetchers -- they already return exactly this material daily
 -- and label them. Doing (2) first matters: labelling against an undefined
 measure bakes the confusion into fixtures.
+
+---
+
+# Part 4 findings
+
+## Q9 — prod disk is at 97%, and run-dir pruning has stopped
+
+`/opt/genlab/.tmp/runs` holds **6.1 GB across 51 run directories**.
+`CLEANUP_KEEP_RUNS=3`, so pruning is not running. Free space fell from 2.5 GB to
+1.4 GB during a single session.
+
+This matters beyond tidiness: **Postgres crashed at 100% disk on 2026-07-01**,
+and `.venv` alone is 2.5 GB. A deploy onto a 97% disk is not safe.
+
+`scripts/disk_cleanup.sh` exists and `.claude/rules/cleanup_safety.md` marks
+`.tmp/runs/` as always-safe to prune, keeping at least 3 recent runs. **Not run
+here** -- pruning prod state is an operational action outside this packet, and
+those run dirs were the corpus source. It is a prerequisite for §4.
+
+**To close:** run `disk_cleanup.sh` on prod, then re-check `df`. Worth also
+finding why pruning stopped, since 51 dirs against a keep-3 policy is a
+scheduler or exit-code failure, not drift.
+
+---
+
+## Q10 — the matte worker needs its own venv before it can matte anything
+
+The worker entrypoint, transport and launchd plist are done and the SSH path is
+proven end to end. The **backend is not wired**: `sam2` and `rembg` are not in
+the project venv, and the craft-era environment that had them is gone.
+
+Installing them into the shared venv is what **rule #31** forbids -- a
+torch-adjacent install without an index pin replaced `torch==2.12.1+cpu` with
+the full CUDA stack on a GPU-less box. The worker should get a dedicated venv
+(`uv venv ~/.genlab-matte`, `--index-url` pinned), and the plist's
+ProgramArguments should point at it rather than at `uv run --project`.
+
+Until then `matte_fn` returns `{"frames": 0, "reason": "sam2_backend not
+available on this worker"}`, prod reads that as worker-unavailable and renders
+legacy -- the fallback working. The packet's IoU >= 0.98 diff against the
+archived UFC-05 mattes could not be run.
+
+**Decide:** is a second venv on the laptop acceptable (~3-5 GB), or should the
+worker move to a box that can hold one?
+
+---
+
+## Q11 — STILL-first ordering is incompatible with the canonical motion unit
+
+`classify()` returns STILL before it ever checks speech and faces:
+
+    if sig.motion_energy < STILL_MOTION_MAX: return STILL
+
+In the canonical unit a locked-off interview measures **0.19-0.21 levels/s**,
+BELOW a footage-free still with a slow push at **1.914**. So a talking head --
+the archetypal TALK clip -- classifies as STILL, and no threshold fixes it,
+because TALK sits below STILL on this axis rather than above it.
+
+The ordering's stated rationale is about CUTTING ("nothing to cut to"), which is
+ACTION's requirement. TALK is speech-led and does not need cuts; a static
+talking head is perfectly serviceable TALK.
+
+I did **not** reorder it. A reorder is a behaviour change beyond the threshold
+move this packet authorised, and the grid search showed it does not rescue the
+gate anyway (TALK-first scores 14/27 against STILL-first's 12/27; the best of
+either ordering is 18/27).
+
+**Decide:** reorder so TALK is checked before STILL, or accept that TALK clips
+land in STILL until the classifier gets a better discriminator (Q8).
+
+---
+
+## Q12 — the corpus's STILL items are too easy, by construction
+
+The 7 STILL fixtures are generated the way the pipeline renders a footage-free
+blueprint -- a held frame with a slow push -- but they carry **no audio track**,
+so `speech_ratio` is trivially 0.00 and STILL scores 7/7 in every variant of the
+confusion matrix.
+
+A real footage-free item has TTS narration and would score a HIGH speech ratio
+with near-zero motion, which is a materially harder case and one the current
+rules would likely send to TALK.
+
+**To close:** regenerate the STILL fixtures with a TTS track over them, then
+re-run the matrix. Expect the 7/7 to fall, and expect that to be informative
+rather than a regression.
