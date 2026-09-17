@@ -1,0 +1,256 @@
+corpus: TREAT-01 classifier corpus
+assembled: '2026-09-17'
+source: live production fetches — clips downloaded by the niche fetchers into .tmp/runs/*/clips on prod,
+  trimmed to 5s. Not retention, not synthetic.
+labelling: by CONTENT TYPE from the candidate title and niche, deliberately NOT from the classifier's
+  own signals — labelling from the signals would make the gate measure the classifier against itself.
+labelled_by: Claude (assistant), not the operator. Treat as provisional.
+still_items: 'generated the way the pipeline renders a footage-free blueprint: a held frame from a real
+  candidate with a slow push. KNOWN FIXTURE FLAW: they carry no audio track, so speech_ratio is trivially
+  0.00 and the STILL row of the confusion matrix is easier than production. A real footage-free item has
+  TTS narration. Fix before trusting the STILL column.'
+clips:
+- file: clips/action_t7m12y_xvr0.mp4
+  label: ACTION
+  video_id: t7m12y_xvr0
+  niche: sports
+  title: 'Roman Reigns vs. Penta | World Heavyweight Title Match: Raw highlights, Sept. 14, 2026'
+  measured:
+    motion_levels_per_s: 7.525
+    speech_ratio: 0.99
+    face_persistence: 0.585
+- file: clips/action_NK7AfP_wi8M.mp4
+  label: ACTION
+  video_id: NK7AfP_wi8M
+  niche: sports
+  title: Race Highlights | 2026 Spanish Grand Prix
+  measured:
+    motion_levels_per_s: 9.423
+    speech_ratio: 0.75
+    face_persistence: 0.062
+- file: clips/action_R_TJxCk9I9M.mp4
+  label: ACTION
+  video_id: R_TJxCk9I9M
+  niche: sports
+  title: Top 10 Onboards | 2026 Spanish Grand Prix | Qatar Airways
+  measured:
+    motion_levels_per_s: 0.879
+    speech_ratio: 0.836
+    face_persistence: 0.0
+- file: clips/action_yTKha3ZsjtA.mp4
+  label: ACTION
+  video_id: yTKha3ZsjtA
+  niche: sports
+  title: Time Stood Still For Donnarumma 🕰️
+  measured:
+    motion_levels_per_s: 3.134
+    speech_ratio: 0.53
+    face_persistence: 0.246
+- file: clips/action_Pe37zQKGkmg.mp4
+  label: ACTION
+  video_id: Pe37zQKGkmg
+  niche: sports
+  title: Never question the strength of Austin Theory 💪
+  measured:
+    motion_levels_per_s: 10.344
+    speech_ratio: 0.94
+    face_persistence: 0.206
+- file: clips/action_owZ01TVfc-0.mp4
+  label: ACTION
+  video_id: owZ01TVfc-0
+  niche: sports
+  title: 'Penta gave it his all, but The OTC is STILL your World Heavyweight Champion 🏆 #WWERaw'
+  measured:
+    motion_levels_per_s: 13.273
+    speech_ratio: 0.92
+    face_persistence: 0.452
+- file: clips/action_4GUWzLvwOoU.mp4
+  label: ACTION
+  video_id: 4GUWzLvwOoU
+  niche: sports
+  title: 'Mason Rook is the NEW No. 1 Contender for the #WWENXT Championship 🔥'
+  measured:
+    motion_levels_per_s: 12.756
+    speech_ratio: 0.96
+    face_persistence: 0.373
+- file: clips/action_tuNkXA2kdVI.mp4
+  label: ACTION
+  video_id: tuNkXA2kdVI
+  niche: anime
+  title: 'Demon Slayer: Kimetsu no Yaiba Infinity Castle I | Official Teaser | Netflix'
+  measured:
+    motion_levels_per_s: 16.764
+    speech_ratio: 0.5
+    face_persistence: 0.276
+- file: clips/action_s8VeNY_qwCI.mp4
+  label: ACTION
+  video_id: s8VeNY_qwCI
+  niche: anime
+  title: 'Xcution returns | BLEACH: Thousand-Year Blood War - The Calamity | VIZ'
+  measured:
+    motion_levels_per_s: 1.67
+    speech_ratio: 0.176
+    face_persistence: 0.0
+- file: clips/action_R8R6o0yC4bg.mp4
+  label: ACTION
+  video_id: R8R6o0yC4bg
+  niche: movies
+  title: CRYSTAL LAKE | Official Trailer (2026) 4K
+  measured:
+    motion_levels_per_s: 1.174
+    speech_ratio: 0.66
+    face_persistence: 0.621
+- file: clips/talk_P-8sCH6syag.mp4
+  label: TALK
+  video_id: P-8sCH6syag
+  niche: ai
+  title: How to Ask ChatGPT Better Questions | OpenAI Academy
+  measured:
+    motion_levels_per_s: 0.867
+    speech_ratio: 0.747
+    face_persistence: 0.612
+- file: clips/talk_QDLlQ5IL2Bk.mp4
+  label: TALK
+  video_id: QDLlQ5IL2Bk
+  niche: ai
+  title: GPT-6 Astra with Tom Krcha
+  measured:
+    motion_levels_per_s: 6.767
+    speech_ratio: 0.652
+    face_persistence: 0.454
+- file: clips/talk_B-jjnydci50.mp4
+  label: TALK
+  video_id: B-jjnydci50
+  niche: ai
+  title: GPT-6 Astra with Ben Davis
+  measured:
+    motion_levels_per_s: 1.0
+    speech_ratio: 0.61
+    face_persistence: 0.946
+- file: clips/talk_A4BUbpKdenc.mp4
+  label: TALK
+  video_id: A4BUbpKdenc
+  niche: ai
+  title: GPT-6 Astra with Peter Gostev
+  measured:
+    motion_levels_per_s: 0.64
+    speech_ratio: 0.299
+    face_persistence: 0.653
+- file: clips/talk_7r4ikZHm9AI.mp4
+  label: TALK
+  video_id: 7r4ikZHm9AI
+  niche: ai
+  title: Anthropic researchers are quitting... and now we know why
+  measured:
+    motion_levels_per_s: 1.033
+    speech_ratio: 0.406
+    face_persistence: 0.183
+- file: clips/talk_iZE2r-Vx5b8.mp4
+  label: TALK
+  video_id: iZE2r-Vx5b8
+  niche: ai
+  title: Assess Usage and Value of ChatGPT Work
+  measured:
+    motion_levels_per_s: 0.1
+    speech_ratio: 0.519
+    face_persistence: 0.0
+- file: clips/talk_MSiAd36bGeQ.mp4
+  label: TALK
+  video_id: MSiAd36bGeQ
+  niche: ai
+  title: Data agent in ChatGPT Work
+  measured:
+    motion_levels_per_s: 2.485
+    speech_ratio: 0.68
+    face_persistence: 0.0
+- file: clips/talk_-TTyyY3VWh8.mp4
+  label: TALK
+  video_id: -TTyyY3VWh8
+  niche: ai
+  title: First impressions of GPT-6 Astra from developers
+  measured:
+    motion_levels_per_s: 4.112
+    speech_ratio: 0.505
+    face_persistence: 0.527
+- file: clips/talk_FluKUJyeYD8.mp4
+  label: TALK
+  video_id: FluKUJyeYD8
+  niche: ai
+  title: Did OpenAI actually build AGI? GPT-6 Astra first look
+  measured:
+    motion_levels_per_s: 0.838
+    speech_ratio: 0.447
+    face_persistence: 0.395
+- file: clips/talk_o3f5YjgpmeI.mp4
+  label: TALK
+  video_id: o3f5YjgpmeI
+  niche: ai
+  title: Our Steam Frame review is here.
+  measured:
+    motion_levels_per_s: 7.122
+    speech_ratio: 0.33
+    face_persistence: 0.0
+- file: clips/still_t7m12y_xvr0.mp4
+  label: STILL
+  video_id: t7m12y_xvr0
+  niche: sports
+  title: 'footage-free render of: Roman Reigns vs. Penta | World Heavyweight Title Match: Raw highlights,
+    Sept. 14, 2026'
+  measured:
+    motion_levels_per_s: 2.49
+    speech_ratio: 0.0
+    face_persistence: 0.966
+- file: clips/still_NK7AfP_wi8M.mp4
+  label: STILL
+  video_id: NK7AfP_wi8M
+  niche: sports
+  title: 'footage-free render of: Race Highlights | 2026 Spanish Grand Prix'
+  measured:
+    motion_levels_per_s: 0.769
+    speech_ratio: 0.0
+    face_persistence: 0.125
+- file: clips/still_R_TJxCk9I9M.mp4
+  label: STILL
+  video_id: R_TJxCk9I9M
+  niche: sports
+  title: 'footage-free render of: Top 10 Onboards | 2026 Spanish Grand Prix | Qatar Airways'
+  measured:
+    motion_levels_per_s: 0.957
+    speech_ratio: 0.0
+    face_persistence: 0.169
+- file: clips/still_yTKha3ZsjtA.mp4
+  label: STILL
+  video_id: yTKha3ZsjtA
+  niche: sports
+  title: 'footage-free render of: Time Stood Still For Donnarumma 🕰️'
+  measured:
+    motion_levels_per_s: 1.045
+    speech_ratio: 0.0
+    face_persistence: 0.971
+- file: clips/still_P-8sCH6syag.mp4
+  label: STILL
+  video_id: P-8sCH6syag
+  niche: ai
+  title: 'footage-free render of: How to Ask ChatGPT Better Questions | OpenAI Academy'
+  measured:
+    motion_levels_per_s: 0.624
+    speech_ratio: 0.0
+    face_persistence: 0.062
+- file: clips/still_QDLlQ5IL2Bk.mp4
+  label: STILL
+  video_id: QDLlQ5IL2Bk
+  niche: ai
+  title: 'footage-free render of: GPT-6 Astra with Tom Krcha'
+  measured:
+    motion_levels_per_s: 0.723
+    speech_ratio: 0.0
+    face_persistence: 0.874
+- file: clips/still_B-jjnydci50.mp4
+  label: STILL
+  video_id: B-jjnydci50
+  niche: ai
+  title: 'footage-free render of: GPT-6 Astra with Ben Davis'
+  measured:
+    motion_levels_per_s: 0.524
+    speech_ratio: 0.0
+    face_persistence: 0.0
