@@ -1,0 +1,17 @@
+{
+ "hue_deg": 235.0,
+ "aspect": 1.39,
+ "chosen_on_frame": 96,
+ "reason": "silhouette vote 10/10 (ACTION-UFC-04 \u00a72)",
+ "centroid": [
+  1739,
+  433
+ ],
+ "subject_colour": {
+  "hue_deg": 235.0,
+  "hue_tol": 25.0,
+  "sat_min": 0.25,
+  "val_min": 0.1
+ },
+ "subject_colour_note": "The FULL HSV spec, backfilled 2026-09-17. The archive previously recorded hue_deg alone, and the worker defaulted sat_min 0.25 / val_min 0.20 -- on this DARK navy garment the value floor excluded the subject and the seed landed on the red cage, so 8 of 9 annotation frames were rejected as garment and half the clip went unmasked (IoU mean 0.93, 48/96 frames).\nDerived by measuring the selected-frame-fraction inside the birefnet foreground across 9 frames, over a grid of hue_tol x sat_min x val_min. Chosen from the MIDDLE of the usable band (mean 4.85% of frame selected), not the widest: maximising coverage is the cage-grabbing failure mode, not the goal. Per-frame colour_seed.derive() does NOT find this subject -- it returns hue 11 and 16 (cage/opponent) on frames 12 and 84, and navy only on frame 48 -- which is why the operator-validated 235 from the 10/10 silhouette vote is the hue, with tolerances measured around it."
+}

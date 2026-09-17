@@ -59,6 +59,23 @@ class SkipReason:
     TIMEOUT = "worker_timeout"
     FAILED = "worker_failed"
     QUEUE_UNWRITABLE = "queue_unwritable"
+    #: The job named a subject colour without the whole HSV spec. The worker
+    #: REFUSES rather than defaulting: defaults are the failure mode. UFC-05's
+    #: archive recorded `hue_deg` alone, the worker supplied sat_min 0.25 /
+    #: val_min 0.20 as defaults, and on a DARK navy garment those floors put the
+    #: seed on the red cage instead -- 8 of 9 annotation frames rejected as
+    #: garment and half the clip left unmasked. A partial spec is not a spec.
+    SEED_SPEC_INCOMPLETE = "seed_spec_incomplete"
+
+
+#: A subject colour spec must carry ALL FOUR fields. Hue alone is not a colour:
+#: navy and sky blue share a hue and differ only in value, and it was exactly
+#: that distinction that broke the UFC-05 matte.
+SEED_SPEC_FIELDS = ("hue_deg", "hue_tol", "sat_min", "val_min")
+
+
+def seed_spec_complete(spec: dict | None) -> bool:
+    return bool(spec) and all(isinstance(spec.get(k), int | float) for k in SEED_SPEC_FIELDS)
 
 
 @dataclass(frozen=True)
@@ -103,10 +120,15 @@ def worker_alive(root: Path | None = None, *, now: float | None = None) -> bool:
     return age <= WORKER_STALE_AFTER_S
 
 
-def request_matte(req: MatteRequest, *, root: Path | None = None,
-                  timeout_s: float = DEFAULT_TIMEOUT_S,
-                  poll_s: float = POLL_INTERVAL_S,
-                  sleep=time.sleep, now=time.time) -> tuple[MatteResult | None, str]:
+def request_matte(
+    req: MatteRequest,
+    *,
+    root: Path | None = None,
+    timeout_s: float = DEFAULT_TIMEOUT_S,
+    poll_s: float = POLL_INTERVAL_S,
+    sleep=time.sleep,
+    now=time.time,
+) -> tuple[MatteResult | None, str]:
     """Queue a matte job and wait for it. Returns ``(result, reason)``.
 
     ``result`` is None on every failure path and ``reason`` is one of
@@ -118,24 +140,30 @@ def request_matte(req: MatteRequest, *, root: Path | None = None,
     d = _dirs(root)
 
     if not worker_alive(root, now=now()):
-        logger.warning("[matte] no worker heartbeat in %ds — rendering legacy this fire",
-                       WORKER_STALE_AFTER_S)
+        logger.warning(
+            "[matte] no worker heartbeat in %ds — rendering legacy this fire", WORKER_STALE_AFTER_S
+        )
         return None, SkipReason.WORKER_UNAVAILABLE
 
     job_id = f"{req.niche_id or 'job'}-{uuid.uuid4().hex[:10]}"
-    payload = {"job_id": job_id, "clip_path": req.clip_path,
-               "frames_dir": req.frames_dir, "annotations": req.annotations,
-               "cuts": req.cuts, "niche_id": req.niche_id,
-               "blueprint_id": req.blueprint_id, "queued_at": now()}
+    payload = {
+        "job_id": job_id,
+        "clip_path": req.clip_path,
+        "frames_dir": req.frames_dir,
+        "annotations": req.annotations,
+        "cuts": req.cuts,
+        "niche_id": req.niche_id,
+        "blueprint_id": req.blueprint_id,
+        "queued_at": now(),
+    }
     try:
         for p in d.values():
             p.mkdir(parents=True, exist_ok=True)
         tmp = d["queued"] / f".{job_id}.tmp"
         tmp.write_text(json.dumps(payload))
-        tmp.rename(d["queued"] / f"{job_id}.json")   # atomic: no half-read job
+        tmp.rename(d["queued"] / f"{job_id}.json")  # atomic: no half-read job
     except OSError as exc:
-        logger.warning("[matte] cannot write the queue at %s (%s) — rendering legacy",
-                       root, exc)
+        logger.warning("[matte] cannot write the queue at %s (%s) — rendering legacy", root, exc)
         return None, SkipReason.QUEUE_UNWRITABLE
 
     logger.info("[matte] queued %s (timeout %.0fs)", job_id, timeout_s)
@@ -146,15 +174,16 @@ def request_matte(req: MatteRequest, *, root: Path | None = None,
         if done.exists():
             try:
                 r = json.loads(done.read_text())
-                res = MatteResult(job_id=job_id, mask_dir=r["mask_dir"],
-                                  frames=int(r.get("frames", 0)),
-                                  seconds=float(r.get("seconds", 0.0)))
+                res = MatteResult(
+                    job_id=job_id,
+                    mask_dir=r["mask_dir"],
+                    frames=int(r.get("frames", 0)),
+                    seconds=float(r.get("seconds", 0.0)),
+                )
             except (OSError, ValueError, KeyError) as exc:
-                logger.warning("[matte] %s completed with an unreadable result (%s)",
-                               job_id, exc)
+                logger.warning("[matte] %s completed with an unreadable result (%s)", job_id, exc)
                 return None, SkipReason.FAILED
-            logger.info("[matte] %s done: %d frames in %.1fs", job_id, res.frames,
-                        res.seconds)
+            logger.info("[matte] %s done: %d frames in %.1fs", job_id, res.frames, res.seconds)
             return (res, "") if res.ok else (None, SkipReason.FAILED)
         if failed.exists():
             reason = ""
@@ -166,6 +195,7 @@ def request_matte(req: MatteRequest, *, root: Path | None = None,
             return None, SkipReason.FAILED
         sleep(poll_s)
 
-    logger.warning("[matte] %s timed out after %.0fs — rendering legacy this fire",
-                   job_id, timeout_s)
+    logger.warning(
+        "[matte] %s timed out after %.0fs — rendering legacy this fire", job_id, timeout_s
+    )
     return None, SkipReason.TIMEOUT

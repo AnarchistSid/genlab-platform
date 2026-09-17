@@ -37,7 +37,7 @@ from pathlib import Path
 import numpy as np
 
 from genlab_core.action.clicks import derive_clicks
-from genlab_core.action.matte import build_mattes, is_garment_not_person
+from genlab_core.action.matte import build_mattes
 
 logger = logging.getLogger(__name__)
 
@@ -180,10 +180,16 @@ def mattes_for(job: dict, *, device: str = "mps"):
         )
         # The LARGEST mask, not the highest-scoring one: the top-scored mask is
         # routinely a torso or a sleeve, and the seed must be a whole body.
+        # The LARGEST mask, not the highest-scoring one: the top-scored mask is
+        # routinely a torso or a sleeve, and the seed must be a whole body.
         best = max(masks, key=lambda m: float((m > 0.5).sum()))
-        if is_garment_not_person(best.astype(np.float32), foreground):
-            logger.info("[sam2] frame %d seed is a GARMENT, not a person — skipped", i)
-            return {}
+        # NO garment check here. `build_mattes` already runs
+        # `is_garment_not_person` on this mask and RECORDS the rejection in
+        # MatteReport.rejected_garment. A duplicate here returned {} instead,
+        # which build_mattes reads as "no silhouette on this frame" and counts
+        # nowhere -- so eight rejected seeds showed up as annotations=1 with an
+        # EMPTY rejected_garment list, and the report said nothing was wrong.
+        # A guard that hides its own firing is worse than no guard.
         return {subject_hue: best.astype(np.float32)}
 
     def propagate_fn(seeds: dict[int, np.ndarray]) -> dict[int, np.ndarray]:

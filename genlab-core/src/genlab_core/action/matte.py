@@ -59,16 +59,19 @@ class MatteReport:
         return self.frames > 0 and not self.empty_frames
 
     def as_dict(self) -> dict:
-        return {"frames": self.frames, "empty_frames": self.empty_frames,
-                "area_min": round(self.area_min, 4),
-                "area_max": round(self.area_max, 4),
-                "area_mean": round(self.area_mean, 4),
-                "annotations": self.annotations, "negatives": self.negatives,
-                "rejected_garment": self.rejected_garment}
+        return {
+            "frames": self.frames,
+            "empty_frames": self.empty_frames,
+            "area_min": round(self.area_min, 4),
+            "area_max": round(self.area_max, 4),
+            "area_mean": round(self.area_mean, 4),
+            "annotations": self.annotations,
+            "negatives": self.negatives,
+            "rejected_garment": self.rejected_garment,
+        }
 
 
-def annotation_frames(n_frames: int, cuts: Sequence[int] = (),
-                      every: int = 12) -> list[int]:
+def annotation_frames(n_frames: int, cuts: Sequence[int] = (), every: int = 12) -> list[int]:
     """Frames to annotate: a regular cadence, plus the first frame after EVERY cut.
 
     The cut frames are the load-bearing half. SAM2 propagating across a cut
@@ -88,23 +91,81 @@ def annotation_frames(n_frames: int, cuts: Sequence[int] = (),
     return sorted(frames)
 
 
-def is_garment_not_person(mask: np.ndarray, foreground: np.ndarray) -> bool:
+def is_garment_not_person(
+    mask: np.ndarray, foreground: np.ndarray, min_body_frac: float = 0.15
+) -> bool:
     """True when the matte covers so much of the foreground it cannot be one body.
 
-    Measured: a healthy per-instance matte runs 12-55% of the CROP. Against the
-    FOREGROUND, a correct body is well under 60%; above it the tracker has a
-    colour field -- trunks plus canvas plus the other fighter -- rather than a
-    person.
+    ONLY MEANINGFUL WHEN THE FOREGROUND HOLDS MORE THAN ONE BODY. When the
+    subject is alone they ARE the foreground, so the fraction carries no
+    information about whether the tracker found a person or a pair of trunks.
+
+    Measured against the operator-approved UFC-05 mattes, on the nine annotation
+    frames of the reference clip:
+
+        frame    0   12   24   36   48   60   72   84   95
+        matte/fg 97%  76%  97%  80%  53%  66%  73%  72%  80%      mean 77%
+
+    The earlier form compared against 60% unconditionally and so rejected the
+    APPROVED matte on 8 of those 9 frames -- which is exactly what happened: the
+    lone survivor, frame 48 at 53.4%, was the single annotation that seeded a
+    96-frame propagation, and half the clip came back unmasked. The docstring
+    claimed "a correct body is well under 60%"; the approved artifact says 77%.
+
+    So the check is gated on the foreground actually containing two bodies. A
+    garment is a sub-region of ONE body, and the case this guard exists to catch
+    -- the tracker holding trunks-plus-canvas-plus-the-other-fighter -- only
+    arises when there is another fighter in the foreground to hold.
     """
-    fg = float((foreground > 0.5).sum())
+    fg_mask = foreground > 0.5
+    fg = float(fg_mask.sum())
     if fg <= 0:
+        return False
+    bodies = _person_sized_components(fg_mask, min_body_frac)
+    if bodies < 2:
         return False
     return float((mask > 0.5).sum()) / fg >= GARMENT_NOT_PERSON_FRAC
 
 
-def warp_to_crop(mask: np.ndarray, rect: tuple[float, float, float, float],
-                 out_w: int = 1080, out_h: int = 1920,
-                 resize_fn: Callable | None = None) -> np.ndarray:
+def _person_sized_components(fg_mask: np.ndarray, min_body_frac: float) -> int:
+    """How many person-sized blobs the foreground splits into.
+
+    Cheap 4-connected labelling on a downsampled mask: the question is "one body
+    or two", not a precise count, and a stride-4 pass answers it for a fraction
+    of the cost.
+    """
+    small = fg_mask[::4, ::4]
+    total = float(small.sum())
+    if total <= 0:
+        return 0
+    seen = np.zeros_like(small, bool)
+    h, w = small.shape
+    count = 0
+    for sy in range(h):
+        for sx in range(w):
+            if not small[sy, sx] or seen[sy, sx]:
+                continue
+            stack, size = [(sy, sx)], 0
+            seen[sy, sx] = True
+            while stack:
+                y, x = stack.pop()
+                size += 1
+                for ny, nx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
+                    if 0 <= ny < h and 0 <= nx < w and small[ny, nx] and not seen[ny, nx]:
+                        seen[ny, nx] = True
+                        stack.append((ny, nx))
+            if size / total >= min_body_frac:
+                count += 1
+    return count
+
+
+def warp_to_crop(
+    mask: np.ndarray,
+    rect: tuple[float, float, float, float],
+    out_w: int = 1080,
+    out_h: int = 1920,
+    resize_fn: Callable | None = None,
+) -> np.ndarray:
     """Warp a NATIVE-resolution mask into the tight crop the reel renders.
 
     The mask is computed on the wide frame (SAM2 needs the context) but every
@@ -167,17 +228,19 @@ def build_mattes(
         sils = silhouette_fn(f)
         if not sils:
             continue
-        mine = [m for h, m in sils.items()
-                if abs((h - subject_hue + 180) % 360 - 180) <= hue_tol]
+        mine = [m for h, m in sils.items() if abs((h - subject_hue + 180) % 360 - 180) <= hue_tol]
         if not mine:
             continue
         mask = max(mine, key=lambda m: float((m > 0.5).sum()))
         fg = foreground_fn(f)
         if is_garment_not_person(mask, fg):
             rep.rejected_garment.append(f)
-            logger.warning("[matte] frame %d: seed covers >=%.0f%% of the "
-                           "foreground — a garment, not a body; not seeding",
-                           f, GARMENT_NOT_PERSON_FRAC * 100)
+            logger.warning(
+                "[matte] frame %d: seed covers >=%.0f%% of the "
+                "foreground — a garment, not a body; not seeding",
+                f,
+                GARMENT_NOT_PERSON_FRAC * 100,
+            )
             continue
         seeds[f] = mask > 0.5
         rep.negatives += int(len(sils) > 1)
