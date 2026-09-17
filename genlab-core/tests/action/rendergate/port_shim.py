@@ -20,7 +20,11 @@ from genlab_core.action.effects import impact as I
 
 _KIT_PATH = Path(I.__file__).parents[1] / "kits" / "impact.yaml"
 KIT = yaml.safe_load(_KIT_PATH.read_text())
-_on = lambda f, lay: np.clip(P.screen(f / 255.0, lay), 0, 1) * 255.0
+
+
+def _on(f, lay):
+    """Composite a port LAYER onto an oracle-contract FRAME."""
+    return np.clip(P.screen(f / 255.0, lay), 0, 1) * 255.0
 
 
 class L6:
