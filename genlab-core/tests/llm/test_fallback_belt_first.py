@@ -75,3 +75,54 @@ def test_no_key_and_no_belt_raises_rather_than_returning_empty(monkeypatch):
     monkeypatch.setenv("GENLAB_LLM_FALLBACK_BELT", "0")
     with pytest.raises(RuntimeError, match="exhausted"):
         fb.call_openai_fallback("sys", "usr", 80, 0.0, "")
+
+
+class TestEmptyUserPrompt:
+    """Anthropic requires a message; OpenAI does not.
+
+    hook_classifier.py:187 and :218 put the whole prompt in `system` and pass
+    user="". Against belt that produced
+    `400 invalid_request_error: messages: at least one message is required`
+    on every call, so those two sites silently had no belt tier at all.
+    """
+
+    def _payload(self, monkeypatch):
+        seen = {}
+
+        class _Proc:
+            returncode = 0
+            stdout = '{"status_text":"completed","output":{"response":"ok"}}'
+            stderr = ""
+
+        def fake_run(cmd, *a, **k):
+            seen["cmd"] = cmd
+            return _Proc()
+
+        # subprocess is lazily imported inside the function, so it is never an
+        # attribute of the fallback module -- patch the SOURCE module (CLAUDE.md
+        # "Test patterns for lazy-imported dependencies").
+        monkeypatch.setattr("subprocess.run", fake_run)
+        return seen
+
+    def _sent(self, seen):
+        import json
+
+        return json.loads(seen["cmd"][seen["cmd"].index("--input") + 1])
+
+    def test_empty_user_promotes_system_into_the_message(self, monkeypatch):
+        seen = self._payload(monkeypatch)
+        fb.call_belt_haiku_fallback("CLASSIFY THIS HOOK", "", 8, 0.0)
+        sent = self._sent(seen)
+        assert sent["text"] == "CLASSIFY THIS HOOK", "empty message -> Anthropic 400"
+        assert not sent.get("system_prompt"), "prompt must not be sent twice"
+
+    def test_normal_split_prompt_is_untouched(self, monkeypatch):
+        seen = self._payload(monkeypatch)
+        fb.call_belt_haiku_fallback("SYS", "USR", 8, 0.0)
+        sent = self._sent(seen)
+        assert sent["text"] == "USR" and sent["system_prompt"] == "SYS"
+
+    def test_both_empty_raises_rather_than_calling_belt(self, monkeypatch):
+        self._payload(monkeypatch)
+        with pytest.raises(ValueError, match="both empty"):
+            fb.call_belt_haiku_fallback("", "   ", 8, 0.0)

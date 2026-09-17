@@ -389,14 +389,28 @@ def call_belt_haiku_fallback(
     # returned a real `choices` payload two hours earlier. `run` returns content
     # reliably. Whatever changed on the belt side, a fallback tier cannot rest
     # on the surface that silently empties.
+    # Anthropic requires at least one message; OpenAI does not. Two call sites
+    # (hook_classifier:187 and :218) put the ENTIRE prompt in `system` and pass
+    # user="" -- fine against OpenAI, but belt relayed it as an empty messages
+    # array and got back
+    #   400 invalid_request_error: messages: at least one message is required
+    # on every call. Promote the system prompt to the user turn in that case so
+    # the belt tier is usable from every call site rather than only the ones
+    # that happen to split their prompt the way Anthropic expects.
+    sys_text, user_text = system, user
+    if not user_text.strip():
+        if not sys_text.strip():
+            raise ValueError("belt fallback needs a system or user prompt; both empty")
+        sys_text, user_text = "", sys_text
+
     payload_in: dict[str, Any] = {
-        "text": user,
+        "text": user_text,
         "model": model,
         "max_tokens": max_tokens,
         "temperature": temperature,
     }
-    if system:
-        payload_in["system_prompt"] = system
+    if sys_text:
+        payload_in["system_prompt"] = sys_text
     if json_mode:
         payload_in["response_format"] = {"type": "json_object"}
 
