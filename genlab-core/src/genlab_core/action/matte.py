@@ -159,6 +159,36 @@ def _person_sized_components(fg_mask: np.ndarray, min_body_frac: float) -> int:
     return count
 
 
+def crop_rect_for(
+    mag: float,
+    cx: float,
+    cy: float,
+    src_h: int,
+    src_w: int = 1920,
+    out_w: int = 1080,
+    out_h: int = 1920,
+) -> tuple:
+    """The reel crop, in NATIVE pixels, from a plan row.
+
+    Ported from the approved `w2_crop.rect`. Verified against the archived
+    UFC-05 deliverable: warping the native mattes through this rect reproduces
+    the archived portrait mattes at **IoU 1.0000 on 96/96 frames**.
+
+    `cx`/`cy` are FRACTIONS of the chrome-cropped frame, not pixels. The
+    `ch > src_h` clamp is load-bearing: at the full-bleed floor the crop is
+    already the full frame height, and without the clamp a plan row asking for
+    more returns a rect taller than the image, which silently slices short.
+    """
+    cw = float(out_w) / mag
+    ch = cw * float(out_h) / float(out_w)
+    if ch > src_h:
+        ch = float(src_h)
+        cw = ch * float(out_w) / float(out_h)
+    x0 = float(np.clip(cx * src_w - cw / 2, 0, src_w - cw))
+    y0 = float(np.clip(cy * src_h - ch / 2, 0, src_h - ch))
+    return (x0, y0, cw, ch)
+
+
 def warp_to_crop(
     mask: np.ndarray,
     rect: tuple[float, float, float, float],

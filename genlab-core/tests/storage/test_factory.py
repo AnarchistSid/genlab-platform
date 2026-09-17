@@ -34,6 +34,15 @@ def _reset(monkeypatch):
 
 
 class TestGetBackendForTable:
+    @pytest.fixture(autouse=True)
+    def _dsn(self, monkeypatch):
+        """These tests are about ROUTING — which backend a table resolves to —
+        not about DSN discovery. PostgresBackend now refuses to construct
+        without one rather than inventing postgresql://genlab@localhost and
+        blocking on it, so routing to postgres needs a DSN present.
+        """
+        monkeypatch.setenv("DATABASE_URL", "postgresql://test:test@localhost:5432/test")
+
     def test_returns_sharepoint_by_default(self):
         proxies = {"Stories": MagicMock()}
         backend = get_backend_for_table("Stories", sharepoint_proxies=proxies)

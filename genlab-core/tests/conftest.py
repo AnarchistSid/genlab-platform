@@ -153,9 +153,7 @@ def _block_prod_cost_telemetry_writes(monkeypatch):
         recorded.append(kwargs)
         return True
 
-    monkeypatch.setattr(
-        cost_persist, "persist_run_cost", _fake_persist_run_cost, raising=True
-    )
+    monkeypatch.setattr(cost_persist, "persist_run_cost", _fake_persist_run_cost, raising=True)
     yield recorded
 
 
@@ -174,3 +172,25 @@ def _disable_belt_llm_fallback_in_tests(monkeypatch):
     re-enables it in its own body; monkeypatch restores this afterwards.
     """
     monkeypatch.setenv("GENLAB_LLM_FALLBACK_BELT", "0")
+
+
+@pytest.fixture(autouse=True)
+def _close_leaked_pools():
+    """Close any connection pool a test opened.
+
+    A psycopg ConnectionPool spawns NON-DAEMON worker threads. A pool that is
+    never closed keeps them for the life of the process, and a long session
+    accumulates enough that it stalls at teardown rather than inside any one
+    test -- which is what a full run looked like: 108 pytest-timeout kills whose
+    thread dumps showed only idle `pool-N-worker` threads waiting on a queue,
+    and no test frame at all.
+
+    Cheap when nothing opened a pool, which is almost every test.
+    """
+    yield
+    try:
+        from genlab_core.storage.postgres import close_all_pools
+
+        close_all_pools()
+    except Exception:  # noqa: BLE001 — teardown must never fail a passing test
+        pass

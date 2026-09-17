@@ -37,7 +37,7 @@ from pathlib import Path
 import numpy as np
 
 from genlab_core.action.clicks import derive_clicks
-from genlab_core.action.matte import build_mattes
+from genlab_core.action.matte import build_mattes, crop_rect_for, warp_to_crop
 
 logger = logging.getLogger(__name__)
 
@@ -205,6 +205,13 @@ def mattes_for(job: dict, *, device: str = "mps"):
             out[idx] = (logits[0] > 0).cpu().numpy().astype(np.float32)[0]
         return out
 
+    # SAM2 RUNS ON THE NATIVE FRAME, and the masks are warped into reel space
+    # afterwards. Running it on the crop instead was the single divergence
+    # behind IoU 0.95 against the archived UFC-05 mattes: the approved pipeline
+    # mattes 1920x1080 and warps, and warping its native mattes through
+    # `crop_rect_for` reproduces its portrait mattes at IoU 1.0000 on 96/96.
+    # The tracker also wants the context — a body leaving the crop is still in
+    # the frame, and on the crop it simply vanishes.
     masks, report = build_mattes(
         len(frames),
         cuts=tuple(job.get("cuts") or ()),
@@ -213,6 +220,31 @@ def mattes_for(job: dict, *, device: str = "mps"):
         propagate_fn=propagate_fn,
         subject_hue=subject_hue,
     )
+    plan = job.get("crop_plan")
+    if plan:
+        warped = {}
+        for f, m in masks.items():
+            row = plan.get(str(f), plan.get(f)) if isinstance(plan, dict) else None
+            if row is None:
+                warped[f] = m
+                continue
+            rect = crop_rect_for(
+                mag=float(row["mag"]),
+                cx=float(row["cx"]),
+                cy=float(row["cy"]),
+                src_h=int(row.get("src_h", m.shape[0])),
+                src_w=m.shape[1],
+            )
+            warped[f] = warp_to_crop(m, rect)
+        masks = warped
+        logger.info("[sam2] warped %d masks into reel space", len(masks))
+    else:
+        logger.warning(
+            "[sam2] no crop_plan in the job — masks stay in NATIVE space. Every "
+            "effect reads them in CROP space, so a caller that forgets this gets "
+            "a silently wrong matte (measured once at 1.4%% area where 28%% was "
+            "correct)."
+        )
     logger.info("[sam2] %d masks, report=%s", len(masks), report)
     return masks, report
 

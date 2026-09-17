@@ -40,10 +40,7 @@ def test_niche_filter_belt_and_suspenders_exists(postgres_source):
     source. Removing it re-opens the RLS-bypass vulnerability."""
     # There should be at least one occurrence of the belt-and-
     # suspenders SQL fragment.
-    assert (
-        "AND niche_id = %s" in postgres_source
-        or "WHERE niche_id = %s" in postgres_source
-    ), (
+    assert "AND niche_id = %s" in postgres_source or "WHERE niche_id = %s" in postgres_source, (
         "PostgresBackend.find must inject explicit niche_id filter — "
         "RLS is bypassed for genlab role in prod, so app.niche_id "
         "config alone is not enforcing isolation. If this pin fails, "
@@ -58,7 +55,7 @@ def test_niche_filter_gated_on_promoted_columns(postgres_source):
     500 on 'column niche_id does not exist'."""
     # Check the exact gating pattern exists in source.
     assert (
-        'PROMOTED_COLUMNS.get(table, set())' in postgres_source
+        "PROMOTED_COLUMNS.get(table, set())" in postgres_source
         and '"niche_id" in PROMOTED_COLUMNS.get(table, set())' in postgres_source
     ), (
         "niche filter must gate on PROMOTED_COLUMNS[table] to avoid "
@@ -72,9 +69,13 @@ def test_niche_filter_admin_mode_bypass(postgres_source):
     break."""
     # The gate `if niche_id and ...` handles falsy niche_id — empty
     # string is falsy, so the filter is skipped. Pin the shape.
-    assert re.search(
-        r"if\s*\(\s*niche_id\s*\n?\s*and\s*\n?\s*", postgres_source
-    ), (
+    # FORMATTING-AGNOSTIC. The previous pattern required the parenthesised
+    # multi-line layout (`if (\n niche_id\n and ...`), so running the project's
+    # own `ruff format` over postgres.py collapsed the gate to one line and broke
+    # this rule #27 guard — a pin the formatter defeats is a trap for whoever
+    # runs it next. The optional paren and free whitespace accept either layout
+    # while still requiring the `niche_id and` gate itself.
+    assert re.search(r"if\s*\(?\s*niche_id\s*and\s+", postgres_source), (
         "niche filter must have `if niche_id and ...` gate — empty "
         "string means admin mode and must skip the filter."
     )
@@ -86,8 +87,7 @@ def test_niche_filter_is_parameterized(postgres_source):
     that might interpolate."""
     # The safe pattern uses %s placeholder + params.append(niche_id).
     assert "params.append(niche_id)" in postgres_source, (
-        "niche filter must use parameterized query (params.append), "
-        "not f-string interpolation."
+        "niche filter must use parameterized query (params.append), not f-string interpolation."
     )
 
 
@@ -176,6 +176,4 @@ def test_delete_has_belt_and_suspenders_filter(postgres_source):
         "cross-tenant deletion can't be undone."
     )
     # Parameter must appear in the DELETE call params tuple.
-    assert "niche_params" in delete_src, (
-        "niche_id must be parameterized, not f-stringed."
-    )
+    assert "niche_params" in delete_src, "niche_id must be parameterized, not f-stringed."

@@ -11,6 +11,7 @@ from genlab_core.action.matte import (
     MATTE_AREA_BAND,
     annotation_frames,
     build_mattes,
+    crop_rect_for,
     is_garment_not_person,
     summarise,
     warp_to_crop,
@@ -225,3 +226,39 @@ def test_cuts_add_seeds_beyond_the_cadence():
     _, plain = build_mattes(96, subject_hue=NAVY, **_fns(sil))
     _, cut = build_mattes(96, cuts=[7, 43, 71], subject_hue=NAVY, **_fns(sil))
     assert cut.annotations > plain.annotations
+
+
+# ── crop geometry (RENDER-01 Part 7 §2) ─────────────────────────────────────
+
+
+def test_crop_rect_reproduces_the_approved_ufc05_geometry():
+    """The divergence hunt's answer, pinned.
+
+    The archived matte is computed on the NATIVE 1920x1080 frame and warped into
+    the reel's portrait crop; the backend was running SAM2 on the graded portrait
+    crop directly and never warping. Warping the archived native mattes through
+    this rect reproduces the archived portrait mattes at IoU 1.0000 on 96/96.
+
+    Pinned here as the GEOMETRY rather than the pixels, so it holds without the
+    deliverable present: the full-bleed floor crops the whole frame height.
+    """
+    r = crop_rect_for(mag=1920 / 1080, cx=0.5, cy=0.5, src_h=1080)
+    x0, y0, cw, ch = r
+    assert round(ch) == 1080, "at the full-bleed floor the crop is the full height"
+    assert round(cw) == 608, "and 9:16 of it"
+    assert y0 == 0.0
+
+
+def test_the_clamp_stops_a_rect_taller_than_the_frame():
+    """Without it a plan row asking for more than the frame height returns a
+    rect the image cannot satisfy, and the crop silently comes out short."""
+    r = crop_rect_for(mag=1.0, cx=0.5, cy=0.5, src_h=1080)
+    _, _, cw, ch = r
+    assert ch <= 1080
+    assert abs(cw / ch - 1080 / 1920) < 1e-6, "aspect preserved by the clamp"
+
+
+def test_the_rect_stays_inside_the_frame_at_the_edges():
+    for cx in (0.0, 1.0):
+        x0, _, cw, _ = crop_rect_for(mag=2.5, cx=cx, cy=0.5, src_h=1080)
+        assert x0 >= 0 and x0 + cw <= 1920

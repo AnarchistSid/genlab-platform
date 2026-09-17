@@ -24,8 +24,11 @@ import os
 import socket
 import threading
 import uuid
+import weakref
 from datetime import date, datetime
 from typing import Any
+
+from genlab_core.exceptions import ConfigError
 
 logger = logging.getLogger(__name__)
 
@@ -384,6 +387,28 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
 }
 
 
+#: Every backend that has opened a pool, weakly held. A ConnectionPool spawns
+#: NON-DAEMON worker threads, so a pool that is never closed keeps them alive
+#: for the life of the process: psycopg logs "couldn't stop thread
+#: 'pool-47-worker-2' within 5.0 seconds" at exit, and enough of them accumulate
+#: that a long test session stalls at teardown rather than inside any one test.
+#: Production wants this too — a clean shutdown should not wait on the pool.
+_OPEN_BACKENDS: weakref.WeakSet = weakref.WeakSet()
+
+
+def close_all_pools() -> int:
+    """Close every pool this process has opened. Returns how many were closed."""
+    closed = 0
+    for be in list(_OPEN_BACKENDS):
+        try:
+            if be._pool is not None:
+                be.close()
+                closed += 1
+        except Exception:  # noqa: BLE001 — teardown must not raise
+            logger.debug("close_all_pools: a pool refused to close", exc_info=True)
+    return closed
+
+
 class PostgresBackend:
     """Storage backend backed by local PostgreSQL with psycopg3.
 
@@ -403,7 +428,40 @@ class PostgresBackend:
         *,
         dsn: str | None = None,
     ) -> None:
-        self._dsn = dsn or f"postgresql://{user}:{password}@{host}:{port}/{database}"
+        # FAIL FAST ON AN ABSENT DSN.
+        #
+        # This used to synthesise `postgresql://genlab:@localhost:5432/genlab`
+        # from the defaults whenever no dsn was passed, so an UNCONFIGURED
+        # backend was indistinguishable from one deliberately pointed at a local
+        # database. `ConnectionPool(open=True)` then blocked trying to reach a
+        # Postgres that was not there.
+        #
+        # In production that turns a fatal misconfiguration into a hang: a
+        # pipeline with no DATABASE_URL waits on a connection that cannot exist
+        # instead of dying in a second with the reason. In the test suite it cost
+        # 108+ timeouts and ~3.8 hours per side of the baseline comparison.
+        #
+        # An explicit dsn, or an explicit host/user/password, is still honoured
+        # untouched -- the error is only for "nobody configured anything".
+        explicit = (
+            dsn
+            or os.environ.get("DATABASE_URL", "").strip()
+            or host != "localhost"
+            or user != "genlab"
+            or password
+            or database != "genlab"
+        )
+        if not explicit:
+            raise ConfigError(
+                "PostgresBackend: no DSN. Pass dsn=..., set DATABASE_URL, or give "
+                "an explicit host/user/password. Refusing to guess "
+                "postgresql://genlab@localhost:5432/genlab and block on it."
+            )
+        self._dsn = (
+            dsn
+            or os.environ.get("DATABASE_URL", "").strip()
+            or (f"postgresql://{user}:{password}@{host}:{port}/{database}")
+        )
         self._min_size = min_size
         # 2026-07-17: env-var override for pool ceiling. Prior hardcoded
         # max=10 saturated at 06:30 UTC publisher fire (5 niches × 2-3
@@ -429,12 +487,26 @@ class PostgresBackend:
                 if self._pool is None:
                     from psycopg_pool import ConnectionPool
 
+                    # BOUND EVERY CONNECTION ATTEMPT. Without connect_timeout
+                    # a pool pointed at an unreachable host blocks on the OS
+                    # socket timeout, which on this platform is minutes. A
+                    # database that is down should surface as an error the
+                    # caller can act on, not as a pipeline that stopped.
+                    # Remaining suite hangs after the fail-fast DSN check were
+                    # all this shape: a test DSN naming a host that does not
+                    # resolve.
+                    try:
+                        connect_timeout = int(os.environ.get("GENLAB_DB_CONNECT_TIMEOUT", "10"))
+                    except (TypeError, ValueError):
+                        connect_timeout = 10
+                    _OPEN_BACKENDS.add(self)
                     self._pool = ConnectionPool(
                         self._dsn,
                         min_size=self._min_size,
                         max_size=self._max_size,
                         open=True,
                         configure=_configure_connection,
+                        kwargs={"connect_timeout": connect_timeout},
                     )
         return self._pool
 
@@ -733,10 +805,7 @@ class PostgresBackend:
                 # "column niche_id does not exist". Derived from
                 # PROMOTED_COLUMNS: any table whose promoted set
                 # includes "niche_id" is niche-scoped.
-                if (
-                    niche_id
-                    and "niche_id" in PROMOTED_COLUMNS.get(table, set())
-                ):
+                if niche_id and "niche_id" in PROMOTED_COLUMNS.get(table, set()):
                     if where_clause:
                         sql += " AND niche_id = %s"
                     else:
@@ -866,10 +935,7 @@ class PostgresBackend:
                 # a record_id belonging to a different niche than the
                 # niche_id kwarg. Explicit AND makes the SR-A
                 # docstring's promise ACTUALLY true.
-                if (
-                    niche_id
-                    and "niche_id" in PROMOTED_COLUMNS.get(table, set())
-                ):
+                if niche_id and "niche_id" in PROMOTED_COLUMNS.get(table, set()):
                     where += " AND niche_id = %s"
                     values.append(niche_id)
 
@@ -966,10 +1032,7 @@ class PostgresBackend:
                 # Explicit AND does.
                 niche_filter = ""
                 niche_params: tuple = ()
-                if (
-                    niche_id
-                    and "niche_id" in PROMOTED_COLUMNS.get(table, set())
-                ):
+                if niche_id and "niche_id" in PROMOTED_COLUMNS.get(table, set()):
                     niche_filter = " AND niche_id = %s"
                     niche_params = (niche_id,)
 
