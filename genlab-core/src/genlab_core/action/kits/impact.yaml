@@ -1,0 +1,54 @@
+family: impact
+status: built
+sports: [ufc, boxing, kickboxing, mma, wrestling, hockey, rugby, nfl]
+moment: contact
+effects: [flame_aura, bolts, body_flash, debris, shockwave, drawing_flash, heat_shimmer]
+palette:
+  aura: [255, 62, 72]        # crimson, measured off the reference -- not amber
+  bolt_core: [255, 118, 150] # PINK end to end: a white core has red-excess ~0 and
+                             # is invisible to the statistic the gate is written in
+  world_sat: 0.22
+  ambient_red: 0.018
+# Grade TARGETS, not multipliers. The multipliers are per source and are solved
+# at render time against these numbers; WWE's 0.30 world_luma was solved for
+# WWE's arena and lands nowhere on a brighter cage (UFC's ungraded corner luma
+# is 81.7 against this reference's 32.9). "Match the reference's numbers" was
+# always the rule -- these ARE the reference's numbers.
+grade_targets:
+  corner_luma: 32.93
+  world_luma: 37.12
+  subject_luma: 76.9
+  subject_world_ratio: 2.07    # dim the world, light the subject
+subject:
+  second_person_is_noise: true
+  min_person_px: 400
+  # A METHOD, never a colour. The seed derivation finds *a* saturated garment;
+  # the kit has to say WHOSE. Identity is decided once per window and held for
+  # every annotation -- re-deriving per frame walked the aura onto the opponent
+  # on 58 of 96 frames.
+  selection:
+    method: upright_on_last_frame     # the finisher is still standing
+    upright_aspect: 1.2
+    tie_break: motion_toward_other    # both upright -> the aggressor
+    hold_across_annotations: true
+drawing_flash:
+  # Derived from THIS clip's contact frame at render time. No path may appear
+  # here: a stored file is another clip's asset and would ship the wrong
+  # fighter's likeness into every reel that uses this kit.
+  source: derived_per_clip
+  frame: contact
+face_protected: true
+beat: {bpm_range: [140, 170], events_on: [beat, half_beat], bolts_on: downbeat}
+audio: {keep_commentary: true, bed_lufs: -15, commentary_lufs: -23}
+source_preference:
+  - close/cage-side broadcast cuts over wide hard-cam
+  - rope-free chest on the hit frame
+  - subject torso >= 180 px in source
+rights:
+  footage_allowed: true
+  posture: official-channel RSS, in-frame attribution, stop rule on any claim
+  hostile_holders: [ufc, wwe]
+notes: >
+  Proven end to end on WWE hard-cam, which is the WORST input for this kit:
+  wide framing forced a 3.0x punch-in. UFC/boxing cage-side footage should need
+  far less magnification and read better unchanged.

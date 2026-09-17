@@ -1,0 +1,26 @@
+family: grace
+status: third
+sports: [figure_skating, gymnastics, diving, swimming, dance]
+moment: the apex / the landing / the touch
+effects: [light_aura, sparkle, particle_bloom, slow_mo_apex]
+palette:
+  aura: [150, 200, 255]
+  sparkle: [255, 250, 235]
+  world_luma: 0.40
+  world_sat: 0.28
+subject:
+  second_person_is_noise: true
+  min_person_px: 400
+  subject_colour: {r_min: 0, g_min: 0, b_over_r: 9.9, r_minus_b: -999}
+face_protected: true
+beat: {bpm_range: [90, 120], events_on: [beat], bolts_on: null, hold_multiplier: 2.0}
+audio: {keep_commentary: false, bed_lufs: -16}
+source_preference: [clean full-body framing, apex in frame]
+rights:
+  footage_allowed: true
+  posture: read rights before any clip; IOC footage tightly controlled
+  hostile_holders: [ioc]
+notes: >
+  A palette and tempo change on the Impact kit with bolts OFF. Skating first --
+  clean matte. SWIMMING IS UNTESTED: water occlusion breaks the silhouette and
+  the matte has not been tried on it.

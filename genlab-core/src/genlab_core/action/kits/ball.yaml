@@ -1,0 +1,27 @@
+family: ball
+status: last
+sports: [tennis, football, soccer, basketball, baseball]
+moment: the strike / the shot
+effects: [ball_trail, player_aura_at_strike, target_shatter, bloom]
+palette:
+  aura: [255, 140, 60]
+  trail: [255, 235, 120]
+  world_luma: 0.38
+  world_sat: 0.26
+subject:
+  second_person_is_noise: true
+  min_person_px: 400
+  subject_colour: {r_min: 0, g_min: 0, b_over_r: 9.9, r_minus_b: -999}  # per kit strip
+  requires_small_object_tracking: true    # NOT BUILT: colour + optical flow
+face_protected: true
+beat: {bpm_range: [130, 165], events_on: [beat, half_beat], bolts_on: null}
+audio: {keep_commentary: true, bed_lufs: -15, commentary_lufs: -22}
+source_preference: [broadcast close cut on the strike, target in frame]
+rights:
+  footage_allowed: true
+  posture: official-channel RSS, in-frame attribution, stop rule on any claim
+  hostile_holders: [premier_league, bcci, icc]
+notes: >
+  Needs small fast-object tracking, which is new work -- the only kit that is
+  not a re-parameterisation of what exists. Tennis first: clean broadcast and a
+  workable rights posture.

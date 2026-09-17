@@ -1,0 +1,28 @@
+family: speed
+status: next
+sports: [f1, motogp, rally, wrc, sprint, athletics, cycling, skiing, motorsport]
+moment: the pass / the finish / the crash
+effects: [light_trail, motion_streak, rgb_split_on_pass, hud_telemetry, bloom]
+palette:
+  aura: [90, 190, 255]
+  trail: [255, 210, 74]
+  world_luma: 0.42
+  world_sat: 0.30
+subject:
+  # The other car is the MOMENT, not noise. A negative click here would tell the
+  # tracker to exclude the thing the shot is about.
+  second_person_is_noise: false
+  min_person_px: 900
+  subject_colour: {r_min: 0, g_min: 0, b_over_r: 9.9, r_minus_b: -999}  # per livery
+face_protected: false        # helmets; identity is number and livery
+beat: {bpm_range: [140, 175], events_on: [beat, half_beat], bolts_on: null}
+audio: {keep_commentary: false, bed_lufs: -14, commentary_lufs: -26}
+source_preference: [onboard and trackside mixed, apex and pass framing]
+rights:
+  footage_allowed: true
+  posture: official-channel RSS, in-frame attribution, stop rule on any claim
+  hostile_holders: [fom, dorna]
+notes: >
+  The trail is the aura's own maths with the band TRAILING the motion vector
+  instead of surrounding the silhouette -- the smallest new module of the four.
+  Speed lines are native to this family, not an overlay.

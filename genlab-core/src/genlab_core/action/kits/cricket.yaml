@@ -1,0 +1,19 @@
+family: cricket
+status: footage_free
+sports: [cricket]
+moment: the wicket / the six
+effects: [stats_card, still_with_motion, data_broll]
+palette: {aura: [0, 0, 0], world_luma: 1.0, world_sat: 1.0}
+subject: {second_person_is_noise: true, min_person_px: 400}
+face_protected: true
+beat: {bpm_range: [130, 160], events_on: [beat], bolts_on: null}
+audio: {keep_commentary: false, bed_lufs: -15}
+source_preference: [no match footage]
+rights:
+  footage_allowed: false
+  posture: FOOTAGE-FREE. Stats cards, stills with motion, data B-roll only.
+  hostile_holders: [bcci, icc]
+notes: >
+  BCCI/ICC are among the two most hostile holders measured. Cricket never enters
+  the footage path, however good a ball trail would look. This kit exists so the
+  pipeline has somewhere to route cricket rather than falling through to `ball`.
