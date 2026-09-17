@@ -255,3 +255,45 @@ rules would likely send to TALK.
 **To close:** regenerate the STILL fixtures with a TTS track over them, then
 re-run the matrix. Expect the 7/7 to fall, and expect that to be informative
 rather than a regression.
+
+---
+
+# Part 5 findings
+
+## Q13 — the classifier becomes a learned model, or it stays advisory forever
+
+Retired as a router (Part 5 §3). Three scalars -- motion, speech, faces -- ceiling
+at **18/27 = 67%** on live production material under exhaustive search. Provenance
+routes now; the classifier's verdict is persisted beside every route and its
+agreement reported per fire.
+
+**The path forward is a learned model on frames** -- CLIP embeddings with a linear
+head, or a small CNN -- not more thresholds. What it needs is a few hundred
+labelled clips, and `agreement_report()` now accumulates exactly that as a side
+effect of every fire: each routed candidate is a clip labelled by provenance.
+
+**Decide when:** a few hundred rows exist. Until then the right move is to keep
+collecting and leave the scalars advisory.
+
+**Do not read the STILL column** of the 27-clip matrix as evidence of anything.
+It scores 7/7 in every variant because those fixtures were generated without an
+audio track, so `speech_ratio` is trivially 0.00. A real footage-free item has
+TTS narration (Q12).
+
+---
+
+## Q14 — the full-suite baseline takes hours on this laptop
+
+`baseline_compare.sh 36ac4d38 5efa33ab` reached **46% of the BASE suite in ~3
+hours** and both pytest processes sat at **0.0% CPU** -- blocked on I/O, not
+computing. With `--timeout=300`, every network-bound test that cannot reach its
+endpoint costs a full five minutes.
+
+Two suites plus the isolation re-runs makes this a many-hour job, which means
+the deploy gate in §4 cannot be satisfied inside a working session.
+
+**To fix:** mark the network-bound tests and deselect them in
+`baseline_compare.deselect`, or give them a much shorter timeout. The harness is
+sound -- it is the suite that is slow, and slow for a reason worth removing.
+Until then, run the baseline overnight or scope it to the packages a change
+touches.
