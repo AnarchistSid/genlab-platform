@@ -98,3 +98,28 @@ def test_subject_spec_is_a_colour_seed_spec():
     spec = s.spec()
     assert set(spec) == {"hue_deg", "hue_tol", "sat_min", "val_min"}
     assert spec["hue_deg"] == s.hue_deg
+
+
+def test_a_downed_fighters_scattered_garment_does_not_read_as_upright():
+    """The defect that rendered a whole reel onto the loser.
+
+    A knocked-down fighter's crimson still appears all over the frame -- trunks
+    on the canvas, a glove, a logo -- and the BBOX OF THAT SCATTER is tall. On
+    the real window's last frame the whole-group aspects were 1.47 (crimson,
+    down) and 1.51 (navy, standing): indistinguishable. The largest connected
+    component gives 0.66 and 1.00.
+    """
+    rgb, fg = _canvas()
+    # standing opponent
+    _body(rgb, fg, 380, 60, 70, 280, BLUE)
+    # downed subject: a WIDE body, plus scattered same-hue specks high in frame
+    _body(rgb, fg, 60, 300, 260, 60, RED)
+    for x in (90, 150, 210):
+        _body(rgb, fg, x, 70, 14, 14, RED)  # glove / logo / canvas mark
+
+    groups = {g["hue"]: g for g in garment_groups(rgb, fg)}
+    red = [g for h, g in groups.items() if h < 45 or h > 330][0]
+    assert red["aspect"] < 1.0, "scatter made a floored body look upright"
+
+    s = choose_subject(rgb, fg, last_frame_index=95)
+    assert 200 < s.hue_deg < 260, f"picked the downed fighter (hue {s.hue_deg})"

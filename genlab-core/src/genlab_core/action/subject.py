@@ -158,12 +158,29 @@ def garment_groups(
         g = sel & nearest
         if int(g.sum()) < MIN_COMPONENT_PX:
             continue
-        bbox, aspect, cen = _stats(g)
+        # Shape is measured on the LARGEST CONNECTED COMPONENT, never on the
+        # scattered hue group. A downed fighter's crimson still appears all over
+        # the frame -- trunks on the canvas, a glove, a logo -- and the bbox of
+        # that scatter is tall, so the whole group reports "upright" while the
+        # body is flat. Measured on the UFC window's last frame:
+        #
+        #   hue 15  (crimson)  whole-group 1.47   largest component 0.66  DOWN
+        #   hue 225 (navy)     whole-group 1.51   largest component 1.00  up
+        #
+        # Using the group aspect picked the fighter who had just been knocked
+        # out, and the whole reel rendered the aura onto the loser.
+        comps = _components(g)
+        if not comps:
+            continue
+        body = max(comps, key=lambda c: int(c.sum()))
+        bbox, aspect, cen = _stats(body)
         groups.append(
             dict(
                 hue=round(float(c), 1),
                 pixels=g,
+                body=body,
                 px=int(g.sum()),
+                body_px=int(body.sum()),
                 bbox=bbox,
                 aspect=float(aspect),
                 centroid=cen,
@@ -219,7 +236,7 @@ def choose_subject(
     elif len(upright) > 1:
         pick, net = _by_motion_toward(upright, window_rgbs, window_fgs)
         if pick is None:
-            pick = max(upright, key=lambda g: g["px"])
+            pick = max(upright, key=lambda g: g["body_px"])
             reason = (
                 f"{len(upright)} upright, motion tie-break unavailable — "
                 f"largest garment ({pick['px']} px)"
@@ -230,7 +247,7 @@ def choose_subject(
                 f"({net:+.0f} px) — the aggressor"
             )
     else:
-        pick = max(groups, key=lambda g: g["px"])
+        pick = max(groups, key=lambda g: g["body_px"])
         reason = (
             f"no upright body (max aspect {max(g['aspect'] for g in groups):.2f}) "
             f"— largest garment group"
@@ -269,18 +286,44 @@ def subject_clicks(rgb: np.ndarray, fg: np.ndarray, subject: Subject, *, hue_tol
     only part of it.
     """
     groups = garment_groups(rgb, fg)
-    if not groups:
-        return None, None, {"reason": "no garment group on this frame"}
-    dists = [float(_hue_dist(np.array([g["hue"]]), subject.hue_deg)[0]) for g in groups]
-    i = int(np.argmin(dists))
-    if dists[i] > hue_tol:
+    scoped = True
+
+    def _nearest(gs):
+        if not gs:
+            return None, None
+        d = [float(_hue_dist(np.array([g["hue"]]), subject.hue_deg)[0]) for g in gs]
+        k = int(np.argmin(d))
+        return (k, d[k]) if d[k] <= hue_tol else (None, d[k])
+
+    i, gap = _nearest(groups)
+    if i is None:
+        # birefnet's foreground is whoever IS salient, not whoever WE chose. On
+        # this window it covers only the crimson fighter on frames 24 and 48,
+        # so the navy subject -- present in frame the whole time, 49k-173k
+        # garment px -- had no group inside the scope and its annotations were
+        # skipped. SAM2 then lost him: 21 empty frames, area mean 1.14%.
+        #
+        # Fall back to the WHOLE FRAME for the subject's own hue only. The
+        # scoping guard still does its job on the first pass (a same-hue canvas
+        # logo cannot win while the body is in scope); this only widens the
+        # search when the body is not in scope at all.
+        whole = np.ones_like(fg)
+        groups = garment_groups(rgb, whole)
+        i, gap = _nearest(groups)
+        scoped = False
+        if i is not None:
+            logger.info(
+                "[subject] hue %.0f outside the foreground on this frame — "
+                "searched the whole frame",
+                subject.hue_deg,
+            )
+    if i is None:
         return (
             None,
             None,
             {
-                "reason": f"subject hue {subject.hue_deg} absent "
-                f"(nearest group {groups[i]['hue']}, "
-                f"{dists[i]:.0f} deg away)"
+                "reason": f"subject hue {subject.hue_deg} absent even unscoped "
+                f"(nearest group {gap:.0f} deg away)"
             },
         )
 
@@ -301,7 +344,7 @@ def subject_clicks(rgb: np.ndarray, fg: np.ndarray, subject: Subject, *, hue_tol
         ys, xs = np.nonzero(big)
         return (int(xs.mean()), int(ys.mean())), int(big.sum())
 
-    pos_hit = _largest_centroid(groups[i]["pixels"])
+    pos_hit = _largest_centroid(groups[i]["body"])
     if pos_hit is None:
         return (
             None,
@@ -313,17 +356,18 @@ def subject_clicks(rgb: np.ndarray, fg: np.ndarray, subject: Subject, *, hue_tol
     others = [g for j, g in enumerate(groups) if j != i]
     neg = None
     if others:
-        neg_hit = _largest_centroid(max(others, key=lambda g: g["px"])["pixels"])
+        neg_hit = _largest_centroid(max(others, key=lambda g: g["body_px"])["body"])
         neg = neg_hit[0] if neg_hit else None
     return (
         pos,
         neg,
         {
             "subject_component_px": pos_px,
+            "foreground_scoped": scoped,
             "subject_hue": groups[i]["hue"],
-            "hue_delta": round(dists[i], 1),
+            "hue_delta": round(gap, 1),
             "subject_px": groups[i]["px"],
-            "opponent_hue": (max(others, key=lambda g: g["px"])["hue"] if others else None),
+            "opponent_hue": (max(others, key=lambda g: g["body_px"])["hue"] if others else None),
         },
     )
 
