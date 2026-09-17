@@ -119,27 +119,33 @@ else
 fi
 
 # --- Phase 3: prune old backups ---
-log "Pruning backups older than ${RETENTION_DAYS} days..."
+# Keep-7-daily + 4-weekly, not a rolling window. "Older than 14 days" is a
+# policy about AGE, so its disk cost is whatever the daily volume happens to
+# be -- at ~270 MB/day this held 15 dirs and 4.0 GB, and nothing objected until
+# the disk hit 97%. Bounding the COUNT bounds the cost, and reaches further back
+# for the same space.
+# shellcheck source=lib/backup_retention.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/backup_retention.sh"
+log "Pruning backups (keep ${KEEP_DAILY} daily + ${KEEP_WEEKLY} weekly)..."
 if [[ -d "$BACKUP_ROOT" ]]; then
     old_count=0
-    for dir in "$BACKUP_ROOT"/*/; do
-        [[ -d "$dir" ]] || continue
+    before_du=$(du -sh "$BACKUP_ROOT" 2>/dev/null | cut -f1)
+    before_free=$(df -h "$BACKUP_ROOT" | tail -1 | awk '{print $4}')
+    while IFS= read -r dir; do
+        [[ -z "$dir" ]] && continue
         dir_name=$(basename "$dir")
-        # Skip if not a YYYY-MM-DD directory
-        [[ "$dir_name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
-        # Compare dates lexically — works because ISO dates sort chronologically
-        cutoff=$(date -u -d "$RETENTION_DAYS days ago" +%Y-%m-%d 2>/dev/null || \
-                 date -u -v-${RETENTION_DAYS}d +%Y-%m-%d 2>/dev/null || echo "")
-        if [[ -n "$cutoff" ]] && [[ "$dir_name" < "$cutoff" ]]; then
-            if [[ $APPLY -eq 1 ]]; then
-                rm -rf "$dir"
-                log "  pruned $dir_name"
-            else
-                log "  DRY-RUN would prune $dir_name"
-            fi
-            old_count=$((old_count + 1))
+        if [[ $APPLY -eq 1 ]]; then
+            rm -rf "$dir"
+            log "  pruned $dir_name"
+        else
+            log "  DRY-RUN would prune $dir_name"
         fi
-    done
+        old_count=$((old_count + 1))
+    done < <(retention_drop_list "$BACKUP_ROOT" "*")
+    # df, not du: these dirs are HARDLINKED to each other (link counts 10-13
+    # measured on prod), so du on the deleted set overstates what comes back --
+    # 1.5 GB by du against 0.4 GB by df on the 2026-09-17 prune.
+    log "  backups ${before_du} -> $(du -sh "$BACKUP_ROOT" 2>/dev/null | cut -f1); free ${before_free} -> $(df -h "$BACKUP_ROOT" | tail -1 | awk '{print $4}')"
     log "Pruned $old_count old backup(s)"
 fi
 

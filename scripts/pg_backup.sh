@@ -34,5 +34,15 @@ PGPASSWORD="$DB_PASS" pg_dump -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" "$DB_NAM
 echo "[$(date)] Backup created: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
 
 # Retain last 14 days
-find "$BACKUP_DIR" -name "genlab_*.sql.gz" -mtime +14 -delete
+# Keep-7-daily + 4-weekly rather than a 14-day rolling window: bounding the
+# COUNT bounds the disk cost, and four weekly points reach back a month where
+# 14 rolling days reach back a fortnight. Same policy as the visuals backup.
+# shellcheck source=lib/backup_retention.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/backup_retention.sh"
+_pruned=0
+while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    rm -f "$f" && _pruned=$((_pruned + 1))
+done < <(retention_drop_list "$BACKUP_DIR" "genlab_*.sql.gz")
+echo "  pruned ${_pruned} dump(s); kept $(ls -1 "$BACKUP_DIR"/genlab_*.sql.gz 2>/dev/null | wc -l), free: $(df -h "$BACKUP_DIR" | tail -1 | awk '{print $4}')"
 echo "[$(date)] Old backups cleaned (>14 days)"

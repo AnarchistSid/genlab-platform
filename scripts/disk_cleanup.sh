@@ -22,8 +22,10 @@
 #     protection via disk_quota._is_published + pending_publish_run_ids)
 #   * /opt/genlab/.venv — the production python env
 #   * any docker volume in use by genlab-postgres / genlab-redis
-#   * /opt/genlab/.backups — 14-day retention self-managed by
-#     pg_backup.sh + backup_visual_assets.sh
+#   * /opt/genlab/.backups — keep-7-daily + 4-weekly, self-managed by
+#     pg_backup.sh + backup_visual_assets.sh via lib/backup_retention.sh
+#     (was a 14-day rolling window, which bounds AGE and not COUNT, so it
+#     grew to 4.0 GB unremarked)
 #
 # History:
 #   2026-06-29 v1 — INCLUDED .tmp/runs prune at -mtime +3, which
@@ -209,6 +211,26 @@ find /tmp -maxdepth 2 -type d -empty -mtime +7 -delete 2>/dev/null || true
 free_gb_after=$(df -BG / | awk 'NR==2 {gsub("G","",$4); print $4}')
 freed_gb=$((free_gb_after - free_gb_before))
 log "complete — disk after: ${free_gb_after} GB free (freed: ${freed_gb} GB this run)"
+
+# WHO IS ACTUALLY USING THE DISK. On 2026-09-17 this box reached 97% and the
+# cause took a session to find, because every log line said how much was FREE
+# and none said what was FULL. These four have each been the top consumer at
+# some point: the shared runs dir (6.1 GB, quota manager was watching a
+# different directory), .backups (4.0 GB, a 14-day rolling window with no count
+# bound), the CI runner's build output (5.1 GB, not GenLab's at all), and the
+# venv (2.5 GB, irreducible). Printing them every run means the NEXT 97% names
+# its own cause in the log rather than needing to be traced.
+log "top consumers:"
+for d in /opt/genlab/.tmp/runs /opt/genlab/.backups /home/gh-runner/actions-runner/_work /opt/genlab/.venv /var/log; do
+    [ -e "$d" ] && log "  $(du -sh "$d" 2>/dev/null | cut -f1)  $d"
+done
+# The runs dir has a stated policy; say when it has drifted from it rather than
+# leaving the count to be noticed.
+_runs=$(find /opt/genlab/.tmp/runs -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+_keep="${CLEANUP_KEEP_RUNS:-5}"
+if [ "${_runs:-0}" -gt $(( _keep * 5 + 35 )) ]; then
+    log "  WARN runs-dir drift: ${_runs} dirs (policy ${_keep}/niche x 5 + pending-publish protection)"
+fi
 
 # Soft warning if still tight after cleanup
 if [ "$free_gb_after" -lt 2 ]; then
