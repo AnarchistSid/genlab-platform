@@ -558,6 +558,115 @@ def check_git_drift() -> list[Alert]:
     return alerts
 
 
+def check_deploy_gap() -> list[Alert]:
+    """Alert when `main` has run ahead of what is actually DEPLOYED.
+
+    Sibling of the post-deploy verifier, and of ``check_git_drift`` -- that one
+    catches code on prod that never reached the repo; this one catches code in
+    the repo that never reached prod. Both are invisible to systemctl and
+    journalctl, because in both cases every service is happily running the wrong
+    thing.
+
+    Why it exists (measured 2026-09-17): prod took NO deploy between 2026-08-21
+    and 2026-09-15 -- 25 days, 95 commits. A loudness fix committed on 09-12 did
+    not exist in production until 09-15, and for those three days the render
+    pipeline kept failing audio validation 3-5 times a day on a bug that was
+    already fixed in `main`. Nothing alerted, because nothing was down.
+
+    Compares HEAD of ``origin/main`` against the SHA in ``.version.env``, which
+    ``deploy.sh`` stamps and is therefore the only honest record of what is
+    RUNNING -- the working tree's HEAD says what was pulled, which a manual
+    ``git pull`` can advance without restarting a single service.
+
+    Thresholds (DECISIONS-0917 §4): > 48h or > 10 commits behind.
+    Fail-open: a missing .version.env, a detached repo or an unreachable remote
+    returns no alerts rather than a false one.
+    """
+    alerts: list[Alert] = []
+    project_root = os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab")
+    max_hours = float(os.environ.get("GENLAB_DEPLOY_GAP_MAX_HOURS", "48"))
+    max_commits = int(os.environ.get("GENLAB_DEPLOY_GAP_MAX_COMMITS", "10"))
+
+    def _git(*args: str, timeout: int = 20):
+        return subprocess.run(
+            ["git", "-C", project_root, *args],
+            capture_output=True, text=True, timeout=timeout,
+        )
+
+    try:
+        version_env = os.path.join(project_root, ".version.env")
+        if not os.path.exists(version_env):
+            logger.debug("[deploy-gap] no .version.env at %s — skipping", version_env)
+            return alerts
+        deployed = ""
+        with open(version_env, encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("GENLAB_GIT_COMMIT="):
+                    deployed = line.split("=", 1)[1].strip()
+                    break
+        if not deployed:
+            logger.warning("[deploy-gap] .version.env has no GENLAB_GIT_COMMIT")
+            return alerts
+
+        # Refresh the remote ref. Without this the check compares against a
+        # stale origin/main and reports a gap of zero forever -- which is
+        # exactly the shape of failure it exists to catch.
+        fetched = _git("fetch", "--quiet", "origin", "main", timeout=60)
+        if fetched.returncode != 0:
+            logger.warning("[deploy-gap] git fetch failed (%s) — cannot measure gap",
+                           (fetched.stderr or "").strip()[:120])
+            return alerts
+
+        head = _git("rev-parse", "origin/main")
+        if head.returncode != 0:
+            return alerts
+        remote_sha = head.stdout.strip()
+        if remote_sha.startswith(deployed) or deployed.startswith(remote_sha[:7]):
+            return alerts
+
+        count = _git("rev-list", "--count", f"{deployed}..{remote_sha}")
+        if count.returncode != 0:
+            logger.warning("[deploy-gap] deployed SHA %s not in history — "
+                           "force-push or shallow clone?", deployed[:12])
+            return alerts
+        behind = int((count.stdout or "0").strip() or 0)
+        if behind <= 0:
+            return alerts
+
+        oldest = _git("log", "-1", "--format=%ct", f"{deployed}..{remote_sha}",
+                      "--reverse")
+        hours = 0.0
+        stamps = [x for x in (oldest.stdout or "").split() if x.isdigit()]
+        if stamps:
+            import time as _time
+            hours = max(0.0, (_time.time() - int(stamps[0])) / 3600.0)
+
+        if behind > max_commits or hours > max_hours:
+            sev = "critical" if (behind > max_commits * 2 or hours > max_hours * 2) \
+                else "warning"
+            alerts.append(
+                Alert(
+                    check="deploy_gap",
+                    severity=sev,
+                    message=(
+                        f"origin/main is {behind} commit(s) and {hours:.0f}h ahead of "
+                        f"what is deployed ({deployed[:8]}). Fixes merged since then "
+                        f"are NOT running. Deploy with scripts/deploy.sh --apply."
+                    ),
+                    details={"deployed_sha": deployed[:12],
+                             "origin_sha": remote_sha[:12],
+                             "commits_behind": behind,
+                             "oldest_undeployed_hours": round(hours, 1),
+                             "max_commits": max_commits,
+                             "max_hours": max_hours},
+                    auto_fix="ssh prod 'cd /opt/genlab && ./scripts/deploy.sh --apply'",
+                )
+            )
+    except Exception as exc:  # noqa: BLE001 — a monitor must never take prod down
+        logger.warning("[deploy-gap] check failed: %s", exc, exc_info=True)
+    return alerts
+
+
 def check_git_ownership_drift() -> list[Alert]:
     """Detect files in ``/opt/genlab/.git/`` not owned by ``genlab:genlab``.
 

@@ -58,6 +58,7 @@ from genlab_core.monitoring.checks.infrastructure import (
     check_anthropic_credit,
     check_disk,
     check_foreign_host_writes,
+    check_deploy_gap,
     check_git_drift,
     check_git_ownership_drift,
     check_services,
@@ -136,6 +137,7 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_swap())
         all_alerts.extend(check_foreign_host_writes())
         all_alerts.extend(check_git_drift())
+        all_alerts.extend(check_deploy_gap())  # 2026-09-17: main ahead of .version.env (25-day gap)
         all_alerts.extend(check_git_ownership_drift())  # 2026-07-21: prevent deploy-blocking root-owned .git files
         all_alerts.extend(check_anthropic_credit())  # 2026-07-21: 1-token probe; prevents 4th exhaustion-class outage
         all_alerts.extend(check_llm_cost())  # 2026-07-23: proactive runaway-spike + budget-runway projection
@@ -632,6 +634,7 @@ __all__ = [
     "check_engagement_health",
     "check_fetcher_stage_silent_failures",
     "check_foreign_host_writes",
+    "check_deploy_gap",
     "check_git_drift",
     "check_git_ownership_drift",
     "check_learning_loops_silent_fail",

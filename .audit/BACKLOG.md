@@ -241,6 +241,46 @@ Also ship while in the code:
 
 ---
 
+# BLOCK 7 — Land the Audit A fix queue (filed 2026-09-17, DECISIONS-0917 §3)
+
+**Not a publishing fix. Do not run it as one.** This is the SaaS blocker
+(rule #27, BYPASSRLS) plus the backup-prune sentinel. Sequence it AFTER the
+renderer work lands.
+
+Two branches existed on one laptop only for two months and are now pushed:
+
+    audit-a/fix-queue-execution        13 commits, 2026-07-31, 5591d546
+    feat/sprint3-canonical-publisher    2 commits, 2026-03-17, 2141f836
+
+`audit-a/fix-queue-execution` touches 73 files and carries an UNAPPLIED alembic
+migration, `a0b0c0d0e0f0_rls_deny_by_default`. Verified absent from `main` --
+these are not squash-merged duplicates:
+
+    genlab-core/migrations/versions/a0b0c0d0e0f0_rls_deny_by_default.py
+    scripts/verify_backup_pruning.sh
+    deploy/systemd-phase2/genlab-verify-backup-pruning.timer
+
+Contents: RLS deny-by-default on unset niche context, `pg_connect` routing at
+the bypass sites, niche_id passed explicitly to PostgresBackend, attribution-
+health monitors routed through pg_connect, rollout_pct defaulting to 0.0,
+backup-prune sentinel + CI enforcement, YouTube videos.insert response capture.
+
+Order, and none of it is optional:
+
+1. Rebase onto current `main`. It is ~7 weeks behind; expect real conflicts in
+   `postgres.py` and `auto_approver.py`, both of which moved since.
+2. Run the migration against a SCRATCH database first, not prod, not a branch of
+   prod. A deny-by-default RLS policy that is wrong locks the pipeline out of
+   its own tables.
+3. Review the 73 files as a normal PR. The audit that produced them is closed;
+   its conclusions are not self-certifying.
+4. Only then flip anything, and per rule #29 verify VPS HEAD == origin HEAD
+   before touching a flag.
+
+Do not merge it as a side effect of another task.
+
+---
+
 # NOT RECOMMENDED — Phase 5, the subsystem deep read
 
 Nine batches (pipeline stages, media/render, research/scoring, writing/LLM, publishing/storage, learning/monetization, the five niche packages, dashboard, scripts/tests) producing PURPOSE / REALITY / GAP / FAILURE MODE / VERDICT cards. It is the only planned phase never run, and the only one that would have judged whether the code is *good* rather than whether it *runs*.
