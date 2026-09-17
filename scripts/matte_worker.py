@@ -54,9 +54,16 @@ def _area_band(masks: dict) -> tuple[float, float, float]:
     return round(min(fr), 2), round(sum(fr) / len(fr), 2), round(max(fr), 2)
 
 
-def make_matte_fn(*, device: str = "mps"):
-    """Build the real matte callable. Imports are deferred so a worker started
-    without torch still reports a clean reason rather than dying at import."""
+def make_matte_fn(*, device: str = "mps", transport=None, workdir: Path | None = None):
+    """Build the real matte callable.
+
+    Imports are deferred so a worker started without torch reports a clean
+    reason rather than dying at import. `transport` is used to FETCH the clip:
+    `clip_path` names a file on the POSTER's filesystem, which for the SSH case
+    is prod, not this laptop -- a worker that assumed otherwise would report
+    "clip not readable" for every real job.
+    """
+    work = workdir or (REPO / ".runtime" / "matte_work")
 
     def matte_fn(job: dict) -> dict:
         t0 = time.time()
@@ -65,7 +72,19 @@ def make_matte_fn(*, device: str = "mps"):
         job_id = job.get("job_id", "?")
         logger.info("[matte-worker] job %s: %s (%d frames)", job_id, clip, n_frames)
 
-        from genlab_core.action.matte import build_mattes  # noqa: F401
+        # Pull the clip local if it is not already here.
+        if clip and not Path(clip).exists() and transport is not None:
+            work.mkdir(parents=True, exist_ok=True)
+            local = work / f"{job_id}_{Path(clip).name}"
+            if transport.fetch(clip, local):
+                logger.info("[matte-worker] fetched %s -> %s", clip, local)
+                job = {**job, "clip_path": str(local)}
+            else:
+                return {
+                    "frames": 0,
+                    "reason": f"could not fetch {clip}",
+                    "seconds": round(time.time() - t0, 1),
+                }
 
         try:
             from genlab_core.action import sam2_backend as backend  # type: ignore
@@ -134,7 +153,9 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("one of --host or --local is required")
 
     stats = serve(
-        transport, make_matte_fn(device=a.device), max_iterations=1 if a.once else a.iterations
+        transport,
+        make_matte_fn(device=a.device, transport=transport),
+        max_iterations=1 if a.once else a.iterations,
     )
     logger.info(
         "[matte-worker] claimed=%d ok=%d failed=%d", stats.claimed, stats.succeeded, stats.failed
