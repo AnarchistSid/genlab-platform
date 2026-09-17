@@ -39,7 +39,16 @@ from genlab_core.action.subject import choose_subject, garment_groups
 logger = logging.getLogger(__name__)
 
 SCENE_THRESHOLD = 0.4        # ffmpeg scene score that counts as a hard cut
-MIN_SUBJECT_FRAC = 0.20      # finisher's share of the foreground
+# The finisher's share of the GARMENT visible in the foreground, not of the raw
+# foreground. Measured on real frames, a garment component runs 3.6-13.0% of the
+# foreground silhouette -- a person's trunks are a small part of their body -- so
+# a 20%-of-foreground bar is unreachable by construction and scored 9 of 10
+# windows at exactly 0.0%. Against the garment total the same frames separate
+# cleanly: a fighter who is present and prominent reads 39-72%, one who is
+# marginal or absent reads 0. Per-person body pixels would be the ideal
+# denominator, but the two bodies are one merged component -- which is the whole
+# reason identity is derived from hue in the first place.
+MIN_SUBJECT_FRAC = 0.20
 MIN_SUBJECT_FRAMES = 0.80    # ...on this share of sampled frames
 IDENTITY_SAMPLES = 8         # frames sampled per window for the identity test
 
@@ -120,10 +129,12 @@ def _subject_hold(rgbs, fgs) -> tuple[float | None, float]:
     held = 0
     for rgb, fg in zip(rgbs, fgs, strict=False):
         groups = garment_groups(rgb, fg)
-        fg_px = float((fg > 0.5).sum()) or 1.0
+        if not groups:
+            continue
+        garment_total = float(sum(g["body_px"] for g in groups)) or 1.0
         mine = [g for g in groups
                 if abs((g["hue"] - subj.hue_deg + 180) % 360 - 180) <= 45]
-        if mine and max(g["body_px"] for g in mine) / fg_px >= MIN_SUBJECT_FRAC:
+        if mine and max(g["body_px"] for g in mine) / garment_total >= MIN_SUBJECT_FRAC:
             held += 1
     return subj.hue_deg, held / max(len(rgbs), 1)
 

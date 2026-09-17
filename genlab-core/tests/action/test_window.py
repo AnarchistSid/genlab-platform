@@ -90,3 +90,32 @@ def test_ffmpeg_metadata_passes_do_not_use_dash_v_error():
         body = src.split(f"def {fn}(")[1].split("\ndef ")[0]
         assert '"-v", "error"' not in body, f"{fn} would silence its own output"
         assert "-hide_banner" in body
+
+
+def test_the_criterion_is_measured_against_garment_not_raw_foreground():
+    """20% of raw FOREGROUND is unreachable and scored 9/10 windows at 0.0%.
+
+    A garment component runs 3.6-13.0% of the foreground silhouette on real
+    frames -- trunks are a small part of a body. Against the garment visible in
+    frame the same frames separate: present-and-prominent reads 39-72%.
+    """
+    SKIN = (190, 150, 130)
+    rgb, fg = _canvas()
+    # Two bodies that are mostly SKIN, each with a small garment patch -- the
+    # real proportion, which an all-coloured fixture hides.
+    _put(rgb, fg, 40, 20, 60, 200, SKIN)
+    _put(rgb, fg, 40, 120, 60, 26, RED)
+    _put(rgb, fg, 220, 20, 60, 200, SKIN)
+    _put(rgb, fg, 220, 120, 60, 26, BLUE)
+
+    groups = W.garment_groups(rgb, fg)
+    fg_px = float((fg > 0.5).sum())
+    assert groups, "no garment found"
+    assert all(g["body_px"] / fg_px < 0.20 for g in groups), (
+        f"fixture no longer reproduces the scale problem: "
+        f"{[round(g['body_px'] / fg_px, 3) for g in groups]}")
+
+    hue, frac = W._subject_hold([rgb] * 4, [fg] * 4)
+    assert frac == 1.0, (
+        f"a fighter holding half the garment in frame must count as held, got "
+        f"{frac}")
