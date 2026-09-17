@@ -173,3 +173,10 @@ deploy/.deploy.log
 # .audit/ — 9-phase audit workspace, un-ignored 2026-07-24 (Phase 8.2)
 # after the F-0024/F-0045/F-0048 port-5432 exposure was closed. Do not
 # re-ignore without redacting security-relevant findings first.
+
+# Approved render deliverables: source frames, SAM2 mattes, models, mp4s.
+# 771 MB and growing, and NOT tracked -- but it was never ignored either, so a
+# stray `git add -A` would have committed all of it. Each dir carries a
+# manifest.json (scripts/archive_deliverable.py) recording sha256s and how to
+# reproduce the render; that manifest, not git, is the integrity check.
+.deliverables/

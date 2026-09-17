@@ -101,6 +101,9 @@ effect_constants:
   world_sat:           {value: 0.22,  source: "CONTENT-15 grade solve"}
   subject_sat:         {value: 1.15,  source: "CONTENT-15 grade solve"}
   ambient_red:         {value: 0.018, source: "cage/ropes survive as red shapes, not black"}
+  # DEFAULT ONLY -- vignette is solved per clip alongside world/subject luma.
+  # UFC-05 solved 0.30 for its source; WWE v6 ran 0.62. A renderer that cannot
+  # override this cannot reproduce either reel but its own.
   vignette_amt:        {value: 0.30,  source: "ACTION-UFC-04 solve; WWE used 0.62"}
   feather_px:          {value: 18,    source: "34 hid a jagged birefnet edge; SAM2 edge is clean"}
   band_w:              {value: 0.251, source: "reference band width / subject height"}

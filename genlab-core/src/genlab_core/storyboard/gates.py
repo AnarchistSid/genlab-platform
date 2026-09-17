@@ -119,6 +119,11 @@ def _flash_at_finish(sb: Storyboard) -> GateResult:
 def _ends_live(sb: Storyboard) -> GateResult:
     """Effects leave the picture; they do not sit on top of it at the end."""
     tail_start = sb.total_frames - 12
+    # OVERLAYS only. `motion_blur` is deliberately absent: a directional smear
+    # along the frame's own motion vector is the footage filmed differently, not
+    # a graphic sitting on top of it, and banning it would reject a clip whose
+    # finish simply lands late. Both approved builds emit it as an event, so the
+    # omission is a decision and not an oversight.
     banned = {"drawing_flash", "white_flash", "mega_bolt", "bolt_afterglow",
               "debris", "heat_shimmer"}
     bad = [e for e in sb.events if e.frame >= tail_start and e.kind in banned]

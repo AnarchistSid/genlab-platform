@@ -83,6 +83,22 @@ def test_overlays_in_the_tail_fail_ends_live():
     assert not r.passed and "90" in r.detail
 
 
+def test_motion_blur_is_allowed_in_the_tail():
+    """`motion_blur` is a FOOTAGE effect, not an overlay.
+
+    `ends_live` exists so the segment does not finish with graphics sitting on
+    top of the picture. A directional smear along the frame's own motion vector
+    is not something sitting on top -- it is the footage, filmed differently.
+    Banning it would reject a clip whose finish simply lands late, and both
+    approved builds emit it as an event (`ev(f, "motion_blur")` on the frames
+    before the finish), so the distinction has to be explicit rather than
+    implied by absence from a list.
+    """
+    ev = [EffectEvent(kind="aura", frame=f) for f in range(0, 84, 12)]
+    ev += [EffectEvent(kind="motion_blur", frame=90)]
+    assert _named(_sb(events=ev), "ends_live").passed
+
+
 def test_a_shot_below_the_full_bleed_floor_is_rejected_before_rendering():
     shots = [Shot(index=0, start_frame=0, end_frame=47, magnification=1.30,
                   centre_x=0.5, centre_y=0.5),

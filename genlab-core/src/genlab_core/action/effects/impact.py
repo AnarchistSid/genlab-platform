@@ -95,7 +95,14 @@ def solve_world_multipliers(
 
 
 def grade_world(
-    frame: np.ndarray, matte: np.ndarray, kit: dict, *, world_luma: float, subject_luma: float
+    frame: np.ndarray,
+    matte: np.ndarray,
+    kit: dict,
+    *,
+    world_luma: float,
+    subject_luma: float,
+    vignette: float | None = None,
+    feather: float | None = None,
 ) -> np.ndarray:
     """Dim the world, light the subject. Returns a FRAME, not a layer.
 
@@ -113,11 +120,18 @@ def grade_world(
     )
     yy, xx = np.ogrid[:h, :w]
     r = np.sqrt(((xx - w / 2) / (w * 0.80)) ** 2 + ((yy - h / 2) / (h * 0.75)) ** 2)
-    vig = float(kit_value(kit, "vignette_amt", 0.30))
+    # PER-CLIP, like world_luma and subject_luma -- not a kit constant. UFC-05
+    # solved it to 0.30 for its source; WWE v6 ran grade_bathed's 0.62. The port
+    # first read it only from the kit, which made it unable to reproduce v6 at
+    # all: an 18.7/255 error on every single frame. The kit value is the default,
+    # not the law.
+    vig = float(kit_value(kit, "vignette_amt", 0.30) if vignette is None else vignette)
     world = world * (1.0 - vig * np.clip(r, 0, 1) ** 1.5)[..., None]
     subj = np.clip(g + (x - g) * float(kit_value(kit, "subject_sat", 1.15)), 0, 1) * subject_luma
-    feather = float(kit_value(kit, "feather_px", 18))
-    a = np.clip(blur(np.clip(blur(matte, 12.0), 0, 1), feather), 0, 1)[..., None]
+    # Likewise per-call: the build grades twice per frame, once at the subject
+    # feather and once at 1.0 for the whole-frame pass.
+    fth = float(kit_value(kit, "feather_px", 18) if feather is None else feather)
+    a = np.clip(blur(np.clip(blur(matte, 12.0), 0, 1), fth), 0, 1)[..., None]
     return np.clip(world * (1 - a) + subj * a, 0, 1) * 255.0
 
 
@@ -263,11 +277,17 @@ def bolts(
     prev_core: np.ndarray | None = None,
     scale: int = 2,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """One stroke per call, matched to the reference's LARGEST component.
+    """One long sweeping stroke per call, not a spray of sparks.
 
-    The reference's mean over fragments is dominated by short stubs; its largest
-    component is 0.834 x subject height at 69 px mean thickness. Matching the
-    mean produced a cage of small sparks.
+    Length is `bolt_len_per_h` = 1.95 x subject height -- the value that
+    rendered every approved reel, taken from `v8_look.mega_bolt`'s signature
+    default because no build ever passed the argument.
+
+    That function's docstring claims it is "matched to the reference's LARGEST
+    component (0.834 x subject height, 69 px mean thickness)". It is not: its
+    own default is 1.95, and 1.95 is what shipped. This port originally carried
+    the docstring's number across and drew bolts 2.34x too short. Whether 0.834
+    is the better value is filed as an open question, not decided here.
 
     Returns ``(layer, core)``; pass ``core`` back as ``prev_core`` next frame for
     the afterglow.

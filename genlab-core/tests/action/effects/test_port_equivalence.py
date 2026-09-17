@@ -59,6 +59,7 @@ recorded rather than "fixed" because changing it would alter nothing today.
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -68,6 +69,7 @@ import yaml
 from genlab_core.action.effects import _ops as P
 from genlab_core.action.effects import impact as I
 
+_ROOT = Path(__file__).resolve().parents[4]
 _ORACLE = Path(__file__).parent / "_oracle"
 sys.path.insert(0, str(_ORACLE))
 
@@ -299,3 +301,77 @@ def test_the_latent_band_peak_difference_cannot_bite(scene, kit):
         f"band_peak now bites: approved {approved:.1f} vs port {port:.1f}. "
         "ACTION subjects are close-ups; if this fires, the shot size changed."
     )
+
+
+# ───────────────────────────── grading ──────────────────────────────────────
+
+
+def _ufc05(rel: str):
+    p = _ROOT / ".deliverables" / "action_ufc_05" / "inputs" / rel
+    if not p.exists():
+        pytest.skip("UFC-05 archive not present")
+    return p
+
+
+def test_grade_world_reproduces_grade_bathed_exactly():
+    """`grade_world` is the port of `v8_look.grade_bathed`, on a real frame.
+
+    Given the same multipliers it must be the same function -- the vignette
+    geometry (0.80/0.75), the red ambient on the shadows, the DOUBLE blur of the
+    alpha (12 px then the feather), and subject saturation all have to line up.
+    """
+    from PIL import Image
+
+    frame = np.asarray(Image.open(_ufc05("clean/000.png")).convert("RGB"), np.float32)
+    m = (
+        np.asarray(Image.open(_ufc05("matte_knight/000.png")).convert("L"), np.float32) / 255.0
+        > 0.5
+    ).astype(np.float32)
+    g = json.loads(_ufc05("grade_solved.json").read_text())
+    kit = yaml.safe_load((Path(I.__file__).parents[1] / "kits" / "impact.yaml").read_text())
+    approved = v8_look.grade_bathed(
+        frame,
+        m,
+        world_luma=g["world_luma"],
+        subj_luma=g["subj_luma"],
+        vignette_amt=g["vignette"],
+        feather=18.0,
+    )
+    got = I.grade_world(frame, m, kit, world_luma=g["world_luma"], subject_luma=g["subj_luma"])
+    same("grade_world", approved, got, 0.0)
+
+
+def test_the_grade_SOLVER_diverges_from_what_shipped_and_this_is_filed():
+    """`solve_world_multipliers` is NOT a port -- its original has no source.
+
+    UFC-05's build reads `w2/grade_solved.json`, and nothing in the archived
+    scratch writes that file: the solver was an inline heredoc in a session, so
+    there is no code to port or to diff against. The port's solver is therefore
+    a reimplementation, and it lands somewhere else:
+
+        shipped   world_luma 0.400  subj_luma 1.750  -> world 39.17  subject 79.46
+        port      world_luma 0.443  subj_luma 2.063  -> world 37.20  subject 76.81
+        targets                                         world 37.10  subject 76.90
+
+    The port is CLOSER to the targets the kit states. Under "no behaviour change
+    inside a port" that is still a divergence, and it is filed as Q5 rather than
+    silently kept or silently reverted -- reverting is not even available.
+
+    What this test pins is the property, not the numbers: the solver must hit the
+    kit's stated targets. If it stops doing that, it has regressed regardless of
+    which multipliers it picks.
+    """
+    from PIL import Image
+
+    frame = np.asarray(Image.open(_ufc05("clean/000.png")).convert("RGB"), np.float32)
+    m = (
+        np.asarray(Image.open(_ufc05("matte_knight/000.png")).convert("L"), np.float32) / 255.0
+        > 0.5
+    ).astype(np.float32)
+    kit = yaml.safe_load((Path(I.__file__).parents[1] / "kits" / "impact.yaml").read_text())
+    wl, sl = I.solve_world_multipliers(frame, m, kit)
+    out = I.grade_world(frame, m, kit, world_luma=wl, subject_luma=sl)
+    y = P.luma(out / 255.0) * 255.0
+    mm = m > 0.5
+    assert abs(float(y[~mm].mean()) - float(I.kit_value(kit, "world_luma_target"))) < 1.0
+    assert abs(float(y[mm].mean()) - float(I.kit_value(kit, "subject_luma_target"))) < 1.0
