@@ -431,7 +431,11 @@ def _next_available_slot(niche_id: str = "", exclude_record_id: str = "") -> str
     else:
         effective_per_day_cap = 1
 
-    for day_offset in range(0, 8):
+    # Same horizon the auto-approver uses. T-53: one contract, two
+    # implementers -- they must not drift, so both read queue_policy.
+    from genlab_core.scheduling.queue_policy import lookahead_days
+
+    for day_offset in range(0, lookahead_days(niche_id)):
         candidate_date = base_date + timedelta(days=day_offset)
         # Per-day cap short-circuit: skip the whole day if it would
         # over-schedule beyond what the publisher will accept.

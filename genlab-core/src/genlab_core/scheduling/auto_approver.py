@@ -76,6 +76,7 @@ from genlab_core.scheduling.auto_approval_gate import (
 from genlab_core.scheduling.auto_approval_gate import (
     evaluate as gate_evaluate_default,
 )
+from genlab_core.scheduling.queue_policy import lookahead_days
 from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-5
 
 logger = logging.getLogger(__name__)
@@ -175,7 +176,10 @@ def _pick_next_available_slot(
     base_date = earliest.date()
     hour, minute = (int(x) for x in canonical_slot_ist.split(":"))
 
-    for day_offset in range(0, 8):
+    # Per-niche horizon (T-53 contract lives in queue_policy, because this
+    # number is implemented here AND in dashboard publishing_queue).
+    horizon = lookahead_days(niche_id)
+    for day_offset in range(0, horizon):
         candidate_date = base_date + timedelta(days=day_offset)
         day_key = candidate_date.strftime("%Y-%m-%d")
         if posts_per_day.get(day_key, 0) >= cap:
@@ -1183,9 +1187,10 @@ def _execute_approval(
 
     if scheduled_for is None:
         logger.info(
-            "[auto_approver] niche=%s bp=%s — no cap-available slot in next 7 days, skipping",
+            "[auto_approver] niche=%s bp=%s — no cap-available slot in next %d days, skipping",
             niche_id,
             record_id,
+            lookahead_days(niche_id),
         )
         result.errors.append(f"no slot available for {record_id}")
         return None

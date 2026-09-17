@@ -64,9 +64,26 @@ freshness:
 video_sourcing:
   strategy: trending_youtube
   niche_category: anime
-  max_age_hours: 48
+  # DECISIONS-0917 §2 — raise INTAKE, keep the bar. min_confidence stays 0.85.
+  #
+  # Measured 2026-09-17 on the 06:00 fire: 4 candidates fetched -> URL dedup
+  # dropped 2 -> 2 stories -> 1 survived video validation -> 1 blueprint. The
+  # funnel was never render-capped; it was starved at the top. top_n_per_run=15
+  # was not binding, because the fetcher only ever returned 4.
+  #
+  # Both widened knobs are POOL knobs. The anime relevance gate
+  # (sources.yaml relevance_threshold 0.35, the strictest niche because there is
+  # no native YouTube category) is untouched -- rule #9 still holds, every
+  # candidate must match anime keywords.
+  #
+  # 48 -> 96h: anime trends on a WEEKLY cycle, which this repo already knows --
+  # see the dedup_window_days note below, "same shows trend across days as new
+  # episodes drop". A 48h window throws away most of that cycle.
+  # 100 -> 50 velocity: anime clips accrue views more slowly than gaming or
+  # sports highlights; 100/h was borrowed from niches with native categories.
+  max_age_hours: 96
   top_n_per_run: 15
-  min_view_velocity: 100
+  min_view_velocity: 50
   use_google_trends: true
   allow_keyword_search: true
   video_gate: require
