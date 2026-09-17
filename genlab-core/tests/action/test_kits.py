@@ -161,3 +161,17 @@ def test_kit_constants_agree_with_the_code_that_still_holds_them():
     assert m["torso_floor"] == TORSO_FLOOR
     assert m["subject_vote_frames"] == VOTE_FRAMES
     assert m["subject_body_area_floor"] == MIN_BODY_FRAC
+
+
+def test_matte_module_constants_match_the_kit():
+    """Port the function, keep the constant in YAML (RENDER-01 rule)."""
+    import pathlib
+
+    import yaml
+
+    from genlab_core.action.matte import MATTE_AREA_BAND
+
+    reg = __import__("genlab_core.action.kits.registry", fromlist=["x"])
+    m = yaml.safe_load((pathlib.Path(reg.__file__).parent / "impact.yaml").read_text())["measured"]
+    assert list(MATTE_AREA_BAND) == m["matte_area_band"], (
+        "matte.py and impact.yaml disagree on the area band")
