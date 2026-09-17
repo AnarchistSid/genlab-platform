@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Matte worker. Runs on the Mac, serves matte jobs posted from prod.
+
+  INSTALL
+    cp deploy/launchd/sh.genlab.matte-worker.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/sh.genlab.matte-worker.plist
+    launchctl kickstart -k gui/$(id -u)/sh.genlab.matte-worker
+  STOP
+    launchctl bootout gui/$(id -u)/sh.genlab.matte-worker
+
+  RunAtLoad + KeepAlive means it runs whenever the laptop is awake and logged
+  in, and restarts if it dies. It is deliberately NOT a prod dependency: when
+  the laptop is shut, `request_matte` times out, prod records
+  craft_skipped=worker_unavailable and renders legacy. That is the design, not
+  a degraded mode.
+
+  ThrottleInterval keeps a crash-looping worker from hammering prod's SSH.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>              <string>sh.genlab.matte-worker</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/anarchistsid/.local/bin/uv</string>
+    <string>run</string>
+    <string>--project</string>
+    <string>/Users/anarchistsid/GenLab</string>
+    <string>python</string>
+    <string>/Users/anarchistsid/GenLab/scripts/matte_worker.py</string>
+    <string>--host</string>
+    <string>genlab-prod</string>
+    <string>--root</string>
+    <string>/opt/genlab/.runtime/mattes</string>
+  </array>
+  <key>WorkingDirectory</key>   <string>/Users/anarchistsid/GenLab</string>
+  <key>RunAtLoad</key>          <true/>
+  <key>KeepAlive</key>          <true/>
+  <key>ThrottleInterval</key>   <integer>60</integer>
+  <key>StandardOutPath</key>    <string>/Users/anarchistsid/GenLab/.runtime/matte_worker.log</string>
+  <key>StandardErrorPath</key>  <string>/Users/anarchistsid/GenLab/.runtime/matte_worker.err</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>             <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTORCH_ENABLE_MPS_FALLBACK</key><string>1</string>
+  </dict>
+</dict>
+</plist>
