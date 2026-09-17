@@ -33,6 +33,11 @@
 #     posts lost their renders; operator force-deleted them.
 #   2026-06-29 v2 — current. .tmp/runs prune REMOVED. Pure
 #     system-level cleanup. genlab data left to its own daemons.
+#   2026-09-17 v4 — uv cache size is now REPORTED every run, and a full
+#     `uv cache clean` fires when the cache is still over 2 GB after the
+#     prune. The v3 prune ran hourly for two months and the cache still
+#     reached 6.1 GB (disk 96%, 4.8 GB free) on 2026-09-17. An unreported
+#     size is how it grew unnoticed twice.
 #   2026-07-15 v3 — added /opt/genlab/.cache/uv prune. Genlab's own
 #     uv cache had grown to 3.2 GB across a year of `uv sync` calls.
 #     `uv cache prune --ci` freed 2.9 GB on first run. Prod disk was
@@ -153,10 +158,39 @@ docker system prune -af --volumes 2>&1 | tail -2 | sed 's/^/  /' || \
 # steady state. Runs as genlab so the ownership + XDG_CACHE_HOME
 # resolves to /opt/genlab/.cache/uv/ (root's uv cache would be a
 # different dir, unused by prod).
-log "pruning /opt/genlab/.cache/uv (genlab-owned)..."
+# 2026-09-17 v4 — REPORT the size, and full-clean when prune is not enough.
+# `uv cache prune --ci` has run hourly since 2026-07-15 and the cache still
+# reached 6.1 GB today, taking the disk to 96% (4.8 GB free) while Postgres
+# runs on the same volume. Prod PG crashed at 100% disk on 2026-07-01, so this
+# is the failure that matters here. --ci removes build artefacts and
+# non-lockfile entries; it evidently does not bound the archive cache.
+#
+# So: measure, log the number (an unreported size is how this grew twice),
+# and if it is STILL over the threshold after the prune, `uv cache clean` --
+# which empties it entirely. The cost is one slower `uv sync` on next deploy;
+# the alternative is a full disk under a database.
+UV_CACHE_DIR="/opt/genlab/.cache/uv"
+UV_CACHE_MAX_GB="${GENLAB_UV_CACHE_MAX_GB:-2}"
+
+uv_cache_gb() {
+    [ -d "$UV_CACHE_DIR" ] || { echo 0; return; }
+    du -sk "$UV_CACHE_DIR" 2>/dev/null | awk '{printf "%.1f", $1/1048576}'
+}
+
+log "pruning $UV_CACHE_DIR (genlab-owned)..."
 if command -v uv >/dev/null 2>&1; then
-    sudo -u genlab bash -c "cd /opt/genlab && uv cache prune --ci 2>&1" | tail -3 | sed 's/^/  /' || \
-        log "WARNING: uv cache prune failed"
+    uv_before="$(uv_cache_gb)"
+    log "  uv cache before: ${uv_before} GB (threshold ${UV_CACHE_MAX_GB} GB)"
+    sudo -u genlab HOME=/opt/genlab bash -c "cd /opt/genlab && uv cache prune --ci 2>&1" \
+        | tail -3 | sed 's/^/  /' || log "WARNING: uv cache prune failed"
+    uv_after="$(uv_cache_gb)"
+    log "  uv cache after prune: ${uv_after} GB"
+    if awk "BEGIN{exit !($uv_after > $UV_CACHE_MAX_GB)}"; then
+        log "  still over ${UV_CACHE_MAX_GB} GB — running full 'uv cache clean'"
+        sudo -u genlab HOME=/opt/genlab bash -c "cd /opt/genlab && uv cache clean 2>&1" \
+            | tail -2 | sed 's/^/  /' || log "WARNING: uv cache clean failed"
+        log "  uv cache after clean: $(uv_cache_gb) GB"
+    fi
 else
     log "  uv not on PATH — skipping (installed via /usr/local/bin/uv typically)"
 fi

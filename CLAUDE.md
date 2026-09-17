@@ -729,6 +729,26 @@ Editing imports: either run `ruff check --fix <file>` manually or rely on the ho
     kernel-level `git pull` is manual). Detection: any end-of-session
     audit MUST include the HEAD-drift check as first assertion.
     See `[[class-of-bug-flag-flip-without-code-deploy-verify]]`.
+31. **Never `uv pip install` a torch-adjacent package into the prod
+    venv without `--index-url` pinned to the CPU wheel** — and never
+    benchmark in the prod venv at all. Measured 2026-09-17: a dry-run
+    of `uv pip install torchvision hydra-core iopath` against
+    `/opt/genlab/.venv` resolved to **replacing `torch==2.12.1+cpu`
+    with `torch==2.14.0` plus the full NVIDIA CUDA stack** — cufft,
+    cusolver, cusparse, nccl, triton, nvshmem — on a box with **no
+    GPU**. Several GB of libraries the machine cannot use, and a
+    replaced torch under the live pipeline. The `+cpu` build is only
+    on the PyTorch CPU index, so plain resolution silently prefers the
+    CUDA wheels. Correct form:
+    `uv pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision`.
+    For anything experimental use a separate venv
+    (`uv venv /opt/genlab/.sam2bench`) and delete it after; the prod
+    venv is 2.5 GB on a 38 GB disk shared with Postgres, which crashed
+    at 100% disk on 2026-07-01. Related: `uv` caches the downloads it
+    resolves, so a failed install still costs disk — see
+    `disk_cleanup.sh` v4, which now reports the cache size and
+    full-cleans over 2 GB.
+
 30. **Model/asset registry pattern is the canonical way to add
     inference.sh app diversity** — 2026-08-18 crystallised this
     across `media/hook_thumbnail_models.py` (image) and
