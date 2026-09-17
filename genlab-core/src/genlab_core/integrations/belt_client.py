@@ -272,3 +272,63 @@ def task_cost_usd(task_id: str) -> float | None:
             except ValueError:
                 return None
     return None
+
+# Markers the CLI prints when the credential is bad, as opposed to when the
+# network or the binary is the problem. Distinguishing them is the whole point:
+# "session expired" is an operator action, "timed out" is a retry.
+_UNAUTH_MARKERS = ("not logged in", "session expired", "unauthorized",
+                   "invalid api key", "invalid token")
+
+
+def auth_status() -> str:
+    """``"ok"`` | ``"unauthenticated"`` | ``"unavailable"``.
+
+    ``balance_usd()`` collapses every failure to None, so a caller cannot tell
+    an expired session from a network blip and has to treat both the same. On
+    2026-09-17 that mattered: the belt session expired at 12:30, every LLM write
+    fell through to an unfunded OpenAI, and the only thing that noticed was the
+    ANTHROPIC credit check -- which escalates on belt only because it happens to
+    probe the balance. Had Anthropic been funded, belt could have been dead for
+    days in silence.
+
+    ``INFSH_API_KEY`` is worth knowing about here: with a key set, an
+    unauthenticated result means a BAD KEY (a config error), and without one it
+    means the interactive session has expired again (the recurring failure).
+    """
+    binary = _belt_binary()
+    if not binary:
+        return "unavailable"
+    try:
+        proc = subprocess.run(
+            [binary, "balance", "--json"],
+            capture_output=True, text=True, timeout=20,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[belt_client] auth probe failed: %s", exc)
+        return "unavailable"
+    blob = f"{proc.stdout}\n{proc.stderr}".lower()
+    if any(m in blob for m in _UNAUTH_MARKERS):
+        return "unauthenticated"
+    for line in reversed(proc.stdout.strip().splitlines()):
+        line = line.strip()
+        if line.startswith("{") and line.endswith("}"):
+            try:
+                parsed = json.loads(line)
+            except ValueError:
+                continue
+            if "balance" in parsed or "balance_dollars" in parsed:
+                return "ok"
+    return "unavailable"
+
+
+def using_api_key() -> bool:
+    """True when a non-expiring credential is supplied via the environment.
+
+    The CLI prefers INFSH_API_KEY over its stored session -- verified by setting
+    it to a bogus value, which makes an otherwise-working `belt balance` report
+    "not logged in". The docs name INFERENCE_API_KEY for the SDK; the CLI does
+    not read that one.
+    """
+    import os
+
+    return bool(os.environ.get("INFSH_API_KEY", "").strip())

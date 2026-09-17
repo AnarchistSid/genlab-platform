@@ -20,9 +20,10 @@ from genlab_core.monitoring.checks.bandit_engagement import (
 from genlab_core.monitoring.checks.infrastructure import (
     _attempt_warp_restart,
     _check_warp_port_listening,
+    check_belt_auth,
+    check_deploy_gap,
     check_disk,
     check_foreign_host_writes,
-    check_deploy_gap,
     check_git_drift,
     check_git_ownership_drift,
     check_services,
@@ -54,6 +55,7 @@ from genlab_core.monitoring.checks.pipeline import (
 )
 
 __all__ = [
+    "check_belt_auth",
     "_FETCHER_STAGES_TO_MONITOR",
     "_SILENT_FAILURE_CONSECUTIVE_RUNS",
     "_SILENT_FAILURE_DURATION_MS",

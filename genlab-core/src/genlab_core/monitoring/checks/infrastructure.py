@@ -780,6 +780,69 @@ def belt_balance_usd() -> float | None:
         return None
 
 
+def check_belt_auth() -> list[Alert]:
+    """Belt's own credential, checked on its own.
+
+    Belt auth was only ever probed INSIDE ``check_anthropic_credit``, which
+    escalates when belt is not serving. That works only while Anthropic is also
+    broken. With Anthropic funded, belt could expire and nothing would say so --
+    and belt is the primary LLM tier, so every write would be quietly falling
+    through to whatever is behind it.
+
+    Measured 2026-09-17: the belt session expired at 12:30 and the platform ran
+    with zero approvals for six hours. It surfaced only because Anthropic
+    happened to be unfunded at the same time. That coincidence is not a monitor.
+
+    Severity is about the CREDENTIAL, not the balance:
+      * unauthenticated + no INFSH_API_KEY -> CRITICAL, the interactive session
+        has expired again (second time in one day)
+      * unauthenticated + INFSH_API_KEY set -> CRITICAL, the key is bad or
+        revoked, which is a config error rather than an expiry
+      * unavailable -> WARNING, the binary or the network, retryable
+    """
+    alerts: list[Alert] = []
+    try:
+        from genlab_core.integrations.belt_client import auth_status, using_api_key
+
+        status = auth_status()
+        keyed = using_api_key()
+    except Exception as exc:  # noqa: BLE001 — a monitor never takes prod down
+        logger.warning("[check_belt_auth] probe failed: %s", exc, exc_info=True)
+        return alerts
+
+    if status == "ok":
+        return alerts
+
+    if status == "unauthenticated":
+        how = ("INFSH_API_KEY is set but rejected — the key is bad or revoked"
+               if keyed else
+               "no INFSH_API_KEY is set, so this is the interactive CLI session "
+               "expiring again; an API key from Settings -> API Keys does not expire")
+        alerts.append(
+            Alert(
+                check="belt_unauthenticated",
+                severity="critical",
+                message=(f"belt is not authenticated — {how}. Belt is the primary "
+                         f"LLM tier: writer, hook generator and the auto-approval "
+                         f"judge all fall through while this holds."),
+                details={"auth_status": status, "using_api_key": keyed},
+                auto_fix=("set INFSH_API_KEY in /opt/genlab/.env" if not keyed
+                          else "rotate INFSH_API_KEY"),
+            )
+        )
+    else:
+        alerts.append(
+            Alert(
+                check="belt_unavailable",
+                severity="warning",
+                message="belt CLI unreachable (binary missing, or the probe timed "
+                        "out). Retryable; not a credential problem.",
+                details={"auth_status": status, "using_api_key": keyed},
+            )
+        )
+    return alerts
+
+
 def check_anthropic_credit() -> list[Alert]:
     """Probe Anthropic API with a minimal request to detect credit exhaustion.
 

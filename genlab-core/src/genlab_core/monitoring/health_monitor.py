@@ -56,9 +56,10 @@ from genlab_core.monitoring.checks.infrastructure import (
     _attempt_warp_restart,
     _check_warp_port_listening,
     check_anthropic_credit,
+    check_belt_auth,
+    check_deploy_gap,
     check_disk,
     check_foreign_host_writes,
-    check_deploy_gap,
     check_git_drift,
     check_git_ownership_drift,
     check_services,
@@ -139,6 +140,7 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_git_drift())
         all_alerts.extend(check_deploy_gap())  # 2026-09-17: main ahead of .version.env (25-day gap)
         all_alerts.extend(check_git_ownership_drift())  # 2026-07-21: prevent deploy-blocking root-owned .git files
+        all_alerts.extend(check_belt_auth())  # 2026-09-17: belt is the primary LLM tier
         all_alerts.extend(check_anthropic_credit())  # 2026-07-21: 1-token probe; prevents 4th exhaustion-class outage
         all_alerts.extend(check_llm_cost())  # 2026-07-23: proactive runaway-spike + budget-runway projection
         all_alerts.extend(check_bandit_regret_signal())  # 2026-07-23: bandit exploration meta-param signal (#7 autonomy roadmap)
@@ -624,6 +626,7 @@ __all__ = [
     "archive_orphan_drafts",
     "archive_orphan_intake_stories",
     "archive_stranded_engagement_reviews",
+    "check_belt_auth",
     "check_anthropic_credit",
     "check_bandit_posterior_drift",
     "check_bandit_staleness",
