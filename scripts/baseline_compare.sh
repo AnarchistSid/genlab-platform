@@ -149,8 +149,26 @@ if ! grep -q "_block_prod_cost_telemetry_writes" "$WT_H/genlab-core/tests/confte
     die "head worktree has no _block_prod_cost_telemetry_writes fixture in tests/conftest.py — the suite can write to PROD telemetry (T-61). Set BC_ALLOW_PROD_STORAGE=1 to override deliberately."
   fi
 fi
-PYARGS=(-q -p no:cacheprovider --timeout=300 "${DES[@]}")
-[[ "$COLLECT_ONLY" == 1 ]] && PYARGS=(-q -p no:cacheprovider --collect-only "${DES[@]}")
+# NETWORK-BOUND TESTS ARE DESELECTED, not endured. At --timeout=300 each test
+# that blocks on a socket or a thread waiting for one costs five minutes; the
+# 2026-09-17 comparison reached 46% of the BASE suite in three hours with both
+# pytest processes at 0.0% CPU. The count is printed on each side below, so a
+# marker drifting onto (or off) a test is visible rather than silent.
+# BOTH terms, because a command-line -m REPLACES the one in addopts. genlab-core's
+# pyproject carries `addopts = "-m 'not integration' ..."`, so passing just
+# "not network" here would silently re-admit the whole integration suite —
+# a filter that widens what it is meant to narrow.
+MARKEXPR="${BC_MARKEXPR:-not integration and not network}"
+PYARGS=(-q -p no:cacheprovider --timeout=300 -m "$MARKEXPR" "${DES[@]}")
+[[ "$COLLECT_ONLY" == 1 ]] && PYARGS=(-q -p no:cacheprovider --collect-only -m "$MARKEXPR" "${DES[@]}")
+say "=== marker filter: -m '$MARKEXPR' ==="
+for WT in "$WT_B" "$WT_H"; do
+  _all=$( cd "$WT/genlab-core" && "$WT/.venv/bin/python" -m pytest -q -p no:cacheprovider \
+            --collect-only "${DES[@]}" 2>/dev/null | grep -cE '::' )
+  _kept=$( cd "$WT/genlab-core" && "$WT/.venv/bin/python" -m pytest -q -p no:cacheprovider \
+            --collect-only -m "$MARKEXPR" "${DES[@]}" 2>/dev/null | grep -cE '::' )
+  say "  $(basename "$WT"): collected ${_all}, kept ${_kept}, deselected by marker $(( _all - _kept ))"
+done
 
 # T-56: setsid is Linux-only. On macOS its absence made `run_one` fail before
 # pytest ever started, and every downstream count read 0 from an empty log --

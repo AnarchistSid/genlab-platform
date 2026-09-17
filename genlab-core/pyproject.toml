@@ -86,6 +86,7 @@ packages = ["src/genlab_core"]
 testpaths = ["tests"]
 markers = [
     "integration: end-to-end pipeline smoke tests (run with: pytest -m integration)",
+    "network: reaches a real host, a real socket, or blocks on a thread waiting for one. These are DESELECTED by baseline_compare.sh: at --timeout=300 each one costs five minutes, and the full-suite comparison sat at 46% after three hours with both pytest processes at 0.0% CPU — blocked on I/O, not computing. Mark rather than endure.",
 ]
 addopts = "-m 'not integration' -p no:faulthandler"
 
