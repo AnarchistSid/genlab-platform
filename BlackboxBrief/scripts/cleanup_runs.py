@@ -88,6 +88,18 @@ _EXTRA_RETENTION = [
 def main() -> None:
     parser = argparse.ArgumentParser(description="Daily run cleanup")
     parser.add_argument("--dry-run", action="store_true", help="Log what would be deleted without deleting")
+    # The shared .tmp/runs is where the unified pipeline writes ALL five niches,
+    # and it was never enforced: this script hardcoded BlackboxBrief's own runs
+    # dir, so it reported "used=0.1 GB (0.4%) — no eviction needed" every day,
+    # a correct statement about the wrong directory while the shared one grew to
+    # 6.1 GB. genlab-core/config/disk_quota.yaml has had a `genlab_shared` entry
+    # (with a comment saying exactly this) that nothing ever invoked.
+    parser.add_argument("--runs-dir", default=None,
+                        help="override the runs directory to enforce")
+    parser.add_argument("--agent", default=None, help="label for this agent")
+    parser.add_argument("--quota-gb", type=float, default=None,
+                        help="quota in GB; must be BELOW the filesystem size or "
+                             "it can never trigger")
     args = parser.parse_args()
 
     # 2026-07-14: moved from import-time to runtime. If genlab_core is
@@ -97,11 +109,13 @@ def main() -> None:
         print(f"ERROR: genlab_core not on path. Run with: uv run python scripts/cleanup_runs.py\n{_IMPORT_ERROR}")
         sys.exit(1)
 
+    agent = args.agent or AGENT_NAME
+    runs_dir = args.runs_dir or RUNS_DIR
     config = {
         "agents": {
-            AGENT_NAME: {
-                "runs_dir": RUNS_DIR,
-                "quota_gb": 20,  # 20 GB cap (at ~1 GB/day, 7-day retention fits easily)
+            agent: {
+                "runs_dir": runs_dir,
+                "quota_gb": args.quota_gb if args.quota_gb else 20,
                 "warn_pct": 70,
                 "evict_pct": 85,
                 "protect_recent": 5,  # was 3 — keep a week's worth at 1 run/day
@@ -111,7 +125,7 @@ def main() -> None:
 
     manager = DiskQuotaManager(config)
 
-    status = manager.get_status(AGENT_NAME)
+    status = manager.get_status(agent)
     logger.info(
         "Disk status: used=%.1f GB (%.1f%%), quota=%.1f GB, runs=%d, evictable=%d (%.1f GB)",
         status.used_bytes / (1024**3),
@@ -124,7 +138,7 @@ def main() -> None:
 
     if args.dry_run:
         logger.info("DRY RUN — showing eviction candidates without deleting")
-        records = manager.scan_runs(AGENT_NAME)
+        records = manager.scan_runs(agent)
         evictable = sorted(
             [r for r in records[3:] if not r.is_published],
             key=lambda r: r.score,
@@ -149,10 +163,10 @@ def main() -> None:
         logger.info("Usage %.1f%% is below warn threshold — no eviction needed", status.pct_used)
         return
 
-    evicted = manager.evict(AGENT_NAME)
+    evicted = manager.evict(agent)
     logger.info("Evicted %d paths", len(evicted))
 
-    status_after = manager.get_status(AGENT_NAME)
+    status_after = manager.get_status(agent)
     logger.info(
         "After cleanup: used=%.1f GB (%.1f%%)",
         status_after.used_bytes / (1024**3),

@@ -70,9 +70,15 @@ echo "  Protected run dirs: $(echo "$PROTECTED_PATHS" | grep -c . || echo 0)" >>
 
 # ── Step 2: Clean shared .tmp/runs (keep last 3 per niche, protect active blueprints) ──
 SHARED_TMP="$GENLAB/.tmp/runs"
+KEEP_PER_NICHE="${CLEANUP_KEEP_RUNS:-5}"
 if [ -d "$SHARED_TMP" ]; then
     cleaned=0
     protected_count=0
+    # BEFORE/AFTER, always. A pruner that does not state what it started with
+    # and what it ended with cannot be checked against its own policy, and the
+    # only signal that it stopped becomes the disk filling up weeks later.
+    before_bytes=$(du -sb "$SHARED_TMP" 2>/dev/null | cut -f1)
+    before_dirs=$(find "$SHARED_TMP" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
 
     # Helper: check if a directory is in the protected set
     is_dir_protected() {
@@ -87,11 +93,18 @@ if [ -d "$SHARED_TMP" ]; then
     }
 
     # Clean per-niche runs (keep last 5, not 3 — safer margin)
+    #
+    # NOTE the `done < <(...)` rather than `... | while read`. A piped while-loop
+    # runs in a SUBSHELL, so `cleaned=$((cleaned+1))` increments a copy that is
+    # discarded at the pipe's end. This summary reported "cleaned=0, protected=0"
+    # for months WHILE the per-directory "Removed:" lines above it were real --
+    # a pruner that looks stopped in its own summary and is not. Process
+    # substitution keeps the loop in this shell so the counters survive.
     for niche in ai_creators gaming sports movies anime; do
         dirs=$(ls -dt "$SHARED_TMP"/${niche}_* 2>/dev/null || true)
         count=$(echo "$dirs" | grep -c . 2>/dev/null) || count=0
-        if [ "$count" -gt 5 ]; then
-            echo "$dirs" | tail -n +6 | while read dir; do
+        if [ "$count" -gt "$KEEP_PER_NICHE" ]; then
+            while read -r dir; do
                 [ -z "$dir" ] && continue
                 if is_dir_protected "$dir"; then
                     echo "  PROTECTED: $(basename $dir)" >> "$LOG"
@@ -101,7 +114,7 @@ if [ -d "$SHARED_TMP" ]; then
                     echo "  Removed: $(basename $dir)" >> "$LOG"
                     cleaned=$((cleaned + 1))
                 fi
-            done
+            done < <(echo "$dirs" | tail -n +$((KEEP_PER_NICHE + 1)))
         fi
     done
 
@@ -110,16 +123,17 @@ if [ -d "$SHARED_TMP" ]; then
         dirs=$(ls -dt "$SHARED_TMP"/${prefix}_* 2>/dev/null || true)
         count=$(echo "$dirs" | grep -c . 2>/dev/null) || count=0
         if [ "$count" -gt 3 ]; then
-            echo "$dirs" | tail -n +4 | while read dir; do
+            while read -r dir; do
                 [ -z "$dir" ] && continue
                 if is_dir_protected "$dir"; then
                     echo "  PROTECTED: $(basename $dir)" >> "$LOG"
+                    protected_count=$((protected_count + 1))
                 else
                     rm -rf "$dir"
                     echo "  Removed: $(basename $dir)" >> "$LOG"
                     cleaned=$((cleaned + 1))
                 fi
-            done
+            done < <(echo "$dirs" | tail -n +4)
         fi
     done
 
@@ -159,7 +173,19 @@ if [ -d "$SHARED_TMP" ]; then
         echo "  Purged clips/: $(basename "$run_dir") (freed ${size:-0}b)" >> "$LOG"
     done < <(find "$SHARED_TMP" -mindepth 2 -maxdepth 2 -type d -name clips -mtime +0 2>/dev/null)
 
+    after_bytes=$(du -sb "$SHARED_TMP" 2>/dev/null | cut -f1)
+    after_dirs=$(find "$SHARED_TMP" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+    freed_mb=$(( (${before_bytes:-0} - ${after_bytes:-0}) / 1048576 ))
     echo "  Shared .tmp/runs: cleaned=$cleaned, protected=$protected_count, clips_purged=$clips_purged" >> "$LOG"
+    echo "  Shared .tmp/runs BEFORE: ${before_dirs} dirs, $(( ${before_bytes:-0} / 1048576 )) MB" >> "$LOG"
+    echo "  Shared .tmp/runs AFTER:  ${after_dirs} dirs, $(( ${after_bytes:-0} / 1048576 )) MB  (freed ${freed_mb} MB)" >> "$LOG"
+    # Drift from the policy, stated as a number rather than left to be noticed.
+    # 5 niches x keep-N, plus whatever pending schedules protect. Well above that
+    # means protection is holding runs open, or a prefix nobody prunes appeared.
+    policy_max=$(( KEEP_PER_NICHE * 5 + protected_count ))
+    if [ "${after_dirs:-0}" -gt "$policy_max" ]; then
+        echo "  WARN runs-dir drift: ${after_dirs} dirs vs policy max ${policy_max} (keep=${KEEP_PER_NICHE}/niche + ${protected_count} protected)" >> "$LOG"
+    fi
 fi
 
 # ── Step 2c: Postgres pending_engagement queue rot ──
@@ -184,6 +210,14 @@ fi
 # ── Step 3: BB cleanup (has its own cleanup script) ──
 if [ -f "$GENLAB/BlackboxBrief/scripts/cleanup_runs.py" ]; then
     "$UV" run --project "$GENLAB/BlackboxBrief" python "$GENLAB/BlackboxBrief/scripts/cleanup_runs.py" >> "$LOG" 2>&1 || true
+    # ...and the SHARED runs dir, which is where the unified pipeline writes all
+    # five niches. Enforcing only BlackboxBrief's own dir reported 0.4% usage
+    # every day -- true of the 86 MB it was watching, blind to the 6.1 GB next
+    # door. quota_gb is 12, deliberately BELOW the filesystem size: a quota
+    # larger than the disk (the config's `genlab_shared` says 40 on a 38 GB box)
+    # can never trigger, so it is a comment rather than a control.
+    "$UV" run --project "$GENLAB/BlackboxBrief" python "$GENLAB/BlackboxBrief/scripts/cleanup_runs.py" \
+        --agent genlab_shared --runs-dir "$GENLAB/.tmp/runs" --quota-gb 12 >> "$LOG" 2>&1 || true
     echo "  BB cleanup done" >> "$LOG"
 fi
 
