@@ -30,9 +30,12 @@ Idempotency
 -----------
 Uses the ``notified_at`` column added by migration s9n0o1p2q3r4:
 
-    SELECT ... WHERE notified_at IS NULL AND ...
+    SELECT ... WHERE notified_at IS NULL
+                     OR notified_at < NOW() - RENOTIFY_AFTER_HOURS ...
     [post to webhook]
-    UPDATE ... SET notified_at = NOW() WHERE id = ANY(...) AND notified_at IS NULL
+    UPDATE ... SET notified_at = NOW() WHERE id = ANY(...)
+    (no `AND notified_at IS NULL` -- that guard would pin the timestamp at the
+     first send and make re-notification a no-op)
 
 The double-check in the UPDATE handles the rare case of two notifier
 runs racing — only the first one's POST actually wins.
@@ -65,8 +68,23 @@ def _connect():
     return pg_connect(dsn, connect_timeout=10, niche_id="all")
 
 
+# An unresolved CRITICAL is re-notified on this cadence. Without it, a
+# persistent outage is indistinguishable -- from the operator's inbox -- from
+# one that resolved itself.
+#
+# Measured 2026-09-17: `anthropic_credit_exhausted` was created 07:00:15,
+# notified once at 07:05:29, and was STILL unresolved twelve hours later with
+# every LLM tier down and approvals at zero on every niche. The check fired, the
+# webhook worked, the row was written -- and the operator got exactly one
+# message, in the morning, for an outage that ran all day. The condition also
+# WORSENED at 12:30 when the belt session expired, and that escalation was
+# swallowed by the same dedup.
+RENOTIFY_AFTER_HOURS = int(os.environ.get("GENLAB_ALERT_RENOTIFY_HOURS", "4"))
+
+
 def fetch_pending(conn, *, lookback_hours: int = 24) -> list[dict]:
-    """Return un-notified unresolved CRITICAL alerts in the window.
+    """Return CRITICAL alerts that need sending: never notified, OR unresolved
+    and last notified more than RENOTIFY_AFTER_HOURS ago.
 
     Case-insensitive severity match (``ILIKE 'critical'``) — the
     post-Wave-4 audit (2026-06-17) found this query was previously
@@ -92,15 +110,20 @@ def fetch_pending(conn, *, lookback_hours: int = 24) -> list[dict]:
         cur.execute("SET app.niche_id TO 'all'")
         cur.execute(
             """
-            SELECT id, niche_id, check_name, message, created_at
+            SELECT id, niche_id, check_name, message, created_at,
+                   notified_at,
+                   EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600.0 AS age_hours
             FROM pipeline_alerts
             WHERE severity ILIKE 'critical'
               AND resolved_at IS NULL
-              AND notified_at IS NULL
+              AND (
+                    notified_at IS NULL
+                 OR notified_at < NOW() - (%s::int || ' hours')::interval
+              )
               AND created_at >= NOW() - (%s::int || ' hours')::interval
             ORDER BY created_at ASC
             """,
-            (lookback_hours,),
+            (RENOTIFY_AFTER_HOURS, lookback_hours),
         )
         return [
             {
@@ -109,9 +132,23 @@ def fetch_pending(conn, *, lookback_hours: int = 24) -> list[dict]:
                 "check_name": row[2],
                 "message": row[3],
                 "created_at": row[4],
+                "notified_at": row[5],
+                "age_hours": float(row[6] or 0.0),
+                "is_reminder": row[5] is not None,
             }
             for row in cur.fetchall()
         ]
+
+
+def _decorate(alert: dict) -> dict:
+    """A reminder must announce itself, or it reads as a fresh incident."""
+    if not alert.get("is_reminder"):
+        return alert
+    hours = alert.get("age_hours", 0.0)
+    out = dict(alert)
+    out["message"] = (f"[STILL UNRESOLVED after {hours:.1f}h] "
+                      f"{alert.get('message', '')}")
+    return out
 
 
 def post_to_webhook(url: str, alert: dict) -> bool:
@@ -154,7 +191,6 @@ def mark_notified(conn, alert_ids: list[str]) -> int:
             UPDATE pipeline_alerts
             SET notified_at = NOW()
             WHERE id = ANY(%s::uuid[])
-              AND notified_at IS NULL
             """,
             (alert_ids,),
         )
@@ -219,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         posted_ids: list[str] = []
         failed = 0
         for alert in pending:
-            if post_to_webhook(url, alert):
+            if post_to_webhook(url, _decorate(alert)):
                 posted_ids.append(alert["id"])
             else:
                 failed += 1
