@@ -119,10 +119,29 @@ def test_footage_with_no_faces_scores_zero(tmp_path):
     assert signals.face_persistence(_clip(tmp_path, "nofaces.mp4", "testsrc2")) == 0.0
 
 
-def test_the_model_is_present_in_the_tree():
+def test_a_missing_model_raises_rather_than_scoring_zero():
     """A silently missing model would make every clip score 0.0 and read as
-    'no faces anywhere' -- a fail-open that looks like data."""
-    assert signals._MODEL.exists(), f"YuNet not at {signals._MODEL}"
+    'no faces anywhere' -- a fail-open that looks like data.
+
+    `genlab-core/models/` is gitignored on purpose (machine-local state; it is
+    in baseline_compare's UNTRACKED_DIRS), so the model's PRESENCE cannot be a
+    pin. What is pinned is that its absence is loud.
+    """
+    import cv2  # noqa: F401  -- the detector import must not be what fails
+
+    missing = Path("/nonexistent") / "yunet.onnx"
+    real, signals._MODEL = signals._MODEL, missing
+    try:
+        with pytest.raises(FileNotFoundError):
+            signals._detector(640, 480)
+    finally:
+        signals._MODEL = real
+
+
+@pytest.mark.skipif(not signals._MODEL.exists(), reason="YuNet model not fetched")
+def test_the_model_resolves_where_signals_expects_it():
+    assert signals._MODEL.name == "yunet.onnx"
+    assert signals._MODEL.parent.name == "models"
 
 
 @pytest.mark.skipif(not _FIX.is_dir(), reason="classifier corpus not present")

@@ -86,6 +86,13 @@ def speech_ratio(path: str) -> float:
 
 # ── faces ───────────────────────────────────────────────────────────────────
 
+#: YuNet lives in `genlab-core/models/`, which is GITIGNORED -- machine-local
+#: state, listed in baseline_compare's UNTRACKED_DIRS. Fetch it with:
+#:   curl -L -o genlab-core/models/yunet.onnx \
+#:     https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/\
+#: face_detection_yunet/face_detection_yunet_2023mar.onnx
+#: It is git-LFS upstream: fetching from the plain github.com URL yields a
+#: 131-byte pointer file that loads as a corrupt model rather than failing.
 _MODEL = Path(__file__).resolve().parents[3] / "models" / "yunet.onnx"
 FACE_SAMPLES = 16
 FACE_CONF = 0.60
