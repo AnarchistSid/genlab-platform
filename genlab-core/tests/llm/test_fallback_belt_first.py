@@ -182,3 +182,32 @@ class TestJsonModeUnwrapping:
         out = fb.call_belt_haiku_fallback("s", "u", 8, 0.0, json_mode=False)
         assert out == "prose {a:1} more"
         seen.clear()
+
+
+def test_every_llm_response_parse_site_is_wired_to_extract_json():
+    """Pins the N-site wire for the unwrap helper.
+
+    The judge passes no json_mode, so gating the unwrap on json_mode did not
+    reach it -- and the PRIMARY (Anthropic) has no structured-output mode
+    either, so prose wrapping is not belt-specific.
+
+    Deliberately weaker than "no bare json.loads in these files": these modules
+    also json.loads STORED DB FIELDS (auto_approval_gate's _safe_json_list and
+    its JSON-encoded validation_status), which must NOT be unwrapped. Nothing in
+    the source distinguishes an LLM body from a DB field by name -- both are
+    called `raw` -- so a stricter rule produces false positives and gets
+    disabled. This asserts the wire exists in each file; the behaviour itself is
+    pinned by the extraction tests above.
+    """
+    import pathlib
+
+    root = pathlib.Path(fb.__file__).resolve().parents[1]
+    sites = [
+        "scheduling/auto_approval_gate.py",
+        "learning/rationale_classifier.py",
+        "learning/post_rca.py",
+        "writing/caption_segments.py",
+        "writing/llm_hook_generator.py",
+    ]
+    missing = [r for r in sites if "extract_json(" not in (root / r).read_text()]
+    assert not missing, f"LLM-response parse sites not wired to extract_json: {missing}"

@@ -674,8 +674,6 @@ def _llm_judge_borderline(
         # rubric. The scratchpad prepend pushes the prompt well past
         # the 4000-char threshold; without scratchpad the helper
         # auto-skips (zero behavior change).
-        from genlab_core.llm.prompt_cache import with_prompt_cache
-
         # 2026-07-21: fallback to OpenAI on Anthropic exhaustion. The LLM
         # judge is the highest-stakes call in the pipeline (its verdict
         # ships content); losing it during Anthropic outages means
@@ -691,6 +689,7 @@ def _llm_judge_borderline(
             fallback_enabled,
             should_fallback,
         )
+        from genlab_core.llm.prompt_cache import with_prompt_cache
 
         openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
         cached_judge_system = with_prompt_cache(judge_system)
@@ -757,7 +756,15 @@ def _llm_judge_borderline(
 
         import json as _json
 
-        parsed = _json.loads(raw)
+        # Neither Anthropic (primary) nor belt (tier 1) has OpenAI's
+        # structured-output guarantee, so the verdict can arrive wrapped in
+        # prose. Parsing it bare threw 'Extra data: line 5 column 1' and the
+        # handler below quietly fell back to rule-based scoring -- errors=0,
+        # judge dead. extract_json returns the text unchanged when nothing
+        # parses, so a genuinely bad response still raises here.
+        from genlab_core.llm.fallback import extract_json
+
+        parsed = _json.loads(extract_json(raw))
         llm_approved = bool(parsed.get("approved", rule_decision.approved))
         llm_reason = str(parsed.get("reason", "")).strip()[:200] or "no_reason"
 

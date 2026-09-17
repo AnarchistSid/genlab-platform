@@ -633,10 +633,20 @@ def generate_hook(
     # or bare-title hooks which get rejected by pre_render_quality.
     from genlab_core.llm.fallback import (
         call_openai_fallback,
+    )
+    from genlab_core.llm.fallback import (
         cb_is_open as _cb_is_open,
+    )
+    from genlab_core.llm.fallback import (
         cb_record_exhaustion as _cb_record_exhaustion,
+    )
+    from genlab_core.llm.fallback import (
         cb_record_success as _cb_record_success,
+    )
+    from genlab_core.llm.fallback import (
         fallback_enabled as _fallback_enabled,
+    )
+    from genlab_core.llm.fallback import (
         should_fallback as _should_fallback,
     )
 
@@ -979,17 +989,26 @@ def _critique_hook_grounded(hook: str, story: dict, niche_id: str) -> tuple[bool
         # used for every hook in a pipeline run; with scratchpad
         # prepend the prompt is consistently >4000 chars so the
         # threshold gate fires.
-        from genlab_core.llm.prompt_cache import with_prompt_cache
-
         # 2026-07-21: OpenAI fallback on Anthropic exhaustion.
         from genlab_core.llm.fallback import (
             call_openai_fallback as _call_openai_fallback,
+        )
+        from genlab_core.llm.fallback import (
             cb_is_open as _cb_is_open,
+        )
+        from genlab_core.llm.fallback import (
             cb_record_exhaustion as _cb_record_exhaustion,
+        )
+        from genlab_core.llm.fallback import (
             cb_record_success as _cb_record_success,
+        )
+        from genlab_core.llm.fallback import (
             fallback_enabled as _fallback_enabled,
+        )
+        from genlab_core.llm.fallback import (
             should_fallback as _should_fallback,
         )
+        from genlab_core.llm.prompt_cache import with_prompt_cache
 
         _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
         raw = ""
@@ -1054,7 +1073,9 @@ def _critique_hook_grounded(hook: str, story: dict, niche_id: str) -> tuple[bool
             if raw.startswith("json"):
                 raw = raw[4:].strip()
 
-        parsed = json.loads(raw)
+        from genlab_core.llm.fallback import extract_json
+
+        parsed = json.loads(extract_json(raw))
         grounded = bool(parsed.get("grounded", True))
         reason = str(parsed.get("reason", "")).strip()[:80] or "no_reason"
         logger.info(
@@ -1173,10 +1194,20 @@ def _rewrite_hook(
         # 2026-07-21: OpenAI fallback on Anthropic exhaustion.
         from genlab_core.llm.fallback import (
             call_openai_fallback as _call_openai_fallback,
+        )
+        from genlab_core.llm.fallback import (
             cb_is_open as _cb_is_open,
+        )
+        from genlab_core.llm.fallback import (
             cb_record_exhaustion as _cb_record_exhaustion,
+        )
+        from genlab_core.llm.fallback import (
             cb_record_success as _cb_record_success,
+        )
+        from genlab_core.llm.fallback import (
             fallback_enabled as _fallback_enabled,
+        )
+        from genlab_core.llm.fallback import (
             should_fallback as _should_fallback,
         )
 
@@ -1367,10 +1398,20 @@ def generate_platform_hooks(
         # 2026-07-21: OpenAI fallback on Anthropic exhaustion.
         from genlab_core.llm.fallback import (
             call_openai_fallback as _call_openai_fallback,
+        )
+        from genlab_core.llm.fallback import (
             cb_is_open as _cb_is_open,
+        )
+        from genlab_core.llm.fallback import (
             cb_record_exhaustion as _cb_record_exhaustion,
+        )
+        from genlab_core.llm.fallback import (
             cb_record_success as _cb_record_success,
+        )
+        from genlab_core.llm.fallback import (
             fallback_enabled as _fallback_enabled,
+        )
+        from genlab_core.llm.fallback import (
             should_fallback as _should_fallback,
         )
 

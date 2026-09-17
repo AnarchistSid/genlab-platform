@@ -352,7 +352,7 @@ def belt_fallback_enabled() -> bool:
     return os.environ.get("GENLAB_LLM_FALLBACK_BELT", "1").strip() != "0"
 
 
-def _extract_json(text: str) -> str:
+def extract_json(text: str) -> str:
     """Return the first complete JSON value embedded in ``text``.
 
     OpenAI has a real structured-output mode (``response_format``) that
@@ -518,7 +518,7 @@ def call_belt_haiku_fallback(
     text = str(out.get("response") or "").strip()
     if json_mode and text:
         # Anthropic has no structured-output mode; unwrap the prose.
-        text = _extract_json(text)
+        text = extract_json(text)
     if not text:
         raise RuntimeError(
             f"belt returned status=completed with EMPTY content "
@@ -701,3 +701,7 @@ __all__ = [
     "with_openai_fallback",
     "CircuitOpen",
 ]
+
+
+# Back-compat alias; `extract_json` is the public name.
+_extract_json = extract_json

@@ -235,7 +235,9 @@ def _parse_haiku_response(raw: str) -> tuple[str, float]:
         if cleaned.lower().startswith("json"):
             cleaned = cleaned[4:].strip()
     try:
-        parsed = json.loads(cleaned)
+        from genlab_core.llm.fallback import extract_json
+
+        parsed = json.loads(extract_json(cleaned))
     except (json.JSONDecodeError, TypeError):
         logger.debug("[rationale] non-JSON Haiku response: %r", raw[:120])
         return (UNCATEGORIZED, 0.0)
@@ -313,17 +315,26 @@ def classify_rejection(
         # plain-string passthrough until the prompt grows (or the
         # threshold is lowered via env). Wiring through the helper now
         # keeps the call site future-proof without behavior change.
-        from genlab_core.llm.prompt_cache import with_prompt_cache
-
         # 2026-07-21: OpenAI fallback on Anthropic exhaustion.
         from genlab_core.llm.fallback import (
             call_openai_fallback as _call_openai_fallback,
+        )
+        from genlab_core.llm.fallback import (
             cb_is_open as _cb_is_open,
+        )
+        from genlab_core.llm.fallback import (
             cb_record_exhaustion as _cb_record_exhaustion,
+        )
+        from genlab_core.llm.fallback import (
             cb_record_success as _cb_record_success,
+        )
+        from genlab_core.llm.fallback import (
             fallback_enabled as _fallback_enabled,
+        )
+        from genlab_core.llm.fallback import (
             should_fallback as _should_fallback,
         )
+        from genlab_core.llm.prompt_cache import with_prompt_cache
 
         _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
         raw_text = ""

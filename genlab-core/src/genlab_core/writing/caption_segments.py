@@ -254,7 +254,9 @@ def parse_llm_response(raw_text: str) -> CaptionSegmentsResult | None:
         return None
 
     try:
-        data = json.loads(blob)
+        from genlab_core.llm.fallback import extract_json
+
+        data = json.loads(extract_json(blob))
     except json.JSONDecodeError as exc:
         logger.debug("[caption_segments] JSON parse failed: %s", exc)
         return None
@@ -369,10 +371,20 @@ def generate_caption_segments(
     # quality (fallback captions ≠ template captions).
     from genlab_core.llm.fallback import (
         call_openai_fallback,
+    )
+    from genlab_core.llm.fallback import (
         cb_is_open as _cb_is_open,
+    )
+    from genlab_core.llm.fallback import (
         cb_record_exhaustion as _cb_record_exhaustion,
+    )
+    from genlab_core.llm.fallback import (
         cb_record_success as _cb_record_success,
+    )
+    from genlab_core.llm.fallback import (
         fallback_enabled as _fallback_enabled,
+    )
+    from genlab_core.llm.fallback import (
         should_fallback as _should_fallback,
     )
 

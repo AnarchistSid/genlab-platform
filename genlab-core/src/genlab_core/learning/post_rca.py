@@ -204,17 +204,26 @@ def analyze_post(
         # threshold) so the helper passes it through as plain string
         # — no behavior change. Wired now so the call site is future-
         # proof if the prompt grows or the threshold drops.
-        from genlab_core.llm.prompt_cache import with_prompt_cache
-
         # 2026-07-21: OpenAI fallback on Anthropic exhaustion.
         from genlab_core.llm.fallback import (
             call_openai_fallback as _call_openai_fallback,
+        )
+        from genlab_core.llm.fallback import (
             cb_is_open as _cb_is_open,
+        )
+        from genlab_core.llm.fallback import (
             cb_record_exhaustion as _cb_record_exhaustion,
+        )
+        from genlab_core.llm.fallback import (
             cb_record_success as _cb_record_success,
+        )
+        from genlab_core.llm.fallback import (
             fallback_enabled as _fallback_enabled,
+        )
+        from genlab_core.llm.fallback import (
             should_fallback as _should_fallback,
         )
+        from genlab_core.llm.prompt_cache import with_prompt_cache
 
         user = json.dumps(context, indent=2)
         _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -269,7 +278,9 @@ def analyze_post(
             if raw.startswith("json"):
                 raw = raw[4:].strip()
 
-        parsed = json.loads(raw)
+        from genlab_core.llm.fallback import extract_json
+
+        parsed = json.loads(extract_json(raw))
         likely_cause = str(parsed.get("likely_cause", "unknown")).strip()[:32] or "unknown"
         # Whitelist categories so a free-text LLM response can't
         # poison downstream aggregations.
