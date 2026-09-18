@@ -53,6 +53,18 @@ done
 
 WT_B="${PARENT}/.bc-base"; WT_H="${PARENT}/.bc-head"
 cleanup() {
+  # KILL THE DETACHED CHILDREN FIRST. `run_one` launches pytest under
+  # setsid/nohup so it survives a hung driver -- which also means killing the
+  # driver leaves it running. Measured 2026-09-18: a pytest orphaned from a
+  # killed run was still alive nearly five hours later, and when the next
+  # comparison reached its head side the two shared .bc-head and DEADLOCKED at
+  # 59% with both processes at 0% CPU. The harness's own run_one comment says
+  # "sequential only -- never concurrent"; nothing was enforcing it across runs.
+  for _pidf in "$LOG_B.pid" "$LOG_H.pid"; do
+    [[ -f "$_pidf" ]] && kill -9 "$(cat "$_pidf")" 2>/dev/null
+  done
+  pkill -9 -f "$WT_B/.venv/bin/python -m pytest" 2>/dev/null
+  pkill -9 -f "$WT_H/.venv/bin/python -m pytest" 2>/dev/null
   git -C "$SRC" worktree remove --force "$WT_B" 2>/dev/null
   git -C "$SRC" worktree remove --force "$WT_H" 2>/dev/null
   rm -rf "$WT_B" "$WT_H" 2>/dev/null
@@ -64,6 +76,15 @@ die() { say "ABORT: $*"; exit 2; }
 
 # ---------------------------------------------------------------- worktrees
 say "=== worktrees ==="
+# A stale pytest from a previous run poisons this one: same worktree, same
+# .tmp, and the deadlock looks like a slow suite rather than a collision.
+for _wt in "$WT_B" "$WT_H"; do
+  if pgrep -f "$_wt/.venv/bin/python -m pytest" >/dev/null 2>&1; then
+    say "  stale pytest still running on $(basename "$_wt") — killing it before we start"
+    pkill -9 -f "$_wt/.venv/bin/python -m pytest" 2>/dev/null
+    sleep 2
+  fi
+done
 cleanup
 git -C "$SRC" worktree add -q --detach "$WT_B" "$BASE" || die "cannot create base worktree at $BASE"
 git -C "$SRC" worktree add -q --detach "$WT_H" "$HEAD_REF" || die "cannot create head worktree at $HEAD_REF"
