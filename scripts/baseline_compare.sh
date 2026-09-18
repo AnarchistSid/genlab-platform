@@ -96,8 +96,6 @@ if [[ -s "$LOCK" ]]; then
     die "another baseline_compare is running (pid $_other). One at a time — two share the worktrees and deadlock."
   fi
 fi
-echo $$ >"$LOCK"
-
 say "=== worktrees ==="
 # A stale pytest from a previous run poisons this one: same worktree, same
 # .tmp, and the deadlock looks like a slow suite rather than a collision.
@@ -109,6 +107,10 @@ for _wt in "$WT_B" "$WT_H"; do
   fi
 done
 cleanup
+# AFTER cleanup(): that call is what clears the previous run's worktrees, and it
+# also removes a lock whose pid matches -- which is this process's own.
+echo $$ >"$LOCK"
+
 git -C "$SRC" worktree add -q --detach "$WT_B" "$BASE" || die "cannot create base worktree at $BASE"
 git -C "$SRC" worktree add -q --detach "$WT_H" "$HEAD_REF" || die "cannot create head worktree at $HEAD_REF"
 say "  base $(git -C "$WT_B" rev-parse --short HEAD)   head $(git -C "$WT_H" rev-parse --short HEAD)"
