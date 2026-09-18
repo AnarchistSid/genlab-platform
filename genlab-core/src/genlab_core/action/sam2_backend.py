@@ -49,6 +49,10 @@ CHECKPOINT = Path(
 )
 MODEL_CFG = os.environ.get("GENLAB_SAM2_CFG", "configs/sam2.1/sam2.1_hiera_b+.yaml")
 
+#: A seed mask covering more than this share of the FRAME is background or a
+#: merged pair, not one fighter. From the approved `u5_vote.silhouettes`.
+MAX_SEED_FRAME_FRAC = 0.60
+
 
 def _decode_frames(clip: str, n: int | None = None) -> list[np.ndarray]:
     """RGB frames from a clip, via ffmpeg rawvideo.
@@ -180,9 +184,21 @@ def mattes_for(job: dict, *, device: str = "mps"):
         )
         # The LARGEST mask, not the highest-scoring one: the top-scored mask is
         # routinely a torso or a sleeve, and the seed must be a whole body.
-        # The LARGEST mask, not the highest-scoring one: the top-scored mask is
-        # routinely a torso or a sleeve, and the seed must be a whole body.
-        best = max(masks, key=lambda m: float((m > 0.5).sum()))
+        # The LARGEST PLAUSIBLE mask, not the highest-scoring one and not the
+        # largest outright. SAM2 returns subpart / part / whole, and a click on
+        # the trunks scores the TRUNKS highest -- the whole-body masks are its
+        # lowest-scored and are the only ones that separate a standing fighter
+        # from a downed one. But "largest" alone takes a merged blob covering
+        # most of the frame whenever SAM2 offers one, which is what the approved
+        # `u5_vote.silhouettes` guards against by discarding anything over 60% of
+        # the FRAME (distinct from is_garment_not_person's 60% of the
+        # FOREGROUND) and taking the largest of the rest.
+        areas = np.array([float((m > 0.5).mean()) for m in masks])
+        plausible = np.where(areas <= MAX_SEED_FRAME_FRAC)[0]
+        pick = (
+            int(plausible[np.argmax(areas[plausible])]) if len(plausible) else int(np.argmin(areas))
+        )
+        best = masks[pick]
         # NO garment check here. `build_mattes` already runs
         # `is_garment_not_person` on this mask and RECORDS the rejection in
         # MatteReport.rejected_garment. A duplicate here returned {} instead,
