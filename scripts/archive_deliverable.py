@@ -164,6 +164,27 @@ def build_scripts(deliverable: Path) -> list[Path]:
     return out
 
 
+def _mattes_are_reel_space(inputs: Path, reel=(1080, 1920)) -> bool:
+    """True when the archived mattes are already the size the reel renders."""
+    # Match on the PATH, not the directory NAME: the WWE archive nests them as
+    # inputs/matte/knight/*.png, so the dir literally called "matte" holds no
+    # PNGs at all and a name test finds nothing.
+    for d in inputs.rglob("*"):
+        if not d.is_dir() or "matte" not in str(d.relative_to(inputs)):
+            continue
+        pngs = sorted(d.glob("*.png"))
+        if not pngs:
+            continue
+        try:
+            from PIL import Image
+
+            with Image.open(pngs[0]) as im:
+                return im.size == reel
+        except Exception:  # noqa: BLE001 — a check must not fail the check
+            return False
+    return False
+
+
 def manifest_complete(deliverable: Path) -> list[Gap]:
     """The gaps that stop this deliverable being reproducible."""
     gaps: list[Gap] = []
@@ -196,6 +217,70 @@ def manifest_complete(deliverable: Path) -> list[Gap]:
 
     if not any(k.endswith((".yaml", ".yml")) for k in man.get("files", {})):
         gaps.append(Gap("missing_kit", "no kit YAML snapshot in the manifest"))
+
+    # A DELIVERABLE WITH MATTES MUST CARRY THE CROP GEOMETRY.
+    #
+    # `crop_rect_for()` needs mag / cx / cy plus the chrome-cropped source
+    # height, or the archived mattes cannot be reproduced in reel space. UFC-05
+    # was archived with only its FRAMING plan (u1/plan.json, mag 1.7778) while
+    # the crop used a different file (w2/plan.json, mag 2.0361, src_h 943) — the
+    # archive looked complete and the matte could not be rebuilt from it.
+    #
+    # Required by CAPABILITY, not by filename: the WWE line carries one plan
+    # (out/src/seg/mag/cx/cy/torso_w_src) that serves both roles, and demanding
+    # a `crop_plan.json` there was this check over-fitting the UFC shape to
+    # every deliverable. src_h may be per-row or derivable from chrome.json's
+    # video_rect height.
+    # Actual matte PNGs, not a filename containing "matte". CONTENT-19 v6 is a
+    # SPLICE — it reuses an approved segment's rendered frames and has no mattes
+    # of its own — but it ships a proof image called `..._matte_overlays.png`,
+    # which a substring test reads as "this deliverable has mattes".
+    inputs_dir = deliverable / "inputs"
+    has_mattes = (
+        any(
+            p.suffix == ".png" and "matte" in str(p.relative_to(inputs_dir))
+            for p in inputs_dir.rglob("*.png")
+        )
+        if inputs_dir.is_dir()
+        else False
+    )
+    if has_mattes:
+        inputs = deliverable / "inputs"
+        # Mattes ALREADY in reel space need no crop geometry — they were
+        # produced on the crop rather than on the native frame. The two ACTION
+        # arcs differ here and the difference is real: the WWE line ran SAM2 on
+        # the 1080x1920 crop (v10/frames), UFC-05 on the native 1920x1080
+        # (w2/frames) and warped. Demanding a crop plan of the first was this
+        # check generalising from the second.
+        if _mattes_are_reel_space(inputs):
+            return gaps
+        plans = [p for p in (inputs / "crop_plan.json", inputs / "plan.json") if p.exists()]
+        if not plans:
+            gaps.append(Gap("missing_input", "mattes archived but no crop plan (mag/cx/cy)"))
+        else:
+            usable = False
+            for p in plans:
+                try:
+                    rows = json.loads(p.read_text())
+                except (OSError, ValueError):
+                    continue
+                rows = rows if isinstance(rows, list) else list(rows.values())
+                if not rows or not isinstance(rows[0], dict):
+                    continue
+                if not {"mag", "cx", "cy"} <= set(rows[0]):
+                    continue
+                has_h = any("src_h" in r for r in rows) or (inputs / "chrome.json").exists()
+                if has_h:
+                    usable = True
+                    break
+            if not usable:
+                gaps.append(
+                    Gap(
+                        "missing_input",
+                        "no plan carries mag/cx/cy plus a source height (per-row src_h or "
+                        "chrome.json) — crop_rect_for cannot rebuild the mattes in reel space",
+                    )
+                )
 
     for rel, digest in sorted(man.get("files", {}).items()):
         f = deliverable / rel
