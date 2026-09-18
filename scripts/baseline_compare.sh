@@ -159,8 +159,21 @@ fi
 # "not network" here would silently re-admit the whole integration suite —
 # a filter that widens what it is meant to narrow.
 MARKEXPR="${BC_MARKEXPR:-not integration and not network}"
-PYARGS=(-q -p no:cacheprovider --timeout=300 -m "$MARKEXPR" "${DES[@]}")
-[[ "$COLLECT_ONLY" == 1 ]] && PYARGS=(-q -p no:cacheprovider --collect-only -m "$MARKEXPR" "${DES[@]}")
+# PER-SIDE TIMEOUTS. A HANG IS A FAILURE AT ANY TIMEOUT, so the side carrying
+# the hangs can be bounded without changing set (a) membership — only the wall
+# clock moves. The 2026-09-17 base ref predates the fail-fast pool fix and hangs
+# 108 times; at 300 s that is ~3.8 hours of waiting to learn what 15 s tells you.
+# Head keeps the full 300 s so a genuine slow test there is not misread as a hang.
+BASE_TIMEOUT="${BC_BASE_TIMEOUT:-300}"
+HEAD_TIMEOUT="${BC_HEAD_TIMEOUT:-300}"
+_pyargs() {   # $1 = timeout seconds
+  if [[ "$COLLECT_ONLY" == 1 ]]; then
+    PYARGS=(-q -p no:cacheprovider --collect-only -m "$MARKEXPR" "${DES[@]}")
+  else
+    PYARGS=(-q -p no:cacheprovider --timeout="$1" -m "$MARKEXPR" "${DES[@]}")
+  fi
+}
+_pyargs "$BASE_TIMEOUT"
 say "=== marker filter: -m '$MARKEXPR' ==="
 for WT in "$WT_B" "$WT_H"; do
   _all=$( cd "$WT/genlab-core" && "$WT/.venv/bin/python" -m pytest -q -p no:cacheprovider \
@@ -209,8 +222,16 @@ run_one() {  # $1=worktree $2=logfile ; sequential only — never concurrent
 }
 say "=== runs (sequential) ==="
 VERDICT_INVALID=0
-run_one "$WT_B" "$LOG_B"; say "  base: $(grep -cE '^(FAILED|ERROR) ' "$LOG_B") failing ids"
-run_one "$WT_H" "$LOG_H"; say "  head: $(grep -cE '^(FAILED|ERROR) ' "$LOG_H") failing ids"
+_t0=$SECONDS
+_pyargs "$BASE_TIMEOUT"
+run_one "$WT_B" "$LOG_B"
+_base_secs=$((SECONDS - _t0))
+say "  base: $(grep -cE '^(FAILED|ERROR) ' "$LOG_B") failing ids  (timeout ${BASE_TIMEOUT}s, ${_base_secs}s wall)"
+_t1=$SECONDS
+_pyargs "$HEAD_TIMEOUT"
+run_one "$WT_H" "$LOG_H"
+_head_secs=$((SECONDS - _t1))
+say "  head: $(grep -cE '^(FAILED|ERROR) ' "$LOG_H") failing ids  (timeout ${HEAD_TIMEOUT}s, ${_head_secs}s wall)"
 
 if [[ "$COLLECT_ONLY" == 1 ]]; then
   cb=$(grep -cE '::' "$LOG_B"); ch=$(grep -cE '::' "$LOG_H")
