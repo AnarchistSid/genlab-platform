@@ -53,6 +53,7 @@ done
 
 WT_B="${PARENT}/.bc-base"; WT_H="${PARENT}/.bc-head"
 cleanup() {
+  [[ -f "${LOCK:-}" && "$(cat "${LOCK:-/dev/null}" 2>/dev/null)" == "$$" ]] && rm -f "$LOCK"
   # KILL THE DETACHED CHILDREN FIRST. `run_one` launches pytest under
   # setsid/nohup so it survives a hung driver -- which also means killing the
   # driver leaves it running. Measured 2026-09-18: a pytest orphaned from a
@@ -75,6 +76,28 @@ say() { printf '%s\n' "$*"; }
 die() { say "ABORT: $*"; exit 2; }
 
 # ---------------------------------------------------------------- worktrees
+# ONE COMPARISON AT A TIME, ENFORCED.
+#
+# Two drivers on the same source share .bc-base and .bc-head, and the second to
+# reach a side deadlocks against the first: both pytest processes sit at 0% CPU
+# on the same worktree and the run looks merely slow. Measured twice on
+# 2026-09-18 — once from a pytest orphaned by a killed driver, once from two
+# drivers launched for the same refs. The stale-pytest check below catches the
+# first shape; only this catches the second.
+#
+# READ the pid before opening the file. An earlier version did `exec 9>"$LOCK"`
+# first, which TRUNCATES it, so every process read an empty lock and the check
+# never fired — it looked like it worked because the second run then failed on
+# an existing worktree instead.
+LOCK="${TMPDIR:-/tmp}/baseline_compare.lock"
+if [[ -s "$LOCK" ]]; then
+  _other=$(cat "$LOCK" 2>/dev/null)
+  if [[ -n "$_other" ]] && [[ "$_other" != "$$" ]] && kill -0 "$_other" 2>/dev/null; then
+    die "another baseline_compare is running (pid $_other). One at a time — two share the worktrees and deadlock."
+  fi
+fi
+echo $$ >"$LOCK"
+
 say "=== worktrees ==="
 # A stale pytest from a previous run poisons this one: same worktree, same
 # .tmp, and the deadlock looks like a slow suite rather than a collision.
