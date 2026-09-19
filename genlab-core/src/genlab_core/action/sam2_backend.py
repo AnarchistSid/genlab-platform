@@ -54,7 +54,9 @@ MODEL_CFG = os.environ.get("GENLAB_SAM2_CFG", "configs/sam2.1/sam2.1_hiera_b+.ya
 MAX_SEED_FRAME_FRAC = 0.60
 
 
-def _decode_frames(clip: str, n: int | None = None) -> list[np.ndarray]:
+def _decode_frames(
+    clip: str, n: int | None = None, *, start_s: float = 0.0, duration_s: float | None = None
+) -> list[np.ndarray]:
     """RGB frames from a clip, via ffmpeg rawvideo.
 
     Decoding to a numpy array rather than to a directory of JPEGs: SAM2's video
@@ -78,23 +80,18 @@ def _decode_frames(clip: str, n: int | None = None) -> list[np.ndarray]:
         text=True,
     ).stdout.strip()
     w, h = (int(x) for x in probe.split(",")[:2])
-    raw = subprocess.run(
-        [
-            "ffmpeg",
-            "-hide_banner",
-            "-nostats",
-            "-v",
-            "error",
-            "-i",
-            clip,
-            "-pix_fmt",
-            "rgb24",
-            "-f",
-            "rawvideo",
-            "-",
-        ],
-        capture_output=True,
-    ).stdout
+    cmd = ["ffmpeg", "-hide_banner", "-nostats", "-v", "error"]
+    if start_s:
+        # -ss BEFORE -i seeks to the nearest KEYFRAME, which silently shifts
+        # every index; after -i it decodes and discards, which is slower and
+        # EXACT. An index off by one frame picks the wrong finish.
+        cmd += ["-i", clip, "-ss", f"{start_s:.3f}"]
+    else:
+        cmd += ["-i", clip]
+    if duration_s:
+        cmd += ["-t", f"{duration_s:.3f}"]
+    cmd += ["-pix_fmt", "rgb24", "-f", "rawvideo", "-"]
+    raw = subprocess.run(cmd, capture_output=True).stdout
     total = len(raw) // (w * h * 3)
     frames = np.frombuffer(raw[: total * w * h * 3], np.uint8).reshape(total, h, w, 3)
     return list(frames[:n] if n else frames)
@@ -275,3 +272,89 @@ def _frames_dir(frames: list[np.ndarray]) -> str:
     for i, f in enumerate(frames):
         Image.fromarray(f).save(f"{d}/{i:05d}.jpg", quality=95)
     return d
+
+
+def plan_backends(job: dict, *, device: str = "mps") -> dict:
+    """The four callables `worker.plan.plan()` needs, wired to real models.
+
+    Built here rather than in worker/plan.py so that module stays free of torch
+    and rembg — it is the sequencing, and its pins replay the archive without a
+    GPU. Frames are decoded ONCE and sliced per candidate: re-decoding for each
+    of three windows was measured at most of the plan's wall time.
+    """
+    import numpy as np
+
+    clip = job.get("clip_path") or job.get("clip") or ""
+    if not clip or not Path(clip).exists():
+        raise FileNotFoundError(f"clip not readable: {clip!r}")
+
+    fps = float(job.get("fps", 30.0))
+
+    # DECODE ONLY THE SPAN THE CANDIDATES COVER. `_decode_frames` reads the
+    # whole clip into memory: the UFC source is 754 s of 1920x1080, which is
+    # ~140 GB of frames. Candidates are a handful of 3.2 s windows scattered
+    # across it, so the span from the earliest to the latest — plus the window
+    # length — is all that is ever indexed.
+    cands = job.get("candidates") or []
+    if cands:
+        starts = [float(c.get("start_s", 0.0)) for c in cands]
+        longest = max(int(c.get("frames", 96)) for c in cands)
+        lo_s = max(min(starts) - 1.0, 0.0)
+        span_s = (max(starts) - lo_s) + longest / fps + 2.0
+        all_frames = _decode_frames(clip, start_s=lo_s, duration_s=span_s)
+        frame_offset = int(round(lo_s * fps))
+    else:
+        all_frames = _decode_frames(clip)
+        frame_offset = 0
+    fg = _foreground_fn(all_frames)
+    image_pred, video_pred, dev = _predictors(device)
+    seed_spec = dict(job.get("subject_hint") or {})
+
+    def frames_for(start_s: float, n: int):
+        # Indices are into the DECODED span, not the clip, so the offset is
+        # subtracted here rather than leaking into every caller.
+        lo = int(round(start_s * fps)) - frame_offset
+        lo = max(lo, 0)
+        return list(range(lo, min(lo + n, len(all_frames))))
+
+    def silhouette_fn(i: int) -> dict[float, np.ndarray]:
+        """One SAM2 image call; largest plausible mask; negative on the other."""
+        if not isinstance(i, int) or not 0 <= i < len(all_frames):
+            return {}
+        rgb, foreground = all_frames[i], fg(i)
+        min_px = int(0.0008 * rgb.shape[0] * rgb.shape[1])
+        clicks = derive_clicks(rgb, foreground, seed_spec, min_px)
+        if clicks is None:
+            return {}
+        image_pred.set_image(rgb)
+        pts = [clicks.positive] + ([clicks.negative] if clicks.negative else [])
+        labels = [1] + ([0] if clicks.negative else [])
+        masks, _, _ = image_pred.predict(
+            point_coords=np.asarray(pts, np.float32),
+            point_labels=np.asarray(labels, np.int32),
+            multimask_output=True,
+        )
+        areas = np.array([float((m > 0.5).mean()) for m in masks])
+        ok = np.where(areas <= MAX_SEED_FRAME_FRAC)[0]
+        pick = int(ok[np.argmax(areas[ok])]) if len(ok) else int(np.argmin(areas))
+        return {float(seed_spec.get("hue_deg", 0.0)): masks[pick].astype(np.float32)}
+
+    def propagate_fn(seeds: dict) -> dict:
+        import torch
+
+        state = video_pred.init_state(video_path=_frames_dir(all_frames))
+        for f, mask in seeds.items():
+            video_pred.add_new_mask(
+                state, frame_idx=f, obj_id=1, mask=torch.as_tensor(mask > 0.5, device=dev)
+            )
+        return {
+            idx: (logits[0] > 0).cpu().numpy().astype(np.float32)[0]
+            for idx, _ids, logits in video_pred.propagate_in_video(state)
+        }
+
+    return {
+        "frames_for": frames_for,
+        "silhouette_fn": silhouette_fn,
+        "foreground_fn": fg,
+        "propagate_fn": propagate_fn,
+    }

@@ -34,6 +34,11 @@ sys.path.insert(0, str(REPO / "genlab-core" / "src"))
 
 from genlab_core.action.matte_daemon import serve  # noqa: E402
 from genlab_core.action.matte_queue import LocalTransport, SSHTransport  # noqa: E402
+from genlab_core.action.matte_worker import (  # noqa: E402
+    SEED_SPEC_FIELDS,
+    SkipReason,
+    seed_spec_complete,
+)
 
 logger = logging.getLogger("matte_worker")
 JOB_LOG = REPO / ".runtime" / "matte_worker_jobs.jsonl"
@@ -86,6 +91,32 @@ def make_matte_fn(*, device: str = "mps", transport=None, workdir: Path | None =
                     "seconds": round(time.time() - t0, 1),
                 }
 
+        # PLAN JOBS answer what needs SAM2 — the silhouette vote, the window
+        # pick, the finish frame — and return the mattes in the SAME round trip.
+        # They carry candidates rather than a settled subject, so the spec check
+        # below does not apply to them.
+        if job.get("plan"):
+            return _run_plan(job, job_id, device, t0)
+
+        # A partial spec is REFUSED, not defaulted. Hue alone plus default
+        # sat/val floors put the seed on the red cage for UFC-05's dark navy
+        # subject: 8 of 9 annotation frames rejected, half the clip unmasked.
+        #
+        # This check was written once before and never landed in the file — I
+        # reported the worker as refusing partial specs while it was silently
+        # accepting them. Verified present this time.
+        spec = job.get("subject_colour")
+        if not seed_spec_complete(spec):
+            missing = [
+                k for k in SEED_SPEC_FIELDS if not isinstance((spec or {}).get(k), int | float)
+            ]
+            return {
+                "frames": 0,
+                "reason": SkipReason.SEED_SPEC_INCOMPLETE,
+                "detail": f"subject_colour missing {missing}",
+                "seconds": round(time.time() - t0, 1),
+            }
+
         try:
             from genlab_core.action import sam2_backend as backend  # type: ignore
         except ImportError:
@@ -115,6 +146,50 @@ def make_matte_fn(*, device: str = "mps", transport=None, workdir: Path | None =
         return result
 
     return matte_fn
+
+
+def _run_plan(job: dict, job_id: str, device: str, t0: float) -> dict:
+    """Vote, pick the window, derive the finish, matte it — one round trip.
+
+    The stage cannot do any of this: the vote is ~20 SAM2 image calls per
+    candidate, and SAM2 on the 2-core VPS measured 138 minutes for 96 frames
+    with OOM. Returning the plan and the mattes together means the stage never
+    posts a second job for two halves of one decision.
+    """
+    from genlab_core.worker.plan import plan as run_plan
+
+    try:
+        from genlab_core.action import sam2_backend as backend
+    except ImportError:
+        return {
+            "frames": 0,
+            "reason": "sam2_backend not available on this worker",
+            "seconds": round(time.time() - t0, 1),
+        }
+
+    res = run_plan(job, **backend.plan_backends(job, device=device))
+    payload = res.as_payload()
+    payload["frames"] = res.frames
+    payload["seconds"] = round(time.time() - t0, 1)
+    if not res.ok:
+        payload.setdefault("reason", "plan produced no window")
+        _log_job(job_id, job.get("clip_path", ""), payload)
+        return payload
+
+    mask_dir = REPO / ".runtime" / "matte_out" / job_id
+    mask_dir.mkdir(parents=True, exist_ok=True)
+    _write_masks(res.mattes, mask_dir)
+    payload["mask_dir"] = str(mask_dir)
+    _log_job(job_id, job.get("clip_path", ""), payload)
+    return payload
+
+
+def _write_masks(masks: dict, dst) -> None:
+    import numpy as np
+    from PIL import Image
+
+    for f, m in sorted(masks.items()):
+        Image.fromarray((np.asarray(m) > 0.5).astype("uint8") * 255).save(dst / f"{int(f):03d}.png")
 
 
 def _log_job(job_id: str, clip: str, result: dict) -> None:
