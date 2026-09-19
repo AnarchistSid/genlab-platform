@@ -28,13 +28,17 @@ from dataclasses import asdict, dataclass, field
 import numpy as np
 
 from genlab_core.action.effects._ops import dilate
-from genlab_core.action.finish import _centroid as _centroid_of
 from genlab_core.action.finish import (
+    MIN_VALID_SAMPLES,
+    FinishFailure,
+    audio_bound,
     audio_onset_frame,
     descent_frame,
+    invariance_spread_s,
     is_window_invariant,
     largest_component,
     subject_velocity_peak,
+    velocity_samples,
 )
 from genlab_core.action.finish import resolve as finish_resolve
 from genlab_core.action.matte import build_mattes, crop_rect_for, warp_to_crop
@@ -127,6 +131,10 @@ class PlanResult:
     area_per_frame: list = field(default_factory=list)
     empty_count: int = 0
     candidates: list = field(default_factory=list)
+    #: {"n", "spread_s", "verdict", "absolute_s"}. verdict is "untested" on n=1
+    #: — one window cannot disagree with itself, and calling that a pass is how
+    #: a gate comes to certify something it never measured.
+    invariance: dict = field(default_factory=dict)
     seconds: float = 0.0
 
     def as_payload(self) -> dict:
@@ -155,6 +163,7 @@ def plan(
     cuts_in_window=None,
     coarse_foreground_fn=None,
     seed_mask_fn=None,
+    quarter_track_fn=None,
     half_silhouette_fn=None,
     audio_onset_fn=None,
     release_span=None,
@@ -203,6 +212,8 @@ def plan(
         logger.info("[plan] no motion scores on candidates — all %d voted", len(ranked))
 
     sil = half_silhouette_fn or silhouette_fn
+    if rss_mb:
+        logger.info("[plan] RSS before the vote: %d MB", rss_mb())
     for cand in ranked:
         start = float(cand.get("start_s", 0.0))
         n = int(cand.get("frames", 96))
@@ -246,6 +257,8 @@ def plan(
             cr.presence = presence_fraction(
                 [tail_silhouettes.get(f, np.zeros((2, 2))) for f in tail]
             )
+        if rss_mb:
+            logger.info("[plan] RSS after vote %.2fs: %d MB", start, rss_mb())
         results.append(cr)
 
     survivors = [c for c in results if c.survived and c.presence >= PRESENCE_MIN_FRAMES]
@@ -282,29 +295,65 @@ def plan(
     for c in survivors:
         n = _frames_of(c)
         wf = frames_for(c.start_s, n)
-        sub = [_centroid_of(seed_mask_fn(f)) if seed_mask_fn else None for f in wf]
-        samples, right_mass, left_mass = [], 0.0, 0.0
+
+        # THE AUDIO BOUNDS. Window-invariant, and late by a known ~0.3 s.
+        a_f = onset(c.start_s, n)
+        if a_f is None:
+            c.finish_reason = FinishFailure.NO_AUDIO
+            logger.info("[finish] candidate %.2fs -> None (%s)", c.start_s, c.finish_reason)
+            continue
+        lo_b, hi_b = audio_bound(a_f, fps)
+
+        # THE VIDEO PICKS, inside the bracket. Only the bracketed frames are
+        # sampled: the seed is cheap but not free, and everything outside is
+        # work whose answer would be discarded.
+        want = [i for i in range(len(wf)) if lo_b - 2 <= i <= hi_b + 2]
+        seeds = {i: sub_mask(seed_mask_fn, wf[i], None) for i in want}
+        samples = velocity_samples(seeds)
+        used_tracker = False
+        if len(samples) < MIN_VALID_SAMPLES and quarter_track_fn is not None:
+            # The colour seed has not answered inside the bracket. Ask the
+            # tracker, seeded from the vote's own mask so the two cannot
+            # disagree about which fighter this is.
+            best = max(
+                seeds, key=lambda k: float((np.asarray(seeds[k]) > 0.5).mean()), default=None
+            )
+            if best is not None:
+                logger.info(
+                    "[finish] only %d valid seed sample(s) in the bracket — quarter-res tracker",
+                    len(samples),
+                )
+                tracked = quarter_track_fn(c.start_s, n, best, seeds[best])
+                if tracked:
+                    samples = velocity_samples({k: v for k, v in tracked.items() if k in want})
+                    used_tracker = True
+
+        right, left = _opponent_side(seeds, fg_for_finish, wf)
+        v_f = subject_velocity_peak(samples, opponent_on_right=right >= left, bound=(lo_b, hi_b))
+
+        # The descent stays a cross-check and never anchors.
+        d_samples = []
         for i in range(0, len(wf), FINISH_STRIDE):
-            f = wf[i]
-            fgm = np.asarray(fg_for_finish(f), np.float32)
+            fgm = np.asarray(fg_for_finish(wf[i]), np.float32)
             if fgm.size < 4:
                 continue
-            subj = _match_shape(sub_mask(seed_mask_fn, f, fgm.shape), fgm.shape)
+            subj = _match_shape(sub_mask(seed_mask_fn, wf[i], fgm.shape), fgm.shape)
             resid = ((fgm > 0.5) & ~(dilate(subj, SUBJECT_DILATE_PX) > 0.5)).astype(np.float32)
-            half = resid.shape[1] // 2
-            left_mass += float(resid[:, :half].sum())
-            right_mass += float(resid[:, half:].sum())
             opp = largest_component(resid)
             area = float(opp.mean())
             if area < OPPONENT_AREA_FLOOR:
                 continue
             ys = np.nonzero(opp > 0.5)[0]
             if len(ys):
-                samples.append((i, float(ys.mean()), area))
+                d_samples.append((i, float(ys.mean()), area))
+
         res = finish_resolve(
-            onset(c.start_s, n),
-            subject_velocity_peak(sub, opponent_on_right=right_mass >= left_mass),
-            descent_frame(samples),
+            a_f,
+            v_f,
+            descent_frame(d_samples),
+            bound=(lo_b, hi_b),
+            samples_in_bound=len(samples),
+            used_tracker=used_tracker,
         )
         c.finish_frame = res.frame
         c.finish_reason = res.reason
@@ -323,16 +372,26 @@ def plan(
             seconds=round(now() - t0, 1),
         )
 
-    # WINDOW-INVARIANCE IS A GATE. Same footage, different start, same ABSOLUTE
-    # answer — or the detector is finding a maximum inside each window rather
-    # than an event in the footage. This is the check that caught the derived
-    # opponent, and it caught it for free from candidates already being scored.
+    # WINDOW-INVARIANCE IS A GATE, AND IT REPORTS ITS n. One candidate cannot
+    # disagree with itself, so on n=1 the gate is UNTESTED — not passed. Saying
+    # "pass" there would be the same error as a detector returning a plausible
+    # value it never measured.
     abs_finishes = [c.start_s + c.finish_frame / fps for c in anchored]
-    if not is_window_invariant(abs_finishes):
+    invariance = {
+        "n": len(abs_finishes),
+        "spread_s": round(invariance_spread_s(abs_finishes), 3) if len(abs_finishes) > 1 else None,
+        "verdict": "untested"
+        if len(abs_finishes) < 2
+        else ("pass" if is_window_invariant(abs_finishes) else "fail"),
+        "absolute_s": [round(a, 3) for a in abs_finishes],
+    }
+    logger.info("[finish] invariance: %s (n=%d)", invariance["verdict"], invariance["n"])
+    if invariance["verdict"] == "fail":
         return PlanResult(
             reason=PlanFailure.NOT_INVARIANT,
             candidates=results,
             vote_frames=vote_frames,
+            invariance=invariance,
             seconds=round(now() - t0, 1),
         )
 
@@ -371,6 +430,8 @@ def plan(
             reason=PlanFailure.NO_MATTES, candidates=results, seconds=round(now() - t0, 1)
         )
 
+    if rss_mb:
+        logger.info("[plan] RSS after propagation: %d MB", rss_mb())
     masks = _warp_all(masks, job)
     areas = [float((np.asarray(m) > 0.5).mean()) for _, m in sorted(masks.items())]
     empty = sum(1 for a in areas if a < 0.005)
@@ -397,6 +458,7 @@ def plan(
         area_per_frame=[round(a, 5) for a in areas],
         empty_count=empty,
         candidates=results,
+        invariance=invariance,
         seconds=round(now() - t0, 1),
     )
 
@@ -435,7 +497,27 @@ def _match_shape(m: np.ndarray, shape) -> np.ndarray:
     return m[np.ix_(r, c)]
 
 
-def sub_mask(seed_mask_fn, f: int, shape) -> np.ndarray:
+def _opponent_side(seeds: dict, foreground_fn, wf: list) -> tuple[float, float]:
+    """(right_mass, left_mass) of what is NOT the subject.
+
+    Only ever used for a left/right decision, so it needs no continuity filter —
+    a coarse mass comparison over several frames cannot be flipped by one bad
+    seed the way a centroid can.
+    """
+    right = left = 0.0
+    for i in sorted(seeds)[:: max(len(seeds) // 6, 1)]:
+        fgm = np.asarray(foreground_fn(wf[i]), np.float32)
+        if fgm.size < 4:
+            continue
+        subj = _match_shape(np.asarray(seeds[i], np.float32), fgm.shape)
+        resid = (fgm > 0.5) & ~(dilate(subj, SUBJECT_DILATE_PX) > 0.5)
+        half = resid.shape[1] // 2
+        left += float(resid[:, :half].sum())
+        right += float(resid[:, half:].sum())
+    return right, left
+
+
+def sub_mask(seed_mask_fn, f: int, shape=None) -> np.ndarray:
     """The coarse SUBJECT mask for one frame, or nothing to subtract.
 
     Coarse on purpose: it is dilated and subtracted, never rendered. What it

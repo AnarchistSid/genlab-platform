@@ -42,9 +42,26 @@ logger = logging.getLogger(__name__)
 ONSET_WIN_S = 0.050
 ONSET_SR = 16000
 
-#: Audio onset and velocity peak must land within this many frames of each
-#: other. Wider and they are not describing the same event.
-AGREE_FRAMES = 4
+#: THE AUDIO BOUNDS, THE VIDEO PICKS. Crowd audio is window-invariant but late
+#: -- measured +0.317 s after the archive's finish, because a crowd reacts after
+#: the punch lands. Subject motion is exact but fragile: the colour seed
+#: collapsed at one frame of the UFC-05 window (0.11% of frame against a 0.5%
+#: norm) and the centroid teleported 200 px, which an unbounded argmax read as a
+#: +94.85 px/frame lunge. So the audio gives a coarse bracket and the motion
+#: picks inside it; neither is trusted to do the other's job.
+#:
+#: The strike PRECEDES the crowd and never follows it, so the bracket is
+#: asymmetric -- generous before the onset, barely anything after.
+BOUND_BEFORE_S = 0.50
+BOUND_AFTER_S = 0.10
+
+#: Below this share of frame the colour seed has not found the garment, and its
+#: centroid is wherever the few surviving pixels happen to be.
+SEED_AREA_FLOOR = 0.0025
+
+#: Fewer valid samples than this inside the bracket and the colour heuristic has
+#: not answered; the quarter-res tracker is asked instead.
+MIN_VALID_SAMPLES = 5
 
 #: The descent is a cross-check. Outside this it is logged as disagreeing; it
 #: never vetoes and never anchors.
@@ -64,7 +81,6 @@ MAX_AREA_JUMP_FRAC = 0.30
 class FinishFailure:
     NO_AUDIO = "finish_no_audio"
     NO_VELOCITY = "finish_no_velocity"
-    SIGNALS_DISAGREE = "finish_signals_disagree"
     NOT_INVARIANT = "finish_not_window_invariant"
 
 
@@ -76,6 +92,9 @@ class FinishResult:
     velocity_frame: int | None = None
     descent_frame: int | None = None
     descent_agrees: bool | None = None
+    bound: tuple | None = None
+    samples_in_bound: int = 0
+    used_tracker: bool = False
 
     @property
     def ok(self) -> bool:
@@ -211,31 +230,72 @@ def _centroid(mask: np.ndarray) -> tuple[float, float] | None:
     return float(xs.mean()), float(ys.mean())
 
 
-def subject_velocity_peak(centroids: list, opponent_on_right: bool) -> int | None:
-    """Frame of peak subject velocity TOWARD the opponent's side.
+def audio_bound(audio_frame: int, fps: float) -> tuple[int, int]:
+    """The bracket the video picks inside. Asymmetric: the strike precedes the
+    crowd's reaction and never follows it."""
+    return (
+        int(round(audio_frame - BOUND_BEFORE_S * fps)),
+        int(round(audio_frame + BOUND_AFTER_S * fps)),
+    )
+
+
+def velocity_samples(masks_by_frame: dict) -> list:
+    """[(frame, centroid_x, area_frac)] for masks that are actually a garment.
+
+    Two rejections, both measured on UFC-05 frame 44: the seed covered 0.11% of
+    frame against a 0.5% norm, and its centroid sat 200 px from where the
+    fighter was. An area floor catches the collapse; taking the largest
+    component catches the case where the seed is scattered but big enough.
+    """
+    out = []
+    for f in sorted(masks_by_frame):
+        m = np.asarray(masks_by_frame[f], np.float32)
+        area = float((m > 0.5).mean())
+        if area < SEED_AREA_FLOOR:
+            logger.info("[finish] frame %d: seed is %.3f%% of frame — collapsed", f, area * 100)
+            continue
+        c = _centroid(largest_component(m))
+        if c is None:
+            continue
+        out.append((f, c[0], area))
+    return out
+
+
+def subject_velocity_peak(
+    samples: list, *, opponent_on_right: bool, bound: tuple | None = None
+) -> int | None:
+    """Frame of peak subject velocity TOWARD the opponent, inside the bracket.
 
     Speed alone peaks when the finisher backs off as much as when he commits;
-    the sign is what makes it a strike rather than a movement.
+    the sign is what makes it a strike. And the peak is taken INSIDE the audio
+    bracket -- unbounded, it found a seed-collapse artefact 34 frames away from
+    where the crowd said the strike was.
     """
-    xs = [(i, c[0]) for i, c in enumerate(centroids) if c is not None]
-    if len(xs) < 3:
-        logger.warning("[finish] only %d subject centroid(s) — no velocity", len(xs))
+    kept = continuous_samples(samples)
+    if bound is not None:
+        lo, hi = bound
+        kept = [s for s in kept if lo <= s[0] <= hi]
+    if len(kept) < 3:
+        logger.warning(
+            "[finish] %d usable subject sample(s)%s — no velocity",
+            len(kept),
+            f" in frames {bound[0]}..{bound[1]}" if bound else "",
+        )
         return None
-    idx = [i for i, _ in xs]
-    x = np.asarray([v for _, v in xs], float)
-    dt = np.diff(idx)
-    v = np.diff(x) / np.maximum(dt, 1)
+    idx = [f for f, _, _ in kept]
+    x = np.asarray([v for _, v, _ in kept], float)
+    v = np.diff(x) / np.maximum(np.diff(idx), 1)
     toward = v if opponent_on_right else -v
-    # Smooth over three samples: a one-sample spike is a seed failure, not a
-    # lunge, and the seed is deliberately coarse.
     k = min(3, len(toward))
     sm = np.convolve(np.pad(toward, (k // 2, k // 2), mode="edge"), np.ones(k) / k, "valid")
     j = int(np.argmax(sm))
     logger.info(
-        "[finish] subject velocity peaks %+.2f px/frame toward the %s at frame %d",
+        "[finish] subject velocity peaks %+.2f px/frame toward the %s at frame %d "
+        "(%d samples in bound)",
         float(sm[j]),
         "right" if opponent_on_right else "left",
         idx[j],
+        len(kept),
     )
     return idx[j]
 
@@ -329,41 +389,54 @@ def descent_frame(samples: list) -> int | None:
 
 
 def resolve(
-    audio_f: int | None, velocity_f: int | None, descent_f: int | None = None
+    audio_f: int | None,
+    velocity_f: int | None,
+    descent_f: int | None = None,
+    *,
+    bound: tuple | None = None,
+    samples_in_bound: int = 0,
+    used_tracker: bool = False,
 ) -> FinishResult:
-    """Two signals must agree. The third only gets to disagree out loud.
+    """THE AUDIO BOUNDS, THE VIDEO PICKS.
 
-    The audio onset is the anchor when they do agree: the sound IS the contact,
-    where the velocity peak is the approach to it.
+    The previous shape asked the two signals to AGREE within four frames and
+    called it unresolved otherwise. That threw away the thing each is good at:
+    the crowd is window-invariant but lands ~0.3 s late, and subject motion is
+    frame-exact but collapses when the colour seed does. Requiring them to
+    coincide asks the late signal to be early.
+
+    So the audio supplies the bracket and the motion picks the frame inside it.
+    The descent stays a cross-check that may disagree out loud.
     """
-    r = FinishResult(audio_frame=audio_f, velocity_frame=velocity_f, descent_frame=descent_f)
+    r = FinishResult(
+        audio_frame=audio_f,
+        velocity_frame=velocity_f,
+        descent_frame=descent_f,
+        bound=bound,
+        samples_in_bound=samples_in_bound,
+        used_tracker=used_tracker,
+    )
     if audio_f is None:
         r.reason = FinishFailure.NO_AUDIO
         return r
     if velocity_f is None:
         r.reason = FinishFailure.NO_VELOCITY
         return r
-    if abs(audio_f - velocity_f) > AGREE_FRAMES:
-        logger.warning(
-            "[finish] audio %d and velocity %d differ by %d frames (max %d) — unresolved",
-            audio_f,
-            velocity_f,
-            abs(audio_f - velocity_f),
-            AGREE_FRAMES,
-        )
-        r.reason = FinishFailure.SIGNALS_DISAGREE
-        return r
-    r.frame = int(audio_f)
+    r.frame = int(velocity_f)
     if descent_f is not None:
         r.descent_agrees = abs(descent_f - r.frame) <= DESCENT_TOLERANCE
         if not r.descent_agrees:
             logger.warning(
-                "[finish] descent says %d, the anchor says %d — cross-check DISAGREES",
+                "[finish] descent says %d, the pick is %d — cross-check DISAGREES",
                 descent_f,
                 r.frame,
             )
     logger.info(
-        "[finish] anchored at frame %d (audio %d, velocity %d)", r.frame, audio_f, velocity_f
+        "[finish] anchored at frame %d — audio bracket %s, %d sample(s)%s",
+        r.frame,
+        bound,
+        samples_in_bound,
+        " via the tracker" if used_tracker else "",
     )
     return r
 

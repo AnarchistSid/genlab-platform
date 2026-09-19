@@ -101,22 +101,68 @@ def test_silence_is_no_onset_not_frame_zero():
 # ── signal 2: subject velocity ──────────────────────────────────────────────
 
 
+def masks_from_x(xs, area=0.01, h=200, w=600):
+    """One garment blob per frame, centred on x — what `seed_mask_fn` returns."""
+    out = {}
+    half = int((area * h * w) ** 0.5 / 2) or 4
+    for f, x in enumerate(xs):
+        m = np.zeros((h, w), np.float32)
+        m[h // 2 - half : h // 2 + half, max(int(x) - half, 0) : int(x) + half] = 1.0
+        out[f] = m
+    return out
+
+
 def test_velocity_peak_is_toward_the_opponent_not_merely_fast():
     """Backing off is as fast as committing. The sign is what makes it a strike."""
-    # A SUSTAINED move, not a one-frame displacement: a single displaced
-    # sample is a spike in BOTH directions and tests the smoother, not the sign.
-    x = [100.0 + i for i in range(10)]  # drifting right, slowly
+    x = [100.0 + i for i in range(10)]
     x += [109 + 15 * k for k in (1, 2, 3)]  # lunge right, frames 10-12
-    x += [x[-1] + 1, x[-1] + 2]  # settle
-    x += [x[-1] - 20 * k for k in (1, 2, 3)]  # a BIGGER retreat, frames 15-17
     x += [x[-1] + 1, x[-1] + 2]
-    cs = [(v, 50.0) for v in x]
-    assert F.subject_velocity_peak(cs, opponent_on_right=True) == 10
-    assert F.subject_velocity_peak(cs, opponent_on_right=False) == 15
+    x += [x[-1] - 20 * k for k in (1, 2, 3)]  # a BIGGER retreat, 15-17
+    x += [x[-1] + 1, x[-1] + 2]
+    sm = F.velocity_samples(masks_from_x(x))
+    assert F.subject_velocity_peak(sm, opponent_on_right=True) == 10
+    assert F.subject_velocity_peak(sm, opponent_on_right=False) == 15
 
 
-def test_too_few_centroids_is_none():
-    assert F.subject_velocity_peak([None, None, (1.0, 1.0)], True) is None
+def test_a_collapsed_seed_is_dropped_before_it_becomes_a_lunge():
+    """MEASURED on UFC-05 frame 44: the seed covered 0.11% of frame against a
+    0.5% norm and its centroid sat ~200 px away. Unbounded and unfiltered, that
+    read as +94.85 px/frame — no fighter moves 95 px in a thirtieth of a second.
+    """
+    masks = masks_from_x([100.0 + i for i in range(20)])
+    collapsed = np.zeros((200, 600), np.float32)
+    collapsed[100:102, 500:503] = 1.0  # a few pixels, far to the right
+    masks[12] = collapsed
+    sm = F.velocity_samples(masks)
+    assert 12 not in [f for f, _, _ in sm], sm
+
+
+def test_the_audio_bracket_is_asymmetric_because_crowds_react_late():
+    lo, hi = F.audio_bound(74, 30.0)
+    assert (lo, hi) == (59, 77)
+    assert 74 - lo == 15 and hi - 74 == 3
+
+
+def test_the_peak_is_taken_inside_the_bracket():
+    """Unbounded, the pick was 34 frames from where the crowd said the strike
+    was. The bracket is what makes a fragile signal usable."""
+    # An earlier move that is FASTER (+30/frame) than the real lunge (+12), and
+    # continuous enough to survive the filter — so only the bracket separates
+    # them. Steps stay under the 40 px continuity limit, as a real body does.
+    x = [100.0] * 10
+    x += [100.0 + 30 * k for k in range(1, 6)]  # frames 10-14, the decoy
+    x += [x[-1]] * 5  # frames 15-19, still
+    x += [x[-1] + 12 * k for k in range(1, 8)]  # frames 20-26, the lunge
+    sm = F.velocity_samples(masks_from_x(x, h=200, w=900))
+    free = F.subject_velocity_peak(sm, opponent_on_right=True)
+    bounded = F.subject_velocity_peak(sm, opponent_on_right=True, bound=(18, 26))
+    assert free is not None and free < 18, free
+    assert bounded is not None and 18 <= bounded <= 26, bounded
+
+
+def test_no_usable_samples_in_the_bracket_is_none():
+    sm = F.velocity_samples(masks_from_x([100.0 + i for i in range(20)]))
+    assert F.subject_velocity_peak(sm, opponent_on_right=True, bound=(50, 60)) is None
 
 
 # ── signal 3: the residual, made honest ─────────────────────────────────────
@@ -159,28 +205,35 @@ def test_largest_component_ignores_the_crowd():
 # ── the anchor ──────────────────────────────────────────────────────────────
 
 
-def test_two_signals_that_agree_anchor_on_the_audio():
-    r = F.resolve(audio_f=13, velocity_f=15)
-    assert r.ok and r.frame == 13
+def test_the_video_picks_and_the_audio_only_brackets():
+    """The audio lands ~0.3 s late by construction. Anchoring ON it would fire
+    the flash on the crowd rather than the punch."""
+    r = F.resolve(audio_f=74, velocity_f=66, bound=(59, 77), samples_in_bound=9)
+    assert r.ok and r.frame == 66
+    assert r.frame < r.audio_frame, "the pick must precede the crowd's reaction"
 
 
-def test_two_signals_that_disagree_are_unresolved_not_averaged():
-    r = F.resolve(audio_f=13, velocity_f=57)
-    assert not r.ok and r.reason == F.FinishFailure.SIGNALS_DISAGREE
+def test_no_audio_means_no_bracket_and_no_finish():
+    assert F.resolve(None, 12).reason == F.FinishFailure.NO_AUDIO
+
+
+def test_no_velocity_inside_the_bracket_is_unresolved_not_the_audio_frame():
+    """Falling back to the audio frame would ship a finish 0.3 s late and call
+    it measured."""
+    r = F.resolve(74, None, bound=(59, 77))
+    assert not r.ok and r.reason == F.FinishFailure.NO_VELOCITY
     assert r.frame is None
 
 
-def test_a_missing_signal_is_named():
-    assert F.resolve(None, 12).reason == F.FinishFailure.NO_AUDIO
-    assert F.resolve(12, None).reason == F.FinishFailure.NO_VELOCITY
-
-
 def test_the_descent_disagrees_out_loud_but_never_vetoes():
-    """It is a cross-check. The version that anchored on it put one strike at
-    three different absolute times."""
-    r = F.resolve(audio_f=13, velocity_f=14, descent_f=42)
-    assert r.ok and r.frame == 13
+    r = F.resolve(audio_f=74, velocity_f=66, descent_f=42, bound=(59, 77))
+    assert r.ok and r.frame == 66
     assert r.descent_agrees is False
+
+
+def test_the_result_records_how_the_pick_was_made():
+    r = F.resolve(74, 66, bound=(59, 77), samples_in_bound=3, used_tracker=True)
+    assert r.used_tracker and r.samples_in_bound == 3 and r.bound == (59, 77)
 
 
 # ── the gate ────────────────────────────────────────────────────────────────

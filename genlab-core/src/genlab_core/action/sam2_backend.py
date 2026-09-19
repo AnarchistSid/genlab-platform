@@ -510,6 +510,42 @@ def plan_backends(job: dict, *, device: str = "mps") -> dict:
         pick = int(ok[np.argmax(areas[ok])]) if len(ok) else int(np.argmin(areas))
         return {float(seed_spec.get("hue_deg", 0.0)): masks[pick].astype(np.float32)}
 
+    def quarter_track_fn(start_s: float, n: int, seed_frame: int, seed_mask) -> dict:
+        """Track the subject at QUARTER resolution across the window.
+
+        The fallback for when the colour seed collapses. A centroid does not
+        need a precise edge, and at 1/4 scale the propagation is ~1/16 the
+        pixels — cheap enough to be a fallback rather than a second plan.
+
+        The seed comes from the vote's own mask, so the tracker and the vote
+        cannot disagree about which fighter this is.
+        """
+        import torch
+
+        lo = max(int(round(start_s * fps)) - frame_offset, 0)
+        window = [f[::4, ::4] for f in all_frames[lo : lo + n] if f is not None]
+        if len(window) < 3:
+            logger.warning("[sam2] quarter-res track: %d frames available", len(window))
+            return {}
+        m = np.asarray(seed_mask, np.float32)
+        m = m[
+            :: max(m.shape[0] // window[0].shape[0], 1), :: max(m.shape[1] // window[0].shape[1], 1)
+        ]
+        m = m[: window[0].shape[0], : window[0].shape[1]]
+        state = video_pred.init_state(video_path=_frames_dir(window))
+        video_pred.add_new_mask(
+            state, frame_idx=int(seed_frame), obj_id=1, mask=torch.as_tensor(m > 0.5, device=dev)
+        )
+        out = {
+            idx: (logits[0] > 0).cpu().numpy().astype(np.float32)[0]
+            for idx, _ids, logits in video_pred.propagate_in_video(state)
+        }
+        del state
+        if hasattr(torch, "mps"):
+            torch.mps.empty_cache()
+        logger.info("[sam2] quarter-res track returned %d masks", len(out))
+        return out
+
     def release_span(start_s: float, n: int) -> None:
         """Drop everything outside the chosen window before propagation.
 
@@ -561,6 +597,7 @@ def plan_backends(job: dict, *, device: str = "mps") -> dict:
         "coarse_foreground_fn": coarse_foreground_fn,
         "half_silhouette_fn": half_silhouette_fn,
         "release_span": release_span,
+        "quarter_track_fn": quarter_track_fn,
         "rss_mb": rss_mb,
         "seed_mask_fn": seed_mask_fn,
         "window_silhouette_fn": window_silhouette_fn,

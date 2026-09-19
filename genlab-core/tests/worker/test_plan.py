@@ -75,9 +75,10 @@ def subject_x(f: int) -> int:
 
 
 def seed_moving(f):
-    """The coarse SUBJECT seed — what `seed_mask_fn` returns."""
+    """The coarse SUBJECT seed — what `seed_mask_fn` returns. A garment patch,
+    not a whole body: the area floor is calibrated against a garment."""
     x = subject_x(f)
-    return body(x, x + 40)
+    return body(x, x + 24, y0=70, y1=110)
 
 
 def fg_both(f):
@@ -96,7 +97,11 @@ def frames_for_abs(start, n, anchor=674.9):
     return list(range(lo, lo + n))
 
 
-def onset_at(frame=FINISH, anchor_s=674.9):
+#: The crowd reacts ~0.3 s after the punch: 9 frames at 30 fps.
+CROWD_LAG = 9
+
+
+def onset_at(frame=FINISH + CROWD_LAG, anchor_s=674.9):
     """Audio onset in WINDOW-relative frames — a fixed ABSOLUTE moment read
     through whatever window asks for it, which is the property that matters."""
 
@@ -361,21 +366,41 @@ def test_a_backend_without_the_shims_still_works():
 # ── the finish: two signals that agree, and a gate ──────────────────────────
 
 
-def test_the_plan_anchors_on_the_archived_finish():
-    """Audio onset and subject velocity both land on frame 13."""
+def test_the_plan_anchors_on_the_strike_not_the_crowd():
+    """The audio sits 9 frames late by construction, as the real crowd does.
+    The pick must land on the motion, inside the bracket, ahead of the audio."""
     r = run()
     assert r.ok, r.reason
-    assert abs(r.finish_frame - FINISH) <= 1, r.finish_frame
+    assert abs(r.finish_frame - FINISH) <= 2, r.finish_frame
+    assert r.finish_frame < FINISH + CROWD_LAG, "anchored on the crowd, not the strike"
 
 
-def test_signals_that_disagree_leave_the_finish_unresolved_not_zero():
-    """The old path read the opponent out of a one-key dict, so its separability
-    test could never be satisfied and it returned frame 0 by fallback — for
-    3722 seconds, silently. Disagreement must be NAMED."""
-    r = run(audio_onset_fn=onset_at(80))
-    assert not r.ok
-    assert r.reason in (P.PlanFailure.FINISH_UNRESOLVED, P.PlanFailure.NOT_INVARIANT)
-    assert r.finish_frame == 0 or r.finish_frame is None
+def test_no_audio_means_no_bracket_and_the_plan_says_so():
+    r = run(audio_onset_fn=lambda start_s, n: None)
+    assert not r.ok and r.reason == P.PlanFailure.FINISH_UNRESOLVED
+
+
+def test_a_collapsed_seed_falls_back_to_the_quarter_res_tracker():
+    """When the colour seed dies inside the bracket, the tracker answers —
+    seeded from the vote's own mask so the two cannot disagree about which
+    fighter this is."""
+    called = []
+
+    def dead_seed(f):
+        return np.zeros((H, W), np.float32) if 5 <= f <= 30 else seed_moving(f)
+
+    def tracker(start_s, n, seed_frame, seed_mask):
+        called.append((start_s, seed_frame))
+        return {i: seed_moving(i) for i in range(n)}
+
+    r = run(seed_mask_fn=dead_seed, quarter_track_fn=tracker)
+    assert called, "the tracker was never asked"
+    assert r.ok, r.reason
+
+
+def test_without_a_tracker_a_collapsed_seed_is_unresolved_not_a_guess():
+    r = run(seed_mask_fn=lambda f: np.zeros((H, W), np.float32), quarter_track_fn=None)
+    assert not r.ok and r.reason == P.PlanFailure.FINISH_UNRESOLVED
 
 
 def test_an_unresolved_finish_fails_before_propagation():
@@ -524,3 +549,26 @@ def test_the_foreground_cache_is_bounded():
     from genlab_core.action import sam2_backend
 
     assert 0 < sam2_backend.FG_CACHE_FRAMES <= 400
+
+
+# ── the gate reports its n ──────────────────────────────────────────────────
+
+
+def test_one_candidate_leaves_the_gate_UNTESTED_not_passed():
+    """One window cannot disagree with itself. Calling that a pass is how a gate
+    comes to certify something it never measured."""
+    r = run()
+    assert r.ok
+    assert r.invariance["verdict"] == "untested", r.invariance
+    assert r.invariance["n"] == 1 and r.invariance["spread_s"] is None
+
+
+def test_two_agreeing_candidates_make_the_gate_report_a_pass_with_its_spread():
+    r = run(
+        job(candidates=[{"start_s": 674.9, "frames": 96}, {"start_s": 675.3, "frames": 96}]),
+        frames_for=frames_for_abs,
+    )
+    assert r.ok, r.reason
+    assert r.invariance["verdict"] == "pass", r.invariance
+    assert r.invariance["n"] == 2 and r.invariance["spread_s"] <= 0.2
+    assert len(r.invariance["absolute_s"]) == 2
