@@ -109,8 +109,18 @@ class CraftRenderStage:
 
         sb = bp.get("storyboard") or context.get("storyboards", {}).get(bid)
         if not sb:
-            self._skip(stats, CraftSkip.NO_STORYBOARD, niche, bid)
-            return
+            # BUILD one rather than skip. Landing the builder without a caller
+            # would repeat the defect this stage was written to fix: a plan with
+            # nothing to plan for, one layer below a router with nothing to
+            # route. Every refusal inside the builder comes back NAMED.
+            built = self._build_storyboard(bp, context, bid)
+            if not built.ok:
+                self._skip(
+                    stats, built.reason or CraftSkip.NO_STORYBOARD, niche, bid, detail=built.detail
+                )
+                return
+            sb = built.storyboard.model_dump()
+            bp["storyboard"] = sb
 
         route = (sb.get("routed_treatment") or sb.get("treatment") or "").upper()
         if route not in ("ACTION", "TALK"):
@@ -166,6 +176,51 @@ class CraftRenderStage:
             self._skip(stats, CraftSkip.EXECUTOR_DECLINED, context.get("niche_id", ""), bid)
             return
         self._deliver(bp, sb, result, context, bid, route="TALK")
+
+    def _build_storyboard(self, bp: dict, context: StageContext, bid: str):
+        """Plan this blueprint. The expensive half runs on the worker.
+
+        `worker_fn` asks for the plan AND the mattes in one job (`plan=True`):
+        the silhouette vote needs SAM2, SAM2 does not fit the VPS, and posting a
+        second job for the mattes afterwards would double the round trip.
+        """
+        from genlab_core.action import storyboard_builder as sbuild
+
+        def worker_fn():
+            return self._plan_from_worker(bp, context, bid)
+
+        def bed_fn():
+            # 150 BPM at 30 fps is exactly 12 frames — an integer-frame grid, so
+            # no event has to round onto it. The trim puts beat 0 on frame 0.
+            bed = (bp.get("audio") or {}).get("bed") or {}
+            return float(bed.get("bpm", 150.0)), float(bed.get("first_beat_s", 0.0))
+
+        return sbuild.build(
+            candidate=bp,
+            niche_id=context.get("niche_id", ""),
+            blueprint_id=bid,
+            worker_fn=worker_fn,
+            bed_fn=bed_fn,
+            source_score=(bp.get("source_score") or {}).get("action_source_score"),
+            sport=bp.get("sport"),
+        )
+
+    def _plan_from_worker(self, bp: dict, context: StageContext, bid: str):
+        """One round trip for plan + mattes, or None.
+
+        None is a NAMED outcome upstream (`worker_unavailable`), never a silent
+        empty plan — craft never blocks a publish, and the reason is the finding.
+        """
+        from genlab_core.action.matte_worker import request_matte
+
+        req = bp.get("_matte_request")
+        if req is None:
+            return None
+        result, reason = request_matte(req)
+        if result is None or not result.ok:
+            logger.info("[craft] worker declined the plan for %s: %s", bid, reason)
+            return None
+        return getattr(result, "plan", None)
 
     # ── helpers ─────────────────────────────────────────────────────────────
 

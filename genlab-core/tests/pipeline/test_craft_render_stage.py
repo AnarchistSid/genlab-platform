@@ -74,10 +74,38 @@ def test_a_niche_running_neither_craft_nor_dual_is_not_requested():
     assert _skips(c).get(f"craft_skipped_{CraftSkip.NOT_REQUESTED}") == 1
 
 
-def test_a_blueprint_with_no_storyboard_says_so():
+def test_a_blueprint_with_no_storyboard_gets_one_BUILT_and_the_refusal_is_named():
+    """The stage builds when none is present rather than skipping.
+
+    Landing a builder with no caller would repeat the very defect this stage
+    exists to fix — a plan with nothing to plan for, one layer under a router
+    with nothing to route. And the refusal that comes back is specific: this
+    blueprint carries no highlight flag, so provenance routes it away from
+    ACTION and the reason says so, instead of the useless "no storyboard".
+    """
     c = ctx(blueprints=[bp()])
     CraftRenderStage().execute(c)
-    assert _skips(c).get(f"craft_skipped_{CraftSkip.NO_STORYBOARD}") == 1
+    skips = _skips(c)
+    assert skips["craft_skipped"] == 1
+    assert skips.get("craft_skipped_route_not_action") == 1
+    assert f"craft_skipped_{CraftSkip.NO_STORYBOARD}" not in skips
+
+
+def test_an_action_blueprint_with_no_worker_reports_worker_unavailable():
+    """The expensive half lives on the Mac. When it is asleep the builder says
+    so by name — craft never blocks a publish, and the reason is the finding."""
+    c = ctx(
+        blueprints=[
+            bp(
+                is_highlight=True,
+                title="Raw highlights",
+                download_url="https://x/y.mp4",
+                source_score={"action_source_score": 0.8},
+            )
+        ]
+    )
+    CraftRenderStage().execute(c)
+    assert _skips(c).get("craft_skipped_worker_unavailable") == 1
 
 
 def test_a_still_route_is_not_craftable():
