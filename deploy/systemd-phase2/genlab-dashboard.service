@@ -32,6 +32,17 @@ ExecStart=/opt/genlab/.venv/bin/gunicorn \
     --error-logfile /opt/genlab/.logs/dashboard_error.log \
     --capture-output \
     server.review_server:app
+# READINESS, not liveness. `systemctl is-active` reports the PROCESS; on
+# 2026-09-19 gunicorn's master was active and listening on 5151 while its
+# gthread worker lost a fork race and blocked in futex_wait before booting. The
+# socket accepted connections and answered none of them for four hours, and
+# every check said the service was up.
+#
+# ExecStartPost fails the start if nothing answers, so that shape pages in a
+# minute. Restart=always then retries it, which is what clears a lost fork race.
+ExecStartPost=/opt/genlab/deploy/systemd-phase2/lib/http_ready.sh http://127.0.0.1:5151/api/v1/compliance/stats 30
+TimeoutStartSec=90
+
 Restart=always
 RestartSec=10
 

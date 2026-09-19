@@ -567,6 +567,36 @@ fi
 # ----------------------------------------------------------------------------
 # Phase 8 — Post-deploy summary
 # ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# Phase 7.9 — VERIFY BEFORE CLAIMING SUCCESS
+#
+# 2026-09-19: this script printed "Deploy complete" while the dashboard was
+# dead. The restart had raced, gunicorn's master was listening, its worker never
+# booted, and the socket accepted connections without answering any of them for
+# four hours. Nothing here noticed because nothing here asked.
+#
+# A deploy that restarts a service proves the service ANSWERS before it says
+# complete. Rolling back is the operator's call — but with the failing line in
+# front of them, not after they notice the dashboard is blank.
+# ----------------------------------------------------------------------------
+if [ "${APPLY:-0}" -eq 1 ]; then
+    log ""
+    log "=== Phase 7.9: post-deploy verification ==="
+    if "$GENLAB/scripts/post_deploy_verify.sh" 2>&1 | tee -a "$LOG"; then
+        log "  verification PASSED"
+    else
+        log ""
+        log "!!! DEPLOY FAILED VERIFICATION !!!"
+        "$GENLAB/scripts/post_deploy_verify.sh" 2>&1 | grep -E "^  ✗|FAILED — died in" | tee -a "$LOG" || true
+        log ""
+        log "The code is deployed and the services were restarted, but the verifier"
+        log "says the result is not serving. Decide: roll back to $HEAD_BEFORE, or"
+        log "fix forward. Not printing 'Deploy complete'."
+        log "Log saved to $LOG"
+        exit 1
+    fi
+fi
+
 log ""
 log "=== Deploy complete ==="
 log "HEAD before: $HEAD_BEFORE"

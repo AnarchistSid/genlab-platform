@@ -28,9 +28,26 @@ VENV=$GENLAB/.venv/bin/python
 EXITCODE=0
 FAILURES=()
 
-note() { echo "[verify] $*"; }
+# EVERY STEP ANNOUNCES ITS VERDICT, and the exit trap names where we died.
+#
+# 2026-09-19: step 4's curl had no --max-time. Against a socket that ACCEPTS and
+# never answers — gunicorn's master listening while its worker failed to boot —
+# it waited indefinitely. The run looked "stuck", was read as slow, and the
+# dashboard stayed down for four hours while this script sat on a curl. A check
+# that cannot time out cannot report.
+STEP=""
+note() { STEP="$*"; echo "[verify] $*"; }
 pass() { echo "  ✓ $*"; }
 fail() { echo "  ✗ $*"; EXITCODE=1; FAILURES+=("$*"); }
+
+_on_exit() {
+  local rc=$?
+  if [ "$rc" -ne 0 ] && [ "${_FINISHED:-0}" != "1" ]; then
+    echo "  ✗ ABORTED during step: ${STEP:-<before step 1>} (exit $rc)"
+    echo "[verify] FAILED — died in: ${STEP:-<before step 1>}"
+  fi
+}
+trap _on_exit EXIT
 
 note "1. Long-running services state"
 for svc in genlab-dashboard genlab-engagement-poller genlab-engagement-worker genlab-webhook; do
@@ -92,12 +109,26 @@ psql_check "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_
 
 note "4. Internal endpoint reachability (5151 = dashboard local bind)"
 for path in compliance/stats scheduling/pauses source-discovery/proposals; do
-    http=$(curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:5151/api/v1/$path" || echo "000")
+    # --max-time is load-bearing, not hygiene: without it a listening socket
+    # whose worker never booted blocks this loop forever (2026-09-19).
+    url="http://127.0.0.1:5151/api/v1/$path"
+    t0=$SECONDS
+    # No `|| echo 000`: on timeout curl ALREADY prints 000 via -w and THEN exits
+    # non-zero, so the fallback appends a second one and $http becomes "000000",
+    # which matches no branch. `|| true` keeps set -e happy without doubling.
+    http=$(curl -sS --max-time "${VERIFY_HTTP_TIMEOUT:-10}" -o /dev/null \
+             -w "%{http_code}" "$url" 2>/dev/null || true)
+    http=${http:-000}
+    waited=$((SECONDS - t0))
     # 401 = auth wall (route wired); 404 = route missing
     if [ "$http" = "401" ] || [ "$http" = "200" ]; then
-        pass "/api/v1/$path → $http"
+        pass "$url → $http (${waited}s)"
+    elif [ "$http" = "000" ]; then
+        # The shape that matters: connection made, no response. Name it plainly
+        # so nobody reads it as "the check is slow".
+        fail "$url → NO RESPONSE after ${waited}s (curl code 000 — the port is listening but nothing answered; check the worker booted, not just that the unit is active)"
     else
-        fail "/api/v1/$path → $http (expected 200 or 401, NOT 404 or 5xx)"
+        fail "$url → $http after ${waited}s (expected 200 or 401, NOT 404 or 5xx)"
     fi
 done
 
@@ -268,4 +299,5 @@ else
         note "  - $f"
     done
 fi
+_FINISHED=1
 exit $EXITCODE
