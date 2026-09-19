@@ -32,6 +32,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -55,14 +56,52 @@ MODEL_CFG = os.environ.get("GENLAB_SAM2_CFG", "configs/sam2.1/sam2.1_hiera_b+.ya
 MAX_SEED_FRAME_FRAC = 0.60
 
 
+def _container_fps(clip: str) -> float | None:
+    """The clip's own rate, as a float. Only used to report a mismatch."""
+    out = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=avg_frame_rate",
+            "-of",
+            "csv=p=0",
+            clip,
+        ],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    try:
+        num, den = out.split("/")
+        return float(num) / float(den) if float(den) else None
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
 def _decode_frames(
-    clip: str, n: int | None = None, *, start_s: float = 0.0, duration_s: float | None = None
+    clip: str,
+    n: int | None = None,
+    *,
+    start_s: float = 0.0,
+    duration_s: float | None = None,
+    fps: float | None = None,
 ) -> list[np.ndarray]:
     """RGB frames from a clip, via ffmpeg rawvideo.
 
     Decoding to a numpy array rather than to a directory of JPEGs: SAM2's video
     predictor accepts either, and a JPEG round-trip re-quantises every frame
     before the matte sees it.
+
+    `fps` IS NOT OPTIONAL IN PRACTICE. Every index in the plan is converted to a
+    time with the JOB's fps -- `frames_for` does `round(start_s * fps)` -- so a
+    decode at the container's own rate silently means something else by "frame
+    n". Measured on the UFC-05 span: the container is 59.94 fps, the job says
+    30, and candidate 24.9 s resolved to frame 81, which is 23.55 s. Every
+    window landed 1.35 s early and covered 1.6 s of footage instead of 3.2 s.
+    Nothing errored; the mattes came back 96/96.
     """
     probe = subprocess.run(
         [
@@ -91,11 +130,28 @@ def _decode_frames(
         cmd += ["-i", clip]
     if duration_s:
         cmd += ["-t", f"{duration_s:.3f}"]
+    if fps:
+        native = _container_fps(clip)
+        if native and abs(native - fps) > 0.01:
+            logger.info(
+                "[sam2] %s is %.2f fps, decoding at %.2f — one frame index is 1/%.0f s",
+                clip,
+                native,
+                fps,
+                fps,
+            )
+        cmd += ["-vf", f"fps={fps}"]
     cmd += ["-pix_fmt", "rgb24", "-f", "rawvideo", "-"]
     raw = subprocess.run(cmd, capture_output=True).stdout
     total = len(raw) // (w * h * 3)
     frames = np.frombuffer(raw[: total * w * h * 3], np.uint8).reshape(total, h, w, 3)
     return list(frames[:n] if n else frames)
+
+
+#: How many foreground planes to keep. Two windows' worth: enough that the
+#: finish's stride-3 walk and the vote's samples both hit warm, bounded so the
+#: span cannot accumulate.
+FG_CACHE_FRAMES = 200
 
 
 def _foreground_fn(frames: list[np.ndarray]):
@@ -111,8 +167,15 @@ def _foreground_fn(frames: list[np.ndarray]):
         if i not in cache:
             cut = remove(Image.fromarray(frames[i]), session=session)
             cache[i] = np.asarray(cut)[:, :, 3].astype(np.float32) / 255.0
+            # BOUNDED. A full-res alpha plane is ~8 MB; an unbounded cache over
+            # a 546-frame span is 4 GB of float32 on a machine that spent this
+            # session between 6 and 18 GB into swap. Oldest-first eviction suits
+            # the access pattern — every phase walks frames forward.
+            while len(cache) > FG_CACHE_FRAMES:
+                cache.pop(next(iter(cache)))
         return cache[i]
 
+    fg.cache = cache
     return fg
 
 
@@ -159,7 +222,7 @@ def mattes_for(job: dict, *, device: str = "mps"):
     if not clip or not Path(clip).exists():
         raise FileNotFoundError(f"clip not readable: {clip!r}")
 
-    frames = _decode_frames(clip, job.get("n_frames"))
+    frames = _decode_frames(clip, job.get("n_frames"), fps=float(job.get("fps") or 0) or None)
     if len(frames) < 2:
         raise ValueError(f"{clip} decoded to {len(frames)} frame(s)")
     logger.info("[sam2] %d frames from %s", len(frames), clip)
@@ -321,10 +384,10 @@ def plan_backends(job: dict, *, device: str = "mps") -> dict:
         longest = max(int(c.get("frames", 96)) for c in cands)
         lo_s = max(min(starts) - 1.0, 0.0)
         span_s = (max(starts) - lo_s) + longest / fps + 2.0
-        all_frames = _decode_frames(clip, start_s=lo_s, duration_s=span_s)
+        all_frames = _decode_frames(clip, start_s=lo_s, duration_s=span_s, fps=fps)
         frame_offset = int(round(lo_s * fps))
     else:
-        all_frames = _decode_frames(clip)
+        all_frames = _decode_frames(clip, fps=fps)
         frame_offset = 0
     fg = _foreground_fn(all_frames)
     image_pred, video_pred, dev = _predictors(device)
@@ -419,6 +482,63 @@ def plan_backends(job: dict, *, device: str = "mps") -> dict:
             return np.zeros((2, 2), np.float32)
         return colour_match(all_frames[i][::2, ::2], seed_spec, foreground=half_fg(i))
 
+    def half_silhouette_fn(i: int) -> dict[float, np.ndarray]:
+        """The vote's silhouette, at half resolution.
+
+        The vote compares garment AREAS between two bodies. Halving resolution
+        halves both, so the ratio that decides it is unchanged — at a quarter of
+        the SAM2 image cost. The MATTES still come from the full-res path; this
+        is only for the decision.
+        """
+        if not isinstance(i, int) or not 0 <= i < len(all_frames):
+            return {}
+        rgb, foreground = all_frames[i][::2, ::2], half_fg(i)
+        min_px = int(0.0008 * rgb.shape[0] * rgb.shape[1])
+        clicks = derive_clicks(rgb, foreground, seed_spec, min_px)
+        if clicks is None:
+            return {}
+        image_pred.set_image(rgb)
+        pts = [clicks.positive] + ([clicks.negative] if clicks.negative else [])
+        labels = [1] + ([0] if clicks.negative else [])
+        masks, _, _ = image_pred.predict(
+            point_coords=np.asarray(pts, np.float32),
+            point_labels=np.asarray(labels, np.int32),
+            multimask_output=True,
+        )
+        areas = np.array([float((m > 0.5).mean()) for m in masks])
+        ok = np.where(areas <= MAX_SEED_FRAME_FRAC)[0]
+        pick = int(ok[np.argmax(areas[ok])]) if len(ok) else int(np.argmin(areas))
+        return {float(seed_spec.get("hue_deg", 0.0)): masks[pick].astype(np.float32)}
+
+    def release_span(start_s: float, n: int) -> None:
+        """Drop everything outside the chosen window before propagation.
+
+        The vote and the finish are done with the rest of the span by then, and
+        propagation is about to hold image embeddings for every frame of the
+        window on top of whatever is still resident.
+        """
+        lo = max(int(round(start_s * fps)) - frame_offset, 0)
+        hi = lo + n
+        freed = 0
+        for k in range(len(all_frames)):
+            if not lo <= k < hi and all_frames[k] is not None:
+                all_frames[k] = None
+                freed += 1
+        for cache in (getattr(fg, "cache", {}), getattr(half_fg, "cache", {})):
+            for k in [k for k in cache if not lo <= k < hi]:
+                cache.pop(k, None)
+        logger.info(
+            "[sam2] released %d of %d span frames outside the window", freed, len(all_frames)
+        )
+
+    def rss_mb() -> int:
+        import resource
+
+        r = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # macOS reports bytes, Linux kilobytes. Guessing wrong here reports a
+        # 1000x error as a fact, so key off the platform rather than magnitude.
+        return int(r / (1024 * 1024)) if sys.platform == "darwin" else int(r / 1024)
+
     def window_silhouette_fn(i: int) -> dict:
         """Window-relative index -> the ABSOLUTE frame the vote also used.
 
@@ -439,6 +559,9 @@ def plan_backends(job: dict, *, device: str = "mps") -> dict:
         "propagate_fn": propagate_fn,
         "select_window": select_window,
         "coarse_foreground_fn": coarse_foreground_fn,
+        "half_silhouette_fn": half_silhouette_fn,
+        "release_span": release_span,
+        "rss_mb": rss_mb,
         "seed_mask_fn": seed_mask_fn,
         "window_silhouette_fn": window_silhouette_fn,
         "window_foreground_fn": window_foreground_fn,

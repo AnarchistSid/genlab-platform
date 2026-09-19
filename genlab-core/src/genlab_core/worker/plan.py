@@ -28,16 +28,27 @@ from dataclasses import asdict, dataclass, field
 import numpy as np
 
 from genlab_core.action.effects._ops import dilate
+from genlab_core.action.finish import _centroid as _centroid_of
+from genlab_core.action.finish import (
+    audio_onset_frame,
+    descent_frame,
+    is_window_invariant,
+    largest_component,
+    subject_velocity_peak,
+)
+from genlab_core.action.finish import resolve as finish_resolve
 from genlab_core.action.matte import build_mattes, crop_rect_for, warp_to_crop
 from genlab_core.action.silhouette_subject import choose_subject_by_vote
-from genlab_core.action.window import finish_frame as derive_finish_frame
 
 logger = logging.getLogger(__name__)
 
 #: A candidate must reach this to be believed. Below it the "winner" was a
 #: 0.05pp area difference between two halves of one merged blob — noise.
-VOTE_FLOOR = 8
-VOTE_FRAMES = 10
+#: Part 16: 6 frames at half resolution instead of 10 at full. The vote is a
+#: garment-AREA comparison, and halving resolution halves both areas — the ratio
+#: that decides it is unchanged, at a quarter of the SAM2 cost.
+VOTE_FLOOR = 5
+VOTE_FRAMES = 6
 
 #: A silhouette smaller than this share of frame is not a fighter.
 AREA_FLOOR = 0.04
@@ -51,9 +62,18 @@ PRESENCE_MIN_FRAMES = 0.80
 #: the subtraction left behind.
 OPPONENT_AREA_FLOOR = 0.01
 
-#: Sample every Nth frame for the finish. The centroid descent is a trend over
-#: about a second, not a per-frame signal, so a third of the frames resolve it.
+#: Sample every Nth frame for the descent cross-check. The trend runs over about
+#: a second, not per-frame, so a third of the frames resolve it.
 FINISH_STRIDE = 3
+
+#: Presence is sampled across the FULL window rather than clustered in its tail:
+#: a subject that is solid for the last third and absent for the first two is
+#: not trackable, and a tail-only sample cannot tell.
+PRESENCE_SAMPLES = 10
+
+#: Only the strongest candidates by motion reach the vote. The vote is the
+#: expensive half and a low-motion window is not an ACTION window.
+VOTE_CANDIDATES = 2
 
 #: How far the subject mask is grown before subtraction. The seed is loose and
 #: holey; without the dilation its gaps read as opponent.
@@ -68,6 +88,9 @@ class PlanFailure:
     #: the finish and the treatment anchors its flash there, so a window with no
     #: derivable finish has nothing to anchor. Never a silent frame 0.
     FINISH_UNRESOLVED = "finish_unresolved"
+    #: The finish moved when the window moved. Same footage, different start,
+    #: different absolute answer — the detector found a maximum, not an event.
+    NOT_INVARIANT = "finish_not_window_invariant"
 
 
 @dataclass
@@ -81,6 +104,7 @@ class CandidateResult:
     reason: str = ""
     #: Window-relative finish, or None when fewer than three frames separate.
     finish_frame: int | None = None
+    finish_reason: str = ""
 
     @property
     def survived(self) -> bool:
@@ -131,6 +155,10 @@ def plan(
     cuts_in_window=None,
     coarse_foreground_fn=None,
     seed_mask_fn=None,
+    half_silhouette_fn=None,
+    audio_onset_fn=None,
+    release_span=None,
+    rss_mb=None,
     select_window=None,
     window_silhouette_fn=None,
     window_foreground_fn=None,
@@ -153,7 +181,29 @@ def plan(
     results: list[CandidateResult] = []
     tail_silhouettes: dict[int, np.ndarray] = {}
 
-    for cand in candidates:
+    # ONLY THE STRONGEST REACH THE VOTE. The vote is the expensive half — six
+    # SAM2 image calls per candidate — and a low-motion window is not an ACTION
+    # window whatever its silhouettes say. Candidates carrying no motion score
+    # cannot be ranked, so they all go through and the log says so.
+    ranked = sorted(candidates, key=lambda c: -float(c.get("motion") or 0.0))
+    if any(c.get("motion") is not None for c in candidates):
+        skipped = ranked[VOTE_CANDIDATES:]
+        for c in skipped:
+            results.append(
+                CandidateResult(start_s=float(c.get("start_s", 0.0)), reason="not top-2 by motion")
+            )
+        ranked = ranked[:VOTE_CANDIDATES]
+        if skipped:
+            logger.info(
+                "[plan] %d candidate(s) below the top-%d by motion — not voted",
+                len(skipped),
+                VOTE_CANDIDATES,
+            )
+    else:
+        logger.info("[plan] no motion scores on candidates — all %d voted", len(ranked))
+
+    sil = half_silhouette_fn or silhouette_fn
+    for cand in ranked:
         start = float(cand.get("start_s", 0.0))
         n = int(cand.get("frames", 96))
 
@@ -171,7 +221,7 @@ def plan(
             results.append(CandidateResult(start_s=start, reason="no frames"))
             continue
 
-        vote = choose_subject_by_vote(frames, silhouette_fn, vote_frames=vote_frames)
+        vote = choose_subject_by_vote(frames, sil, vote_frames=vote_frames)
         cr = CandidateResult(
             start_s=start,
             hue_deg=vote.hue_deg,
@@ -181,12 +231,16 @@ def plan(
             reason=vote.reason,
         )
         if vote.hue_deg is not None and vote.votes >= floor:
-            tail = frames[-vote_frames:]
+            # ACROSS THE FULL WINDOW, not its tail. A subject solid for the last
+            # third and absent for the first two is not trackable, and a
+            # tail-only sample reports 1.0 for it.
+            step = max(len(frames) // PRESENCE_SAMPLES, 1)
+            tail = frames[::step][:PRESENCE_SAMPLES]
             # Keep them. These are SAM2-quality subject masks already paid for;
             # the finish subtracts a subject mask on every third frame and would
             # otherwise re-derive a coarser one over the same frames.
             for f in tail:
-                m = next(iter(silhouette_fn(f).values()), None)
+                m = next(iter(sil(f).values()), None)
                 if m is not None:
                     tail_silhouettes[f] = m
             cr.presence = presence_fraction(
@@ -212,27 +266,53 @@ def plan(
             )
         )
 
-    # THE FINISH IS DERIVED PER SURVIVOR, BEFORE PROPAGATION. It is now cheap
-    # (every third frame, half res, no SAM2), and it is the tie-break: the
-    # window is DESIGNED to begin at the finish, so the candidate whose finish
-    # sits closest to its own start is the one that was framed on the event
-    # rather than on the follow-through. Running it before propagation also
-    # means an unresolvable finish costs the cheap phase, not the expensive one.
+    # THE FINISH, PER SURVIVOR, BEFORE PROPAGATION.
+    #
+    # Two independent signals that must AGREE, plus the descent as a cross-check
+    # that may disagree out loud but never anchors. The version that anchored on
+    # the descent alone placed one UFC-05 strike at 24.60 s, 26.20 s and 26.80 s
+    # depending on which window it was sampled from.
+    fps = float(job.get("fps", 30.0))
+    clip = job.get("clip_path") or job.get("clip") or ""
     fg_for_finish = coarse_foreground_fn or foreground_fn
-
-    def _subject_mask(i: int, f: int) -> np.ndarray:
-        m = tail_silhouettes.get(f)
-        if m is not None:
-            return m
-        return seed_mask_fn(f) if seed_mask_fn else np.zeros((2, 2), np.float32)
+    onset = audio_onset_fn or (
+        lambda start_s, n: audio_onset_frame(clip, start_s, n, fps) if clip else None
+    )
 
     for c in survivors:
-        c.finish_frame = _finish(
-            frames_for(c.start_s, _frames_of(c)),
-            foreground_fn=fg_for_finish,
-            subject_mask_for=_subject_mask,
+        n = _frames_of(c)
+        wf = frames_for(c.start_s, n)
+        sub = [_centroid_of(seed_mask_fn(f)) if seed_mask_fn else None for f in wf]
+        samples, right_mass, left_mass = [], 0.0, 0.0
+        for i in range(0, len(wf), FINISH_STRIDE):
+            f = wf[i]
+            fgm = np.asarray(fg_for_finish(f), np.float32)
+            if fgm.size < 4:
+                continue
+            subj = _match_shape(sub_mask(seed_mask_fn, f, fgm.shape), fgm.shape)
+            resid = ((fgm > 0.5) & ~(dilate(subj, SUBJECT_DILATE_PX) > 0.5)).astype(np.float32)
+            half = resid.shape[1] // 2
+            left_mass += float(resid[:, :half].sum())
+            right_mass += float(resid[:, half:].sum())
+            opp = largest_component(resid)
+            area = float(opp.mean())
+            if area < OPPONENT_AREA_FLOOR:
+                continue
+            ys = np.nonzero(opp > 0.5)[0]
+            if len(ys):
+                samples.append((i, float(ys.mean()), area))
+        res = finish_resolve(
+            onset(c.start_s, n),
+            subject_velocity_peak(sub, opponent_on_right=right_mass >= left_mass),
+            descent_frame(samples),
         )
-        logger.info("[finish] candidate %.2fs -> %s", c.start_s, c.finish_frame)
+        c.finish_frame = res.frame
+        c.finish_reason = res.reason
+        logger.info(
+            "[finish] candidate %.2fs -> %s (%s)", c.start_s, res.frame, res.reason or "anchored"
+        )
+        if rss_mb:
+            logger.info("[plan] RSS after finish %.2fs: %d MB", c.start_s, rss_mb())
 
     anchored = [c for c in survivors if c.finish_frame is not None]
     if not anchored:
@@ -243,11 +323,33 @@ def plan(
             seconds=round(now() - t0, 1),
         )
 
+    # WINDOW-INVARIANCE IS A GATE. Same footage, different start, same ABSOLUTE
+    # answer — or the detector is finding a maximum inside each window rather
+    # than an event in the footage. This is the check that caught the derived
+    # opponent, and it caught it for free from candidates already being scored.
+    abs_finishes = [c.start_s + c.finish_frame / fps for c in anchored]
+    if not is_window_invariant(abs_finishes):
+        return PlanResult(
+            reason=PlanFailure.NOT_INVARIANT,
+            candidates=results,
+            vote_frames=vote_frames,
+            seconds=round(now() - t0, 1),
+        )
+
     # Closest finish to the window's own start; a tie goes to the earlier window.
     chosen = sorted(anchored, key=lambda c: (c.finish_frame, c.start_s))[0]
     finish = int(chosen.finish_frame)
     n_frames = _frames_of(chosen)
     frames = frames_for(chosen.start_s, n_frames)
+
+    # The vote and the finish are done with the rest of the span. Propagation
+    # holds image embeddings for every frame of the window on top of whatever
+    # is still resident, and this machine has been between 6 and 18 GB into
+    # swap all session.
+    if release_span:
+        release_span(chosen.start_s, n_frames)
+    if rss_mb:
+        logger.info("[plan] RSS before propagation: %d MB", rss_mb())
 
     # TWO INDEX SPACES. The vote walks ABSOLUTE frames of the decoded span;
     # build_mattes counts 0..n-1 WITHIN the window. The backend supplies shims
@@ -333,48 +435,13 @@ def _match_shape(m: np.ndarray, shape) -> np.ndarray:
     return m[np.ix_(r, c)]
 
 
-def _finish(
-    frames,
-    *,
-    foreground_fn,
-    subject_mask_for,
-    stride: int = FINISH_STRIDE,
-) -> int | None:
-    """Steepest descent of the OPPONENT's centroid. The opponent is DERIVED.
+def sub_mask(seed_mask_fn, f: int, shape) -> np.ndarray:
+    """The coarse SUBJECT mask for one frame, or nothing to subtract.
 
-    It used to be read out of `silhouette_fn`, on the assumption that the dict
-    carried one entry per body. The real backend returns exactly one entry --
-    `{subject_hue: mask}` -- so the separability test `len(sils) < 2` was
-    structurally unsatisfiable: every frame was skipped, `ys` stayed empty, and
-    the function returned frame 0 by fallback on every real run. It cost 3722
-    seconds to answer nothing.
-
-    So the opponent is now what is LEFT: foreground AND NOT dilate(subject).
-    birefnet on every third frame at half resolution, no SAM2 -- the centroid of
-    a body does not need a precise edge, and that is the difference between
-    about three minutes and about sixty-two.
-
-    Returns the window-relative finish frame, or None when fewer than three
-    frames are separable. None is not frame 0.
+    Coarse on purpose: it is dilated and subtracted, never rendered. What it
+    must NOT be is absent, because then the residual is the whole foreground
+    and the "opponent" is both fighters.
     """
-    ys, idx = [], []
-    for i in range(0, len(frames), stride):
-        f = frames[i]
-        fgm = np.asarray(foreground_fn(f), np.float32)
-        if fgm.size < 4:
-            continue
-        subj = _match_shape(subject_mask_for(i, f), fgm.shape)
-        opp = (fgm > 0.5) & ~(dilate(subj, SUBJECT_DILATE_PX) > 0.5)
-        area = float(opp.mean())
-        rows = np.nonzero(opp.any(axis=1))[0]
-        if area < OPPONENT_AREA_FLOOR or not len(rows):
-            logger.info("[finish] frame %d: opponent %.2f%% — not separable", i, area * 100)
-            continue
-        y = float(np.nonzero(opp)[0].mean())
-        logger.info("[finish] frame %d: opponent %.2f%% centroid y=%.1f", i, area * 100, y)
-        ys.append(y)
-        idx.append(i)
-    if len(ys) < 3:
-        logger.warning("[finish] only %d separable frame(s) — unresolved", len(ys))
-        return None
-    return int(derive_finish_frame(ys, idx))
+    if seed_mask_fn is None:
+        return np.zeros((2, 2), np.float32)
+    return np.asarray(seed_mask_fn(f), np.float32)

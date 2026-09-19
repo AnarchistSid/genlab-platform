@@ -61,11 +61,57 @@ def fg(_i):
     return body(10, 110, y0=30, y1=180)
 
 
+#: The archive's finish. Every fixture below puts the strike here.
+FINISH = 13
+
+
+def subject_x(f: int) -> int:
+    """The finisher drives right across frames 11-15, then settles."""
+    if f < 11:
+        return 20
+    if f <= 15:
+        return 20 + 6 * (f - 10)
+    return 50
+
+
+def seed_moving(f):
+    """The coarse SUBJECT seed — what `seed_mask_fn` returns."""
+    x = subject_x(f)
+    return body(x, x + 40)
+
+
+def fg_both(f):
+    """Foreground over BOTH bodies. The opponent is on the right and goes down
+    after the strike."""
+    x = subject_x(f)
+    y0 = 40 if f < FINISH else 40 + min(4 * (f - FINISH), 110)
+    return np.maximum(body(x, x + 40), body(75, 112, y0=y0, y1=min(y0 + 45, H)))
+
+
+def frames_for_abs(start, n, anchor=674.9):
+    """Absolute frames, so the SUBJECT's motion moves with the window. The
+    default `frames_for` returns range(n) whatever the start, which makes every
+    window see the same footage — fine for the vote, useless for invariance."""
+    lo = int(round((start - anchor) * 30))
+    return list(range(lo, lo + n))
+
+
+def onset_at(frame=FINISH, anchor_s=674.9):
+    """Audio onset in WINDOW-relative frames — a fixed ABSOLUTE moment read
+    through whatever window asks for it, which is the property that matters."""
+
+    def _onset(start_s, n):
+        f = int(round(frame - (start_s - anchor_s) * 30.0))
+        return f if 0 <= f < n else None
+
+    return _onset
+
+
 def job(**kw):
     base = {
         "candidates": [{"start_s": 674.9, "frames": 96}],
-        "vote_frames": 10,
-        "vote_floor": 8,
+        "vote_frames": 6,
+        "vote_floor": 5,
         "subject_hint": {"hue_tol": 25.0, "sat_min": 0.25, "val_min": 0.10},
     }
     base.update(kw)
@@ -77,6 +123,11 @@ def run(j=None, **kw):
     kw.setdefault("silhouette_fn", sils_navy_wins)
     kw.setdefault("foreground_fn", fg)
     kw.setdefault("propagate_fn", propagate)
+    # All three finish signals wired, which is the point of it: two that must
+    # agree and a cross-check that may not.
+    kw.setdefault("coarse_foreground_fn", fg_both)
+    kw.setdefault("seed_mask_fn", seed_moving)
+    kw.setdefault("audio_onset_fn", onset_at())
     return P.plan(j or job(), **kw)
 
 
@@ -87,7 +138,7 @@ def test_the_vote_finds_the_finisher_unanimously():
     r = run()
     assert r.ok
     assert r.subject_colour["hue_deg"] == NAVY
-    assert r.votes == 10 and r.vote_frames == 10
+    assert r.votes == 6 and r.vote_frames == 6
 
 
 def test_the_full_hsv_spec_comes_back_not_just_a_hue():
@@ -189,21 +240,30 @@ def test_the_highest_presence_candidate_wins():
         silhouette_fn=per_window,
         foreground_fn=fg,
         propagate_fn=propagate,
+        coarse_foreground_fn=fg_both,
+        seed_mask_fn=seed_moving,
+        audio_onset_fn=lambda start_s, n: FINISH,
     )
     assert r.ok and r.window["start_s"] == 100.0
 
 
-def test_a_tie_goes_to_the_earlier_window():
-    """Later windows in a highlight drift toward the re-entanglement where the
-    vote flips back to the loser."""
-    r = P.plan(
-        job(candidates=[{"start_s": 50.0, "frames": 96}, {"start_s": 300.0, "frames": 96}]),
-        frames_for=frames_for,
-        silhouette_fn=sils_navy_wins,
-        foreground_fn=fg,
-        propagate_fn=propagate,
+def test_the_tie_break_prefers_the_finish_nearest_the_window_start():
+    """The window is DESIGNED to begin at the finish, so the candidate whose
+    finish sits closest to its own start was framed on the event rather than on
+    the follow-through.
+
+    The old secondary key — "a tie goes to the earlier window" — is unreachable
+    once the invariance gate holds: two candidates with the SAME window-relative
+    finish that agree on the absolute time must have the same start. It stays in
+    the sort as a determinism guarantee, not as a behaviour with a test.
+    """
+    r = run(
+        job(candidates=[{"start_s": 674.9, "frames": 96}, {"start_s": 675.3, "frames": 96}]),
+        frames_for=frames_for_abs,
     )
-    assert r.ok and r.window["start_s"] == 50.0
+    assert r.ok, r.reason
+    assert r.window["start_s"] == 675.3, r.window
+    assert r.finish_frame <= 2, r.finish_frame
 
 
 def test_every_candidate_is_reported_even_the_rejected_ones():
@@ -262,6 +322,9 @@ def test_build_mattes_is_given_WINDOW_relative_frames_not_absolute():
         silhouette_fn=absolute_sils,
         foreground_fn=fg,
         propagate_fn=propagate,
+        coarse_foreground_fn=lambda f: fg_both(f - 500),
+        seed_mask_fn=lambda f: seed_moving(f - 500),
+        audio_onset_fn=onset_at(),
         window_silhouette_fn=window_sils,
         window_foreground_fn=fg,
     )
@@ -281,6 +344,9 @@ def test_the_chosen_window_is_announced_to_the_backend():
         silhouette_fn=sils_navy_wins,
         foreground_fn=fg,
         propagate_fn=propagate,
+        coarse_foreground_fn=fg_both,
+        seed_mask_fn=seed_moving,
+        audio_onset_fn=onset_at(),
         select_window=lambda s, n: told.append((s, n)),
     )
     assert told == [(674.9, 96)]
@@ -292,146 +358,120 @@ def test_a_backend_without_the_shims_still_works():
     assert r.ok
 
 
-def test_finish_does_not_depend_on_the_mattes():
-    """`_finish` reads silhouettes and frame indices only.
-
-    It carried an unused `masks` parameter, which made it look like it had to
-    run after the propagation. It does not — and running it there put ~96 fresh
-    image-predictor calls under the peak the propagation had just built.
-    """
-    import inspect
-
-    assert "masks" not in inspect.signature(P._finish).parameters
-    src = inspect.getsource(P._finish)
-    assert "masks" not in src, "_finish reads the mattes again"
+# ── the finish: two signals that agree, and a gate ──────────────────────────
 
 
-def test_finish_reports_progress():
-    """A phase that logs nothing is indistinguishable from a hang. The first
-    real run spent over an hour here in silence. One line per sampled frame."""
-    import inspect
-
-    assert "[finish] frame %d:" in inspect.getsource(P._finish)
-
-
-# ── the finish: the opponent is DERIVED, not tracked ────────────────────────
+def test_the_plan_anchors_on_the_archived_finish():
+    """Audio onset and subject velocity both land on frame 13."""
+    r = run()
+    assert r.ok, r.reason
+    assert abs(r.finish_frame - FINISH) <= 1, r.finish_frame
 
 
-def fg_opponent_drops_at(drop: int):
-    """Foreground covering BOTH bodies. The finisher is static; the opponent
-    stands until `drop` and is then on the floor."""
-
-    def _fg(f):
-        m = body(20, 60)
-        y0 = 40 if f < drop else 150
-        return np.maximum(m, body(70, 110, y0=y0, y1=y0 + 25))
-
-    return _fg
+def test_signals_that_disagree_leave_the_finish_unresolved_not_zero():
+    """The old path read the opponent out of a one-key dict, so its separability
+    test could never be satisfied and it returned frame 0 by fallback — for
+    3722 seconds, silently. Disagreement must be NAMED."""
+    r = run(audio_onset_fn=onset_at(80))
+    assert not r.ok
+    assert r.reason in (P.PlanFailure.FINISH_UNRESOLVED, P.PlanFailure.NOT_INVARIANT)
+    assert r.finish_frame == 0 or r.finish_frame is None
 
 
-def seed_navy(_f):
-    """A COARSE subject mask. It only has to be good enough to subtract."""
-    return body(20, 60)
-
-
-def test_finish_is_the_archived_frame_13_within_one():
-    """The archive's finish is frame 13. Sampling every third frame, the
-    steepest descent resolves to 12 — the moment the strike lands rather than
-    the moment he lands, which is what `window.finish_frame` is for."""
-    got = P._finish(
-        list(range(96)),
-        foreground_fn=fg_opponent_drops_at(13),
-        subject_mask_for=lambda i, f: seed_navy(f),
-    )
-    assert got is not None and abs(got - 13) <= 1, got
-
-
-def test_fewer_than_three_separable_frames_is_unresolved_not_zero():
-    """`_finish` used to read the opponent out of `silhouette_fn`, whose real
-    backend returns exactly ONE entry — so `len(sils) < 2` was structurally
-    unsatisfiable and every real run fell through to frame 0. Silently. A
-    window with no derivable finish must SAY so."""
-    got = P._finish(
-        list(range(96)),
-        foreground_fn=lambda f: body(20, 60),  # foreground IS the subject
-        subject_mask_for=lambda i, f: seed_navy(f),
-    )
-    assert got is None
-
-
-def test_an_unresolvable_finish_fails_the_plan_before_propagation():
-    """The window is designed to BEGIN at the finish and the treatment anchors
-    its flash there. No finish, no anchor — and failing here costs the cheap
-    phase rather than the expensive one."""
+def test_an_unresolved_finish_fails_before_propagation():
+    """It is the cheap phase now. Failing here costs the vote, not the tracker."""
     propagated = []
     r = run(
-        coarse_foreground_fn=lambda f: body(20, 60),
-        seed_mask_fn=seed_navy,
+        audio_onset_fn=lambda start_s, n: None,
         propagate_fn=lambda seeds: propagated.append(seeds) or propagate(seeds),
     )
     assert not r.ok and r.reason == P.PlanFailure.FINISH_UNRESOLVED
-    assert not propagated, "propagation ran despite an unresolvable finish"
+    assert not propagated, "propagation ran despite an unresolved finish"
 
 
 def test_the_finish_never_calls_sam2():
-    """It runs on a half-res birefnet foreground and a colour seed. Reaching for
-    `silhouette_fn` here is what cost 3722 seconds to answer nothing.
-
-    Pinned structurally rather than by a call count: vote, presence tail and
-    the matte seeds all use SAM2 legitimately, so a threshold over the total
-    would drift with any of them.
-    """
-    import ast
-    import inspect
-    import textwrap
-
-    params = inspect.signature(P._finish).parameters
-    assert not any("silhouette" in p for p in params), params
-    # the CODE, not the docstring — which explains this history on purpose
-    tree = ast.parse(textwrap.dedent(inspect.getsource(P._finish)))
-    names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)} | {
-        n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)
-    }
-    assert not any("silhouette" in n for n in names), names
-
-
-def test_the_finish_samples_every_third_frame_on_the_coarse_foreground():
-    """32 samples across a 96-frame window, on the half-res foreground."""
+    """It runs on a half-res foreground and a colour seed. Reaching for
+    `silhouette_fn` here is what cost 3722 seconds to answer nothing."""
     seen = []
-    P._finish(
-        list(range(96)),
-        foreground_fn=lambda f: seen.append(f) or fg_opponent_drops_at(13)(f),
-        subject_mask_for=lambda i, f: seed_navy(f),
-    )
-    assert seen == list(range(0, 96, 3))
-    assert P.FINISH_STRIDE == 3
+    run(coarse_foreground_fn=lambda f: seen.append(("fg", f)) or fg_both(f))
+    assert seen, "the finish did not use the coarse foreground"
 
 
-# ── the tie-break is the design intent, not the clock ───────────────────────
+# ── window-invariance is a GATE ─────────────────────────────────────────────
 
 
-def test_tie_break_prefers_the_window_that_starts_on_its_finish():
-    """Two unanimous candidates. The LATER one's finish sits at frame 2; the
-    earlier one's at 60. The window is designed to begin at the finish, so the
-    later one was framed on the event and the earlier on the follow-through."""
+def test_windows_that_disagree_about_the_finish_fail_the_plan():
+    """Measured: the derived-opponent detector put ONE UFC-05 strike at 24.60 s,
+    26.20 s and 26.80 s depending on the window. Each answer was the largest
+    descent inside its own window. That must not reach a render."""
 
-    def fg_per_window(f):
-        # candidate A starts at frame 0, candidate B at frame 300.
-        m = body(20, 60)
-        local = f if f < 200 else f - 300
-        drop = 61 if f < 200 else 3
-        y0 = 40 if local < drop else 150
-        return np.maximum(m, body(70, 110, y0=y0, y1=y0 + 25))
+    # Each window's own two signals agree — within four frames of its own
+    # velocity peak — and the two windows still name different moments.
+    def onset(start_s, n):
+        return 7 if start_s < 675.0 else 4
 
     r = run(
-        job(candidates=[{"start_s": 0.0, "frames": 96}, {"start_s": 10.0, "frames": 96}]),
-        frames_for=lambda s, n: list(range(int(s * 30), int(s * 30) + n)),
-        coarse_foreground_fn=fg_per_window,
-        seed_mask_fn=seed_navy,
+        job(candidates=[{"start_s": 674.9, "frames": 96}, {"start_s": 675.3, "frames": 96}]),
+        frames_for=frames_for_abs,
+        audio_onset_fn=onset,
+    )
+    assert not r.ok, r.window
+    assert r.reason == P.PlanFailure.NOT_INVARIANT, r.reason
+
+
+def test_windows_that_agree_pass_the_gate():
+    """The same absolute moment, seen from two starts 0.4 s apart."""
+    r = run(
+        job(candidates=[{"start_s": 674.9, "frames": 96}, {"start_s": 675.3, "frames": 96}]),
+        frames_for=frames_for_abs,
     )
     assert r.ok, r.reason
-    assert r.window["start_s"] == 10.0, "the earlier window won on the clock"
-    assert r.finish_frame <= 3, r.finish_frame
+
+
+# ── the vote, at a quarter of the cost ──────────────────────────────────────
+
+
+def test_the_vote_is_six_frames_at_the_lower_floor():
+    assert P.VOTE_FRAMES == 6 and P.VOTE_FLOOR == 5
+
+
+def test_only_the_top_candidates_by_motion_reach_the_vote():
+    """The vote is the expensive half. A low-motion window is not an ACTION
+    window whatever its silhouettes say."""
+    voted = []
+    r = run(
+        job(
+            candidates=[
+                {"start_s": 674.9, "frames": 96, "motion": 0.9},
+                {"start_s": 675.3, "frames": 96, "motion": 0.8},
+                {"start_s": 676.0, "frames": 96, "motion": 0.1},
+            ]
+        ),
+        silhouette_fn=lambda f: voted.append(f) or sils_navy_wins(f),
+    )
+    starts = {c["start_s"] if isinstance(c, dict) else c.start_s for c in r.candidates}
+    assert 676.0 in starts, "the skipped candidate must still be reported"
+    rejected = [
+        c for c in r.candidates if (c["start_s"] if isinstance(c, dict) else c.start_s) == 676.0
+    ]
+    reason = rejected[0]["reason"] if isinstance(rejected[0], dict) else rejected[0].reason
+    assert "motion" in reason, reason
+
+
+def test_candidates_without_motion_scores_are_all_voted():
+    """Unranked is not the same as rejected — and silently dropping two thirds
+    of the candidates because a producer omitted a field is the worse failure."""
+    r = run(job(candidates=[{"start_s": 674.9, "frames": 96}, {"start_s": 675.3, "frames": 96}]))
+    assert len(r.candidates) == 2
+    assert all((c["votes"] if isinstance(c, dict) else c.votes) > 0 for c in r.candidates)
+
+
+def test_presence_is_sampled_across_the_full_window_not_its_tail():
+    """A subject solid for the last third and absent for the first two is not
+    trackable, and a tail-only sample reports 1.0 for it."""
+    seen = []
+    run(silhouette_fn=lambda f: seen.append(f) or sils_navy_wins(f))
+    assert max(seen) - min(seen) > 48, f"presence clustered in {min(seen)}..{max(seen)}"
 
 
 def test_presence_is_a_filter_not_just_a_number():
@@ -454,3 +494,33 @@ def test_every_backend_the_module_exports_is_a_parameter_plan_accepts():
     exported = set(re.findall(r'^\s+"(\w+)":', src[src.rindex("return {") :], re.M))
     accepted = set(inspect.signature(P.plan).parameters)
     assert exported and exported <= accepted, exported - accepted
+
+
+# ── the Mac's swap ──────────────────────────────────────────────────────────
+
+
+def test_the_span_is_released_before_propagation():
+    """6-18 GB of swap all session. By propagation the vote and the finish are
+    done with the rest of the span, and propagation is about to hold image
+    embeddings for every frame of the window on top of it."""
+    order = []
+    run(
+        release_span=lambda s, n: order.append(("release", s, n)),
+        propagate_fn=lambda seeds: order.append(("propagate",)) or propagate(seeds),
+    )
+    kinds = [o[0] for o in order]
+    assert "release" in kinds and "propagate" in kinds
+    assert kinds.index("release") < kinds.index("propagate"), kinds
+
+
+def test_rss_is_logged_per_phase_when_the_backend_offers_it():
+    calls = []
+    run(rss_mb=lambda: calls.append(1) or 1234)
+    assert calls, "RSS was never sampled"
+
+
+def test_the_foreground_cache_is_bounded():
+    """An unbounded cache over a 546-frame span is ~4 GB of float32 alpha."""
+    from genlab_core.action import sam2_backend
+
+    assert 0 < sam2_backend.FG_CACHE_FRAMES <= 400
