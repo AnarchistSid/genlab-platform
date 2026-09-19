@@ -231,3 +231,82 @@ def test_the_payload_excludes_the_mattes_themselves():
     """Masks go to disk beside the result, not into a JSON field."""
     p = run().as_payload()
     assert "mattes" not in p and p["frames"] == 96
+
+
+# ── the two index spaces ────────────────────────────────────────────────────
+
+
+def test_build_mattes_is_given_WINDOW_relative_frames_not_absolute():
+    """The bug the first real run exposed.
+
+    The vote walks ABSOLUTE frames of the decoded span; build_mattes counts
+    0..n-1 WITHIN the window. Left unreconciled the mattes come back built on
+    the START of the span rather than the chosen window — a wrong answer with no
+    error attached. The backend supplies shims; the plan must use them.
+    """
+    seen = {"vote": [], "matte": []}
+
+    def absolute_sils(f):
+        seen["vote"].append(f)
+        return sils_navy_wins(f)
+
+    def window_sils(f):
+        seen["matte"].append(f)
+        return sils_navy_wins(f)
+
+    P.plan(
+        job(candidates=[{"start_s": 674.9, "frames": 96}]),
+        frames_for=lambda s, n: list(range(500, 500 + n)),  # absolute, offset
+        silhouette_fn=absolute_sils,
+        foreground_fn=fg,
+        propagate_fn=propagate,
+        window_silhouette_fn=window_sils,
+        window_foreground_fn=fg,
+    )
+    assert seen["matte"], "build_mattes never received the window-relative shim"
+    assert max(seen["matte"]) < 96, "build_mattes was handed absolute indices"
+    assert max(seen["vote"]) >= 500, "the vote was not walking absolute frames"
+
+
+def test_the_chosen_window_is_announced_to_the_backend():
+    """`select_window` is how the backend learns which 96 of the decoded span to
+    propagate. Without it SAM2 tracks the whole span — 546 frames against 96 on
+    the first real run, at ~4 s each."""
+    told = []
+    P.plan(
+        job(candidates=[{"start_s": 674.9, "frames": 96}]),
+        frames_for=frames_for,
+        silhouette_fn=sils_navy_wins,
+        foreground_fn=fg,
+        propagate_fn=propagate,
+        select_window=lambda s, n: told.append((s, n)),
+    )
+    assert told == [(674.9, 96)]
+
+
+def test_a_backend_without_the_shims_still_works():
+    """Older callers pass only the four original backends; they must not break."""
+    r = run()
+    assert r.ok
+
+
+def test_finish_does_not_depend_on_the_mattes():
+    """`_finish` reads silhouettes and frame indices only.
+
+    It carried an unused `masks` parameter, which made it look like it had to
+    run after the propagation. It does not — and running it there put ~96 fresh
+    image-predictor calls under the peak the propagation had just built.
+    """
+    import inspect
+
+    assert "masks" not in inspect.signature(P._finish).parameters
+    src = inspect.getsource(P._finish)
+    assert "masks" not in src, "_finish reads the mattes again"
+
+
+def test_finish_reports_progress():
+    """A phase that takes ~40 minutes and logs nothing is indistinguishable from
+    a hang. The first real run spent over an hour here in silence."""
+    import inspect
+
+    assert "[finish] %d/%d" in inspect.getsource(P._finish)

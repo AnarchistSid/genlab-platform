@@ -339,22 +339,63 @@ def plan_backends(job: dict, *, device: str = "mps") -> dict:
         pick = int(ok[np.argmax(areas[ok])]) if len(ok) else int(np.argmin(areas))
         return {float(seed_spec.get("hue_deg", 0.0)): masks[pick].astype(np.float32)}
 
+    # The window the plan settled on. `build_mattes` indexes frames
+    # WINDOW-RELATIVE (0..n-1) while the vote indexes them ABSOLUTE into the
+    # decoded span, so the two disagree unless something reconciles them. Left
+    # unreconciled, the mattes are computed on the START of the span rather than
+    # on the chosen window — a silent wrong answer, not an error.
+    chosen: dict = {"offset": 0, "n": 0}
+
+    def select_window(start_s: float, n: int) -> None:
+        chosen["offset"] = max(int(round(start_s * fps)) - frame_offset, 0)
+        chosen["n"] = n
+
     def propagate_fn(seeds: dict) -> dict:
         import torch
 
-        state = video_pred.init_state(video_path=_frames_dir(all_frames))
+        # Propagate over the WINDOW, not the span. The span covers every
+        # candidate — 546 frames here against the window's 96 — and at ~4 s a
+        # frame that is 36 minutes of tracking thrown away.
+        off, n = chosen["offset"], (chosen["n"] or len(all_frames))
+        window = all_frames[off : off + n]
+        state = video_pred.init_state(video_path=_frames_dir(window))
         for f, mask in seeds.items():
             video_pred.add_new_mask(
                 state, frame_idx=f, obj_id=1, mask=torch.as_tensor(mask > 0.5, device=dev)
             )
-        return {
+        out = {
             idx: (logits[0] > 0).cpu().numpy().astype(np.float32)[0]
             for idx, _ids, logits in video_pred.propagate_in_video(state)
         }
+        # DROP THE STATE BEFORE RETURNING. init_state holds image embeddings for
+        # every frame of the window; the caller's next phase is ~96 fresh image
+        # -predictor calls. Left resident, that pushed a 19 GB machine to 18 GB
+        # of swap and per-frame cost from ~15 s to minutes — the phase ran over
+        # an hour with no output. Nothing downstream reads `state`.
+        del state
+        if hasattr(torch, "mps"):
+            torch.mps.empty_cache()
+        return out
+
+    def window_silhouette_fn(i: int) -> dict:
+        """Window-relative index -> the ABSOLUTE frame the vote also used.
+
+        `build_mattes` counts 0..n-1 within the window; the vote counts frames
+        of the decoded span. Without this shim the mattes are built on the START
+        of the span instead of the chosen window, which is a wrong answer with
+        no error attached to it.
+        """
+        return silhouette_fn(chosen["offset"] + int(i))
+
+    def window_foreground_fn(i: int):
+        return fg(chosen["offset"] + int(i))
 
     return {
         "frames_for": frames_for,
-        "silhouette_fn": silhouette_fn,
+        "silhouette_fn": silhouette_fn,  # absolute — the vote's space
         "foreground_fn": fg,
         "propagate_fn": propagate_fn,
+        "select_window": select_window,
+        "window_silhouette_fn": window_silhouette_fn,
+        "window_foreground_fn": window_foreground_fn,
     }

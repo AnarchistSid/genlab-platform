@@ -110,6 +110,9 @@ def plan(
     foreground_fn,
     propagate_fn,
     cuts_in_window=None,
+    select_window=None,
+    window_silhouette_fn=None,
+    window_foreground_fn=None,
     now=time.time,
 ) -> PlanResult:
     """Vote across candidates, pick a window, derive the finish, matte it.
@@ -183,11 +186,18 @@ def plan(
     )
     frames = frames_for(chosen.start_s, n_frames)
 
+    # TWO INDEX SPACES. The vote walks ABSOLUTE frames of the decoded span;
+    # build_mattes counts 0..n-1 WITHIN the window. The backend supplies shims
+    # that translate, and `select_window` tells it which window was chosen —
+    # without that the mattes come back built on the start of the span, which is
+    # a wrong answer carrying no error.
+    if select_window is not None:
+        select_window(chosen.start_s, n_frames)
     masks, report = build_mattes(
         len(frames),
         cuts=tuple(job.get("cuts") or ()),
-        foreground_fn=foreground_fn,
-        silhouette_fn=silhouette_fn,
+        foreground_fn=window_foreground_fn or foreground_fn,
+        silhouette_fn=window_silhouette_fn or silhouette_fn,
         propagate_fn=propagate_fn,
         subject_hue=float(chosen.hue_deg),
     )
@@ -200,7 +210,7 @@ def plan(
     areas = [float((np.asarray(m) > 0.5).mean()) for _, m in sorted(masks.items())]
     empty = sum(1 for a in areas if a < 0.005)
 
-    finish = _finish(masks, silhouette_fn, frames)
+    finish = _finish(silhouette_fn, frames)
     spec = job.get("subject_hint") or {}
     subject_colour = {
         "hue_deg": float(chosen.hue_deg),
@@ -250,7 +260,7 @@ def _warp_all(masks: dict, job: dict) -> dict:
     return out
 
 
-def _finish(masks: dict, silhouette_fn, frames) -> int:
+def _finish(silhouette_fn, frames) -> int:
     """Steepest descent of the OPPONENT's centroid, on SEPARABLE frames only.
 
     The first attempt at this returned frame 1, because two frames where
@@ -258,7 +268,15 @@ def _finish(masks: dict, silhouette_fn, frames) -> int:
     is what makes the signal usable.
     """
     ys, idx = [], []
+    t_f = time.time()
     for i, f in enumerate(frames):
+        # THE LONGEST PHASE MUST NOT BE SILENT. This loop is ~96 fresh
+        # silhouettes; on the first real run it took over an hour and logged
+        # nothing, so "slow" and "hung" were indistinguishable from outside.
+        if i and i % 8 == 0:
+            logger.info(
+                "[finish] %d/%d silhouettes (%.1f s/frame)", i, len(frames), (time.time() - t_f) / i
+            )
         sils = silhouette_fn(f)
         if len(sils) < 2:  # not separable: both bodies are one blob
             continue
