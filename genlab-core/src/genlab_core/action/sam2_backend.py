@@ -37,6 +37,7 @@ from pathlib import Path
 import numpy as np
 
 from genlab_core.action.clicks import derive_clicks
+from genlab_core.action.colour_seed import match as colour_match
 from genlab_core.action.matte import build_mattes, crop_rect_for, warp_to_crop
 
 logger = logging.getLogger(__name__)
@@ -113,6 +114,25 @@ def _foreground_fn(frames: list[np.ndarray]):
         return cache[i]
 
     return fg
+
+
+class _HalfFrames:
+    """Half-resolution view of a decoded span, materialised per access.
+
+    birefnet on 960x540 costs roughly a quarter of 1920x1080, and the finish is
+    a centroid TREND over about a second — it does not need the extra pixels.
+    Nothing is precomputed: the finish samples every third frame, so halving the
+    whole span up front would allocate three times what gets read.
+    """
+
+    def __init__(self, frames):
+        self._f = frames
+
+    def __getitem__(self, i):
+        return self._f[i][::2, ::2]
+
+    def __len__(self):
+        return len(self._f)
 
 
 def _predictors(device: str):
@@ -377,6 +397,28 @@ def plan_backends(job: dict, *, device: str = "mps") -> dict:
             torch.mps.empty_cache()
         return out
 
+    # THE OPPONENT IS DERIVED, NOT TRACKED. `silhouette_fn` returns exactly one
+    # entry — {subject_hue: mask} — so any caller asking it for a second body
+    # gets nothing, silently. These two backends are what the finish subtracts
+    # with instead: a half-res foreground covering BOTH bodies, and a coarse
+    # colour seed covering the subject. Neither touches SAM2.
+    half_fg = _foreground_fn(_HalfFrames(all_frames))
+
+    def coarse_foreground_fn(i: int) -> np.ndarray:
+        if not isinstance(i, int) or not 0 <= i < len(all_frames):
+            return np.zeros((2, 2), np.float32)
+        return half_fg(i)
+
+    def seed_mask_fn(i: int) -> np.ndarray:
+        """Coarse SUBJECT mask: the garment hue, scoped inside the foreground.
+
+        Unscoped, this selected the cage padding. Scoped, it is loose and
+        holey — which is fine, because it is dilated and subtracted, never
+        rendered."""
+        if not isinstance(i, int) or not 0 <= i < len(all_frames):
+            return np.zeros((2, 2), np.float32)
+        return colour_match(all_frames[i][::2, ::2], seed_spec, foreground=half_fg(i))
+
     def window_silhouette_fn(i: int) -> dict:
         """Window-relative index -> the ABSOLUTE frame the vote also used.
 
@@ -396,6 +438,8 @@ def plan_backends(job: dict, *, device: str = "mps") -> dict:
         "foreground_fn": fg,
         "propagate_fn": propagate_fn,
         "select_window": select_window,
+        "coarse_foreground_fn": coarse_foreground_fn,
+        "seed_mask_fn": seed_mask_fn,
         "window_silhouette_fn": window_silhouette_fn,
         "window_foreground_fn": window_foreground_fn,
     }

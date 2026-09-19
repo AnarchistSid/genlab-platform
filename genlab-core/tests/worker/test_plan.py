@@ -14,6 +14,8 @@ sequences them and supplies backends, so these pins and theirs are the same pins
 
 from __future__ import annotations
 
+import re
+
 import numpy as np
 import pytest
 from genlab_core.worker import plan as P
@@ -305,8 +307,150 @@ def test_finish_does_not_depend_on_the_mattes():
 
 
 def test_finish_reports_progress():
-    """A phase that takes ~40 minutes and logs nothing is indistinguishable from
-    a hang. The first real run spent over an hour here in silence."""
+    """A phase that logs nothing is indistinguishable from a hang. The first
+    real run spent over an hour here in silence. One line per sampled frame."""
     import inspect
 
-    assert "[finish] %d/%d" in inspect.getsource(P._finish)
+    assert "[finish] frame %d:" in inspect.getsource(P._finish)
+
+
+# ── the finish: the opponent is DERIVED, not tracked ────────────────────────
+
+
+def fg_opponent_drops_at(drop: int):
+    """Foreground covering BOTH bodies. The finisher is static; the opponent
+    stands until `drop` and is then on the floor."""
+
+    def _fg(f):
+        m = body(20, 60)
+        y0 = 40 if f < drop else 150
+        return np.maximum(m, body(70, 110, y0=y0, y1=y0 + 25))
+
+    return _fg
+
+
+def seed_navy(_f):
+    """A COARSE subject mask. It only has to be good enough to subtract."""
+    return body(20, 60)
+
+
+def test_finish_is_the_archived_frame_13_within_one():
+    """The archive's finish is frame 13. Sampling every third frame, the
+    steepest descent resolves to 12 — the moment the strike lands rather than
+    the moment he lands, which is what `window.finish_frame` is for."""
+    got = P._finish(
+        list(range(96)),
+        foreground_fn=fg_opponent_drops_at(13),
+        subject_mask_for=lambda i, f: seed_navy(f),
+    )
+    assert got is not None and abs(got - 13) <= 1, got
+
+
+def test_fewer_than_three_separable_frames_is_unresolved_not_zero():
+    """`_finish` used to read the opponent out of `silhouette_fn`, whose real
+    backend returns exactly ONE entry — so `len(sils) < 2` was structurally
+    unsatisfiable and every real run fell through to frame 0. Silently. A
+    window with no derivable finish must SAY so."""
+    got = P._finish(
+        list(range(96)),
+        foreground_fn=lambda f: body(20, 60),  # foreground IS the subject
+        subject_mask_for=lambda i, f: seed_navy(f),
+    )
+    assert got is None
+
+
+def test_an_unresolvable_finish_fails_the_plan_before_propagation():
+    """The window is designed to BEGIN at the finish and the treatment anchors
+    its flash there. No finish, no anchor — and failing here costs the cheap
+    phase rather than the expensive one."""
+    propagated = []
+    r = run(
+        coarse_foreground_fn=lambda f: body(20, 60),
+        seed_mask_fn=seed_navy,
+        propagate_fn=lambda seeds: propagated.append(seeds) or propagate(seeds),
+    )
+    assert not r.ok and r.reason == P.PlanFailure.FINISH_UNRESOLVED
+    assert not propagated, "propagation ran despite an unresolvable finish"
+
+
+def test_the_finish_never_calls_sam2():
+    """It runs on a half-res birefnet foreground and a colour seed. Reaching for
+    `silhouette_fn` here is what cost 3722 seconds to answer nothing.
+
+    Pinned structurally rather than by a call count: vote, presence tail and
+    the matte seeds all use SAM2 legitimately, so a threshold over the total
+    would drift with any of them.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    params = inspect.signature(P._finish).parameters
+    assert not any("silhouette" in p for p in params), params
+    # the CODE, not the docstring — which explains this history on purpose
+    tree = ast.parse(textwrap.dedent(inspect.getsource(P._finish)))
+    names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)} | {
+        n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)
+    }
+    assert not any("silhouette" in n for n in names), names
+
+
+def test_the_finish_samples_every_third_frame_on_the_coarse_foreground():
+    """32 samples across a 96-frame window, on the half-res foreground."""
+    seen = []
+    P._finish(
+        list(range(96)),
+        foreground_fn=lambda f: seen.append(f) or fg_opponent_drops_at(13)(f),
+        subject_mask_for=lambda i, f: seed_navy(f),
+    )
+    assert seen == list(range(0, 96, 3))
+    assert P.FINISH_STRIDE == 3
+
+
+# ── the tie-break is the design intent, not the clock ───────────────────────
+
+
+def test_tie_break_prefers_the_window_that_starts_on_its_finish():
+    """Two unanimous candidates. The LATER one's finish sits at frame 2; the
+    earlier one's at 60. The window is designed to begin at the finish, so the
+    later one was framed on the event and the earlier on the follow-through."""
+
+    def fg_per_window(f):
+        # candidate A starts at frame 0, candidate B at frame 300.
+        m = body(20, 60)
+        local = f if f < 200 else f - 300
+        drop = 61 if f < 200 else 3
+        y0 = 40 if local < drop else 150
+        return np.maximum(m, body(70, 110, y0=y0, y1=y0 + 25))
+
+    r = run(
+        job(candidates=[{"start_s": 0.0, "frames": 96}, {"start_s": 10.0, "frames": 96}]),
+        frames_for=lambda s, n: list(range(int(s * 30), int(s * 30) + n)),
+        coarse_foreground_fn=fg_per_window,
+        seed_mask_fn=seed_navy,
+    )
+    assert r.ok, r.reason
+    assert r.window["start_s"] == 10.0, "the earlier window won on the clock"
+    assert r.finish_frame <= 3, r.finish_frame
+
+
+def test_presence_is_a_filter_not_just_a_number():
+    """PRESENCE_MIN_FRAMES sat unused. A window whose subject vanishes for a
+    fifth of its length has nothing to track, whatever the vote said."""
+    assert P.PRESENCE_MIN_FRAMES == 0.80
+    r = run(silhouette_fn=lambda f: {NAVY: np.zeros((H, W), np.float32)})
+    assert not r.ok
+
+
+def test_every_backend_the_module_exports_is_a_parameter_plan_accepts():
+    """`_run_plan` splats `plan_backends(...)` straight into `plan(...)`. A key
+    added on one side and not the other is a TypeError on the worker, an hour
+    into a run, on the Mac — which is the worst place to find it."""
+    import inspect
+
+    from genlab_core.action import sam2_backend
+
+    src = inspect.getsource(sam2_backend.plan_backends)
+    exported = set(re.findall(r'^\s+"(\w+)":', src[src.rindex("return {") :], re.M))
+    accepted = set(inspect.signature(P.plan).parameters)
+    assert exported and exported <= accepted, exported - accepted
