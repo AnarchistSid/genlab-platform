@@ -140,6 +140,25 @@ done
 # systemd `service_down` alarm despite deploys being fine.
 # Check the new path first; fall back to the legacy path for backward
 # compat with any stale servers that haven't run the new deploy.sh.
+note "4b. systemd unit files match their source"
+# Phase 6.8 of deploy.sh copies deploy/systemd-phase2/* into /etc/systemd/system
+# and daemon-reloads. If an installed unit still differs afterwards the copy did
+# not happen, and the fix you shipped is sitting in the repo doing nothing —
+# which is how a SuccessExitStatus fix went unapplied for weeks, and how a
+# readiness probe would too.
+_drift=0
+for _src in "$GENLAB"/deploy/systemd-phase2/*.service "$GENLAB"/deploy/systemd-phase2/*.timer; do
+    [ -f "$_src" ] || continue
+    _bn=$(basename "$_src")
+    _dep="/etc/systemd/system/$_bn"
+    [ -f "$_dep" ] || continue          # not installed: Phase 6.8 leaves those alone
+    if ! diff -q "$_src" "$_dep" >/dev/null 2>&1; then
+        fail "unit DRIFT: $_bn differs from deploy/systemd-phase2 (deployed copy is stale)"
+        _drift=$((_drift + 1))
+    fi
+done
+[ "$_drift" -eq 0 ] && pass "all installed units match their source"
+
 note "5. /opt/genlab/.version.env present and current"
 VERSION_ENV_PATH=""
 if [ -f /opt/genlab/.version.env ]; then

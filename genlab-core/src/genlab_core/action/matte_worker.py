@@ -170,6 +170,12 @@ class MatteRequest:
     cuts: list[int] = field(default_factory=list)
     niche_id: str = ""
     blueprint_id: str = ""
+    #: Ask the worker for the PLAN as well as the mattes, in one round trip:
+    #: the silhouette vote, the chosen window, the finish frame. Twenty SAM2
+    #: image calls do not fit the 2-core VPS (measured: 138 min for 96 frames,
+    #: with OOM), so the decisions that need SAM2 are made where SAM2 lives —
+    #: and the stage never posts a second job for them.
+    plan: bool = False
 
     def as_job(self, job_id: str) -> dict:
         """The payload the worker receives — whole spec, whole plan."""
@@ -183,6 +189,7 @@ class MatteRequest:
             "cuts": list(self.cuts),
             "niche_id": self.niche_id,
             "blueprint_id": self.blueprint_id,
+            "plan": bool(self.plan),
         }
 
 
