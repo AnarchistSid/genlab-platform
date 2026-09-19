@@ -162,6 +162,16 @@ pipeline:
 
     # Layered post-render effects — these keep fail_mode=continue
     # (a missing overlay is acceptable, missing primary video is not).
+    # Craft renders BESIDE the legacy reel and publishes nothing while
+    # ``craft_publishes`` is False. Gated internally by ``dual_render_enabled``,
+    # so this entry is inert for every niche that has not opted in — it is here
+    # rather than in one niche.yaml because the opt-in is a flag, not a fork.
+    #
+    # fail_mode stays continue: craft is an observation running next to a render
+    # that has already succeeded. It must never block a publish.
+    - class: genlab_core.pipeline.stages.craft_render.CraftRenderStage
+      fail_mode: continue
+
     - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
       parallel_group: post_render
     - class: genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions

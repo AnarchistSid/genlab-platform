@@ -45,8 +45,10 @@ that creates a highlight, or it blooms the footage and not the effects.
 from __future__ import annotations
 
 import logging
+import subprocess
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 
@@ -322,3 +324,115 @@ def render(sb: Storyboard, src: FrameSources, kit: dict, **kw) -> CraftResult | 
         logger.warning("craft plate appears more than once; falling back to legacy")
         return None
     return res
+
+
+@dataclass
+class RenderedReel:
+    """What the pipeline stage gets back: a file, and the numbers to log."""
+
+    path: str
+    frames: int
+    empty_mattes: int
+    events: list
+    gates: dict = field(default_factory=dict)
+
+
+def render_to(
+    storyboard: dict, mattes, dst, *, kit: dict | None = None, clean_frames: dict | None = None
+) -> RenderedReel | None:
+    """Storyboard dict + mattes -> an encoded reel, or None.
+
+    Returns None rather than raising for every unusable input: the caller is a
+    pipeline stage running BESIDE a legacy render that has already succeeded, so
+    an exception here would turn an observation into an outage.
+
+    `clean_frames` is the graded source; when absent the storyboard must name a
+    frames directory. Mattes are expected in REEL space — the worker warps them
+    with the crop plan before returning, and a matte in native space is silently
+    wrong (measured once at 1.4% area where 28% was correct).
+    """
+    import numpy as np
+    from PIL import Image
+
+    from genlab_core.action.kits.registry import load_kit
+    from genlab_core.storyboard.models import Storyboard
+
+    try:
+        sb = storyboard if isinstance(storyboard, Storyboard) else Storyboard(**storyboard)
+    except Exception:  # noqa: BLE001 — a malformed plan is a skip, not a crash
+        logger.warning("craft.render_to: storyboard did not validate", exc_info=True)
+        return None
+
+    if clean_frames is None:
+        frames_dir = (storyboard or {}).get("frames_dir") if isinstance(storyboard, dict) else None
+        if not frames_dir or not Path(frames_dir).is_dir():
+            logger.info("craft.render_to: no clean frames to render from")
+            return None
+        clean_frames = {}
+        for p in sorted(Path(frames_dir).glob("*.png")):
+            try:
+                clean_frames[int(p.stem)] = np.asarray(Image.open(p).convert("RGB"), np.float32)
+            except ValueError:
+                continue
+    if not clean_frames:
+        return None
+
+    masks = mattes if isinstance(mattes, dict) else {}
+    if not masks and sb.treatment_is(Treatment.ACTION):
+        logger.info("craft.render_to: ACTION needs mattes and none were supplied")
+        return None
+
+    src = FrameSources(clean=clean_frames, matte=masks or dict.fromkeys(clean_frames))
+    res = render(sb, src, kit or load_kit(sb.kit or "impact"))
+    if res is None:
+        return None
+
+    dst = Path(dst)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    h, w = res.frames[0].shape[:2]
+    proc = subprocess.Popen(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-s",
+            f"{w}x{h}",
+            "-r",
+            str(sb.fps),
+            "-i",
+            "-",
+            "-pix_fmt",
+            "yuv420p",
+            "-colorspace",
+            "bt709",
+            "-color_primaries",
+            "bt709",
+            "-color_trc",
+            "bt709",
+            "-c:v",
+            "libx264",
+            "-crf",
+            "20",
+            "-preset",
+            "fast",
+            str(dst),
+        ],
+        stdin=subprocess.PIPE,
+    )
+    for fr in res.frames:
+        proc.stdin.write(np.clip(fr, 0, 255).astype(np.uint8).tobytes())
+    proc.stdin.close()
+    if proc.wait() != 0 or not dst.exists():
+        logger.warning("craft.render_to: encode failed for %s", dst)
+        return None
+
+    empty = sum(1 for m in masks.values() if float((np.asarray(m) > 0.5).mean()) < 0.005)
+    return RenderedReel(
+        path=str(dst), frames=len(res.frames), empty_mattes=empty, events=res.events
+    )

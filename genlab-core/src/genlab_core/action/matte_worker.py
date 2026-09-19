@@ -79,13 +79,111 @@ def seed_spec_complete(spec: dict | None) -> bool:
 
 
 @dataclass(frozen=True)
+class HSVSpec:
+    """The subject's garment colour. ALL FOUR fields, always.
+
+    Hue alone is not a colour: navy and sky blue share a hue and differ only in
+    value, and that is exactly the distinction that broke the UFC-05 matte — the
+    archive recorded `hue_deg` alone, the worker defaulted sat/val, and on a dark
+    navy garment the value floor excluded the subject so the seed landed on the
+    red cage. Eight of nine annotation frames were rejected and half the clip
+    came back unmasked.
+
+    The worker refuses a partial spec at runtime; this type refuses to express
+    one at all, which is the earlier and cheaper place to say no.
+    """
+
+    hue_deg: float
+    hue_tol: float
+    sat_min: float
+    val_min: float
+
+    def __post_init__(self) -> None:
+        for name in ("hue_deg", "hue_tol", "sat_min", "val_min"):
+            v = getattr(self, name)
+            if v is None or isinstance(v, bool) or not isinstance(v, int | float):
+                raise ValueError(f"HSVSpec.{name} must be a number, got {v!r}")
+        if not 0.0 <= self.hue_deg < 360.0:
+            raise ValueError(f"hue_deg out of range: {self.hue_deg}")
+        if self.hue_tol <= 0:
+            raise ValueError(f"hue_tol must be positive: {self.hue_tol}")
+
+    def as_dict(self) -> dict:
+        return {
+            "hue_deg": float(self.hue_deg),
+            "hue_tol": float(self.hue_tol),
+            "sat_min": float(self.sat_min),
+            "val_min": float(self.val_min),
+        }
+
+
+@dataclass(frozen=True)
+class CropRow:
+    """One output frame's crop, in NATIVE pixels.
+
+    `src_h` is the chrome-cropped source height and is NOT optional: without it
+    `crop_rect_for` cannot place the rect, and UFC-05's archive shipped a plan
+    that omitted it while a second, unarchived plan carried it.
+    """
+
+    out: int
+    mag: float
+    cx: float
+    cy: float
+    src_h: int
+
+    def as_dict(self) -> dict:
+        return {
+            "out": int(self.out),
+            "mag": float(self.mag),
+            "cx": float(self.cx),
+            "cy": float(self.cy),
+            "src_h": int(self.src_h),
+        }
+
+
+@dataclass(frozen=True)
+class CropPlan:
+    """Per-frame crop geometry. Masks are computed on the NATIVE frame and
+    warped into reel space with this; a matte in the wrong space is silently
+    wrong (measured once at 1.4% area where 28% was correct)."""
+
+    rows: tuple[CropRow, ...]
+
+    def __post_init__(self) -> None:
+        if not self.rows:
+            raise ValueError("CropPlan needs at least one row")
+
+    def as_dict(self) -> dict:
+        return {str(r.out): r.as_dict() for r in self.rows}
+
+
+@dataclass(frozen=True)
 class MatteRequest:
     clip_path: str
     frames_dir: str
+    #: Both are REQUIRED. A request that cannot name the subject's colour or the
+    #: crop geometry is a request the worker will refuse, so it is refused here.
+    subject_spec: HSVSpec
+    crop_plan: CropPlan
     annotations: list[dict] = field(default_factory=list)
     cuts: list[int] = field(default_factory=list)
     niche_id: str = ""
     blueprint_id: str = ""
+
+    def as_job(self, job_id: str) -> dict:
+        """The payload the worker receives — whole spec, whole plan."""
+        return {
+            "job_id": job_id,
+            "clip_path": self.clip_path,
+            "frames_dir": self.frames_dir,
+            "n_frames": len(self.crop_plan.rows),
+            "subject_colour": self.subject_spec.as_dict(),
+            "crop_plan": self.crop_plan.as_dict(),
+            "cuts": list(self.cuts),
+            "niche_id": self.niche_id,
+            "blueprint_id": self.blueprint_id,
+        }
 
 
 @dataclass(frozen=True)
