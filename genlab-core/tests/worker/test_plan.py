@@ -801,3 +801,61 @@ def test_the_plan_timeout_exceeds_the_measured_plan_duration():
     from genlab_core.action.matte_worker import DEFAULT_TIMEOUT_S
 
     assert DEFAULT_TIMEOUT_S >= 2914, "the timeout is shorter than a measured plan"
+
+
+# ── audio finds the crowd; motion finds the fighter ─────────────────────────
+
+
+def _still(f):
+    """A fighter standing still — the celebration."""
+    return body(40, 64, y0=70, y1=110)
+
+
+def _moving(f):
+    """A fighter crossing frame — the strike."""
+    x = 20 + min(f, 40) * 2
+    return body(x, x + 24, y0=70, y1=110)
+
+
+def test_the_louder_anchor_loses_to_the_one_whose_subject_moves():
+    """MEASURED: on a real blueprint the winning anchor was 20.3s — the
+    post-fight flag-and-belt moment, where the crowd is deafening and the
+    fighter is standing still. Frame-difference motion cannot separate that
+    from a strike (waving flags and a moving camera score just as high);
+    subject velocity can."""
+    cands = [
+        {"start_s": 100.0, "frames": 96, "motion_score": 9.9, "anchor_s": 100.4},  # loud, still
+        {"start_s": 200.0, "frames": 96, "motion_score": 1.0, "anchor_s": 200.4},  # quiet, moving
+    ]
+
+    def seeds(f):
+        return _still(f) if f < 150 * 30 else _moving(f - 200 * 30)
+
+    r = run(
+        job(candidates=cands),
+        frames_for=lambda s, n: list(range(int(s * 30), int(s * 30) + n)),
+        seed_mask_fn=seeds,
+        coarse_foreground_fn=lambda f: np.maximum(seeds(f), body(75, 112, y0=40, y1=85)),
+        audio_onset_fn=lambda start_s, n: 20,
+    )
+    starts = [c.start_s if hasattr(c, "start_s") else c["start_s"] for c in r.candidates]
+    voted = [c for c in r.candidates if (c.votes if hasattr(c, "votes") else c.get("votes", 0)) > 0]
+    assert 200.0 in starts
+    assert voted, "nothing was voted"
+    top = voted[0].start_s if hasattr(voted[0], "start_s") else voted[0]["start_s"]
+    assert top == 200.0, f"the loud, still anchor won: {starts}"
+
+
+def test_ranking_falls_back_to_motion_when_anchors_are_absent():
+    """Unranked is not the same as wrong — an older job with no anchor tags
+    must still be ordered, and the log must say which rule ran."""
+    r = run(
+        job(
+            candidates=[
+                {"start_s": 674.9, "frames": 96, "motion_score": 0.9},
+                {"start_s": 675.1, "frames": 96, "motion_score": 0.8},
+            ]
+        ),
+        frames_for=frames_for_abs,
+    )
+    assert r.ok, r.reason

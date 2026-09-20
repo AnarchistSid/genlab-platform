@@ -160,6 +160,60 @@ def presence_fraction(masks, area_floor: float = AREA_FLOOR) -> float:
     return present / len(masks)
 
 
+def _rank_by_subject_velocity(candidates, frames_for, seed_mask_fn, onset, fps, results):
+    """Candidates ordered by their ANCHOR's peak subject velocity, then motion.
+
+    One bracket sampled per anchor, not per candidate: the anchors are what
+    differ in content, and a bracket is ~20 half-res silhouette calls. Falls
+    back to motion order when the candidates carry no anchor or no seed
+    function is available, and says so rather than ranking on a default.
+    """
+    by_anchor: dict = {}
+    for c in candidates:
+        by_anchor.setdefault(c.get("anchor_s"), []).append(c)
+    if seed_mask_fn is None or list(by_anchor) == [None] or len(by_anchor) < 2:
+        logger.info(
+            "[plan] ranking by motion (%s)",
+            "no seed function" if seed_mask_fn is None else f"{len(by_anchor)} anchor(s)",
+        )
+        return sorted(candidates, key=lambda c: -float(c["motion_score"]))
+
+    speeds: dict = {}
+    for a_s, group in by_anchor.items():
+        best = max(group, key=lambda c: float(c["motion_score"]))
+        n = int(best.get("frames", 96))
+        wf = frames_for(float(best["start_s"]), n)
+        a_f = onset(float(best["start_s"]), n) if onset else None
+        lo, hi = audio_bound(a_f, fps) if a_f is not None else (0, min(n - 1, 30))
+        want = [i for i in range(len(wf)) if lo <= i <= hi]
+        seeds = {i: sub_mask(seed_mask_fn, wf[i], None) for i in want}
+        sm = continuous_samples(velocity_samples(seeds))
+        if len(sm) < 3:
+            speeds[a_s] = 0.0
+            logger.info("[plan] anchor %.2fs: %d usable sample(s) — speed 0", a_s, len(sm))
+            continue
+        idx = [f for f, _, _ in sm]
+        x = np.asarray([v for _, v, _ in sm], float)
+        v = np.abs(np.diff(x) / np.maximum(np.diff(idx), 1))
+        speeds[a_s] = float(v.max())
+        logger.info(
+            "[plan] anchor %.2fs: peak subject speed %.2f px/frame over %d samples",
+            a_s,
+            speeds[a_s],
+            len(sm),
+        )
+
+    order = sorted(
+        candidates,
+        key=lambda c: (-speeds.get(c.get("anchor_s"), 0.0), -float(c["motion_score"])),
+    )
+    logger.info(
+        "[plan] anchors ranked by subject velocity: %s",
+        ", ".join(f"{a:.2f}s={speeds[a]:.2f}" for a in sorted(speeds, key=lambda k: -speeds[k])),
+    )
+    return order
+
+
 def plan(
     job: dict,
     *,
@@ -197,6 +251,15 @@ def plan(
     results: list[CandidateResult] = []
     tail_silhouettes: dict[int, np.ndarray] = {}
 
+    # Lifted above the ranking: the anchor ranking needs the bracket, which
+    # needs the onset, which needs fps and the clip.
+    fps = float(job.get("fps", 30.0))
+    clip = job.get("clip_path") or job.get("clip") or ""
+    fg_for_finish = coarse_foreground_fn or foreground_fn
+    onset = audio_onset_fn or (
+        lambda start_s, n: audio_onset_frame(clip, start_s, n, fps) if clip else None
+    )
+
     unscored = [c for c in candidates if c.get("motion_score") is None]
     if unscored:
         logger.error(
@@ -213,7 +276,21 @@ def plan(
     # SAM2 image calls per candidate — and a low-motion window is not an ACTION
     # window whatever its silhouettes say. Candidates carrying no motion score
     # cannot be ranked, so they all go through and the log says so.
-    ranked = sorted(candidates, key=lambda c: -float(c["motion_score"]))
+    # AUDIO FINDS THE CROWD; MOTION FINDS THE FIGHTER.
+    #
+    # The level-shift anchor is window-invariant and is therefore the right
+    # GENERATOR, but it ranks crowd reactions by loudness -- and the loudest
+    # sustained rise in a fight clip is the celebration, not the knockout.
+    # Measured: on a real blueprint the winning anchor was 20.3 s, the
+    # post-fight flag-and-belt moment, where the crowd is deafening and the
+    # fighter is standing still.
+    #
+    # So anchors are RANKED by how much the subject actually moves in their
+    # bracket. Frame-difference motion (`motion_score`) cannot separate them --
+    # waving flags and a moving camera score just as high as a strike. Subject
+    # velocity can: it is measured on the silhouette, and a still fighter has
+    # none however loud the room is.
+    ranked = _rank_by_subject_velocity(candidates, frames_for, seed_mask_fn, onset, fps, results)
     skipped = ranked[VOTE_CANDIDATES:]
     for c in skipped:
         results.append(
@@ -301,12 +378,6 @@ def plan(
     # that may disagree out loud but never anchors. The version that anchored on
     # the descent alone placed one UFC-05 strike at 24.60 s, 26.20 s and 26.80 s
     # depending on which window it was sampled from.
-    fps = float(job.get("fps", 30.0))
-    clip = job.get("clip_path") or job.get("clip") or ""
-    fg_for_finish = coarse_foreground_fn or foreground_fn
-    onset = audio_onset_fn or (
-        lambda start_s, n: audio_onset_frame(clip, start_s, n, fps) if clip else None
-    )
 
     for c in survivors:
         n = _frames_of(c)
