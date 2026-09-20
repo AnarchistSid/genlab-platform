@@ -566,6 +566,17 @@ def run_publish(
                 record_id,
                 {
                     "status": "ARCHIVED",
+                    # UNSCHEDULE IN THE SAME UPDATE. Without this the archive
+                    # is refused by the scheduled-post guard -- correctly: the
+                    # guard exists so a cleanup cannot silently discard a queued
+                    # slot (cleanup_safety.md). But this is not a cleanup. The
+                    # media is gone, the slot cannot be filled by this record,
+                    # and refusing the archive left it selected-then-failing on
+                    # EVERY run, forever: ai_creators and sports went three days
+                    # without publishing while the selector picked the same dead
+                    # blueprint three times a day. The guard's own message says
+                    # how -- "set scheduled_for=None in the same update".
+                    "scheduled_for": None,
                     "error_message": (
                         (fields.get("error_message") or "")
                         + " | archived:2026-07-21:media_missing_pre_publish"
@@ -805,6 +816,7 @@ def main() -> int:
     # Flag-state audit — see genlab_core.observability.flag_audit
     try:
         from genlab_core.observability.flag_audit import log_active_flags
+
         log_active_flags(context="publisher")
     except Exception:
         pass
@@ -859,7 +871,9 @@ def main() -> int:
             delay = random.uniform(jitter_min, jitter_max)
             logger.info(
                 "[publish] Inter-niche jitter: sleeping %.1fs before niche=%s "
-                "(anti-fingerprint, 2026-07-22)", delay, nid,
+                "(anti-fingerprint, 2026-07-22)",
+                delay,
+                nid,
             )
             time.sleep(delay)
         first_niche = False
@@ -911,9 +925,7 @@ def main() -> int:
             # after the incident. Same pattern as
             # scripts/nightly_schedule_top_per_niche.py (commit 242718b2)
             # + rule #19 (never silent-fail exceptions on ops paths).
-            logger.error(
-                "[publish] Failed for %s: %s", nid, exc, exc_info=True
-            )
+            logger.error("[publish] Failed for %s: %s", nid, exc, exc_info=True)
             try:
                 import traceback as _tb
                 from datetime import datetime as _dt
@@ -929,9 +941,7 @@ def main() -> int:
             except Exception as write_exc:
                 # Durable-write failure must NOT hide the real error —
                 # log it but proceed with the EXIT_UNEXPECTED signal.
-                logger.warning(
-                    "[publish] Also failed to write error file: %s", write_exc
-                )
+                logger.warning("[publish] Also failed to write error file: %s", write_exc)
             # EXIT_UNEXPECTED (5), not 1: an unhandled exception is a
             # real signal that needs operator attention. Using 1 would
             # lump it in with the BENIGN "no blueprints today" exit code
