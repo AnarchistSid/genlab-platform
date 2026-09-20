@@ -417,17 +417,24 @@ def plan_backends(job: dict, *, device: str = "mps") -> dict:
         _start = float((job.get("candidates") or [{}])[0].get("start_s", 0.0))
         _i = max(int(round(_start * fps)) - frame_offset, 0)
         if 0 <= _i < len(all_frames):
+            # `derive` returns a ColourSeed dataclass, not a dict: `.spec` is
+            # the HSV spec and `.coverage` is the fraction of frame it selects.
+            # Coverage is the number that matters -- a seed selecting 10-19% of
+            # the frame is not a garment, and that is how a dark maroon one was
+            # caught before.
             derived = colour_derive(all_frames[_i], fg(_i))
-            if derived and derived.get("hue_deg") is not None:
-                seed_spec = dict(derived)
+            if derived is not None and derived.spec is not None:
+                seed_spec = dict(derived.spec)
                 logger.info(
-                    "[sam2] subject hint DERIVED from frame %d: hue=%.1f tol=%.1f "
-                    "sat_min=%.2f val_min=%.2f",
+                    "[sam2] subject hint DERIVED from frame %d (%s): hue=%.1f tol=%.1f "
+                    "sat_min=%.2f val_min=%.2f — selects %.1f%% of the frame",
                     _i,
+                    derived.source,
                     seed_spec["hue_deg"],
                     seed_spec.get("hue_tol", 25.0),
                     seed_spec.get("sat_min", 0.25),
                     seed_spec.get("val_min", 0.10),
+                    derived.coverage * 100,
                 )
             else:
                 logger.warning("[sam2] no subject hint in the job and none derivable")
