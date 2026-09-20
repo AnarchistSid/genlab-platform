@@ -45,3 +45,47 @@ def test_the_guard_still_refuses_a_bare_demotion():
     assert src.count('"scheduled_for": None') == 1, (
         "scheduled_for is cleared in more than one place — each needs its own reason"
     )
+
+
+def test_a_guard_refusal_is_caught_per_blueprint_not_per_run():
+    """MEASURED, and it corrects an assumption worth recording.
+
+    The premise was that `ScheduledPostProtectionError` was uncaught and killed
+    the niche's whole run. The publisher's log shows otherwise: it logged
+    "Pre-publish archive failed … (continuing)" and went on to the jitter sleep
+    and the next niche. The traceback in the journal came from `exc_info=True`,
+    not from a re-raise.
+
+    What actually cost the two channels their slot was the unconditional
+    `return` after the archive attempt — the record was skipped either way, and
+    eligible content behind it was never reached.
+    """
+    import inspect
+
+    from genlab_core.publishing import publish_all_platforms
+
+    src = inspect.getsource(publish_all_platforms)
+    i = src.index("ARCHIVING %s pre-publish")
+    window = src[i : i + 2000]
+    assert "except Exception" in window, "the archive must not take the run with it"
+    assert "(continuing)" in window
+
+
+def test_an_archived_blueprint_does_not_end_the_niches_run():
+    """One dead record costs an attempt, not the channel's slot. Bounded to
+    three, so a niche whose whole queue is dead cannot spin."""
+    import inspect
+
+    from genlab_core.publishing import publish_all_platforms as P
+
+    assert P.EXIT_MEDIA_ARCHIVED not in (
+        P.EXIT_SUCCESS,
+        P.EXIT_NO_BLUEPRINTS,
+        P.EXIT_ALL_FAILED,
+        P.EXIT_DAILY_CAP,
+        P.EXIT_LOCK_HELD,
+        P.EXIT_UNEXPECTED,
+    ), "the archived signal must be distinguishable from every other outcome"
+    main = inspect.getsource(P)
+    assert "for _attempt in range(3):" in main
+    assert "if exit_code != EXIT_MEDIA_ARCHIVED:" in main

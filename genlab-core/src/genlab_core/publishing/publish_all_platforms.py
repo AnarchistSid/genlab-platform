@@ -95,6 +95,11 @@ EXIT_ALL_FAILED = 2  # real signal — every platform failed on the chosen bluep
 EXIT_DAILY_CAP = 3  # benign — already published today
 EXIT_LOCK_HELD = 4  # benign — concurrent run, next timer retry
 EXIT_UNEXPECTED = 5  # real signal — unhandled exception in run_publish
+#: The selected blueprint's media was gone, so it was archived and unscheduled.
+#: Nothing was published, but something MIGHT be — eligible content can sit
+#: right behind a dead record. The caller re-selects rather than losing the
+#: niche's slot to it. Benign.
+EXIT_MEDIA_ARCHIVED = 9
 
 # RUN-03 (2026-09-15): partial success is NOT an incident.
 #
@@ -591,7 +596,10 @@ def run_publish(
                 exc,
                 exc_info=True,
             )
-        return  # Skip publish entirely — blueprint archived.
+        # ARCHIVED, NOT FINISHED. This used to `return`, ending the niche's
+        # whole run: one dead blueprint cost the channel its slot even though
+        # eligible content sat behind it. The caller re-selects.
+        return EXIT_MEDIA_ARCHIVED
 
     # 6. Per-platform parallel publish. The ParallelPublishOutcome carries the
     # per-platform status map, this-run success flag, and the post_ids dict
@@ -909,13 +917,24 @@ def main() -> int:
                 enabled if operator_explicit_platforms else _filter_enabled_platforms(nid, enabled)
             )
 
-            exit_code = run_publish(
-                niche_id=nid,
-                backlog_client=shared_client,
-                daily_cap=enforcer,
-                enabled_platforms=niche_enabled,
-                retry_only=args.retry_only,
-            )
+            # A DEAD BLUEPRINT COSTS ONE ATTEMPT, NOT THE NICHE'S SLOT.
+            # Bounded, so a niche whose whole queue is dead cannot spin.
+            for _attempt in range(3):
+                exit_code = run_publish(
+                    niche_id=nid,
+                    backlog_client=shared_client,
+                    daily_cap=enforcer,
+                    enabled_platforms=niche_enabled,
+                    retry_only=args.retry_only,
+                )
+                if exit_code != EXIT_MEDIA_ARCHIVED:
+                    break
+                logger.info(
+                    "[publish] %s: archived a blueprint with missing media — "
+                    "re-selecting (attempt %d of 3)",
+                    nid,
+                    _attempt + 2,
+                )
             per_niche_exits.append((nid, exit_code))
         except Exception as exc:
             # 2026-07-23: preserve traceback to a durable file BEFORE
