@@ -163,3 +163,44 @@ def test_the_router_and_the_producer_agree_on_the_name():
 
     assert 'candidate.get("clip_path")' in inspect.getsource(router)
     assert '"clip_path"' in inspect.getsource(push_to_backlog)
+
+
+def test_every_field_the_action_chain_reads_is_written_by_the_producer():
+    """Derived by introspection, so it cannot drift.
+
+    Fixing `clip_path` alone moved the verdict from "no footage" to "no
+    highlight flag" — one gate of progress, because a propagator is a CHAIN and
+    each link fails the same silent way. This asserts the whole set at once.
+
+    `source_score` and `footage_free` are exempt and named: nothing computes
+    them per story, and route() fails open on an unscored source with a reason.
+    """
+    import inspect
+    import re
+
+    from genlab_core.action import router
+    from genlab_core.pipeline.stages import craft_render, push_to_backlog
+
+    reads = set(re.findall(r'candidate\.get\("([a-z_]+)"\)', inspect.getsource(router)))
+    reads |= set(re.findall(r'bp\.get\("([a-z_]+)"\)', inspect.getsource(craft_render)))
+    # A leading underscore means the stage set it on the blueprint itself, in
+    # this run — intra-stage state, not something a producer owes it.
+    reads = {f for f in reads if not f.startswith("_")}
+    # Written by other stages onto the blueprint, or fail-open by design.
+    exempt = {
+        "source_score",
+        "footage_free",
+        "download_url",
+        "media",
+        "audio",
+        "storyboard",
+        "record_id",
+        "id",
+        "sport",
+    }
+    produced = inspect.getsource(push_to_backlog)
+    missing = [f for f in sorted(reads - exempt) if f'"{f}"' not in produced]
+    assert not missing, (
+        f"the ACTION chain reads {missing} off the blueprint and PushToBacklog "
+        f"writes none of them — every one is a silent route to STILL"
+    )

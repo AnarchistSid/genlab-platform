@@ -2611,6 +2611,19 @@ class PushToBacklog:
                         # The name is the one the downloader already uses, so
                         # the consumers do not learn an alias: the producer
                         # starts writing what they were always reading.
+                        # THE REST OF WHAT THE ACTION CHAIN READS. `route()`
+                        # asks the candidate for is_highlight and source_url;
+                        # the blueprint had neither, so even with the footage
+                        # visible it answered "no highlight flag and no talk
+                        # provenance" and sent everything to STILL. Fixing
+                        # clip_path alone bought exactly one gate of progress --
+                        # which is what a propagator CHAIN does to you.
+                        #
+                        # source_score and footage_free are deliberately absent:
+                        # nothing computes them per story, and route() fails
+                        # open on an unscored source with a named reason.
+                        "is_highlight": bool(story.get("is_highlight")),
+                        "source_url": story.get("source_url", ""),
                         "clip_path": (
                             ((context.get("clip_index") or {}).get("clips") or {})
                             .get(story_id, {})
