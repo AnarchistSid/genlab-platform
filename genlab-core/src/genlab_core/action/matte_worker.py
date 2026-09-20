@@ -168,9 +168,14 @@ class CropPlan:
 class MatteRequest:
     clip_path: str
     frames_dir: str
-    #: Both are REQUIRED. A request that cannot name the subject's colour or the
-    #: crop geometry is a request the worker will refuse, so it is refused here.
-    subject_spec: HSVSpec
+    #: REQUIRED for a matte request, OPTIONAL for a plan request.
+    #:
+    #: A matte job that cannot name the subject's colour or the crop geometry is
+    #: one the worker will refuse, so it is refused here. A PLAN job is the job
+    #: that DISCOVERS those things: deriving the seed needs a foreground matte,
+    #: which needs rembg, which is in the worker's venv and not on the VPS. The
+    #: worker derives it from the first candidate's own first frame.
+    subject_spec: HSVSpec | None
     crop_plan: CropPlan
     annotations: list[dict] = field(default_factory=list)
     cuts: list[int] = field(default_factory=list)
@@ -182,6 +187,13 @@ class MatteRequest:
     #: with OOM), so the decisions that need SAM2 are made where SAM2 lives —
     #: and the stage never posts a second job for them.
     plan: bool = False
+    #: THE PLAN JOB'S OWN INPUTS. A plan-mode request describes windows to
+    #: CHOOSE BETWEEN; the crop plan is empty because the geometry is derived
+    #: from the window the worker picks. Each candidate carries its measured
+    #: motion_score -- the worker refuses a job whose candidates lack it rather
+    #: than ranking on a default.
+    candidates: list[dict] = field(default_factory=list)
+    fps: float = 30.0
 
     def as_job(self, job_id: str) -> dict:
         """The payload the worker receives — whole spec, whole plan."""
@@ -190,12 +202,15 @@ class MatteRequest:
             "clip_path": self.clip_path,
             "frames_dir": self.frames_dir,
             "n_frames": len(self.crop_plan.rows),
-            "subject_colour": self.subject_spec.as_dict(),
+            "subject_colour": self.subject_spec.as_dict() if self.subject_spec else {},
             "crop_plan": self.crop_plan.as_dict(),
             "cuts": list(self.cuts),
             "niche_id": self.niche_id,
             "blueprint_id": self.blueprint_id,
             "plan": bool(self.plan),
+            "subject_hint": self.subject_spec.as_dict() if self.subject_spec else {},
+            "candidates": [dict(c) for c in self.candidates],
+            "fps": float(self.fps),
         }
 
 

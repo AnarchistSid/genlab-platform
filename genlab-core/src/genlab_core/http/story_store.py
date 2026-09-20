@@ -65,6 +65,13 @@ class StoryStore:
             "why_it_matters": story.get("why_it_matters", ""),
             "priority": story.get("priority", scores.get("priority", 0.5)),
             "status": "INTAKE",
+            # THE STORE DROPPED A FIELD THE FETCHER SET. `is_highlight` decides
+            # whether the ACTION route is even reachable -- `router.route()`
+            # requires it -- and `trending_video_fetcher` writes it on the story
+            # in memory. The store's field list did not carry it, so it survived
+            # exactly as long as the run did. A replay against a persisted
+            # record had to take it as an operator assertion instead.
+            "is_highlight": bool(story.get("is_highlight", False)),
             "themes": story.get("themes", []),
             "authority_score": scores.get("authority", 0.0),
             "recency_score": scores.get("recency", 0.0),
@@ -213,6 +220,13 @@ class StoryStore:
                 "summary": story.get("summary", ""),
                 "priority": story.get("priority", scores.get("priority", 0.5)),
                 "status": "INTAKE",
+                # THE STORE DROPPED A FIELD THE FETCHER SET. `is_highlight` decides
+                # whether the ACTION route is even reachable -- `router.route()`
+                # requires it -- and `trending_video_fetcher` writes it on the story
+                # in memory. The store's field list did not carry it, so it survived
+                # exactly as long as the run did. A replay against a persisted
+                # record had to take it as an operator assertion instead.
+                "is_highlight": bool(story.get("is_highlight", False)),
                 "themes": story.get("themes", []),
                 "authority_score": scores.get("authority", 0.0),
                 "recency_score": scores.get("recency", 0.0),

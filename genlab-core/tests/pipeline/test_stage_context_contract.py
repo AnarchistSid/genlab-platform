@@ -13,6 +13,8 @@ WARNING when upstream had input.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 import yaml
 from genlab_core.pipeline.stage_contract import OpaqueStage, check_order, coverage
@@ -183,9 +185,16 @@ def test_every_field_the_action_chain_reads_is_written_by_the_producer():
 
     reads = set(re.findall(r'candidate\.get\("([a-z_]+)"\)', inspect.getsource(router)))
     reads |= set(re.findall(r'bp\.get\("([a-z_]+)"\)', inspect.getsource(craft_render)))
-    # A leading underscore means the stage set it on the blueprint itself, in
-    # this run — intra-stage state, not something a producer owes it.
-    reads = {f for f in reads if not f.startswith("_")}
+    # NO UNDERSCORE EXEMPTION. It was here, justified as "the stage set it on
+    # the blueprint itself, in this run" — which was a guess presented as a
+    # convention. The check had flagged `_matte_request` as read-never-written
+    # and the exemption suppressed it. Nothing set that key anywhere, and could
+    # not have: its producer ran after its consumer. Every ACTION blueprint
+    # skipped `worker_unavailable` against a live worker for as long as the
+    # stage existed.
+    #
+    # An exemption in a contract check is a hole in the contract. Declare
+    # writers for everything and accept the noise.
     # Written by other stages onto the blueprint, or fail-open by design.
     exempt = {
         "source_score",
@@ -204,3 +213,24 @@ def test_every_field_the_action_chain_reads_is_written_by_the_producer():
         f"the ACTION chain reads {missing} off the blueprint and PushToBacklog "
         f"writes none of them — every one is a silent route to STILL"
     )
+
+
+def test_the_story_store_persists_what_the_router_needs():
+    """SERIALISER PARITY, extended to the story store.
+
+    `is_highlight` decides whether ACTION is reachable at all. The fetcher set
+    it on the story and the store's field list dropped it, so it lived exactly
+    as long as the run — and a replay against a persisted record could only get
+    it from an operator assertion.
+    """
+    import inspect
+
+    from genlab_core.action import router
+    from genlab_core.http import story_store
+
+    src = inspect.getsource(story_store)
+    reads = set(re.findall(r'candidate\.get\("([a-z_]+)"\)', inspect.getsource(router)))
+    # What the router asks of a candidate and the story can answer.
+    story_owned = {"is_highlight", "title", "source_url"}
+    missing = [f for f in sorted(reads & story_owned) if f'"{f}"' not in src]
+    assert not missing, f"the story store drops {missing}, which router.route() requires"

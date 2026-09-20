@@ -38,6 +38,7 @@ from pathlib import Path
 import numpy as np
 
 from genlab_core.action.clicks import derive_clicks
+from genlab_core.action.colour_seed import derive as colour_derive
 from genlab_core.action.colour_seed import match as colour_match
 from genlab_core.action.matte import build_mattes, crop_rect_for, warp_to_crop
 
@@ -404,6 +405,32 @@ def plan_backends(job: dict, *, device: str = "mps") -> dict:
     fg = _foreground_fn(all_frames)
     image_pred, video_pred, dev = _predictors(device)
     seed_spec = dict(job.get("subject_hint") or {})
+    if not seed_spec.get("hue_deg"):
+        # DERIVED HERE, WHERE THE MODEL IS. The stage cannot supply a hue: the
+        # seed comes from a foreground matte, rembg lives in this venv and not
+        # on the VPS, and a hue sent with defaulted floors is what put a dark
+        # navy garment under the value floor on UFC-05. Derived from the first
+        # candidate's own first frame.
+        # The index inline: `frames_for` is defined further down, and reaching
+        # forward for it would be the same producer-after-consumer shape this
+        # packet exists to remove.
+        _start = float((job.get("candidates") or [{}])[0].get("start_s", 0.0))
+        _i = max(int(round(_start * fps)) - frame_offset, 0)
+        if 0 <= _i < len(all_frames):
+            derived = colour_derive(all_frames[_i], fg(_i))
+            if derived and derived.get("hue_deg") is not None:
+                seed_spec = dict(derived)
+                logger.info(
+                    "[sam2] subject hint DERIVED from frame %d: hue=%.1f tol=%.1f "
+                    "sat_min=%.2f val_min=%.2f",
+                    _i,
+                    seed_spec["hue_deg"],
+                    seed_spec.get("hue_tol", 25.0),
+                    seed_spec.get("sat_min", 0.25),
+                    seed_spec.get("val_min", 0.10),
+                )
+            else:
+                logger.warning("[sam2] no subject hint in the job and none derivable")
 
     def frames_for(start_s: float, n: int):
         # Indices are into the DECODED span, not the clip, so the offset is

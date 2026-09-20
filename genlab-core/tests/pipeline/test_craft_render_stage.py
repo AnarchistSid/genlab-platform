@@ -91,9 +91,15 @@ def test_a_blueprint_with_no_storyboard_gets_one_BUILT_and_the_refusal_is_named(
     assert f"craft_skipped_{CraftSkip.NO_STORYBOARD}" not in skips
 
 
-def test_an_action_blueprint_with_no_worker_reports_worker_unavailable():
-    """The expensive half lives on the Mac. When it is asleep the builder says
-    so by name — craft never blocks a publish, and the reason is the finding."""
+def test_an_action_blueprint_with_no_clip_says_so_distinctly():
+    """TWO CONDITIONS MUST NOT SHARE ONE REASON STRING.
+
+    This asserted `worker_unavailable` for a blueprint with no clip on disk —
+    the same string a stale heartbeat produces. For weeks the real cause was
+    neither: the builder could not construct a request at all, while the worker
+    was up and heartbeating. `worker_unavailable` now means the heartbeat is
+    stale and nothing else.
+    """
     c = ctx(
         blueprints=[
             bp(
@@ -105,7 +111,8 @@ def test_an_action_blueprint_with_no_worker_reports_worker_unavailable():
         ]
     )
     CraftRenderStage().execute(c)
-    assert _skips(c).get("craft_skipped_worker_unavailable") == 1
+    assert _skips(c).get("craft_skipped_plan_request_failed:no_clip") == 1
+    assert not any(k.endswith("worker_unavailable") for k in _skips(c))
 
 
 def test_a_still_route_is_not_craftable():

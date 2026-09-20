@@ -42,7 +42,6 @@ from genlab_core.action.matte_worker import (
     CropRow,
     HSVSpec,
     MatteRequest,
-    SkipReason,
 )
 from genlab_core.pipeline.stage_context import StageContext
 from genlab_core.rendering.render_engine import craft_publishes, dual_render_enabled
@@ -59,6 +58,13 @@ class CraftSkip:
     NO_SUBJECT_SPEC = "no_subject_spec"  # colour seed not derivable
     NO_CROP_PLAN = "no_crop_plan"  # shot list carries no geometry
     EXECUTOR_DECLINED = "executor_declined"  # craft.render returned None
+
+    #: TWO CONDITIONS MUST NOT SHARE ONE REASON STRING. `worker_unavailable`
+    #: meant "the heartbeat is stale" AND "the builder could not construct a
+    #: request" -- and for weeks it was the second while the worker was up and
+    #: heartbeating. Each of these is produced by exactly one condition.
+    PLAN_REQUEST_FAILED = "plan_request_failed"  # we could not describe the job
+    PLAN_UNRESOLVED = "plan_unresolved"  # the worker answered, with a refusal
 
 
 class CraftRenderStage:
@@ -140,9 +146,14 @@ class CraftRenderStage:
             # route. Every refusal inside the builder comes back NAMED.
             built = self._build_storyboard(bp, context, bid)
             if not built.ok:
-                self._skip(
-                    stats, built.reason or CraftSkip.NO_STORYBOARD, niche, bid, detail=built.detail
+                # The builder's own reason, or -- when it failed because the
+                # plan did -- the plan's, which names WHICH condition: a stale
+                # heartbeat, a request we could not describe, or a worker that
+                # answered with a refusal. One string, one condition.
+                reason = (
+                    getattr(self, "_plan_reason", "") or built.reason or CraftSkip.NO_STORYBOARD
                 )
+                self._skip(stats, reason, niche, bid, detail=built.detail)
                 return
             sb = built.storyboard.model_dump()
             bp["storyboard"] = sb
@@ -158,6 +169,15 @@ class CraftRenderStage:
             self._talk(bp, sb, context, stats, bid)
 
     def _action(self, bp: dict, sb: dict, context: StageContext, stats: dict, bid: str) -> None:
+        """PLAN -> STORYBOARD -> RENDER.
+
+        The plan already ran: `_build_storyboard` called the worker, and the
+        storyboard was assembled FROM its answer. So the subject spec and the
+        crop plan here are read off that storyboard, not invented before it --
+        which is the ordering that was inverted, and why the request this stage
+        built was the only one ever constructed while the one the builder needed
+        never existed.
+        """
         niche = context.get("niche_id", "")
         spec = self._subject_spec(sb)
         if spec is None:
@@ -168,26 +188,8 @@ class CraftRenderStage:
             self._skip(stats, CraftSkip.NO_CROP_PLAN, niche, bid)
             return
 
-        clip = bp.get("clip_path") or (bp.get("media") or {}).get("clip_path") or ""
-        req = MatteRequest(
-            clip_path=clip,
-            frames_dir=str(Path(context.get("run_dir", ".")) / "frames" / bid),
-            subject_spec=spec,
-            crop_plan=plan,
-            cuts=list(sb.get("cuts") or []),
-            niche_id=niche,
-            blueprint_id=bid,
-        )
-
-        from genlab_core.rendering.craft_router import plan_render
-
-        decision = plan_render(niche, context.get("niche_config") or {}, req)
-        if not decision.craft_available:
-            reason = decision.craft_skipped or SkipReason.WORKER_UNAVAILABLE
-            self._skip(stats, reason, niche, bid)
-            return
-
-        result = self._render(sb, decision.matte, context, bid)
+        mattes = (sb.get("plan") or {}).get("mask_dir") or sb.get("mask_dir")
+        result = self._render(sb, mattes, context, bid)
         if result is None:
             self._skip(stats, CraftSkip.EXECUTOR_DECLINED, niche, bid)
             return
@@ -231,21 +233,100 @@ class CraftRenderStage:
         )
 
     def _plan_from_worker(self, bp: dict, context: StageContext, bid: str):
-        """One round trip for plan + mattes, or None.
+        """BUILD the plan job, post it, return the plan. Or None, with a reason.
 
-        None is a NAMED outcome upstream (`worker_unavailable`), never a silent
-        empty plan — craft never blocks a publish, and the reason is the finding.
+        THE PLAN PRECEDES THE STORYBOARD BY DEFINITION. This used to read
+        `bp["_matte_request"]`, which nothing ever wrote -- and could not have:
+        that request was constructed in `_action`, which runs AFTER the
+        storyboard, which is built by calling this. Producer after consumer, and
+        the key had no writer at all, so every ACTION blueprint skipped
+        `worker_unavailable` against a live worker.
+
+        Everything the job needs exists before any storyboard: the clip, the
+        container's fps, the audio-anchored candidates, and a subject hint
+        derived from a candidate's own first frame. The window, the subject spec
+        and the finish are what the job RETURNS.
         """
         from genlab_core.action.matte_worker import request_matte
 
-        req = bp.get("_matte_request")
-        if req is None:
+        self._plan_reason = ""
+        clip = bp.get("clip_path") or (bp.get("media") or {}).get("clip_path") or ""
+        if not clip or not Path(clip).exists():
+            self._plan_reason = f"{CraftSkip.PLAN_REQUEST_FAILED}:no_clip"
+            logger.info("[craft] %s: no source clip on disk (%r)", bid, clip)
             return None
+
+        try:
+            req = self._plan_request(clip, context, bid)
+        except Exception as exc:  # noqa: BLE001 — craft never blocks a publish
+            self._plan_reason = f"{CraftSkip.PLAN_REQUEST_FAILED}:{type(exc).__name__}"
+            logger.warning("[craft] %s: could not describe the plan job: %s", bid, exc)
+            return None
+        if req is None:
+            self._plan_reason = f"{CraftSkip.PLAN_REQUEST_FAILED}:{self._plan_detail}"
+            return None
+
         result, reason = request_matte(req)
         if result is None or not result.ok:
+            # The worker's OWN refusal, carried through by name:
+            # vote_too_split, finish_unresolved, candidates_unscored...
+            self._plan_reason = f"{CraftSkip.PLAN_UNRESOLVED}:{reason or 'no_reason'}"
             logger.info("[craft] worker declined the plan for %s: %s", bid, reason)
             return None
         return getattr(result, "plan", None)
+
+    def _plan_request(self, clip: str, context: StageContext, bid: str):
+        """The plan job: clip, anchored candidates, cuts, fps, `plan=True`.
+
+        NO SUBJECT HINT. Deriving the garment colour needs a foreground matte,
+        which needs rembg, which lives in the worker's venv and not on the VPS
+        (rule #31 -- the project venv must not grow a torch stack). The worker
+        derives the seed from the first candidate's own first frame, where the
+        model already is. Sending a hue from here would mean either importing
+        rembg onto the VPS or inventing a number, and an invented seed is what
+        put a dark navy garment under a defaulted value floor once already.
+        """
+        from genlab_core.action import storyboard_builder as sbuild
+        from genlab_core.action.finish import level_shift_anchors
+        from genlab_core.action.window import cut_times, motion_profile
+
+        self._plan_detail = "unknown"
+        prof, fps = motion_profile(clip)
+        if not prof:
+            self._plan_detail = "no_motion_profile"
+            return None
+
+        anchors = level_shift_anchors(clip, 0.0, None, fps)
+        if not anchors:
+            self._plan_detail = "no_audio_anchor"
+            logger.info("[craft] %s: no level-shift anchor in the clip's audio", bid)
+            return None
+
+        cuts = cut_times(clip)
+
+        def motion_at(start: float) -> float:
+            lo, hi = int(start * fps), int((start + sbuild.WINDOW_S) * fps)
+            seg = prof[lo:hi]
+            return float(sum(seg) / len(seg)) if seg else 0.0
+
+        cands = sbuild.candidates_for_anchors(anchors, cuts, motion_at)
+        if not cands:
+            self._plan_detail = "no_zero_cut_candidate"
+            logger.info("[craft] %s: every anchored window contains a cut", bid)
+            return None
+
+        return MatteRequest(
+            clip_path=clip,
+            frames_dir=str(Path(context.get("run_dir", ".")) / "frames" / bid),
+            subject_spec=None,
+            crop_plan=CropPlan(rows={}),
+            cuts=[int(c * fps) for c in cuts],
+            niche_id=context.get("niche_id", ""),
+            blueprint_id=bid,
+            plan=True,
+            candidates=cands,
+            fps=float(fps),
+        )
 
     # ── helpers ─────────────────────────────────────────────────────────────
 
