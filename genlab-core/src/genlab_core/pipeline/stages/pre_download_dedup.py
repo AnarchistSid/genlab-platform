@@ -24,9 +24,11 @@ push stage still catches duplicates.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from pathlib import Path
 from typing import Any
 
 from genlab_core.http.backlog_client import BacklogClient
@@ -159,6 +161,43 @@ class PreDownloadDedup:
             url = (fields.get("video_url") or "").strip()
             if url:
                 seen_url_hashes.add(sha256(url.encode()).hexdigest()[:16])
+
+        # FEED FRESHNESS, measured where the active set already exists.
+        #
+        # "14 highlights passed the gate and 0 were downloaded" looked like a
+        # starved feed and was not: the scoring cut is top_n=5 by design, and of
+        # the 5 that survived it, 2 were repeats. Counting repeats separately is
+        # what makes "no new items" distinguishable from "no supply" -- measured
+        # 2026-09-20 at 6 repeats / 8 FRESH of 14, so the feed is not the
+        # problem. Reported so the next reader does not reconstruct it.
+        _fresh = _repeat = 0
+        try:
+            run_dir = context.get("run_dir") or ""
+            tv_path = Path(run_dir) / "trending_videos.json" if run_dir else None
+            if tv_path and tv_path.exists():
+                raw = json.loads(tv_path.read_text())
+                items = (
+                    raw if isinstance(raw, list) else (raw.get("videos") or raw.get("items") or [])
+                )
+                for it in items:
+                    vid = (it.get("video_id") or it.get("id") or "").strip()
+                    if not vid:
+                        continue
+                    if vid in seen_video_ids:
+                        _repeat += 1
+                    else:
+                        _fresh += 1
+                logger.info(
+                    "[PreDownloadDedup] feed freshness: yt_fresh=%d yt_repeats=%d of %d fetched",
+                    _fresh,
+                    _repeat,
+                    _fresh + _repeat,
+                )
+                context.setdefault("run_stats", {}).setdefault("fetch", {}).update(
+                    {"yt_fresh": _fresh, "yt_repeats": _repeat}
+                )
+        except Exception as exc:  # noqa: BLE001 — a counter must never fail a run
+            logger.warning("[PreDownloadDedup] freshness count failed: %s", exc)
 
         kept: list[dict[str, Any]] = []
         dropped_url = dropped_vid = 0

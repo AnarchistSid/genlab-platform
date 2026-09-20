@@ -70,9 +70,18 @@ class FetchScoreBatHighlights(FetcherStage):
         if niche_id != "sports":
             return context
 
+        # EVERY STAGE THAT DISCARDS PRINTS IN, OUT AND REASON. This one
+        # returned silently when disabled and completed in 0.0s with no line at
+        # all, so a run where it contributed nothing was indistinguishable from
+        # a run where it was never configured -- which is how "14 highlights in,
+        # 0 downloaded" took a journal reconstruction to answer.
         sources_config = context.get("sources_config", {})
         scorebat_cfg = sources_config.get("scorebat", {})
         if scorebat_cfg.get("enabled") is False:
+            logger.info("[ScoreBat] 0 highlights — disabled in sources.yaml")
+            return context
+        if not sources_config:
+            logger.info("[ScoreBat] 0 highlights — no sources_config in context")
             return context
 
         max_items = scorebat_cfg.get("max_highlights", 10)
