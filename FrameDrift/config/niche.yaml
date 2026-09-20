@@ -82,7 +82,47 @@ video_sourcing:
   # 100 -> 50 velocity: anime clips accrue views more slowly than gaming or
   # sports highlights; 100/h was borrowed from niches with native categories.
   max_age_hours: 96
-  top_n_per_run: 15
+  # 2026-09-21 — 15 -> 40. top_n_per_run truncates the candidate list
+  # BEFORE the relevance gate runs, so the cap was being spent on rows the
+  # next stage would reject. Measured on the live fetcher, same searches,
+  # same keywords, same 301 quota units:
+  #
+  #   top_n   15   20   25   30   40   60
+  #   kept     4    6   10   14   21   23    (pool exhausts at 42)
+  #
+  # The curve ACCELERATES, which is the tell: relevant candidates sit in
+  # the tail. Ordering is by view velocity (the LLM niche-fit ranker was
+  # down on the Anthropic credit error), and velocity floats Japanese-title
+  # PVs to the front -- `TVアニメ『...』メインPV` scores 0.00 because every
+  # positive keyword in sources.yaml is English or romaji. So the first 15
+  # slots were being spent largely on rows the next stage would reject.
+  #
+  # 30 (-> 14 kept) rather than 40 (-> 21): gaming creates ~6 stories/day
+  # and books 8 days, so 14 is ~2.3x the rate of a niche that is already
+  # where anime needs to be. Enough to climb 1 -> 8 days in a few days
+  # without a 21-blueprint burst, and every surplus candidate costs a hook
+  # generation that may never publish -- belt is the only funded provider
+  # right now. It is also self-limiting: as anime accumulates blueprints,
+  # video_id dedup turns more of the pool into already-used and FRESH
+  # falls without anyone touching this number.
+  #
+  # The DECISIONS-0917 note below says top_n=15 "was not binding, because
+  # the fetcher only ever returned 4". That was true then and is not true
+  # now -- the pool knobs widened there, plus the search-cache fix and
+  # 3->6 keyword searches (871f39e3), took the pool to 42. The cap became
+  # binding without anyone re-reading it.
+  #
+  # Why anime and not the other four: they all sit at 15, but theirs is 15
+  # candidates ALREADY filtered by a native YouTube category (mostPopular
+  # in cat 20/17/1/24), and their relevance bar is 0.20-0.25. Anime has no
+  # native category, so its 15 are raw keyword hits facing the strictest
+  # bar in the repo (0.35). Same cap, very different precision upstream.
+  # This raises the POOL only -- rule #9 and the 0.35 threshold are
+  # untouched, and no keyword was added to make more things "count".
+  #
+  # Costs no quota: `limit` truncates the returned list, it does not drive
+  # search.list calls. Verified 301 units at both 15 and 60.
+  top_n_per_run: 30
   min_view_velocity: 50
   use_google_trends: true
   allow_keyword_search: true
