@@ -477,8 +477,23 @@ def call_belt_haiku_fallback(
     }
     if sys_text:
         payload_in["system_prompt"] = sys_text
-    if json_mode:
-        payload_in["response_format"] = {"type": "json_object"}
+    # NOT sent: ``response_format: {"type": "json_object"}``. That is an
+    # OpenAI-ism, and belt relays this app to Anthropic, which rejects it:
+    #
+    #   belt task status='failed' err=response_format json_object is not
+    #   supported by Anthropic; use json_schema with a schema
+    #
+    # The request failed before producing any response, so every json_mode
+    # caller fell straight through to OpenAI — and when the OpenAI balance
+    # hit zero (2026-09-20) the strategist failed 100% of niches and exited
+    # 1 every Sunday, with belt funded and working the whole time.
+    #
+    # The response-side half of the contract was already correct below
+    # (``extract_json`` unwraps fenced or prose JSON), written by someone
+    # who knew Anthropic has no structured-output mode. This line
+    # contradicted it. json_schema is not a substitute: callers pass a
+    # boolean, not a schema, and inventing one per call site is exactly
+    # the per-site duplication ``call_openai_fallback`` exists to avoid.
 
     proc = subprocess.run(
         [

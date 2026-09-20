@@ -211,3 +211,70 @@ def test_every_llm_response_parse_site_is_wired_to_extract_json():
     ]
     missing = [r for r in sites if "extract_json(" not in (root / r).read_text()]
     assert not missing, f"LLM-response parse sites not wired to extract_json: {missing}"
+
+
+class TestBeltNeverSendsOpenAIResponseFormat:
+    """belt relays to Anthropic, which rejects OpenAI's ``response_format``.
+
+    Measured on prod 2026-09-20::
+
+        belt task status='failed' err=response_format json_object is not
+        supported by Anthropic; use json_schema with a schema
+
+    The request died before producing a response, so every ``json_mode=True``
+    caller fell through to OpenAI. When the OpenAI balance reached zero the
+    same day, the strategist failed 100% of niches and exited 1 — while belt
+    was funded and working the whole time. The only json_mode caller today is
+    the strategist, so this pin is what keeps a second one from inheriting a
+    dead tier.
+
+    The response side was always right: ``extract_json`` unwraps fenced or
+    prose JSON after the call. The request side contradicted it.
+    """
+
+    def _payload(self, monkeypatch, response='{"ok": true}'):
+        import json
+
+        seen = {}
+        body = json.dumps({"status_text": "completed", "output": {"response": response}})
+
+        class _Proc:
+            returncode = 0
+            stdout = body
+            stderr = ""
+
+        def fake_run(cmd, *a, **k):
+            seen["cmd"] = cmd
+            return _Proc()
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+        return seen
+
+    def _sent(self, seen):
+        import json
+
+        return json.loads(seen["cmd"][seen["cmd"].index("--input") + 1])
+
+    def test_json_mode_does_not_send_response_format(self, monkeypatch):
+        seen = self._payload(monkeypatch)
+        fb.call_belt_haiku_fallback("SYS", "USR", 16000, 0.3, json_mode=True)
+        sent = self._sent(seen)
+        assert "response_format" not in sent, (
+            "response_format is an OpenAI-ism; belt relays to Anthropic, which "
+            "rejects it and fails the whole task. JSON is recovered from the "
+            "response text by extract_json instead."
+        )
+
+    def test_json_mode_still_unwraps_fenced_json(self, monkeypatch):
+        """Dropping the request flag must not drop the json_mode contract."""
+        self._payload(monkeypatch, response='```json\n{"ok": true}\n```')
+        out = fb.call_belt_haiku_fallback("SYS", "USR", 64, 0.3, json_mode=True)
+        import json
+
+        assert json.loads(out) == {"ok": True}, f"caller got unparseable text: {out!r}"
+
+    def test_plain_mode_is_unchanged(self, monkeypatch):
+        seen = self._payload(monkeypatch, response="hello")
+        out = fb.call_belt_haiku_fallback("SYS", "USR", 64, 0.3)
+        assert "response_format" not in self._sent(seen)
+        assert out == "hello"

@@ -333,8 +333,28 @@ class TestCBCooldownExpiry:
         fb_module._ANTHROPIC_CB_OPEN_UNTIL = time.time() + 300
         assert cb_is_open() is True
 
-    def test_cb_default_cooldown_is_600s(self):
-        """The 600s (10-min) cooldown is the operator-facing latency
-        budget — how quickly Anthropic recovery gets picked up.
-        Bumping this needs a deliberate operator decision."""
-        assert fb_module._CB_COOLDOWN_S == 600
+    def test_cb_default_cooldown_is_60_minutes(self, monkeypatch):
+        """The cooldown is the operator-facing latency budget — how quickly
+        Anthropic recovery gets picked up. Bumping it needs a deliberate
+        operator decision, which is what this pin protects.
+
+        Was ``_CB_COOLDOWN_S == 600``. FIX-LLMFB §B replaced the module
+        constant with an env-configurable function and moved the default to
+        60 minutes (10 minutes against a genuinely exhausted key means six
+        pointless primary attempts an hour, each a failed request the writer
+        waits on). The constant went away, so this test raised
+        AttributeError rather than failing an assertion — it had stopped
+        guarding anything. Re-pointed at the function, and at the new value.
+        """
+        monkeypatch.delenv("GENLAB_LLM_FALLBACK_COOLDOWN_MINUTES", raising=False)
+        assert fb_module._cb_cooldown_s() == 3600
+
+    def test_cb_cooldown_is_env_configurable(self, monkeypatch):
+        monkeypatch.setenv("GENLAB_LLM_FALLBACK_COOLDOWN_MINUTES", "5")
+        assert fb_module._cb_cooldown_s() == 300
+
+    def test_cb_cooldown_floors_at_60s_and_survives_garbage(self, monkeypatch):
+        monkeypatch.setenv("GENLAB_LLM_FALLBACK_COOLDOWN_MINUTES", "0")
+        assert fb_module._cb_cooldown_s() == 60
+        monkeypatch.setenv("GENLAB_LLM_FALLBACK_COOLDOWN_MINUTES", "not-a-number")
+        assert fb_module._cb_cooldown_s() == 3600
