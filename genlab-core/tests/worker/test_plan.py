@@ -14,6 +14,7 @@ sequences them and supplies backends, so these pins and theirs are the same pins
 
 from __future__ import annotations
 
+import json
 import re
 
 import numpy as np
@@ -711,3 +712,45 @@ def test_a_plan_request_needs_neither_subject_nor_crop():
     assert job["plan"] is True and job["n_frames"] == 0
     assert job["crop_plan"] == {} and job["subject_hint"] == {}
     assert job["candidates"][0]["motion_score"] == 2.0 and job["fps"] == 30.0
+
+
+def test_the_poster_uses_as_job_and_not_its_own_payload():
+    """TWO SERIALISERS, AND THE POSTER USED THE ONE THAT KNEW LESS.
+
+    `request_matte` hand-built a dict with seven keys and never called
+    `as_job()`, so `plan`, `subject_colour`, `crop_plan`, `n_frames`,
+    `candidates` and `fps` never reached the worker. A plan job arrived without
+    its plan flag, took the matte branch, and was refused seed_spec_incomplete
+    for a subject a plan job does not carry. Every pin was on `as_job`, which
+    nothing called.
+    """
+    import inspect
+
+    from genlab_core.action import matte_worker as M
+
+    src = inspect.getsource(M.request_matte)
+    assert "as_job(" in src, "request_matte builds its own payload again"
+
+
+def test_a_queued_plan_job_carries_its_plan_flag(tmp_path):
+    from genlab_core.action.matte_worker import MatteRequest, request_matte
+
+    req = MatteRequest(
+        clip_path="/tmp/x.mp4",
+        frames_dir="/tmp/f",
+        subject_spec=None,
+        crop_plan=None,
+        plan=True,
+        candidates=[{"start_s": 1.0, "frames": 96, "motion_score": 2.0}],
+        fps=30.0,
+        niche_id="sports",
+    )
+    (tmp_path / "queued").mkdir()
+    (tmp_path / "worker.heartbeat").write_text("1")
+    request_matte(req, root=tmp_path, timeout_s=0.01)
+    posted = list((tmp_path / "queued").glob("*.json"))
+    assert posted, "nothing was queued"
+    job = json.loads(posted[0].read_text())
+    assert job["plan"] is True, job
+    assert job["candidates"][0]["motion_score"] == 2.0
+    assert job["fps"] == 30.0

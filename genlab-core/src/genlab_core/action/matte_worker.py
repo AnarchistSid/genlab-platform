@@ -272,16 +272,13 @@ def request_matte(
         return None, SkipReason.WORKER_UNAVAILABLE
 
     job_id = f"{req.niche_id or 'job'}-{uuid.uuid4().hex[:10]}"
-    payload = {
-        "job_id": job_id,
-        "clip_path": req.clip_path,
-        "frames_dir": req.frames_dir,
-        "annotations": req.annotations,
-        "cuts": req.cuts,
-        "niche_id": req.niche_id,
-        "blueprint_id": req.blueprint_id,
-        "queued_at": now(),
-    }
+    # ONE SERIALISER. This built its own payload and never called `as_job()`,
+    # so everything `as_job` knew about was dropped on the floor: `plan`,
+    # `subject_colour`, `crop_plan`, `n_frames`, `candidates`, `fps`. A plan job
+    # therefore arrived at the worker WITHOUT its plan flag, took the matte
+    # branch, and was refused `seed_spec_incomplete` for a subject a plan job is
+    # not supposed to carry. The pins were on `as_job`, which nothing called.
+    payload = {**req.as_job(job_id), "annotations": req.annotations, "queued_at": now()}
     try:
         for p in d.values():
             p.mkdir(parents=True, exist_ok=True)
