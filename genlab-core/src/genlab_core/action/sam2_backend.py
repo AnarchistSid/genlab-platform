@@ -69,6 +69,15 @@ MODEL_CFG = os.environ.get("GENLAB_SAM2_CFG", "configs/sam2.1/sam2.1_hiera_b+.ya
 MAX_SEED_FRAME_FRAC = 0.60
 
 
+class FpsMismatch(RuntimeError):
+    """The decode rate does not match the container's.
+
+    Raised instead of logged because the previous logger.info let
+    sports-c787edca13 run 94 minutes and return a clean-looking result whose
+    frame indices were at 1/41 s against 60 fps pixels.
+    """
+
+
 def _container_fps(clip: str) -> float | None:
     """The clip's own rate, as a float. Only used to report a mismatch."""
     out = subprocess.run(
@@ -144,14 +153,25 @@ def _decode_frames(
     if duration_s:
         cmd += ["-t", f"{duration_s:.3f}"]
     if fps:
+        # Part 29 §1 — REFUSE, do not report. This was logger.info, and it
+        # fired correctly on sports-c787edca13 ("is 60.00 fps, decoding at
+        # 40.66"), sat in the worker log, and the job ran to completion
+        # anyway: 94 minutes of compute, 96 mattes, every internal gate
+        # green, on a window whose every index was 1/41 s instead of 1/60 s.
+        # An observation nobody is required to read is not a check.
+        #
+        # The rate must come from `window.container_fps` at the builder and
+        # be carried in MatteRequest.fps. If the two disagree here, the job
+        # is unrunnable — the plan's frame indices mean nothing against
+        # these pixels — so it fails loudly rather than producing confident
+        # output about the wrong seconds.
         native = _container_fps(clip)
         if native and abs(native - fps) > 0.01:
-            logger.info(
-                "[sam2] %s is %.2f fps, decoding at %.2f — one frame index is 1/%.0f s",
-                clip,
-                native,
-                fps,
-                fps,
+            raise FpsMismatch(
+                f"fps_mismatch:{fps:.2f} vs {native:.2f} ({clip}). "
+                "The job's rate must equal the container's — read it from "
+                "genlab_core.action.window.container_fps and carry it in "
+                "MatteRequest.fps."
             )
         cmd += ["-vf", f"fps={fps}"]
     cmd += ["-pix_fmt", "rgb24", "-f", "rawvideo", "-"]

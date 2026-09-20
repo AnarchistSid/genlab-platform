@@ -288,12 +288,39 @@ class CraftRenderStage:
         """
         from genlab_core.action import storyboard_builder as sbuild
         from genlab_core.action.finish import level_shift_anchors
-        from genlab_core.action.window import cut_times, motion_profile
+        from genlab_core.action.window import container_fps, cut_times, motion_profile
 
         self._plan_detail = "unknown"
-        prof, fps = motion_profile(clip)
+        # Part 29 §1 — ONE source for the frame rate, and it is the container.
+        # This read `prof, fps = motion_profile(clip)`, which bound the clip's
+        # DURATION to `fps`. Both are floats, so nothing complained. On
+        # sports-c787edca13 (40.658 s, 60 fps) the plan then ran at "fps =
+        # 40.66" in three places at once: the audio anchors, the worker's
+        # decode rate, and — the one that picked the window — `motion_at`
+        # indexing a per-frame profile at 40.658 samples/s instead of 59.91.
+        # motion_at(12.65) scored the motion at 8.58 s and reported it as
+        # 12.65 s, which is how a post-fight interview won the ranking.
+        fps = container_fps(clip)
+        profile = motion_profile(clip)
+        prof = profile.values
         if not prof:
             self._plan_detail = "no_motion_profile"
+            return None
+
+        # The profile emits one sample per decoded frame, so its sample rate
+        # IS the container rate. Assert rather than assume: a profile whose
+        # length disagrees with duration x fps means one of the two lied, and
+        # every index below would be silently wrong again.
+        implied = len(prof) / profile.duration_s if profile.duration_s > 0 else 0.0
+        if abs(implied - fps) > 1.0:
+            self._plan_detail = f"profile_rate_mismatch:{implied:.2f} vs {fps:.2f}"
+            logger.warning(
+                "[craft] %s: motion profile implies %.2f samples/s but the container "
+                "is %.2f fps — refusing to index it",
+                bid,
+                implied,
+                fps,
+            )
             return None
 
         anchors = level_shift_anchors(clip, 0.0, None, fps)

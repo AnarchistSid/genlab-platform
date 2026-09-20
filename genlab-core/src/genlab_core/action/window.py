@@ -31,6 +31,7 @@ import logging
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import numpy as np
 
@@ -125,8 +126,76 @@ def duration_s(path: str) -> float:
     return float((r.stdout or "0").strip() or 0.0)
 
 
-def motion_profile(path: str) -> tuple[list[float], float]:
+class MotionProfile(NamedTuple):
+    """What ``motion_profile`` returns. Named because the tuple was misread.
+
+    ``prof, fps = motion_profile(clip)`` bound ``duration_s`` to a variable
+    called ``fps`` at craft_render.py:294 and nothing complained -- both
+    fields are floats. The clip was 40.658 s long, so the plan ran with
+    "fps = 40.66": audio anchors were found at the wrong rate, the matte
+    worker decoded at 40.66 against a 60 fps container, and ``motion_at``
+    indexed a per-FRAME profile at 40.658 samples/s instead of 59.91.
+
+    That last one chose the window. Measured on sports-c787edca13:
+
+        motion_at(12.65) read prof[514]  -> the motion at 8.58 s
+        motion_at(19.90) read prof[809]  -> the motion at 13.50 s
+
+    So the velocity ranking compared motion from timestamps it was not
+    reporting, and put a post-fight interview top of the list.
+
+    Attribute access (``prof.values`` / ``prof.duration_s``) makes the
+    mistake visible at the call site. Tuple unpacking still works, so this
+    is not a guarantee -- ``container_fps`` and the worker-side assertion
+    are. This is the legibility half.
+    """
+
+    values: list[float]
+    duration_s: float
+
+
+def container_fps(path: str) -> float:
+    """The clip's frame rate, from the container. THE single source.
+
+    Every hop that needs a frame rate reads it here: the plan builder for
+    profile indexing and for ``MatteRequest.fps``, and the worker to assert
+    its decode rate. Anything deriving a rate another way (duration, a
+    default, a count) is the bug this function exists to prevent.
+
+    ``r_frame_rate`` per Part 29 §1, not ``avg_frame_rate``: avg is
+    nb_frames/duration and so is itself a derived quantity, which is the
+    shape that caused this.
+    """
+    out = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=r_frame_rate",
+            "-of",
+            "csv=p=0",
+            path,
+        ],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    try:
+        num, den = out.split("/")
+        fps = float(num) / float(den)
+    except (ValueError, ZeroDivisionError) as exc:
+        raise RuntimeError(f"could not read r_frame_rate of {path}: {out!r}") from exc
+    if not (1.0 <= fps <= 240.0):
+        raise RuntimeError(f"implausible container fps {fps} for {path}")
+    return fps
+
+
+def motion_profile(path: str) -> MotionProfile:
     """Per-FRAME luma difference, and the clip duration in seconds.
+
+    NOTE the second field is a DURATION, not a rate. See ``MotionProfile``.
 
     Returns frames, not buckets. An earlier version returned "(values, bucket_s)"
     and the caller multiplied len(values) by the bucket to get a duration, which
@@ -157,7 +226,7 @@ def motion_profile(path: str) -> tuple[list[float], float]:
     dur = duration_s(path)
     if dur <= 0:
         raise RuntimeError(f"could not read duration of {path}")
-    return vals, dur
+    return MotionProfile(values=vals, duration_s=dur)
 
 
 def _subject_hold(rgbs, fgs) -> tuple[float | None, float]:
