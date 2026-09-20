@@ -180,3 +180,16 @@ deploy/.deploy.log
 # manifest.json (scripts/archive_deliverable.py) recording sha256s and how to
 # reproduce the render; that manifest, not git, is the integrity check.
 .deliverables/
+
+# ── CLEAN-01: the repo root is not a screenshot folder ──────────────────────
+# 94 setup captures accumulated at the top level over months, none referenced.
+# Agent sessions write captures to .audit/screenshots/<date>/ instead.
+/*.png
+/*.jpg
+/*.jpeg
+/*.log
+/*.db
+/*.bak
+/*.bak.*
+.audit/screenshots/
+.backups/

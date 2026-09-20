@@ -309,6 +309,30 @@ else
     fi
 fi
 
+# ── Step 9: the repo root is not a scratch folder ───────────────────────────
+# CLEAN-01. 94 setup screenshots, a second copy of .env, an empty genlab.db and
+# a 170-day-old firebase log had accumulated at the top level. None was ever
+# referenced. A root .env copy is a leak waiting for a `git add -A`.
+STEP="9. Repo root contains only what belongs there"
+note "[verify] $STEP"
+ROOT_ALLOWED="README.md CLAUDE.md CHANGELOG.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md \
+LICENSE Makefile pyproject.toml uv.lock docker-compose.yml .gitignore .gitattributes \
+.editorconfig .dockerignore .pre-commit-config.yaml .env.example .env"
+ROOT_STRAY=0
+for f in "${GENLAB_ROOT:-/opt/genlab}"/* "${GENLAB_ROOT:-/opt/genlab}"/.*; do
+    b="$(basename "$f")"
+    [ -d "$f" ] && continue
+    [ "$b" = "." ] || [ "$b" = ".." ] && continue
+    case " $ROOT_ALLOWED " in *" $b "*) continue ;; esac
+    note "  [ x ] stray at repo root: $b"
+    ROOT_STRAY=$((ROOT_STRAY + 1))
+done
+if [ "$ROOT_STRAY" -eq 0 ]; then
+    note "  [ ✓ ] repo root clean"
+else
+    fail "repo root has $ROOT_STRAY stray file(s) — screenshots go to .audit/screenshots/<date>/"
+fi
+
 note ""
 if [ $EXITCODE -eq 0 ]; then
     note "ALL CHECKS PASSED ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
