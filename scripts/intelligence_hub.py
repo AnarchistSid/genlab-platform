@@ -25,6 +25,7 @@ from typing import Any
 
 # Run via: uv run --package genlab-core python scripts/intelligence_hub.py
 from dotenv import load_dotenv
+from genlab_core.paths import state_dir
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -51,7 +52,7 @@ KNOWN_PLATFORMS = [
 
 # ── File locations (each system writes here) ────────────────────────
 
-GENLAB_DIR = Path.home() / ".genlab"
+GENLAB_DIR = state_dir()
 TRENDS_FILE = GENLAB_DIR / "trend_cache.json"
 SCHEDULE_FILE = GENLAB_DIR / "optimal_schedule.json"
 VIRAL_FILE = GENLAB_DIR / "viral_alerts.json"

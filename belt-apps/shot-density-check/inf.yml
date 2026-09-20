@@ -1,0 +1,34 @@
+namespace: anarchistsid
+name: shot-density-check
+description: Measure how often a video actually cuts, and whether that suits short-form. A reel can pass
+  every technical check -- resolution, codec, loudness -- and still be one unbroken shot for thirty seconds,
+  because 'is this edited?' is not a codec property. Reports cuts/sec, average and median shot length,
+  and the longest static stretch (usually the number that matters, since that is where a viewer's thumb
+  starts moving), with a verdict against short-form pacing norms. ffmpeg scene detection, CPU only, a
+  few seconds. Returns the per-shot list so you can check the detector's work.
+metadata:
+  tags:
+  - video
+  - ffmpeg
+  - editing
+  - pacing
+  - shot-detection
+  - scene-detection
+  - shorts
+  - reels
+  - qc
+  - analysis
+  - utility
+category: video
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 2048

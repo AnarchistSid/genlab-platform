@@ -1,0 +1,24 @@
+{
+  "properties": {
+    "report_constructors": {
+      "default": true,
+      "description": "Report datetime(...) literals built without tzinfo.",
+      "title": "Report Constructors",
+      "type": "boolean"
+    },
+    "report_date_today": {
+      "default": true,
+      "description": "Report date.today(), whose calendar boundary is the local one. Turn off for code that is genuinely local-calendar by design.",
+      "title": "Report Date Today",
+      "type": "boolean"
+    },
+    "assume_utc_helper": {
+      "default": "timezone.utc",
+      "description": "Timezone expression used in suggested fixes, e.g. 'timezone.utc' or 'ZoneInfo(\"Europe/London\")'.",
+      "title": "Assume Utc Helper",
+      "type": "string"
+    }
+  },
+  "title": "AppSetup",
+  "type": "object"
+}

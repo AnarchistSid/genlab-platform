@@ -1,0 +1,37 @@
+namespace: anarchistsid
+name: env-flag-drift-check
+description: 'Compare the env vars your code READS against the ones your environment SETS. A feature flag
+  has two halves living in different files, changed by different people at different times -- the os.environ.get("FEATURE_X")
+  in code and the FEATURE_X=1 in deploy -- and nothing checks they agree. Both halves fail silently: flip
+  a flag whose reader was never deployed and it is a no-op; rename a reader without updating the environment
+  and it reverts to its default while still appearing set in .env. Three checks earn their keep. NAME DRIFT:
+  FEATURE_X_ENABLED in .env beside FEATURE_X_ENABLE in code is not a missing variable you would notice,
+  it is one that exists, reads correctly in review, and is connected to nothing. DEFAULT DIVERGENCE: the
+  same var read with two different fallbacks, so when unset the system is in two states at once. TRUTHINESS
+  DIVERGENCE: one site tests == "1" and another == "true", so setting the flag half-enables it -- invisible
+  to every linter because both lines are correct. Covers Python, JS/TS, Go, Ruby and shell. Nothing is executed.'
+metadata:
+  tags:
+  - environment-variables
+  - feature-flags
+  - configuration
+  - static-analysis
+  - devops
+  - deployment
+  - linting
+  - validation
+  - developer-tools
+  - gotcha
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 512

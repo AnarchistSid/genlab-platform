@@ -1,0 +1,168 @@
+{
+  "run": {
+    "description": "",
+    "input_schema": {
+      "$defs": {
+        "Document": {
+          "properties": {
+            "name": {
+              "description": "Identifier for this document, e.g. gaming/sources.yaml",
+              "title": "Name",
+              "type": "string"
+            },
+            "content": {
+              "description": "Full text of the config file",
+              "title": "Content",
+              "type": "string"
+            },
+            "format": {
+              "default": "auto",
+              "description": "auto, json or yaml",
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "content"
+          ],
+          "title": "Document",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "documents": {
+          "description": "Two or more sibling configs that should share a shape. Order does not matter; names are echoed in findings.",
+          "items": {
+            "$ref": "#/$defs/Document"
+          },
+          "title": "Documents",
+          "type": "array"
+        }
+      },
+      "required": [
+        "documents"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Finding": {
+          "properties": {
+            "code": {
+              "description": "Stable machine-readable identifier",
+              "title": "Code",
+              "type": "string"
+            },
+            "severity": {
+              "description": "critical, error, warn or info",
+              "title": "Severity",
+              "type": "string"
+            },
+            "path": {
+              "description": "Dotted config path the finding concerns",
+              "title": "Path",
+              "type": "string"
+            },
+            "detail": {
+              "description": "What differs, naming the documents",
+              "title": "Detail",
+              "type": "string"
+            },
+            "fix": {
+              "description": "Concrete suggestion",
+              "title": "Fix",
+              "type": "string"
+            },
+            "documents": {
+              "description": "Documents implicated",
+              "items": {
+                "type": "string"
+              },
+              "title": "Documents",
+              "type": "array"
+            }
+          },
+          "required": [
+            "code",
+            "severity",
+            "path",
+            "detail",
+            "fix",
+            "documents"
+          ],
+          "title": "Finding",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "verdict": {
+          "description": "aligned, drifted or broken",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "document_count": {
+          "description": "Documents compared",
+          "title": "Document Count",
+          "type": "integer"
+        },
+        "total_paths": {
+          "description": "Distinct dotted paths across the set",
+          "title": "Total Paths",
+          "type": "integer"
+        },
+        "shared_paths": {
+          "description": "Paths present in every document",
+          "title": "Shared Paths",
+          "type": "integer"
+        },
+        "findings": {
+          "description": "Problems found, worst first",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "most_divergent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Document appearing in the most findings",
+          "title": "Most Divergent"
+        },
+        "per_document_paths": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Path count per document",
+          "title": "Per Document Paths",
+          "type": "object"
+        },
+        "summary": {
+          "description": "One-line human-readable result",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "verdict",
+        "document_count",
+        "total_paths",
+        "shared_paths",
+        "findings",
+        "per_document_paths",
+        "summary"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

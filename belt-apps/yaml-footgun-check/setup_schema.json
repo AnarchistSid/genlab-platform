@@ -1,0 +1,24 @@
+{
+  "properties": {
+    "report_dates": {
+      "default": true,
+      "description": "Report unquoted dates, which become datetime.date rather than str.",
+      "title": "Report Dates",
+      "type": "boolean"
+    },
+    "report_all_float_text_loss": {
+      "default": false,
+      "description": "Report every float whose text changes, not just identifier-looking fields. `weight: 0.10` -> 0.1 is harmless; turn this on only if you want to see them all.",
+      "title": "Report All Float Text Loss",
+      "type": "boolean"
+    },
+    "report_nulls": {
+      "default": false,
+      "description": "Report bare `~`, `null` and empty values. Off by default: these are usually deliberate.",
+      "title": "Report Nulls",
+      "type": "boolean"
+    }
+  },
+  "title": "AppSetup",
+  "type": "object"
+}

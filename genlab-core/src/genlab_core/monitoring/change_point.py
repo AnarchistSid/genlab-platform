@@ -38,6 +38,7 @@ Real Bayesian change-point (BOCPD) would give principled posterior
 probabilities but is much heavier. CUSUM is Occam's razor here —
 2-4× less code, 10× faster, catches the same class of shifts.
 """
+
 from __future__ import annotations
 
 import logging
@@ -59,10 +60,10 @@ _K_SIGMA_MULTIPLIER: float = 0.5
 
 @dataclass(frozen=True)
 class ChangePoint:
-    direction: str          # 'up' | 'down'
-    at_index: int           # position in series where CUSUM fired
-    magnitude: float        # |shift| / σ
-    confidence: float       # proxy for posterior probability (0..1)
+    direction: str  # 'up' | 'down'
+    at_index: int  # position in series where CUSUM fired
+    magnitude: float  # |shift| / σ
+    confidence: float  # proxy for posterior probability (0..1)
 
 
 def _mean(xs: list[float]) -> float:
@@ -120,7 +121,8 @@ def detect_change_point(
                 # Confidence proxy: 1 - exp(-CUSUM/h). Bounded [0, 1).
                 confidence = min(0.99, 1.0 - math.exp(-s_plus / h))
                 return ChangePoint(
-                    direction="up", at_index=i,
+                    direction="up",
+                    at_index=i,
                     magnitude=round(magnitude, 3),
                     confidence=round(confidence, 3),
                 )
@@ -128,7 +130,8 @@ def detect_change_point(
                 magnitude = s_minus / sigma
                 confidence = min(0.99, 1.0 - math.exp(-s_minus / h))
                 return ChangePoint(
-                    direction="down", at_index=i,
+                    direction="down",
+                    at_index=i,
                     magnitude=round(magnitude, 3),
                     confidence=round(confidence, 3),
                 )

@@ -590,7 +590,9 @@ def check_deploy_gap() -> list[Alert]:
     def _git(*args: str, timeout: int = 20):
         return subprocess.run(
             ["git", "-C", project_root, *args],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
 
     try:
@@ -613,8 +615,10 @@ def check_deploy_gap() -> list[Alert]:
         # exactly the shape of failure it exists to catch.
         fetched = _git("fetch", "--quiet", "origin", "main", timeout=60)
         if fetched.returncode != 0:
-            logger.warning("[deploy-gap] git fetch failed (%s) — cannot measure gap",
-                           (fetched.stderr or "").strip()[:120])
+            logger.warning(
+                "[deploy-gap] git fetch failed (%s) — cannot measure gap",
+                (fetched.stderr or "").strip()[:120],
+            )
             return alerts
 
         head = _git("rev-parse", "origin/main")
@@ -626,24 +630,25 @@ def check_deploy_gap() -> list[Alert]:
 
         count = _git("rev-list", "--count", f"{deployed}..{remote_sha}")
         if count.returncode != 0:
-            logger.warning("[deploy-gap] deployed SHA %s not in history — "
-                           "force-push or shallow clone?", deployed[:12])
+            logger.warning(
+                "[deploy-gap] deployed SHA %s not in history — force-push or shallow clone?",
+                deployed[:12],
+            )
             return alerts
         behind = int((count.stdout or "0").strip() or 0)
         if behind <= 0:
             return alerts
 
-        oldest = _git("log", "-1", "--format=%ct", f"{deployed}..{remote_sha}",
-                      "--reverse")
+        oldest = _git("log", "-1", "--format=%ct", f"{deployed}..{remote_sha}", "--reverse")
         hours = 0.0
         stamps = [x for x in (oldest.stdout or "").split() if x.isdigit()]
         if stamps:
             import time as _time
+
             hours = max(0.0, (_time.time() - int(stamps[0])) / 3600.0)
 
         if behind > max_commits or hours > max_hours:
-            sev = "critical" if (behind > max_commits * 2 or hours > max_hours * 2) \
-                else "warning"
+            sev = "critical" if (behind > max_commits * 2 or hours > max_hours * 2) else "warning"
             alerts.append(
                 Alert(
                     check="deploy_gap",
@@ -653,12 +658,14 @@ def check_deploy_gap() -> list[Alert]:
                         f"what is deployed ({deployed[:8]}). Fixes merged since then "
                         f"are NOT running. Deploy with scripts/deploy.sh --apply."
                     ),
-                    details={"deployed_sha": deployed[:12],
-                             "origin_sha": remote_sha[:12],
-                             "commits_behind": behind,
-                             "oldest_undeployed_hours": round(hours, 1),
-                             "max_commits": max_commits,
-                             "max_hours": max_hours},
+                    details={
+                        "deployed_sha": deployed[:12],
+                        "origin_sha": remote_sha[:12],
+                        "commits_behind": behind,
+                        "oldest_undeployed_hours": round(hours, 1),
+                        "max_commits": max_commits,
+                        "max_hours": max_hours,
+                    },
                     auto_fix="ssh prod 'cd /opt/genlab && ./scripts/deploy.sh --apply'",
                 )
             )
@@ -814,20 +821,25 @@ def check_belt_auth() -> list[Alert]:
         return alerts
 
     if status == "unauthenticated":
-        how = ("INFSH_API_KEY is set but rejected — the key is bad or revoked"
-               if keyed else
-               "no INFSH_API_KEY is set, so this is the interactive CLI session "
-               "expiring again; an API key from Settings -> API Keys does not expire")
+        how = (
+            "INFSH_API_KEY is set but rejected — the key is bad or revoked"
+            if keyed
+            else "no INFSH_API_KEY is set, so this is the interactive CLI session "
+            "expiring again; an API key from Settings -> API Keys does not expire"
+        )
         alerts.append(
             Alert(
                 check="belt_unauthenticated",
                 severity="critical",
-                message=(f"belt is not authenticated — {how}. Belt is the primary "
-                         f"LLM tier: writer, hook generator and the auto-approval "
-                         f"judge all fall through while this holds."),
+                message=(
+                    f"belt is not authenticated — {how}. Belt is the primary "
+                    f"LLM tier: writer, hook generator and the auto-approval "
+                    f"judge all fall through while this holds."
+                ),
                 details={"auth_status": status, "using_api_key": keyed},
-                auto_fix=("set INFSH_API_KEY in /opt/genlab/.env" if not keyed
-                          else "rotate INFSH_API_KEY"),
+                auto_fix=(
+                    "set INFSH_API_KEY in /opt/genlab/.env" if not keyed else "rotate INFSH_API_KEY"
+                ),
             )
         )
     else:
@@ -836,7 +848,7 @@ def check_belt_auth() -> list[Alert]:
                 check="belt_unavailable",
                 severity="warning",
                 message="belt CLI unreachable (binary missing, or the probe timed "
-                        "out). Retryable; not a credential problem.",
+                "out). Retryable; not a credential problem.",
                 details={"auth_status": status, "using_api_key": keyed},
             )
         )

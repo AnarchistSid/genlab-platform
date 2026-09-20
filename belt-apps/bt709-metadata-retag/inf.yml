@@ -1,0 +1,30 @@
+namespace: anarchistsid
+name: bt709-metadata-retag
+description: |
+    Rewrite h264 color-space metadata to bt709 without re-encoding.
+    Fixes videos rejected by Meta/TikTok/YouTube Shorts validators
+    for non-bt709 color primaries (smpte170m, bt470bg, unknown).
+    Uses ffmpeg h264_metadata bitstream filter — ~1s per minute of
+    video, zero quality change.
+metadata:
+    tags:
+        - video
+        - ffmpeg
+        - metadata
+        - color-space
+        - bt709
+        - h264
+        - utility
+category: video
+images:
+    card: ""
+    thumbnail: ""
+    banner: ""
+env: {}
+kernel: python-3.11
+resources:
+    gpu:
+        count: 0
+        vram: 0
+        type: none
+    ram: 512

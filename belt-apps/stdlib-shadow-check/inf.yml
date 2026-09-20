@@ -1,0 +1,33 @@
+namespace: anarchistsid
+name: stdlib-shadow-check
+description: 'Find Python files whose names shadow a standard-library module. Python puts the running
+  script''s own directory first on sys.path, so a file called queue.py is imported instead of the stdlib
+  -- not by you, but by something several layers down. The failure never points at the culprit: you get
+  AttributeError: module ''queue'' has no attribute ''LifoQueue'' from inside urllib3, and urllib3 is
+  fine. Severity reflects TRANSITIVE risk: shadowing queue/types/select/io breaks libraries that import
+  them indirectly. Feed it `find . -name ''*.py''` output; nothing is executed or read, names only.'
+metadata:
+  tags:
+  - python
+  - linting
+  - static-analysis
+  - imports
+  - sys-path
+  - debugging
+  - code-quality
+  - utility
+  - developer-tools
+  - gotcha
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 512

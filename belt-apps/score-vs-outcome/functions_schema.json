@@ -1,0 +1,208 @@
+{
+  "run": {
+    "description": "",
+    "input_schema": {
+      "properties": {
+        "scores": {
+          "description": "What your heuristic/model predicted, in item order.",
+          "items": {
+            "type": "number"
+          },
+          "title": "Scores",
+          "type": "array"
+        },
+        "outcomes": {
+          "description": "What actually happened for the same items, same order. Views, revenue, conversions, clicks \u2014 whatever the score is meant to predict.",
+          "items": {
+            "type": "number"
+          },
+          "title": "Outcomes",
+          "type": "array"
+        },
+        "gate_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "If you currently act on scores above some value, pass it here and the report will tell you what that gate actually buys.",
+          "title": "Gate Threshold"
+        },
+        "higher_score_means_better": {
+          "default": true,
+          "description": "Set false if a LOWER score is supposed to mean a better outcome.",
+          "title": "Higher Score Means Better",
+          "type": "boolean"
+        }
+      },
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "DecileRow": {
+          "properties": {
+            "decile": {
+              "description": "1 = lowest-scored tenth, 10 = highest.",
+              "title": "Decile",
+              "type": "integer"
+            },
+            "n": {
+              "description": "Items in this decile.",
+              "title": "N",
+              "type": "integer"
+            },
+            "mean_score": {
+              "description": "Average score in the decile.",
+              "title": "Mean Score",
+              "type": "number"
+            },
+            "mean_outcome": {
+              "description": "Average realised outcome.",
+              "title": "Mean Outcome",
+              "type": "number"
+            }
+          },
+          "required": [
+            "decile",
+            "n",
+            "mean_score",
+            "mean_outcome"
+          ],
+          "title": "DecileRow",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "n": {
+          "description": "Usable pairs after dropping non-finite values.",
+          "title": "N",
+          "type": "integer"
+        },
+        "pearson_r": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Linear correlation, \u22121..1. Null when a series has no variance.",
+          "title": "Pearson R"
+        },
+        "spearman_r": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Rank correlation \u2014 catches monotone-but-curved relationships Pearson misses.",
+          "title": "Spearman R"
+        },
+        "noise_floor": {
+          "description": "|r| below this is indistinguishable from zero at this n (\u22482/\u221an).",
+          "title": "Noise Floor",
+          "type": "number"
+        },
+        "verdict": {
+          "description": "predictive | weak | noise | ANTI-CORRELATED | insufficient-data | no-variance",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "top_vs_bottom_decile_lift": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mean outcome of the top-scored decile \u00f7 the bottom. 1.0 = the score sorts nothing.",
+          "title": "Top Vs Bottom Decile Lift"
+        },
+        "deciles": {
+          "description": "Decile table, so you can see the shape rather than trust one number.",
+          "items": {
+            "$ref": "#/$defs/DecileRow"
+          },
+          "title": "Deciles",
+          "type": "array"
+        },
+        "gate_kept_mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mean outcome of items your gate keeps.",
+          "title": "Gate Kept Mean"
+        },
+        "gate_dropped_mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mean outcome of items it drops.",
+          "title": "Gate Dropped Mean"
+        },
+        "gate_verdict": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What the gate is actually doing.",
+          "title": "Gate Verdict"
+        },
+        "warnings": {
+          "description": "Things that make the numbers less trustworthy than they look.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "report": {
+          "description": "Human-readable summary.",
+          "title": "Report",
+          "type": "string"
+        }
+      },
+      "required": [
+        "n",
+        "pearson_r",
+        "spearman_r",
+        "noise_floor",
+        "verdict",
+        "top_vs_bottom_decile_lift",
+        "deciles",
+        "gate_kept_mean",
+        "gate_dropped_mean",
+        "gate_verdict",
+        "warnings",
+        "report"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

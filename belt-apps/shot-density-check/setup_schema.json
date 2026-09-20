@@ -1,0 +1,6 @@
+{
+  "description": "Stateless \u2014 analysis is pure ffmpeg.",
+  "properties": {},
+  "title": "AppSetup",
+  "type": "object"
+}

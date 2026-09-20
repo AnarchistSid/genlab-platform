@@ -1,0 +1,18 @@
+{
+  "properties": {
+    "allow_multiple_bases": {
+      "default": false,
+      "description": "Treat more than one root as legitimate rather than reporting it.",
+      "title": "Allow Multiple Bases",
+      "type": "boolean"
+    },
+    "check_filenames": {
+      "default": true,
+      "description": "Report when the filename prefix disagrees with the declared revision id.",
+      "title": "Check Filenames",
+      "type": "boolean"
+    }
+  },
+  "title": "AppSetup",
+  "type": "object"
+}

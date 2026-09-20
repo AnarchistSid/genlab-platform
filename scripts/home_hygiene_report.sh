@@ -47,7 +47,7 @@ STANDARD="Applications Desktop Documents Downloads Library Movies Music Pictures
 # is not alternation in a `case` pattern. Both were tried; both matched nothing.
 ALLOW_EXACT=$'Google Drive\nOneDrive - VeritasOne LLP\nDropbox\niCloud Drive\nCalibre Library\nE Book'
 allowed() { printf '%s\n' "$ALLOW_EXACT" | grep -Fxq -- "$1"; }
-KNOWN_PROJECTS="GenLab genlab-worker inference-apps scratch-archive aspirehub ai_trading_agent ai_trading_bot x_mw_ocr aa_ocr replay_data"
+KNOWN_PROJECTS="GenLab aspirehub ai_trading_agent ai_trading_bot x_mw_ocr aa_ocr replay_data"
 unexpected=()
 for d in "$HOME"/*/; do
     b="$(basename "$d")"

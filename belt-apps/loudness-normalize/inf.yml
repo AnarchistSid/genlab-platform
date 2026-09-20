@@ -1,0 +1,42 @@
+namespace: anarchistsid
+name: loudness-normalize
+description: |
+    Hit an EBU R128 loudness target deterministically, and prove it. Uses
+    ffmpeg loudnorm in two-pass mode (measure, then apply a fixed offset with
+    linear=true) so the same input lands on the same number every time —
+    single-pass is adaptive and drifts. Measured on one real 18.5s reel
+    rendered four times through an identical pipeline, single-pass produced
+    -14.33 / -14.78 / -14.85 / -15.51 LUFS against a -14.0 target: a 1.18 LU
+    spread. Platform loudness is a pass/fail spec, so that matters. Returns
+    before/after LUFS, true peak and LRA, plus a signed deviation and an
+    on_target flag, so the result is verifiable rather than asserted. Video in,
+    video out — the video stream is stream-copied untouched. Presets:
+    streaming -14, podcast -16, broadcast -23.
+metadata:
+    tags:
+        - audio
+        - video
+        - ffmpeg
+        - loudness
+        - lufs
+        - ebu-r128
+        - loudnorm
+        - normalization
+        - mastering
+        - reels
+        - shorts
+        - podcast
+        - utility
+category: audio
+images:
+    card: ""
+    thumbnail: ""
+    banner: ""
+env: {}
+kernel: python-3.11
+resources:
+    gpu:
+        count: 0
+        vram: 0
+        type: none
+    ram: 2048

@@ -1,0 +1,6 @@
+{
+  "description": "Stateless -- everything is ffprobe/ffmpeg.",
+  "properties": {},
+  "title": "AppSetup",
+  "type": "object"
+}

@@ -1,0 +1,37 @@
+namespace: anarchistsid
+name: cron-timezone-check
+description: 'Show when a cron schedule actually fires -- in local time and UTC side by side -- and flag
+  the days it does not fire at all. Cron matches on local wall-clock time, and so do `systemctl list-timers`
+  and `journalctl --since`; read them as UTC on a box that is not on UTC and every conclusion is silently
+  hours out of register, producing a confident wrong answer rather than an error. Separately, some wall-clock
+  times do not exist: on the spring-forward date a zone that jumps 02:00 to 03:00 has no 02:30, so a daily
+  02:30 job has no valid instant -- Vixie cron skips it, systemd runs at the boundary, and neither says
+  so. Others happen twice on fall-back. Detects the UTC/local offset trap, DST gaps and overlaps across
+  a full year, the day-of-month/day-of-week OR rule that surprises nearly everyone, impossible dates like
+  Feb 30, and catch-up bursts. Returns the next N fires as paired local/UTC timestamps. Stdlib zoneinfo,
+  no network.'
+metadata:
+  tags:
+  - cron
+  - systemd
+  - timezone
+  - dst
+  - scheduling
+  - devops
+  - sre
+  - validation
+  - developer-tools
+  - gotcha
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 512

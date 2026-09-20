@@ -1,0 +1,6 @@
+{
+  "description": "Stateless \u2014 the scan is pure text analysis.",
+  "properties": {},
+  "title": "AppSetup",
+  "type": "object"
+}

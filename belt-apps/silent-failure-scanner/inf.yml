@@ -1,0 +1,34 @@
+namespace: anarchistsid
+name: silent-failure-scanner
+description: "Find exception handlers that hide the cause of a failure. A fail-open handler is often correct\
+  \ \u2014 a probe shouldn't crash the pipeline it watches \u2014 but swallowing the exception, logging\
+  \ it at debug, or logging without exc_info makes the failure invisible until someone goes looking months\
+  \ later. Six AST-based checks, each taken from a real production incident: silent pass, empty-default\
+  \ return with no log, debug-only logging, missing exc_info (the 'failed: 1' problem), handlers that\
+  \ never log, and bare except. Reports line, severity, what it hides, and the smallest fix that keeps\
+  \ the fail-open behaviour."
+metadata:
+  tags:
+  - python
+  - ast
+  - static-analysis
+  - linting
+  - code-review
+  - observability
+  - logging
+  - error-handling
+  - audit
+  - utility
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 1024

@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "SourceFile": {
+      "properties": {
+        "name": {
+          "description": "Filename or path, echoed in findings",
+          "title": "Name",
+          "type": "string"
+        },
+        "content": {
+          "description": "Full text of the source file",
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "content"
+      ],
+      "title": "SourceFile",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "files": {
+      "description": "Every source file that participates in the context. A partial set produces false 'never written' findings -- include the producers.",
+      "items": {
+        "$ref": "#/$defs/SourceFile"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "containers": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Override the container names. Default: context, ctx, state, payload, job, meta, params",
+      "title": "Containers"
+    },
+    "report_dead_writes": {
+      "default": true,
+      "description": "Also report keys written but never read.",
+      "title": "Report Dead Writes",
+      "type": "boolean"
+    },
+    "near_miss_distance": {
+      "default": 2,
+      "description": "Report a read with no writer as a NAME DRIFT when some written key is within this edit distance. 0 disables.",
+      "maximum": 4,
+      "minimum": 0,
+      "title": "Near Miss Distance",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "files"
+  ],
+  "title": "AppInput",
+  "type": "object"
+}

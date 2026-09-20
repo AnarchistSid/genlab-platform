@@ -1,0 +1,215 @@
+{
+  "run": {
+    "description": "",
+    "input_schema": {
+      "$defs": {
+        "MigrationFile": {
+          "properties": {
+            "name": {
+              "description": "Filename, e.g. 43c4084cf927_add_variant_type.py",
+              "title": "Name",
+              "type": "string"
+            },
+            "content": {
+              "description": "Full text of the migration file",
+              "title": "Content",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "content"
+          ],
+          "title": "MigrationFile",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "files": {
+          "description": "Every file in your alembic versions/ directory. Partial sets produce false missing_down_revision findings -- pass them all.",
+          "items": {
+            "$ref": "#/$defs/MigrationFile"
+          },
+          "title": "Files",
+          "type": "array"
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Finding": {
+          "properties": {
+            "code": {
+              "description": "Stable machine-readable identifier",
+              "title": "Code",
+              "type": "string"
+            },
+            "severity": {
+              "description": "critical, error or warn",
+              "title": "Severity",
+              "type": "string"
+            },
+            "detail": {
+              "description": "What was found, naming the files involved",
+              "title": "Detail",
+              "type": "string"
+            },
+            "fix": {
+              "description": "Concrete suggestion",
+              "title": "Fix",
+              "type": "string"
+            },
+            "files": {
+              "description": "Files implicated in this finding",
+              "items": {
+                "type": "string"
+              },
+              "title": "Files",
+              "type": "array"
+            }
+          },
+          "required": [
+            "code",
+            "severity",
+            "detail",
+            "fix",
+            "files"
+          ],
+          "title": "Finding",
+          "type": "object"
+        },
+        "RevisionInfo": {
+          "properties": {
+            "revision": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Declared revision id",
+              "title": "Revision"
+            },
+            "down_revision": {
+              "description": "Parent ids; empty for a base, 2+ for a merge",
+              "items": {
+                "type": "string"
+              },
+              "title": "Down Revision",
+              "type": "array"
+            },
+            "file": {
+              "description": "Source filename",
+              "title": "File",
+              "type": "string"
+            },
+            "parsed_by": {
+              "description": "ast or regex \u2014 regex results are less trustworthy",
+              "title": "Parsed By",
+              "type": "string"
+            },
+            "branch_labels": {
+              "description": "Declared branch labels, if any",
+              "items": {
+                "type": "string"
+              },
+              "title": "Branch Labels",
+              "type": "array"
+            }
+          },
+          "required": [
+            "down_revision",
+            "file",
+            "parsed_by",
+            "branch_labels"
+          ],
+          "title": "RevisionInfo",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "verdict": {
+          "description": "clean, warn or broken",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "total_files": {
+          "description": "Files supplied",
+          "title": "Total Files",
+          "type": "integer"
+        },
+        "total_revisions": {
+          "description": "Distinct revision ids found",
+          "title": "Total Revisions",
+          "type": "integer"
+        },
+        "heads": {
+          "description": "Revisions with no child",
+          "items": {
+            "type": "string"
+          },
+          "title": "Heads",
+          "type": "array"
+        },
+        "bases": {
+          "description": "Revisions with no parent",
+          "items": {
+            "type": "string"
+          },
+          "title": "Bases",
+          "type": "array"
+        },
+        "findings": {
+          "description": "Problems found, worst first",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "apply_order": {
+          "description": "Base-to-head order Alembic will apply, when the graph is orderable",
+          "items": {
+            "type": "string"
+          },
+          "title": "Apply Order",
+          "type": "array"
+        },
+        "revisions": {
+          "description": "Parsed detail per file",
+          "items": {
+            "$ref": "#/$defs/RevisionInfo"
+          },
+          "title": "Revisions",
+          "type": "array"
+        },
+        "summary": {
+          "description": "One-line human-readable result",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "verdict",
+        "total_files",
+        "total_revisions",
+        "heads",
+        "bases",
+        "findings",
+        "apply_order",
+        "revisions",
+        "summary"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

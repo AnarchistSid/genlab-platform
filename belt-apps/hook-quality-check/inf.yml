@@ -1,0 +1,35 @@
+namespace: anarchistsid
+name: hook-quality-check
+description: 'Score a short-form video hook and name the way it fails. Most bad hooks fail in a handful
+  of repeating shapes, and nearly all are detectable without a model. The quietest one: the hook is just
+  the source video title, because a writer with nothing to say echoes its input -- it looks like a hook,
+  passes a length check, and is worthless. Pass source_title to unlock the echo checks (verbatim, truncated,
+  prefix, reworded) alongside refusal preambles, placeholder leftovers, stock phrasing, missing predicate,
+  shouting and length. The score is an itemised ledger, not an opaque float: every check contributes a
+  named signed delta to score_components, so you can always ask why 0.42 and get an answer. Batch mode
+  tallies failure codes so you can tell sixty writing problems from one broken writer. No model, no network.'
+metadata:
+  tags:
+  - text
+  - content-quality
+  - short-form-video
+  - copywriting
+  - linting
+  - validation
+  - social-media
+  - qa
+  - utility
+  - heuristics
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 512

@@ -1,0 +1,6 @@
+{
+  "description": "No setup state \u2014 the scan is pure and stateless.",
+  "properties": {},
+  "title": "AppSetup",
+  "type": "object"
+}

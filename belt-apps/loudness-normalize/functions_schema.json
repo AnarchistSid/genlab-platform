@@ -1,0 +1,199 @@
+{
+  "run": {
+    "description": "",
+    "input_schema": {
+      "properties": {
+        "media": {
+          "description": "Audio or video file to normalise. Video streams are stream-copied untouched; only audio is re-encoded.",
+          "format": "file",
+          "title": "Media",
+          "type": "string"
+        },
+        "preset": {
+          "default": "streaming",
+          "description": "Loudness preset: 'streaming' (-14 LUFS: YouTube, Spotify, Meta, TikTok), 'podcast' (-16), 'broadcast' (-23), or 'custom' to use target_lufs.",
+          "title": "Preset",
+          "type": "string"
+        },
+        "target_lufs": {
+          "default": -14.0,
+          "description": "Integrated loudness target when preset='custom'. Ignored otherwise.",
+          "title": "Target Lufs",
+          "type": "number"
+        },
+        "true_peak_dbtp": {
+          "default": -1.5,
+          "description": "True-peak ceiling in dBTP. -1.5 leaves headroom for lossy transcoders to overshoot without clipping.",
+          "title": "True Peak Dbtp",
+          "type": "number"
+        },
+        "loudness_range": {
+          "default": 11.0,
+          "description": "Target loudness range (LRA) in LU.",
+          "title": "Loudness Range",
+          "type": "number"
+        },
+        "two_pass": {
+          "default": true,
+          "description": "Measure then apply (deterministic). Setting False uses single-pass adaptive normalisation, which is faster but lands in a ~1 LU band around the target rather than on it.",
+          "title": "Two Pass",
+          "type": "boolean"
+        },
+        "audio_bitrate": {
+          "default": "192k",
+          "description": "AAC bitrate for the output.",
+          "title": "Audio Bitrate",
+          "type": "string"
+        }
+      },
+      "required": [
+        "media"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "properties": {
+        "media": {
+          "description": "Normalised file.",
+          "format": "file",
+          "title": "Media",
+          "type": "string"
+        },
+        "target_lufs": {
+          "description": "Target that was applied.",
+          "title": "Target Lufs",
+          "type": "number"
+        },
+        "input_lufs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Integrated loudness before.",
+          "title": "Input Lufs"
+        },
+        "output_lufs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Integrated loudness after.",
+          "title": "Output Lufs"
+        },
+        "input_true_peak": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "True peak before, dBTP.",
+          "title": "Input True Peak"
+        },
+        "output_true_peak": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "True peak after, dBTP.",
+          "title": "Output True Peak"
+        },
+        "input_lra": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Loudness range before, LU.",
+          "title": "Input Lra"
+        },
+        "output_lra": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Loudness range after, LU.",
+          "title": "Output Lra"
+        },
+        "deviation_lu": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How far the output landed from target, in LU. Signed: negative means quieter than target.",
+          "title": "Deviation Lu"
+        },
+        "on_target": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "True when the output is within 1 LU of target \u2014 the tolerance most platform specs allow.",
+          "title": "On Target"
+        },
+        "two_pass_used": {
+          "description": "Whether deterministic two-pass ran.",
+          "title": "Two Pass Used",
+          "type": "boolean"
+        },
+        "had_audio": {
+          "description": "False when the input carried no audio stream.",
+          "title": "Had Audio",
+          "type": "boolean"
+        },
+        "report": {
+          "description": "Human-readable summary.",
+          "title": "Report",
+          "type": "string"
+        }
+      },
+      "required": [
+        "media",
+        "target_lufs",
+        "two_pass_used",
+        "had_audio",
+        "report"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

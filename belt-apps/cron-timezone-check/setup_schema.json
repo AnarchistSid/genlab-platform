@@ -1,0 +1,18 @@
+{
+  "properties": {
+    "scan_days": {
+      "default": 365,
+      "description": "How far ahead to scan for DST problems. Below ~365 you will miss transitions for most of the year.",
+      "title": "Scan Days",
+      "type": "integer"
+    },
+    "max_fires": {
+      "default": 10,
+      "description": "How many upcoming fires to return",
+      "title": "Max Fires",
+      "type": "integer"
+    }
+  },
+  "title": "AppSetup",
+  "type": "object"
+}

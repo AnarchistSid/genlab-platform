@@ -1,0 +1,6 @@
+{
+  "description": "Stateless \u2014 name matching only.",
+  "properties": {},
+  "title": "AppSetup",
+  "type": "object"
+}

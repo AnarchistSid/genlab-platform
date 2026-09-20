@@ -4,7 +4,7 @@ RENDER-01 Part 5 section 2.
 
 RUNS IN AN ISOLATED VENV
 ------------------------
-`~/genlab-worker/.venv`, never the project venv. Rule #31: a torch-adjacent
+`GenLab/worker/.venv`, never the project venv. Rule #31: a torch-adjacent
 install without an index pin once replaced `torch==2.12.1+cpu` with the whole
 NVIDIA CUDA stack on a GPU-less box. Here the isolation is structural -- this
 module's imports (`torch`, `sam2`, `rembg`) do not exist in the project venv at
@@ -43,12 +43,24 @@ from genlab_core.action.matte import build_mattes, crop_rect_for, warp_to_crop
 
 logger = logging.getLogger(__name__)
 
-CHECKPOINT = Path(
-    os.environ.get(
-        "GENLAB_SAM2_CHECKPOINT",
-        Path.home() / "genlab-worker" / "checkpoints" / "sam2.1_hiera_base_plus.pt",
-    )
-)
+
+def _default_checkpoint() -> Path:
+    """The SAM2 checkpoint, relative to the REPO rather than to $HOME.
+
+    CLEAN-03 §2 moved the worker to GenLab/worker/. This path was
+    `Path.home() / "genlab-worker" / ...`, which the move silently invalidated:
+    the worker keeps its heartbeat either way, because the checkpoint is only
+    opened when a job arrives, so it would have failed on the next real matte
+    and not before. The old location is still tried, so a machine that has not
+    moved yet keeps working.
+    """
+    here = Path(__file__).resolve()
+    for root in (p for p in here.parents if (p / "worker" / "checkpoints").is_dir()):
+        return root / "worker" / "checkpoints" / "sam2.1_hiera_base_plus.pt"
+    return Path.home() / "genlab-worker" / "checkpoints" / "sam2.1_hiera_base_plus.pt"
+
+
+CHECKPOINT = Path(os.environ.get("GENLAB_SAM2_CHECKPOINT") or _default_checkpoint())
 MODEL_CFG = os.environ.get("GENLAB_SAM2_CFG", "configs/sam2.1/sam2.1_hiera_b+.yaml")
 
 #: A seed mask covering more than this share of the FRAME is background or a
@@ -206,7 +218,7 @@ def _predictors(device: str):
     if not CHECKPOINT.exists():
         raise FileNotFoundError(
             f"SAM2 checkpoint missing at {CHECKPOINT}. Fetch it with:\n"
-            "  curl -sSL -o ~/genlab-worker/checkpoints/sam2.1_hiera_base_plus.pt \\\n"
+            "  curl -sSL -o <repo>/worker/checkpoints/sam2.1_hiera_base_plus.pt \\\n"
             "    https://dl.fbaipublicfiles.com/segment_anything_2/092824/"
             "sam2.1_hiera_base_plus.pt"
         )

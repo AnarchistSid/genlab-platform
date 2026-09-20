@@ -1,0 +1,38 @@
+namespace: anarchistsid
+name: pytest-baseline-diff
+description: 'Compare two pytest runs and answer one question: which failures are MINE? A suite that already
+  fails cannot tell you whether your change broke anything -- you get a number like "194 failed" and it
+  means nothing without the number from before, so the honest options are classifying 194 failures by hand
+  or shipping on a hunch. This does the classification: baseline in, current in, out come the tests that
+  went from passing to failing. The check that matters most is collection soundness. A comparison between
+  runs that collected DIFFERENT test sets is not a comparison -- if the baseline collected 516 tests and
+  the current run collected 11,225, every test the baseline never ran looks "newly failing" the moment it
+  fails, and a test that vanished from collection looks "newly passing" when it simply stopped existing.
+  So totals are compared first and a mismatch downgrades the verdict to `unsound` no matter how clean the
+  failure diff looks. Also distinguishes newly-passing from disappeared, because lost coverage wears the
+  same clothes as a fix. Reads ordinary pytest console output -- no -v, no plugin, no JSON report.'
+metadata:
+  tags:
+  - pytest
+  - python
+  - testing
+  - ci
+  - regression
+  - developer-tools
+  - diff
+  - quality
+  - automation
+  - gotcha
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 512

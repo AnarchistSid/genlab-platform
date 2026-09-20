@@ -199,3 +199,19 @@ deploy/.deploy.log
 # home directory is creating them in the wrong place.
 /.bc-base/
 /.bc-head/
+
+# belt app sources live in the repo (CLEAN-03 §3): the directory had no git
+# history and no README of its own, so by the packet's own test it is GenLab
+# tooling rather than an independently published project. 26 app sources that
+# were version-controlled nowhere now are. Build and venv dirs are not.
+belt-apps/*/.infsh/
+belt-apps/*/.venv/
+belt-apps/*/input.json
+.audit/scratch-archive/
+
+# The matte worker lives in the repo (CLEAN-03 §2); its venv and model weights
+# do not. 1.1G of venv and a 309MB SAM2 checkpoint are fetched, not authored --
+# the checkpoint by the curl in sam2_backend.py's FileNotFoundError message.
+# GitHub rejects the checkpoint outright at 100MB, which is how this was found.
+worker/.venv/
+worker/checkpoints/

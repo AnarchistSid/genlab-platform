@@ -56,6 +56,8 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from genlab_core.paths import state_dir
+
 try:
     import fcntl  # POSIX only — present on the macOS/Linux deploy targets
 except ImportError:  # pragma: no cover - non-POSIX fallback
@@ -134,7 +136,7 @@ OPERATION_COSTS: dict[str, int] = {
     "video_list": 1,
 }
 
-_DEFAULT_STATE_PATH = Path.home() / ".genlab" / "youtube_quota.json"
+_DEFAULT_STATE_PATH = state_dir("youtube_quota.json")
 
 
 class YouTubeQuotaTracker:

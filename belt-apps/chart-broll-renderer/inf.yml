@@ -1,0 +1,35 @@
+namespace: anarchistsid
+name: chart-broll-renderer
+description: |
+    Render a bar chart as a 1080x1920 vertical mp4 for short-form video
+    intros or B-roll (Reels, TikTok, Shorts, Threads). Input: title +
+    list of {label, value} bars + optional accent color hex. Output:
+    bt709-tagged h264/AAC mp4 with silent audio track (concat-safe with
+    a main reel). Pure ffmpeg — no matplotlib, no external Python deps.
+    Around 500ms per generation.
+metadata:
+    tags:
+        - video
+        - ffmpeg
+        - chart
+        - bar-chart
+        - data-visualization
+        - b-roll
+        - reels
+        - tiktok
+        - shorts
+        - social-media
+        - utility
+category: video
+images:
+    card: ""
+    thumbnail: ""
+    banner: ""
+env: {}
+kernel: python-3.11
+resources:
+    gpu:
+        count: 0
+        vram: 0
+        type: none
+    ram: 512

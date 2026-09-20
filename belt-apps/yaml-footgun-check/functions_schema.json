@@ -1,0 +1,131 @@
+{
+  "run": {
+    "description": "",
+    "capabilities": [],
+    "input_schema": {
+      "properties": {
+        "content": {
+          "description": "Full text of the YAML document",
+          "title": "Content",
+          "type": "string"
+        },
+        "name": {
+          "default": "document.yaml",
+          "description": "Filename, echoed in output",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Finding": {
+          "properties": {
+            "code": {
+              "description": "Stable machine-readable identifier",
+              "title": "Code",
+              "type": "string"
+            },
+            "severity": {
+              "description": "critical, error, warn or info",
+              "title": "Severity",
+              "type": "string"
+            },
+            "line": {
+              "description": "1-indexed line in the source",
+              "title": "Line",
+              "type": "integer"
+            },
+            "key_path": {
+              "description": "Dotted path to the value, where resolvable",
+              "title": "Key Path",
+              "type": "string"
+            },
+            "source_text": {
+              "description": "Characters as written in the file",
+              "title": "Source Text",
+              "type": "string"
+            },
+            "parsed_as": {
+              "description": "What the loader actually produced",
+              "title": "Parsed As",
+              "type": "string"
+            },
+            "parsed_type": {
+              "description": "Python type of the parsed value",
+              "title": "Parsed Type",
+              "type": "string"
+            },
+            "detail": {
+              "description": "What happens and why it matters",
+              "title": "Detail",
+              "type": "string"
+            },
+            "fix": {
+              "description": "Concrete suggestion",
+              "title": "Fix",
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "severity",
+            "line",
+            "key_path",
+            "source_text",
+            "parsed_as",
+            "parsed_type",
+            "detail",
+            "fix"
+          ],
+          "title": "Finding",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "name": {
+          "description": "Document name",
+          "title": "Name",
+          "type": "string"
+        },
+        "verdict": {
+          "description": "clean, warn or broken",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "scalars_checked": {
+          "description": "Unquoted scalar values examined",
+          "title": "Scalars Checked",
+          "type": "integer"
+        },
+        "findings": {
+          "description": "Problems found, worst first",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "summary": {
+          "description": "One-line human-readable result",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "verdict",
+        "scalars_checked",
+        "findings",
+        "summary"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

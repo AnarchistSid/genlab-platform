@@ -19,10 +19,12 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
+from genlab_core.paths import state_dir
+
 logger = logging.getLogger("trend_signals")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-TRENDS_CACHE = os.path.expanduser("~/.genlab/trend_cache.json")
+TRENDS_CACHE = str(state_dir("trend_cache.json"))
 
 # Niche-specific seed keywords for trend discovery
 NICHE_SEEDS = {

@@ -1,0 +1,18 @@
+{
+  "properties": {
+    "report_value_outliers": {
+      "default": false,
+      "description": "Report a document whose VALUE differs when all others agree. Off by default: sibling configs differ in values by design.",
+      "title": "Report Value Outliers",
+      "type": "boolean"
+    },
+    "missing_key_threshold": {
+      "default": 0.5,
+      "description": "A key must appear in at least this fraction of documents before its absence elsewhere is reported. Guards against one file's private settings being read as everyone else's omission.",
+      "title": "Missing Key Threshold",
+      "type": "number"
+    }
+  },
+  "title": "AppSetup",
+  "type": "object"
+}

@@ -1,0 +1,153 @@
+{
+  "run": {
+    "description": "",
+    "capabilities": [],
+    "input_schema": {
+      "properties": {
+        "baseline": {
+          "description": "pytest console output from the BEFORE run",
+          "title": "Baseline",
+          "type": "string"
+        },
+        "current": {
+          "description": "pytest console output from the AFTER run",
+          "title": "Current",
+          "type": "string"
+        },
+        "baseline_label": {
+          "default": "baseline",
+          "description": "Name for the before run",
+          "title": "Baseline Label",
+          "type": "string"
+        },
+        "current_label": {
+          "default": "current",
+          "description": "Name for the after run",
+          "title": "Current Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "baseline",
+        "current"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Finding": {
+          "properties": {
+            "node_id": {
+              "description": "pytest node id",
+              "title": "Node Id",
+              "type": "string"
+            },
+            "reason": {
+              "description": "Failure reason as pytest reported it",
+              "title": "Reason",
+              "type": "string"
+            }
+          },
+          "required": [
+            "node_id",
+            "reason"
+          ],
+          "title": "Finding",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "verdict": {
+          "description": "clean | regressions | unsound \u2014 unsound means the two runs are not comparable and the failure diff must not be trusted",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "newly_failing": {
+          "description": "Passed before, fails now. YOURS.",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Newly Failing",
+          "type": "array"
+        },
+        "newly_passing": {
+          "description": "Failed before, passes now",
+          "items": {
+            "type": "string"
+          },
+          "title": "Newly Passing",
+          "type": "array"
+        },
+        "still_failing": {
+          "description": "Failed in both \u2014 the pre-existing baseline",
+          "title": "Still Failing",
+          "type": "integer"
+        },
+        "disappeared": {
+          "description": "Failing before, absent from the current run entirely \u2014 not fixed, gone",
+          "items": {
+            "type": "string"
+          },
+          "title": "Disappeared",
+          "type": "array"
+        },
+        "baseline_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Parsed totals, before",
+          "title": "Baseline Counts",
+          "type": "object"
+        },
+        "current_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Parsed totals, after",
+          "title": "Current Counts",
+          "type": "object"
+        },
+        "collection_delta": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "current collected minus baseline collected",
+          "title": "Collection Delta"
+        },
+        "warnings": {
+          "description": "Reasons the comparison may be unsound",
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "summary": {
+          "description": "One-line human-readable result",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "verdict",
+        "newly_failing",
+        "newly_passing",
+        "still_failing",
+        "disappeared",
+        "baseline_counts",
+        "current_counts",
+        "warnings",
+        "summary"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

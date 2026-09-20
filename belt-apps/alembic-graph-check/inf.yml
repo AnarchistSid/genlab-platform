@@ -1,0 +1,37 @@
+namespace: anarchistsid
+name: alembic-graph-check
+description: 'Validate an Alembic migration graph before it silently drops one of your migrations. Alembic
+  keys its revision map on the `revision` id each file declares, so if two files declare the same id the
+  second overwrites the first -- one migration then never applies, with no error, no warning, and no mention
+  in `alembic history`. Downstream code hits the missing table, gets caught by the nearest defensive except,
+  and degrades quietly; in the codebase that prompted this, a duplicate id left a reward loop dead for 35
+  days while every dashboard read healthy. Detects duplicate ids, dangling down_revision targets, cycles,
+  multiple heads, multiple bases, self-references and filename/id mismatches, and returns the base-to-head
+  apply order when the graph is sound. Parsed with ast (module-level assignments only -- nothing imported
+  or executed), handling bare strings, typed `revision: str` declarations and merge tuples; regex is the
+  fallback and the result says which was used per file.'
+metadata:
+  tags:
+  - python
+  - alembic
+  - sqlalchemy
+  - database
+  - migrations
+  - static-analysis
+  - validation
+  - ci
+  - developer-tools
+  - gotcha
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 512

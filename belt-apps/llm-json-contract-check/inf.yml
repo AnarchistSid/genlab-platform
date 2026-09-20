@@ -1,0 +1,37 @@
+namespace: anarchistsid
+name: llm-json-contract-check
+description: Check that the JSON contract a prompt DECLARES is the one your code ENFORCES. REQUIRED in
+  a prompt is a comment; it instructs the model and binds nothing, while only your checker binds and nothing
+  keeps the two in sync. Parses the key list a prompt declares, flags a prose count that disagrees with
+  the list (ALL SIX KEYS above seven bullets), and given your code's enforced-field list reports declared-but-unenforced
+  (the silent failure, where the model omits it and nothing retries or logs) and enforced-but-undeclared
+  (a retry on every call). Given a sample response it separates keys that are ABSENT from keys PRESENT
+  BUT EMPTY, since the latter pass a naive key-in-response check and are usually the real bug. Built after
+  a field marked REQUIRED in a prompt and missing from the parser's required set produced five days of
+  intermittent success that turned out to be voluntary model compliance. CPU only, no network, no model
+  call.
+metadata:
+  tags:
+  - llm
+  - json
+  - prompt
+  - validation
+  - contract
+  - structured-output
+  - debugging
+  - qc
+  - reliability
+  - utility
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 1024

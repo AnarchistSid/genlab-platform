@@ -1,0 +1,34 @@
+namespace: anarchistsid
+name: video-availability-check
+description: 'Find out WHY a video URL will not download, before you build a pipeline on it. Every failure
+  looks the same in a log -- ''yt-dlp failed'' -- but they need opposite responses: geo-blocked means
+  the video is fine and your egress region is not; bot-challenge means the platform is refusing your IP
+  and changing region will not help; removed or private means nothing will fix it. Classifies each URL
+  into geo_blocked / bot_challenge / removed / private / age_gated / live_not_started / network / ok,
+  with the fix that actually applies, and flags when a batch contains both geo and bot failures since
+  those pull in opposite directions. Metadata only, nothing downloaded.'
+metadata:
+  tags:
+  - video
+  - yt-dlp
+  - availability
+  - geo-blocking
+  - diagnostics
+  - scraping
+  - pipeline
+  - qc
+  - utility
+  - debugging
+category: video
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 1024

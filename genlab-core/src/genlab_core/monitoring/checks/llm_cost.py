@@ -282,8 +282,7 @@ def check_llm_budget_runway() -> list[Alert]:
                 "budget_usd": round(budget, 4),
             },
             auto_fix=(
-                "Top up at https://console.anthropic.com/settings/billing "
-                "before runway hits 0"
+                "Top up at https://console.anthropic.com/settings/billing before runway hits 0"
             ),
         )
     ]
@@ -295,15 +294,11 @@ def check_llm_cost() -> list[Alert]:
     try:
         alerts.extend(check_llm_cost_runaway())
     except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "[llm_cost] runaway check failed: %s", exc, exc_info=True
-        )
+        logger.warning("[llm_cost] runaway check failed: %s", exc, exc_info=True)
     try:
         alerts.extend(check_llm_budget_runway())
     except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "[llm_cost] budget runway check failed: %s", exc, exc_info=True
-        )
+        logger.warning("[llm_cost] budget runway check failed: %s", exc, exc_info=True)
     return alerts
 
 

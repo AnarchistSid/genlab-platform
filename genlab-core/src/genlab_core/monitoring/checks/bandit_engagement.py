@@ -508,8 +508,7 @@ def check_learning_loops_silent_fail() -> list[Alert]:
         try:
             alerts.extend(check_fn(dsn))
         except Exception as exc:  # noqa: BLE001
-            logger.debug("[learning_loop_health] sub-check %s failed: %s",
-                         check_fn.__name__, exc)
+            logger.debug("[learning_loop_health] sub-check %s failed: %s", check_fn.__name__, exc)
     return alerts
 
 
@@ -629,13 +628,11 @@ def _check_artifact_freshness() -> list[Alert]:
                             "threshold_hours": max_age_hours,
                         },
                         auto_fix=f"sudo systemctl start {service}.service; "
-                                f"journalctl -u {service}.service --since '5 min ago'",
+                        f"journalctl -u {service}.service --since '5 min ago'",
                     )
                 )
         except Exception as exc:  # noqa: BLE001
-            logger.debug(
-                "[artifact_freshness] failed for %s: %s", path_pattern, exc
-            )
+            logger.debug("[artifact_freshness] failed for %s: %s", path_pattern, exc)
     return alerts
 
 
@@ -665,8 +662,8 @@ def _check_late_reward_dead(dsn: str) -> list[Alert]:
                 ),
                 details={"rows_48h": n, "last_row": str(latest) if latest else None},
                 auto_fix="Investigate late_reward.process_late_reward_batch SQL; "
-                        "confirm status filter matches actual publishing_analytics "
-                        "status values (SUCCESS + INSIGHTS_* variants).",
+                "confirm status filter matches actual publishing_analytics "
+                "status values (SUCCESS + INSIGHTS_* variants).",
             )
         ]
     return []
@@ -697,8 +694,8 @@ def _check_outcome_calibration_dead(dsn: str) -> list[Alert]:
                 ),
                 details={"rows_48h": n},
                 auto_fix="Trigger late_reward manually + grep journal for "
-                        "'[outcome_calibration]' log lines to see if the "
-                        "wire fires.",
+                "'[outcome_calibration]' log lines to see if the "
+                "wire fires.",
             )
         ]
     return []
@@ -736,7 +733,7 @@ def _check_strategist_apply_dead(dsn: str) -> list[Alert]:
                 ),
                 details={"unapplied_report_count": n},
                 auto_fix="sudo systemctl start genlab-strategist-apply.service; "
-                        "journalctl -u it --since '5 min ago' | grep counters",
+                "journalctl -u it --since '5 min ago' | grep counters",
             )
         ]
     return []
@@ -754,16 +751,19 @@ def _check_reward_pipeline_flow(dsn: str) -> list[Alert]:
             "WHERE published_at >= NOW() - INTERVAL '3 days' "
             "AND status = 'SUCCESS'"
         ).fetchone()
-        pub_n = int((recent_publishes.get("n") if hasattr(recent_publishes, "get")
-                     else recent_publishes[0]) or 0)
+        pub_n = int(
+            (recent_publishes.get("n") if hasattr(recent_publishes, "get") else recent_publishes[0])
+            or 0
+        )
 
         recent_rewards = conn.execute(
             "SELECT COUNT(*) AS n FROM pending_feedback "
             "WHERE updated_at >= NOW() - INTERVAL '24 hours' "
             "AND reward_48h IS NOT NULL"
         ).fetchone()
-        rwd_n = int((recent_rewards.get("n") if hasattr(recent_rewards, "get")
-                     else recent_rewards[0]) or 0)
+        rwd_n = int(
+            (recent_rewards.get("n") if hasattr(recent_rewards, "get") else recent_rewards[0]) or 0
+        )
 
     if pub_n >= 20 and rwd_n == 0:
         # Enough publishes to expect at least some 48h windows to close
@@ -781,8 +781,8 @@ def _check_reward_pipeline_flow(dsn: str) -> list[Alert]:
                 ),
                 details={"publishes_3d": pub_n, "rewards_computed_24h": rwd_n},
                 auto_fix="Check metric_collector journal for 48h reward "
-                        "logs; verify early_stop 6h floors aren't set too "
-                        "high per niche in metric_collector.py:875.",
+                "logs; verify early_stop 6h floors aren't set too "
+                "high per niche in metric_collector.py:875.",
             )
         ]
     return []
@@ -836,9 +836,9 @@ def _check_ig_view_metric_regression(dsn: str) -> list[Alert]:
                     "zero_view_pct": round(100 * zero_view / total, 1),
                 },
                 auto_fix="grep journal for 'reels 6h fetch failed' + "
-                        "'[meta-metric-deprecation]'; audit metric_set list "
-                        "in genlab_core/learning/metrics/instagram.py against "
-                        "meta_metric_deprecation._DEPRECATED_METRICS.",
+                "'[meta-metric-deprecation]'; audit metric_set list "
+                "in genlab_core/learning/metrics/instagram.py against "
+                "meta_metric_deprecation._DEPRECATED_METRICS.",
             )
         ]
     return []

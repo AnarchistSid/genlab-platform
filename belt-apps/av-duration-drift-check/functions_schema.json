@@ -1,0 +1,225 @@
+{
+  "run": {
+    "description": "",
+    "capabilities": [],
+    "input_schema": {
+      "properties": {
+        "video": {
+          "description": "The media file to inspect (mp4/mov/mkv/webm).",
+          "format": "file",
+          "title": "Video",
+          "type": "string"
+        },
+        "count_frames": {
+          "default": true,
+          "description": "Decode the whole video stream to count frames exactly. This is the only way to know the true end, but it costs a full pass. Turn it off for very long files and rely on stream metadata instead.",
+          "title": "Count Frames",
+          "type": "boolean"
+        },
+        "probe_seek": {
+          "default": true,
+          "description": "Actually attempt a frame extraction at the container's reported end. This is what turns a metadata comparison into a reproduction of the bug, so leave it on unless you only want the numbers.",
+          "title": "Probe Seek",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "video"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "StreamDuration": {
+          "properties": {
+            "index": {
+              "description": "Stream index within the container.",
+              "title": "Index",
+              "type": "integer"
+            },
+            "codec_type": {
+              "description": "video, audio, subtitle, ...",
+              "title": "Codec Type",
+              "type": "string"
+            },
+            "codec_name": {
+              "description": "Codec of this stream.",
+              "title": "Codec Name",
+              "type": "string"
+            },
+            "duration_seconds": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Duration this stream declares, if it declares one.",
+              "title": "Duration Seconds"
+            }
+          },
+          "required": [
+            "index",
+            "codec_type",
+            "codec_name"
+          ],
+          "title": "StreamDuration",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "container_duration_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Duration the container declares. Usually the longest stream.",
+          "title": "Container Duration Seconds"
+        },
+        "video_duration_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Duration the video stream declares.",
+          "title": "Video Duration Seconds"
+        },
+        "audio_duration_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Duration the audio stream declares.",
+          "title": "Audio Duration Seconds"
+        },
+        "streams": {
+          "description": "Every stream and the duration it claims.",
+          "items": {
+            "$ref": "#/$defs/StreamDuration"
+          },
+          "title": "Streams",
+          "type": "array"
+        },
+        "decoded_frame_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Video frames actually decoded. Null if count_frames was off.",
+          "title": "Decoded Frame Count"
+        },
+        "frame_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Average frame rate.",
+          "title": "Frame Rate"
+        },
+        "frames_imply_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "decoded_frame_count / frame_rate -- duration the frames imply.",
+          "title": "Frames Imply Seconds"
+        },
+        "drift_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "container_duration - video_duration. Positive means the file claims to run longer than its video does, which is the dangerous direction.",
+          "title": "Drift Seconds"
+        },
+        "last_decodable_frame_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Timestamp of the last frame that could actually be decoded.",
+          "title": "Last Decodable Frame Seconds"
+        },
+        "seek_at_container_end_fails": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tested, not predicted: did extracting a frame just inside the container's reported end actually fail?",
+          "title": "Seek At Container End Fails"
+        },
+        "safe": {
+          "description": "True when the drift is negligible and the end-of-file seek worked.",
+          "title": "Safe",
+          "type": "boolean"
+        },
+        "verdict": {
+          "description": "One line on what was found.",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "recommendation": {
+          "description": "How a downstream tool should seek the end of this file.",
+          "title": "Recommendation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "safe",
+        "verdict",
+        "recommendation"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

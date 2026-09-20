@@ -1,0 +1,14 @@
+{
+  "properties": {
+    "containers": {
+      "description": "Variable names treated as a shared context dict.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Containers",
+      "type": "array"
+    }
+  },
+  "title": "AppSetup",
+  "type": "object"
+}

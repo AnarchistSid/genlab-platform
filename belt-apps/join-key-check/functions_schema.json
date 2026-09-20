@@ -1,0 +1,260 @@
+{
+  "run": {
+    "description": "",
+    "capabilities": [],
+    "input_schema": {
+      "$defs": {
+        "Column": {
+          "properties": {
+            "name": {
+              "description": "Column name",
+              "title": "Name",
+              "type": "string"
+            },
+            "type": {
+              "description": "SQL type, e.g. uuid, text, bigint",
+              "title": "Type",
+              "type": "string"
+            },
+            "null_count": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Rows where this column is NULL",
+              "title": "Null Count"
+            },
+            "distinct_count": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Distinct non-null values",
+              "title": "Distinct Count"
+            }
+          },
+          "required": [
+            "name",
+            "type"
+          ],
+          "title": "Column",
+          "type": "object"
+        },
+        "ProposedJoin": {
+          "properties": {
+            "left_table": {
+              "title": "Left Table",
+              "type": "string"
+            },
+            "left_column": {
+              "title": "Left Column",
+              "type": "string"
+            },
+            "right_table": {
+              "title": "Right Table",
+              "type": "string"
+            },
+            "right_column": {
+              "title": "Right Column",
+              "type": "string"
+            }
+          },
+          "required": [
+            "left_table",
+            "left_column",
+            "right_table",
+            "right_column"
+          ],
+          "title": "ProposedJoin",
+          "type": "object"
+        },
+        "Table": {
+          "properties": {
+            "name": {
+              "description": "Table name",
+              "title": "Name",
+              "type": "string"
+            },
+            "row_count": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Total rows",
+              "title": "Row Count"
+            },
+            "columns": {
+              "description": "Columns, from information_schema",
+              "items": {
+                "$ref": "#/$defs/Column"
+              },
+              "title": "Columns",
+              "type": "array"
+            }
+          },
+          "required": [
+            "name",
+            "columns"
+          ],
+          "title": "Table",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "tables": {
+          "description": "Two or more table schemas",
+          "items": {
+            "$ref": "#/$defs/Table"
+          },
+          "title": "Tables",
+          "type": "array"
+        },
+        "join": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProposedJoin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The join to validate. Omit to just rank candidate keys."
+        }
+      },
+      "required": [
+        "tables"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Candidate": {
+          "properties": {
+            "left": {
+              "description": "left_table.column",
+              "title": "Left",
+              "type": "string"
+            },
+            "right": {
+              "description": "right_table.column",
+              "title": "Right",
+              "type": "string"
+            },
+            "score": {
+              "description": "0-1 plausibility, from type, population and naming",
+              "title": "Score",
+              "type": "number"
+            },
+            "why": {
+              "description": "What earned or cost the score",
+              "title": "Why",
+              "type": "string"
+            }
+          },
+          "required": [
+            "left",
+            "right",
+            "score",
+            "why"
+          ],
+          "title": "Candidate",
+          "type": "object"
+        },
+        "Finding": {
+          "properties": {
+            "code": {
+              "description": "Stable machine-readable identifier",
+              "title": "Code",
+              "type": "string"
+            },
+            "severity": {
+              "description": "critical, error, warn or info",
+              "title": "Severity",
+              "type": "string"
+            },
+            "detail": {
+              "description": "What is wrong with this key",
+              "title": "Detail",
+              "type": "string"
+            },
+            "fix": {
+              "description": "Concrete suggestion",
+              "title": "Fix",
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "severity",
+            "detail",
+            "fix"
+          ],
+          "title": "Finding",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "verdict": {
+          "description": "ok, suspect or broken \u2014 'suspect' means it may silently return nothing",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "findings": {
+          "description": "Problems with the proposed join, worst first",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "candidates": {
+          "description": "Better keys, best first",
+          "items": {
+            "$ref": "#/$defs/Candidate"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "checks_skipped": {
+          "description": "Checks that needed statistics you did not supply",
+          "items": {
+            "type": "string"
+          },
+          "title": "Checks Skipped",
+          "type": "array"
+        },
+        "summary": {
+          "description": "One-line human-readable result",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "verdict",
+        "findings",
+        "candidates",
+        "checks_skipped",
+        "summary"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "properties": {
+    "ignore_ambient": {
+      "default": true,
+      "description": "Skip PATH/HOME/CI and similar vars every environment provides.",
+      "title": "Ignore Ambient",
+      "type": "boolean"
+    },
+    "report_set_never_read": {
+      "default": true,
+      "description": "Report vars set in env files that no supplied source reads. Turn off when passing a partial source set, where absence proves nothing.",
+      "title": "Report Set Never Read",
+      "type": "boolean"
+    },
+    "prefix_filter": {
+      "default": "",
+      "description": "Only consider variables starting with this prefix, e.g. 'MYAPP_'. Sharpens the report on a codebase with many third-party vars.",
+      "title": "Prefix Filter",
+      "type": "string"
+    }
+  },
+  "title": "AppSetup",
+  "type": "object"
+}

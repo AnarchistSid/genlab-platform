@@ -1,0 +1,34 @@
+namespace: anarchistsid
+name: score-vs-outcome
+description: 'Check whether a score you act on actually predicts the outcome you care about. Systems accumulate
+  quality scores and then gate on them -- approve above 0.3, promote the top decile -- and almost nobody
+  checks the score correlates with what it is meant to predict. Reports Pearson and Spearman, whether
+  |r| is distinguishable from zero at your sample size, decile lift (do top-scored items actually outperform
+  the bottom?), and gate analysis: what the threshold you currently use actually buys. Flags the dangerous
+  case explicitly -- an ANTI-correlated score, where every loop maximising it moves away from the goal
+  while reporting progress. Pure Python, no dependencies.'
+metadata:
+  tags:
+  - analysis
+  - statistics
+  - correlation
+  - validation
+  - ml-ops
+  - evaluation
+  - heuristics
+  - data-quality
+  - audit
+  - utility
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 1024

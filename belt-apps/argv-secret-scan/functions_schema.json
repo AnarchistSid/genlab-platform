@@ -1,0 +1,125 @@
+{
+  "run": {
+    "description": "",
+    "capabilities": [],
+    "input_schema": {
+      "properties": {
+        "script": {
+          "description": "Shell script, Dockerfile, CI config, systemd unit, or a single command line to scan.",
+          "title": "Script",
+          "type": "string"
+        },
+        "redact": {
+          "default": true,
+          "description": "Redact the secret value in the output. Leave on unless you are scanning a file with placeholder values \u2014 this tool should not become a second place the secret is recorded.",
+          "title": "Redact",
+          "type": "boolean"
+        },
+        "extra_secret_names": {
+          "description": "Additional variable-name fragments to treat as secret-bearing, e.g. your internal prefix.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Extra Secret Names",
+          "type": "array"
+        }
+      },
+      "required": [
+        "script"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Finding": {
+          "properties": {
+            "line_number": {
+              "description": "1-indexed line the finding is on.",
+              "title": "Line Number",
+              "type": "integer"
+            },
+            "line": {
+              "description": "The line, with the secret value redacted.",
+              "title": "Line",
+              "type": "string"
+            },
+            "kind": {
+              "description": "Which shape matched, e.g. sudo_env_assignment.",
+              "title": "Kind",
+              "type": "string"
+            },
+            "name": {
+              "description": "The variable or flag carrying the secret.",
+              "title": "Name",
+              "type": "string"
+            },
+            "severity": {
+              "description": "critical | high | medium",
+              "title": "Severity",
+              "type": "string"
+            },
+            "why": {
+              "description": "Which logs record it.",
+              "title": "Why",
+              "type": "string"
+            },
+            "fix": {
+              "description": "The safe rewrite.",
+              "title": "Fix",
+              "type": "string"
+            }
+          },
+          "required": [
+            "line_number",
+            "line",
+            "kind",
+            "name",
+            "severity",
+            "why",
+            "fix"
+          ],
+          "title": "Finding",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "critical_count": {
+          "description": "Findings whose value reaches a sudo/auth log.",
+          "title": "Critical Count",
+          "type": "integer"
+        },
+        "total_count": {
+          "description": "All findings.",
+          "title": "Total Count",
+          "type": "integer"
+        },
+        "clean": {
+          "description": "True when nothing was found.",
+          "title": "Clean",
+          "type": "boolean"
+        },
+        "verdict": {
+          "description": "One line.",
+          "title": "Verdict",
+          "type": "string"
+        }
+      },
+      "required": [
+        "critical_count",
+        "total_count",
+        "clean",
+        "verdict"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

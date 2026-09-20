@@ -1,0 +1,14 @@
+{
+  "video": null,
+  "voiceover": null,
+  "expected_width": 1080,
+  "expected_height": 1920,
+  "min_duration_seconds": 15.0,
+  "max_duration_seconds": 60.0,
+  "require_bt709": true,
+  "expected_audio_sample_rate": 48000,
+  "target_lufs": -14.0,
+  "lufs_tolerance": 1.0,
+  "speech_band_threshold_db": -35.0,
+  "voiceover_fit_tolerance_seconds": 0.5
+}

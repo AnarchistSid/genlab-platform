@@ -1,0 +1,39 @@
+namespace: anarchistsid
+name: systemd-unit-audit
+description: 'Audit systemd unit and timer files for the failure modes that report success while failing.
+  systemd fails quietly: `systemctl show` answers Result=success for a unit that does not exist (LoadState=not-found),
+  so a health gate reading Result alone passes on a phantom -- found after two audit jobs were built around
+  a template unit that had never been installed. SuccessExitStatus= widened to swallow a non-zero code
+  makes genuine faults indistinguishable from clean runs and leaves any OnFailure= wiring structurally
+  dead. OnCalendar= without an explicit timezone is evaluated in the host zone, and `systemctl list-timers`
+  and `journalctl --since` parse locally too, so a UTC-intent reading of the schedule and of the logs are
+  wrong in the same direction and never contradict each other. Persistent=false on a weekly timer loses
+  a missed fire in silence; Persistent=true on a frequent one produces a catch-up burst. Also flags stated
+  times that disagree with the schedule they describe, oneshot units with Restart=, and RandomizedDelaySec
+  longer than the interval. Paste a unit file; optionally paste `systemctl show` output to catch the phantom-unit
+  case, which is invisible in the file by definition. Pure stdlib, no network, no systemd required.'
+metadata:
+  tags:
+  - systemd
+  - devops
+  - sre
+  - linter
+  - validation
+  - observability
+  - silent-failure
+  - timers
+  - developer-tools
+  - gotcha
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 512

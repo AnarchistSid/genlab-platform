@@ -1,0 +1,107 @@
+{
+  "run": {
+    "description": "",
+    "input_schema": {
+      "$defs": {
+        "Bar": {
+          "description": "One bar in the chart.",
+          "properties": {
+            "label": {
+              "description": "Short label under the bar (e.g. 'GPT-4', '2024', 'OpenAI'). Truncated with ellipsis at 5+ bars.",
+              "title": "Label",
+              "type": "string"
+            },
+            "value": {
+              "description": "Numeric value above the bar. Must be positive; values \u22640 are dropped.",
+              "exclusiveMinimum": 0,
+              "title": "Value",
+              "type": "number"
+            }
+          },
+          "required": [
+            "label",
+            "value"
+          ],
+          "title": "Bar",
+          "type": "object"
+        }
+      },
+      "description": "Inputs for chart rendering.",
+      "properties": {
+        "title": {
+          "description": "Chart title displayed at the top (max ~50 chars for clean fit)",
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "bars": {
+          "description": "2-7 bars. First 7 rendered; extras silently dropped.",
+          "items": {
+            "$ref": "#/$defs/Bar"
+          },
+          "maxItems": 7,
+          "minItems": 2,
+          "title": "Bars",
+          "type": "array"
+        },
+        "accent_color_hex": {
+          "default": "3B82F6",
+          "description": "Bar fill color as 6-char hex without leading # (e.g. '00D4FF' for cyan, 'FF2040' for red)",
+          "pattern": "^[0-9A-Fa-f]{6}$",
+          "title": "Accent Color Hex",
+          "type": "string"
+        },
+        "background_color_hex": {
+          "default": "0F172A",
+          "description": "Background color as 6-char hex without leading #. Default is slate-950 for high contrast with white text.",
+          "pattern": "^[0-9A-Fa-f]{6}$",
+          "title": "Background Color Hex",
+          "type": "string"
+        },
+        "duration_seconds": {
+          "default": 2.5,
+          "description": "Clip length in seconds (0.5 to 15.0)",
+          "maximum": 15.0,
+          "minimum": 0.5,
+          "title": "Duration Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "title",
+        "bars"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "description": "Rendered mp4 + rendering metadata.",
+      "properties": {
+        "video": {
+          "description": "Rendered 1080x1920 h264/AAC mp4 with bt709 color metadata and silent stereo audio track.",
+          "format": "file",
+          "title": "Video",
+          "type": "string"
+        },
+        "bars_rendered": {
+          "description": "Number of bars actually drawn (input capped at 7).",
+          "title": "Bars Rendered",
+          "type": "integer"
+        },
+        "duration_seconds": {
+          "description": "Actual output duration in seconds (matches input).",
+          "title": "Duration Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "video",
+        "bars_rendered",
+        "duration_seconds"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

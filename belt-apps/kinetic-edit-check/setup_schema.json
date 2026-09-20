@@ -1,0 +1,36 @@
+{
+  "properties": {
+    "hist_cut_threshold": {
+      "default": 0.6,
+      "description": "Colour-histogram intersection below which a frame is a cut (canonical detector).",
+      "title": "Hist Cut Threshold",
+      "type": "number"
+    },
+    "framediff_threshold": {
+      "default": 35.0,
+      "description": "Mean absolute luma difference above which a frame is a cut (also fires on strobes).",
+      "title": "Framediff Threshold",
+      "type": "number"
+    },
+    "flash_threshold": {
+      "default": 9.0,
+      "description": "Rise in FRAME-MEAN luma that counts as a flash. A cut moves pixels; a flash lifts them all.",
+      "title": "Flash Threshold",
+      "type": "number"
+    },
+    "zoom_threshold": {
+      "default": 0.02,
+      "description": "Deviation from scale 1.0 that counts as a zoom pulse.",
+      "title": "Zoom Threshold",
+      "type": "number"
+    },
+    "rgb_split_threshold": {
+      "default": 2.0,
+      "description": "Horizontal red/blue channel lag, in source pixels, that counts as an RGB split.",
+      "title": "Rgb Split Threshold",
+      "type": "number"
+    }
+  },
+  "title": "AppSetup",
+  "type": "object"
+}

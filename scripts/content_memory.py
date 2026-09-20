@@ -27,13 +27,14 @@ from typing import Any
 
 # NOTE: Run via: uv run --package genlab-core python scripts/content_memory.py
 from dotenv import load_dotenv
+from genlab_core.paths import state_dir
 
 load_dotenv()
 
 logger = logging.getLogger("content_memory")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-MEMORY_DIR = Path.home() / ".genlab" / "content_memory"
+MEMORY_DIR = state_dir("content_memory")
 POSTS_FILE = MEMORY_DIR / "posts.json"
 
 # SharePoint list config — loaded from lists_config.yaml (single source of truth)

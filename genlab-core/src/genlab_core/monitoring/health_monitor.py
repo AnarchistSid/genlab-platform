@@ -139,11 +139,19 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_foreign_host_writes())
         all_alerts.extend(check_git_drift())
         all_alerts.extend(check_deploy_gap())  # 2026-09-17: main ahead of .version.env (25-day gap)
-        all_alerts.extend(check_git_ownership_drift())  # 2026-07-21: prevent deploy-blocking root-owned .git files
+        all_alerts.extend(
+            check_git_ownership_drift()
+        )  # 2026-07-21: prevent deploy-blocking root-owned .git files
         all_alerts.extend(check_belt_auth())  # 2026-09-17: belt is the primary LLM tier
-        all_alerts.extend(check_anthropic_credit())  # 2026-07-21: 1-token probe; prevents 4th exhaustion-class outage
-        all_alerts.extend(check_llm_cost())  # 2026-07-23: proactive runaway-spike + budget-runway projection
-        all_alerts.extend(check_bandit_regret_signal())  # 2026-07-23: bandit exploration meta-param signal (#7 autonomy roadmap)
+        all_alerts.extend(
+            check_anthropic_credit()
+        )  # 2026-07-21: 1-token probe; prevents 4th exhaustion-class outage
+        all_alerts.extend(
+            check_llm_cost()
+        )  # 2026-07-23: proactive runaway-spike + budget-runway projection
+        all_alerts.extend(
+            check_bandit_regret_signal()
+        )  # 2026-07-23: bandit exploration meta-param signal (#7 autonomy roadmap)
         all_alerts.extend(check_warp_health())
         # PR #516 (2026-06-24): infrastructure-half-wired audit probes
         all_alerts.extend(check_engagement_health())
@@ -501,9 +509,9 @@ def notify(alerts: list[Alert]) -> bool:
     fingerprint = ",".join(sorted(f"{a.check}:{a.niche_id or '-'}" for a in critical))
     if _notify_throttled(fingerprint):
         logger.info(
-            "Webhook throttled: %d critical alert(s), unchanged set already "
-            "notified within %dm",
-            len(critical), _NOTIFY_REMINDER_SECONDS // 60,
+            "Webhook throttled: %d critical alert(s), unchanged set already notified within %dm",
+            len(critical),
+            _NOTIFY_REMINDER_SECONDS // 60,
         )
         return False
 
@@ -519,16 +527,17 @@ def notify(alerts: list[Alert]) -> bool:
         # failing — only a transport exception was ever noticed.
         if not (200 <= resp.status_code < 300):
             logger.warning(
-                "Alert webhook returned HTTP %s — %d critical alert(s) NOT "
-                "delivered. Body: %s",
-                resp.status_code, len(critical),
+                "Alert webhook returned HTTP %s — %d critical alert(s) NOT delivered. Body: %s",
+                resp.status_code,
+                len(critical),
                 (resp.text or "")[:200].replace("\n", " "),
             )
             return False
         _notify_record(fingerprint)
         logger.info(
             "Delivered %d critical alert(s) to webhook (HTTP %s)",
-            len(critical), resp.status_code,
+            len(critical),
+            resp.status_code,
         )
         return True
     except Exception as e:

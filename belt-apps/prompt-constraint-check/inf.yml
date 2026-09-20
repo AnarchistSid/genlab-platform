@@ -1,0 +1,33 @@
+namespace: anarchistsid
+name: prompt-constraint-check
+description: "Find numeric constraints in an LLM prompt that contradict each other. A prompt saying 'HARD\
+  \ word cap: 32 words' and then '2-4 sentences of commentary' is asking for what it forbids \u2014 2-4\
+  \ sentences is ~30-80 words. The model obeys one, busts the other, and the retry inherits the same contradiction.\
+  \ Converts word / sentence / paragraph / character / duration limits into a common unit and reports\
+  \ the pairs that cannot both hold, plus the inverse: a cap so far above the ask that the budget goes\
+  \ unused. Every finding shows the arithmetic so you can dismiss it in one read."
+metadata:
+  tags:
+  - prompt
+  - llm
+  - linting
+  - validation
+  - static-analysis
+  - prompt-engineering
+  - constraints
+  - text
+  - audit
+  - utility
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 1024

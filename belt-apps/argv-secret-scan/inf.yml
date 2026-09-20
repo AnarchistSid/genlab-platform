@@ -1,0 +1,36 @@
+namespace: anarchistsid
+name: argv-secret-scan
+description: "Find secrets passed as command-line arguments, where every logger records them. A value\
+  \ on an argv element is in the process table for any user running ps, in shell history, in journald\
+  \ for anything under systemd, and \u2014 if sudo is involved \u2014 written verbatim to the auth log,\
+  \ because sudo records the full argv of everything it runs. Detects env NAME=value and sudo env NAME=value\
+  \ prefixes, secret-bearing flags such as --password= and --api-key, and URLs carrying inline user:password\
+  \ credentials. Redacts the value it finds by default so the scanner does not become a second place the\
+  \ secret is written down. Built after a deploy verifier put a production database password into journald\
+  \ and a monitoring alert body via a line that reads as careful code. CPU only, no network, no model\
+  \ call."
+metadata:
+  tags:
+  - security
+  - secrets
+  - shell
+  - sudo
+  - logging
+  - devops
+  - audit
+  - static-analysis
+  - ci
+  - utility
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 1024

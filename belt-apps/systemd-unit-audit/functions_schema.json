@@ -1,0 +1,156 @@
+{
+  "run": {
+    "description": "",
+    "capabilities": [],
+    "input_schema": {
+      "properties": {
+        "unit_text": {
+          "description": "Contents of a .service or .timer file. Paste the whole file, including comments -- some checks compare the prose to the schedule.",
+          "title": "Unit Text",
+          "type": "string"
+        },
+        "unit_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filename, e.g. 'backup.timer'. Used to decide which checks apply when the text alone is ambiguous.",
+          "title": "Unit Name"
+        },
+        "systemctl_show_output": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional. Paste `systemctl show -p LoadState -p ActiveState -p Result -p ExecMainStatus <unit>` output to catch a unit that reports success while not existing -- invisible in the file itself.",
+          "title": "Systemctl Show Output"
+        },
+        "server_timezone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "IANA zone the host runs in, e.g. 'Asia/Kolkata'. Supply it to get a sharper warning when OnCalendar has no explicit timezone.",
+          "title": "Server Timezone"
+        }
+      },
+      "required": [
+        "unit_text"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Finding": {
+          "properties": {
+            "code": {
+              "description": "Stable machine-readable identifier",
+              "title": "Code",
+              "type": "string"
+            },
+            "severity": {
+              "description": "error, warn or info",
+              "title": "Severity",
+              "type": "string"
+            },
+            "detail": {
+              "description": "What was found, quoting the offending directive",
+              "title": "Detail",
+              "type": "string"
+            },
+            "fix": {
+              "description": "Concrete suggestion",
+              "title": "Fix",
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "severity",
+            "detail",
+            "fix"
+          ],
+          "title": "Finding",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "unit_name": {
+          "description": "Unit this report is about",
+          "title": "Unit Name",
+          "type": "string"
+        },
+        "unit_kind": {
+          "description": "service, timer, or other",
+          "title": "Unit Kind",
+          "type": "string"
+        },
+        "verdict": {
+          "description": "clean, warn or broken",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "schedules": {
+          "description": "Every OnCalendar / OnBootSec value found",
+          "items": {
+            "type": "string"
+          },
+          "title": "Schedules",
+          "type": "array"
+        },
+        "inferred_period_seconds": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Approximate seconds between fires, when derivable",
+          "title": "Inferred Period Seconds"
+        },
+        "findings": {
+          "description": "Problems found, worst first",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "summary": {
+          "description": "One-line human-readable result",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "unit_name",
+        "unit_kind",
+        "verdict",
+        "schedules",
+        "findings",
+        "summary"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

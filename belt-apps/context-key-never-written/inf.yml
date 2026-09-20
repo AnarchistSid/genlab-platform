@@ -1,0 +1,39 @@
+namespace: anarchistsid
+name: context-key-never-written
+description: 'Find the context keys your code READS that nothing ever WRITES. A pipeline hands a dict
+  from stage to stage; one stage does context.get("blueprints") and the stage that fills it calls it something
+  else, or fills it five stages later, or was renamed. The read returns None, the stage takes its empty-input
+  branch, logs "nothing to do" at INFO, and reports success. Nothing errors: no type catches it because
+  both sides are dict[str, Any], and no test catches it because the test builds the context by hand and
+  puts the key in. It surfaces when someone asks why a feature that shipped weeks ago has never once produced
+  output. Three findings earn their keep. READ NEVER WRITTEN: the producer is missing, or runs later in
+  the pipeline than the consumer, which is a silent no-op on every run. NAME DRIFT: "blueprints" is read
+  and "blueprint" is written -- both lines are correct, review passes, and they are connected to nothing.
+  WRITTEN ON ANOTHER CONTAINER: the key exists but on a different object, so it is a plumbing question
+  rather than a missing producer, and is reported as such instead of as absence. Also reports dead writes.
+  Covers Python dict-style access and JS/TS attribute access. Nothing is executed.'
+metadata:
+  tags:
+  - static-analysis
+  - pipelines
+  - dict-keys
+  - silent-failure
+  - refactoring
+  - data-flow
+  - linting
+  - developer-tools
+  - gotcha
+  - python
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 512

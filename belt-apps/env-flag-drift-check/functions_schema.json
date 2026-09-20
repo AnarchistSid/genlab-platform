@@ -1,0 +1,221 @@
+{
+  "run": {
+    "description": "",
+    "capabilities": [],
+    "input_schema": {
+      "$defs": {
+        "EnvFile": {
+          "properties": {
+            "name": {
+              "description": "Filename, e.g. .env or deploy/prod.env",
+              "title": "Name",
+              "type": "string"
+            },
+            "content": {
+              "description": "Full text, KEY=value lines",
+              "title": "Content",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "content"
+          ],
+          "title": "EnvFile",
+          "type": "object"
+        },
+        "SourceFile": {
+          "properties": {
+            "name": {
+              "description": "Filename or path, echoed in findings",
+              "title": "Name",
+              "type": "string"
+            },
+            "content": {
+              "description": "Full text of the source file",
+              "title": "Content",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "content"
+          ],
+          "title": "SourceFile",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "sources": {
+          "description": "Source files that read environment variables",
+          "items": {
+            "$ref": "#/$defs/SourceFile"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "env_files": {
+          "description": "Env files that set them (.env, deploy env, etc.)",
+          "items": {
+            "$ref": "#/$defs/EnvFile"
+          },
+          "title": "Env Files",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sources",
+        "env_files"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Finding": {
+          "properties": {
+            "code": {
+              "description": "Stable machine-readable identifier",
+              "title": "Code",
+              "type": "string"
+            },
+            "severity": {
+              "description": "critical, error, warn or info",
+              "title": "Severity",
+              "type": "string"
+            },
+            "variable": {
+              "description": "Environment variable concerned",
+              "title": "Variable",
+              "type": "string"
+            },
+            "detail": {
+              "description": "What was found",
+              "title": "Detail",
+              "type": "string"
+            },
+            "fix": {
+              "description": "Concrete suggestion",
+              "title": "Fix",
+              "type": "string"
+            },
+            "sites": {
+              "description": "Where in the source this appears",
+              "items": {
+                "$ref": "#/$defs/Site"
+              },
+              "title": "Sites",
+              "type": "array"
+            }
+          },
+          "required": [
+            "code",
+            "severity",
+            "variable",
+            "detail",
+            "fix",
+            "sites"
+          ],
+          "title": "Finding",
+          "type": "object"
+        },
+        "Site": {
+          "properties": {
+            "file": {
+              "description": "Source file",
+              "title": "File",
+              "type": "string"
+            },
+            "line": {
+              "description": "1-indexed line number",
+              "title": "Line",
+              "type": "integer"
+            },
+            "default": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Default expression, if the read has one",
+              "title": "Default"
+            }
+          },
+          "required": [
+            "file",
+            "line"
+          ],
+          "title": "Site",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "verdict": {
+          "description": "aligned, drifted or broken",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "vars_read": {
+          "description": "Distinct variables read in source",
+          "title": "Vars Read",
+          "type": "integer"
+        },
+        "vars_set": {
+          "description": "Distinct variables set in env files",
+          "title": "Vars Set",
+          "type": "integer"
+        },
+        "connected": {
+          "description": "Variables both read and set",
+          "title": "Connected",
+          "type": "integer"
+        },
+        "findings": {
+          "description": "Problems found, worst first",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "read_never_set": {
+          "description": "Read in code, set nowhere",
+          "items": {
+            "type": "string"
+          },
+          "title": "Read Never Set",
+          "type": "array"
+        },
+        "set_never_read": {
+          "description": "Set in env, read nowhere",
+          "items": {
+            "type": "string"
+          },
+          "title": "Set Never Read",
+          "type": "array"
+        },
+        "summary": {
+          "description": "One-line human-readable result",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "verdict",
+        "vars_read",
+        "vars_set",
+        "connected",
+        "findings",
+        "read_never_set",
+        "set_never_read",
+        "summary"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

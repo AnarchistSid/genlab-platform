@@ -1,0 +1,38 @@
+namespace: anarchistsid
+name: join-key-check
+description: 'Check a SQL join key before you trust a zero-row result. A join that returns nothing is ambiguous
+  in the worst way -- it looks exactly like a finding. No error is raised, the query is valid, the column
+  names read correctly, and the natural conclusion is that data is missing. Often the data is fine and
+  the key is wrong. The case this was built from: publishing_analytics.blueprint_id (uuid) actually references
+  blueprints.id, while blueprints.blueprint_id is a vestigial empty text column. Joining the same-named
+  pair matched on name, cast without complaint, returned 0 of 60, and produced a filed report that a write
+  path had been dead for 26 days. Nothing was dead. Checks: decoy_column (the target has both id and <name>_id
+  and you picked the one whose type does not match -- the highest-value check, because the wrong column
+  exists and reads correctly), vestigial_column (empty on every row, so the join can only ever return nothing),
+  type_mismatch, low cardinality fan-out, and a ranked list of better candidate keys. Statistics are optional;
+  without them it says which checks it skipped rather than implying a clean bill of health. No database connection.'
+metadata:
+  tags:
+  - sql
+  - postgres
+  - database
+  - schema
+  - debugging
+  - data-quality
+  - static-analysis
+  - developer-tools
+  - gotcha
+  - validation
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 512

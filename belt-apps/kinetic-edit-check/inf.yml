@@ -1,0 +1,17 @@
+namespace: ""
+name: kinetic-edit-check
+description: "Measure the pacing of a short-form video: cuts per second by three independent detectors that disagree, effect-event density (flashes, zoom pulses, RGB splits), the longest run with nothing happening, letterbox detection that tells a black bar from dark content, and beat alignment. Returns every number with the method that produced it."
+metadata: {}
+category: video
+images:
+    card: ""
+    thumbnail: ""
+    banner: ""
+env: {}
+kernel: python-3.11
+resources:
+    gpu:
+        count: 0
+        vram: 0
+        type: none
+    ram: 4

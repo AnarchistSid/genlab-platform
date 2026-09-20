@@ -1,0 +1,151 @@
+{
+  "run": {
+    "description": "",
+    "input_schema": {
+      "properties": {
+        "urls": {
+          "description": "Video URLs to check. Anything yt-dlp supports.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Urls",
+          "type": "array"
+        },
+        "timeout_seconds": {
+          "default": 45,
+          "description": "Per-URL timeout. Raise for slow origins.",
+          "title": "Timeout Seconds",
+          "type": "integer"
+        },
+        "max_urls": {
+          "default": 25,
+          "description": "Safety cap so a huge list cannot run for hours.",
+          "title": "Max Urls",
+          "type": "integer"
+        }
+      },
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "UrlResult": {
+          "properties": {
+            "url": {
+              "description": "The URL checked.",
+              "title": "Url",
+              "type": "string"
+            },
+            "available": {
+              "description": "True when metadata was retrieved successfully.",
+              "title": "Available",
+              "type": "boolean"
+            },
+            "reason": {
+              "description": "ok | geo_blocked | bot_challenge | removed | private | age_gated | live_not_started | network | unknown",
+              "title": "Reason",
+              "type": "string"
+            },
+            "advice": {
+              "description": "What actually fixes this class of failure.",
+              "title": "Advice",
+              "type": "string"
+            },
+            "title": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Title, when available.",
+              "title": "Title"
+            },
+            "duration_seconds": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Duration, when available.",
+              "title": "Duration Seconds"
+            },
+            "raw_error": {
+              "default": "",
+              "description": "First line of the tool's own error, trimmed.",
+              "title": "Raw Error",
+              "type": "string"
+            }
+          },
+          "required": [
+            "url",
+            "available",
+            "reason",
+            "advice"
+          ],
+          "title": "UrlResult",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "checked": {
+          "description": "URLs actually checked.",
+          "title": "Checked",
+          "type": "integer"
+        },
+        "available": {
+          "description": "How many are downloadable from here.",
+          "title": "Available",
+          "type": "integer"
+        },
+        "unavailable": {
+          "description": "How many are not.",
+          "title": "Unavailable",
+          "type": "integer"
+        },
+        "by_reason": {
+          "additionalProperties": true,
+          "description": "Count per failure class.",
+          "title": "By Reason",
+          "type": "object"
+        },
+        "dominant_problem": {
+          "description": "The single class to act on first, or 'none'.",
+          "title": "Dominant Problem",
+          "type": "string"
+        },
+        "results": {
+          "description": "Per-URL detail.",
+          "items": {
+            "$ref": "#/$defs/UrlResult"
+          },
+          "title": "Results",
+          "type": "array"
+        },
+        "report": {
+          "description": "Human-readable summary with the advice that matters.",
+          "title": "Report",
+          "type": "string"
+        }
+      },
+      "required": [
+        "checked",
+        "available",
+        "unavailable",
+        "by_reason",
+        "dominant_problem",
+        "results",
+        "report"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

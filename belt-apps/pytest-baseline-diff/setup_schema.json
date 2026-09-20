@@ -1,0 +1,18 @@
+{
+  "properties": {
+    "collection_tolerance": {
+      "default": 0,
+      "description": "Allowed difference in collected-test totals before the comparison is called unsound. 0 is the honest default; raise it only if you know why the counts differ.",
+      "title": "Collection Tolerance",
+      "type": "integer"
+    },
+    "max_listed": {
+      "default": 40,
+      "description": "Cap on node ids listed per category",
+      "title": "Max Listed",
+      "type": "integer"
+    }
+  },
+  "title": "AppSetup",
+  "type": "object"
+}

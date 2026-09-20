@@ -1,0 +1,6 @@
+{
+  "description": "Stateless.",
+  "properties": {},
+  "title": "AppSetup",
+  "type": "object"
+}

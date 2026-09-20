@@ -20,11 +20,11 @@ import logging
 import os
 import time
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 import requests
 
+from genlab_core.paths import state_dir
 from genlab_core.platforms.meta_api import META_GRAPH_API_VERSION, META_GRAPH_BASE_URL
 
 logger = logging.getLogger(__name__)
@@ -749,7 +749,7 @@ def main():
     logger.info("=" * 60)
 
     # Write report
-    report_dir = Path.home() / ".genlab" / "health"
+    report_dir = state_dir("health")
     report_dir.mkdir(parents=True, exist_ok=True)
     report_path = report_dir / "token_health.json"
     report_path.write_text(json.dumps(summary, indent=2))

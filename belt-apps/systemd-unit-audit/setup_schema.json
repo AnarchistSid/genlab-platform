@@ -1,0 +1,18 @@
+{
+  "properties": {
+    "infrequent_threshold_hours": {
+      "default": 24,
+      "description": "At or above this period, a missed fire is treated as lost work and Persistent=true is expected.",
+      "title": "Infrequent Threshold Hours",
+      "type": "integer"
+    },
+    "frequent_threshold_minutes": {
+      "default": 60,
+      "description": "At or below this period, Persistent=true is treated as a thundering-herd risk after downtime.",
+      "title": "Frequent Threshold Minutes",
+      "type": "integer"
+    }
+  },
+  "title": "AppSetup",
+  "type": "object"
+}

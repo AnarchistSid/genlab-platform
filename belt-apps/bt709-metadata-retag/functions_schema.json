@@ -1,0 +1,55 @@
+{
+  "run": {
+    "description": "",
+    "input_schema": {
+      "description": "Video file to re-tag.",
+      "properties": {
+        "video": {
+          "description": "Input h264 mp4 video to re-tag with bt709 color metadata. Passes through untouched if already bt709.",
+          "format": "file",
+          "title": "Video",
+          "type": "string"
+        }
+      },
+      "required": [
+        "video"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "description": "Retagged video + a small diagnostic string.",
+      "properties": {
+        "video": {
+          "description": "Video with bt709 color_primaries / color_trc / colorspace metadata. Same encoded frames as input.",
+          "format": "file",
+          "title": "Video",
+          "type": "string"
+        },
+        "before": {
+          "description": "color_primaries|color_transfer|color_space of input",
+          "title": "Before",
+          "type": "string"
+        },
+        "after": {
+          "description": "color_primaries|color_transfer|color_space of output",
+          "title": "After",
+          "type": "string"
+        },
+        "was_already_bt709": {
+          "description": "True if the input was already correctly tagged; output is a byte-identical copy in that case.",
+          "title": "Was Already Bt709",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "video",
+        "before",
+        "after",
+        "was_already_bt709"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

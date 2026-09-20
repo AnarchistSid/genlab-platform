@@ -1,0 +1,12 @@
+{
+  "properties": {
+    "max_candidates": {
+      "default": 6,
+      "description": "How many alternative keys to return",
+      "title": "Max Candidates",
+      "type": "integer"
+    }
+  },
+  "title": "AppSetup",
+  "type": "object"
+}

@@ -1,0 +1,6 @@
+{
+  "description": "Stateless \u2014 pure text analysis, no network.",
+  "properties": {},
+  "title": "AppSetup",
+  "type": "object"
+}

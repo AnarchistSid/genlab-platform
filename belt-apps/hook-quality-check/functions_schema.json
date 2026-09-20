@@ -1,0 +1,360 @@
+{
+  "check_batch": {
+    "description": "Evaluate many hooks and report the dominant failure shape.\n\nMore useful than the single check when auditing a backlog: the\n`top_failure_codes` tally is what tells you whether you have sixty\nseparate writing problems or one broken writer.",
+    "input_schema": {
+      "$defs": {
+        "HookItem": {
+          "properties": {
+            "hook": {
+              "description": "The hook text to evaluate",
+              "title": "Hook",
+              "type": "string"
+            },
+            "source_title": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Title of the source video or article the hook was written from. Optional, but this is what unlocks the echo checks -- pass it.",
+              "title": "Source Title"
+            },
+            "label": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Free-form identifier echoed back in the result (id, slug, filename)",
+              "title": "Label"
+            }
+          },
+          "required": [
+            "hook"
+          ],
+          "title": "HookItem",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "items": {
+          "description": "Hooks to evaluate in one call",
+          "items": {
+            "$ref": "#/$defs/HookItem"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "BatchInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "BatchResult": {
+          "properties": {
+            "label": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Echoed from the input item",
+              "title": "Label"
+            },
+            "verdict": {
+              "description": "pass, warn or fail",
+              "title": "Verdict",
+              "type": "string"
+            },
+            "score": {
+              "description": "0.0-1.0",
+              "title": "Score",
+              "type": "number"
+            },
+            "hook": {
+              "description": "The hook as evaluated",
+              "title": "Hook",
+              "type": "string"
+            },
+            "findings": {
+              "description": "Every problem found, worst first",
+              "items": {
+                "$ref": "#/$defs/Finding"
+              },
+              "title": "Findings",
+              "type": "array"
+            }
+          },
+          "required": [
+            "verdict",
+            "score",
+            "hook",
+            "findings"
+          ],
+          "title": "BatchResult",
+          "type": "object"
+        },
+        "Finding": {
+          "properties": {
+            "code": {
+              "description": "Stable machine-readable identifier for the problem",
+              "title": "Code",
+              "type": "string"
+            },
+            "severity": {
+              "description": "fail (do not publish) or warn (weak but shippable)",
+              "title": "Severity",
+              "type": "string"
+            },
+            "detail": {
+              "description": "What was found, quoting the offending text",
+              "title": "Detail",
+              "type": "string"
+            },
+            "fix": {
+              "description": "Concrete suggestion for what to do instead",
+              "title": "Fix",
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "severity",
+            "detail",
+            "fix"
+          ],
+          "title": "Finding",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "total": {
+          "description": "Number of hooks evaluated",
+          "title": "Total",
+          "type": "integer"
+        },
+        "passed": {
+          "description": "Count with verdict=pass",
+          "title": "Passed",
+          "type": "integer"
+        },
+        "warned": {
+          "description": "Count with verdict=warn",
+          "title": "Warned",
+          "type": "integer"
+        },
+        "failed": {
+          "description": "Count with verdict=fail",
+          "title": "Failed",
+          "type": "integer"
+        },
+        "mean_score": {
+          "description": "Mean score across all hooks",
+          "title": "Mean Score",
+          "type": "number"
+        },
+        "top_failure_codes": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Finding code -> occurrence count, so you can see the dominant failure shape",
+          "title": "Top Failure Codes",
+          "type": "object"
+        },
+        "results": {
+          "description": "Per-hook results, worst score first",
+          "items": {
+            "$ref": "#/$defs/BatchResult"
+          },
+          "title": "Results",
+          "type": "array"
+        },
+        "summary": {
+          "description": "One-line human-readable result",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "total",
+        "passed",
+        "warned",
+        "failed",
+        "mean_score",
+        "top_failure_codes",
+        "results",
+        "summary"
+      ],
+      "title": "BatchOutput",
+      "type": "object"
+    }
+  },
+  "run": {
+    "description": "Evaluate a single hook.",
+    "input_schema": {
+      "properties": {
+        "hook": {
+          "description": "The hook text to evaluate",
+          "title": "Hook",
+          "type": "string"
+        },
+        "source_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Title of the source video/article. Optional but strongly recommended: the title-echo checks are the ones that catch silent writer failure.",
+          "title": "Source Title"
+        }
+      },
+      "required": [
+        "hook"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Finding": {
+          "properties": {
+            "code": {
+              "description": "Stable machine-readable identifier for the problem",
+              "title": "Code",
+              "type": "string"
+            },
+            "severity": {
+              "description": "fail (do not publish) or warn (weak but shippable)",
+              "title": "Severity",
+              "type": "string"
+            },
+            "detail": {
+              "description": "What was found, quoting the offending text",
+              "title": "Detail",
+              "type": "string"
+            },
+            "fix": {
+              "description": "Concrete suggestion for what to do instead",
+              "title": "Fix",
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "severity",
+            "detail",
+            "fix"
+          ],
+          "title": "Finding",
+          "type": "object"
+        },
+        "ScoreComponent": {
+          "properties": {
+            "name": {
+              "description": "Which check produced this contribution",
+              "title": "Name",
+              "type": "string"
+            },
+            "delta": {
+              "description": "Signed contribution to the score",
+              "title": "Delta",
+              "type": "number"
+            },
+            "reason": {
+              "description": "Why this check fired",
+              "title": "Reason",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "delta",
+            "reason"
+          ],
+          "title": "ScoreComponent",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "verdict": {
+          "description": "pass, warn or fail",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "score": {
+          "description": "0.0-1.0, the clamped sum of score_components",
+          "title": "Score",
+          "type": "number"
+        },
+        "hook": {
+          "description": "The hook as evaluated, after whitespace normalisation",
+          "title": "Hook",
+          "type": "string"
+        },
+        "char_count": {
+          "description": "Length in characters",
+          "title": "Char Count",
+          "type": "integer"
+        },
+        "word_count": {
+          "description": "Length in words",
+          "title": "Word Count",
+          "type": "integer"
+        },
+        "findings": {
+          "description": "Every problem found, worst first",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "score_components": {
+          "description": "Itemised ledger. The score is the clamped sum of these deltas.",
+          "items": {
+            "$ref": "#/$defs/ScoreComponent"
+          },
+          "title": "Score Components",
+          "type": "array"
+        },
+        "summary": {
+          "description": "One-line human-readable result",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "verdict",
+        "score",
+        "hook",
+        "char_count",
+        "word_count",
+        "findings",
+        "score_components",
+        "summary"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

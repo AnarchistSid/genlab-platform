@@ -18,18 +18,18 @@ import logging
 import subprocess
 import sys
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+from genlab_core.paths import state_dir
 
 load_dotenv()
 
 logger = logging.getLogger("viral_detector")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-VIRAL_LOG = Path.home() / ".genlab" / "viral_alerts.json"
-BASELINE_FILE = Path.home() / ".genlab" / "engagement_baselines.json"
+VIRAL_LOG = state_dir("viral_alerts.json")
+BASELINE_FILE = state_dir("engagement_baselines.json")
 
 # Engagement thresholds (multiplier over baseline to trigger alert)
 DEFAULT_VIRAL_THRESHOLD = 5.0  # 5x normal engagement = viral
@@ -272,9 +272,7 @@ def detect_viral(
                         # silent write failure means the bandit misses
                         # a viral signal + can't reinforce winning
                         # patterns.
-                        logger.warning(
-                            "Could not flag viral in memory: %s", e, exc_info=True
-                        )
+                        logger.warning("Could not flag viral in memory: %s", e, exc_info=True)
 
                     _send_notification(
                         f"VIRAL on {platform.upper()}",
@@ -308,9 +306,7 @@ def detect_viral(
                         # Same rationale as the viral branch above —
                         # trending is a weaker signal but still feeds
                         # the learning loop.
-                        logger.warning(
-                            "Could not flag trending in memory: %s", e, exc_info=True
-                        )
+                        logger.warning("Could not flag trending in memory: %s", e, exc_info=True)
 
                     _send_notification(
                         f"Trending on {platform.upper()}",

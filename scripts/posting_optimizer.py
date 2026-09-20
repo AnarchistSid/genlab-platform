@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from social_analytics import (
+from genlab_core.paths import state_dir
     get_facebook_analytics,
     get_instagram_analytics,
     get_threads_analytics,
@@ -35,7 +36,7 @@ from social_analytics import (
 logger = logging.getLogger("posting_optimizer")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-SCHEDULE_FILE = os.path.expanduser("~/.genlab/optimal_schedule.json")
+SCHEDULE_FILE = str(state_dir("optimal_schedule.json"))
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 

@@ -1,0 +1,37 @@
+namespace: anarchistsid
+name: yaml-footgun-check
+description: 'Find YAML values that parse successfully into something you did not write. Implicit typing
+  means an unquoted scalar is a guess, and when the guess is wrong nothing errors -- the file loads, the
+  key exists, and the value is a different type or number than the characters on the line. `country: NO`
+  is the boolean false (Norway''s ISO code, hence the name; Ontario''s ON too). `start: 12:30` is the integer
+  750, because YAML 1.1 reads colon-separated digits as base-60, so times, durations and MAC addresses
+  silently become unrelated numbers. `version: 1.10` is the float 1.1 with the trailing zero gone. `mode:
+  0755` is 493, octal. Duplicate keys are kept last-wins with no warning. The core check is a ROUND-TRIP:
+  parse each unquoted scalar, render it back, and compare to the source characters -- if they differ the
+  file says one thing and means another. Behaviour was verified against PyYAML, not copied from gotcha
+  lists: y and n are NOT booleans, 08 is a string while 0755 is octal, and 1e3 is a string not a float.'
+metadata:
+  tags:
+  - yaml
+  - linting
+  - configuration
+  - static-analysis
+  - validation
+  - parsing
+  - developer-tools
+  - gotcha
+  - devops
+  - ci
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 512

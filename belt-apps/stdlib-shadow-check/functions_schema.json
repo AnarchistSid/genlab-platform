@@ -1,0 +1,132 @@
+{
+  "run": {
+    "description": "",
+    "input_schema": {
+      "properties": {
+        "paths": {
+          "description": "File paths to check. Output of `find . -name '*.py'` or `ls` works directly; directories and non-.py entries are ignored.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Paths",
+          "type": "array"
+        },
+        "include_low_risk": {
+          "default": true,
+          "description": "Report stdlib names outside the high/medium lists too. Set false to see only the ones likely to break someone else's import.",
+          "title": "Include Low Risk",
+          "type": "boolean"
+        },
+        "ignore_dirs": {
+          "description": "Path fragments to skip \u2014 vendored trees legitimately contain stdlib-named files and are not your problem.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Ignore Dirs",
+          "type": "array"
+        }
+      },
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Finding": {
+          "properties": {
+            "path": {
+              "description": "The offending file, as supplied.",
+              "title": "Path",
+              "type": "string"
+            },
+            "module": {
+              "description": "The stdlib module it shadows.",
+              "title": "Module",
+              "type": "string"
+            },
+            "severity": {
+              "description": "high | medium | low",
+              "title": "Severity",
+              "type": "string"
+            },
+            "why": {
+              "description": "What actually breaks.",
+              "title": "Why",
+              "type": "string"
+            },
+            "fix": {
+              "description": "The smallest safe rename.",
+              "title": "Fix",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "module",
+            "severity",
+            "why",
+            "fix"
+          ],
+          "title": "Finding",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "checked": {
+          "description": "Python files considered after filtering.",
+          "title": "Checked",
+          "type": "integer"
+        },
+        "skipped": {
+          "description": "Entries ignored (non-.py or in an ignored dir).",
+          "title": "Skipped",
+          "type": "integer"
+        },
+        "finding_count": {
+          "description": "Shadowing files found.",
+          "title": "Finding Count",
+          "type": "integer"
+        },
+        "high": {
+          "description": "High-severity count.",
+          "title": "High",
+          "type": "integer"
+        },
+        "medium": {
+          "description": "Medium-severity count.",
+          "title": "Medium",
+          "type": "integer"
+        },
+        "low": {
+          "description": "Low-severity count.",
+          "title": "Low",
+          "type": "integer"
+        },
+        "findings": {
+          "description": "Every shadowing file, worst first.",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "report": {
+          "description": "Human-readable summary.",
+          "title": "Report",
+          "type": "string"
+        }
+      },
+      "required": [
+        "checked",
+        "skipped",
+        "finding_count",
+        "high",
+        "medium",
+        "low",
+        "findings",
+        "report"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

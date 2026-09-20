@@ -344,9 +344,7 @@ def check_source_starvation(reports: list[dict], niche_id: str) -> list[Alert]:
     # Anime relies entirely on this path.
     stories_count = 0
     try:
-        stories_count = int(
-            latest.get("metrics", {}).get("stories_count", 0)
-        )
+        stories_count = int(latest.get("metrics", {}).get("stories_count", 0))
     except (TypeError, ValueError):
         stories_count = 0
 

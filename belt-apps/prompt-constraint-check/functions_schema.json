@@ -1,0 +1,207 @@
+{
+  "run": {
+    "description": "",
+    "input_schema": {
+      "properties": {
+        "prompt": {
+          "default": "",
+          "description": "The prompt text to check. Leave empty and pass `file` instead.",
+          "title": "Prompt",
+          "type": "string"
+        },
+        "file": {
+          "anyOf": [
+            {
+              "format": "file",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A text file containing the prompt. Used when `prompt` is empty.",
+          "title": "File"
+        },
+        "words_per_sentence": {
+          "default": 17.0,
+          "description": "Typical words per sentence for your domain. Terse marketing copy runs ~10; explanatory prose ~20.",
+          "title": "Words Per Sentence",
+          "type": "number"
+        },
+        "speech_words_per_minute": {
+          "default": 141.0,
+          "description": "Speaking rate, when the prompt constrains duration. 141 suits unhurried narration; 150-160 is brisk.",
+          "title": "Speech Words Per Minute",
+          "type": "number"
+        },
+        "underuse_ratio": {
+          "default": 0.5,
+          "description": "Flag when the largest ask fills less than this fraction of the cap. 0 disables the check.",
+          "title": "Underuse Ratio",
+          "type": "number"
+        }
+      },
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Conflict": {
+          "properties": {
+            "severity": {
+              "description": "high | medium",
+              "title": "Severity",
+              "type": "string"
+            },
+            "kind": {
+              "description": "contradiction | underuse",
+              "title": "Kind",
+              "type": "string"
+            },
+            "summary": {
+              "description": "One line, with the arithmetic.",
+              "title": "Summary",
+              "type": "string"
+            },
+            "detail": {
+              "description": "What a model will do about it.",
+              "title": "Detail",
+              "type": "string"
+            },
+            "line_a": {
+              "description": "Line of the first constraint.",
+              "title": "Line A",
+              "type": "integer"
+            },
+            "line_b": {
+              "description": "Line of the second.",
+              "title": "Line B",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "severity",
+            "kind",
+            "summary",
+            "detail",
+            "line_a",
+            "line_b"
+          ],
+          "title": "Conflict",
+          "type": "object"
+        },
+        "Constraint": {
+          "properties": {
+            "kind": {
+              "description": "words | sentences | paragraphs | characters | seconds",
+              "title": "Kind",
+              "type": "string"
+            },
+            "lo": {
+              "description": "Lower bound as written (equals hi when a single value).",
+              "title": "Lo",
+              "type": "number"
+            },
+            "hi": {
+              "description": "Upper bound as written.",
+              "title": "Hi",
+              "type": "number"
+            },
+            "is_cap": {
+              "description": "True when phrased as a maximum rather than a target.",
+              "title": "Is Cap",
+              "type": "boolean"
+            },
+            "words_lo": {
+              "description": "Lower bound converted to words.",
+              "title": "Words Lo",
+              "type": "number"
+            },
+            "words_hi": {
+              "description": "Upper bound converted to words.",
+              "title": "Words Hi",
+              "type": "number"
+            },
+            "words_mid": {
+              "description": "Midpoint in words \u2014 what a model given a range tends to produce.",
+              "title": "Words Mid",
+              "type": "number"
+            },
+            "line": {
+              "description": "1-indexed line it was found on.",
+              "title": "Line",
+              "type": "integer"
+            },
+            "text": {
+              "description": "The matched phrase.",
+              "title": "Text",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "lo",
+            "hi",
+            "is_cap",
+            "words_lo",
+            "words_hi",
+            "words_mid",
+            "line",
+            "text"
+          ],
+          "title": "Constraint",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "ok": {
+          "description": "True when no conflicts were found.",
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "constraint_count": {
+          "description": "How many numeric constraints were parsed.",
+          "title": "Constraint Count",
+          "type": "integer"
+        },
+        "conflict_count": {
+          "description": "How many conflicting pairs were reported.",
+          "title": "Conflict Count",
+          "type": "integer"
+        },
+        "constraints": {
+          "description": "Everything parsed, in line order.",
+          "items": {
+            "$ref": "#/$defs/Constraint"
+          },
+          "title": "Constraints",
+          "type": "array"
+        },
+        "conflicts": {
+          "description": "Conflicting pairs, most severe first.",
+          "items": {
+            "$ref": "#/$defs/Conflict"
+          },
+          "title": "Conflicts",
+          "type": "array"
+        },
+        "report": {
+          "description": "Human-readable summary.",
+          "title": "Report",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ok",
+        "constraint_count",
+        "conflict_count",
+        "constraints",
+        "conflicts",
+        "report"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

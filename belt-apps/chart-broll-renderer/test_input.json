@@ -1,0 +1,11 @@
+{
+  "title": "AI Model Parameter Count",
+  "bars": [
+    {"label": "GPT-2", "value": 1.5},
+    {"label": "GPT-3", "value": 175},
+    {"label": "GPT-4", "value": 1700},
+    {"label": "Llama 3", "value": 405}
+  ],
+  "accent_color_hex": "00D4FF",
+  "duration_seconds": 2.5
+}

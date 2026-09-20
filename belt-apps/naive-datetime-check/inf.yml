@@ -1,0 +1,37 @@
+namespace: anarchistsid
+name: naive-datetime-check
+description: 'Find Python datetimes that carry no timezone, and the calls that produce them. A naive datetime
+  is a wall-clock reading with no record of which clock -- it prints identically to an aware one, compares
+  fine against other naive values, and is wrong in a way nothing surfaces until it meets a value from elsewhere.
+  The worst offender is datetime.utcnow(), which reads UTC and then throws away the fact that it is UTC;
+  the name says otherwise, which is why it survives review, and it has been deprecated since Python 3.12.
+  Also catches datetime.now() and fromtimestamp() without a tz (local time, naive), strptime with a format
+  lacking %z, date.today() (local calendar boundary -- how daily aggregations lose and duplicate rows at
+  midnight), naive constructors, and pytz imports that need .localize(). Real AST parsing, so import style
+  does not matter: datetime.utcnow(), datetime.datetime.utcnow() and dt.utcnow() all resolve to the same
+  finding. Calls that already pass a timezone are left alone. Nothing is imported or executed.'
+metadata:
+  tags:
+  - python
+  - datetime
+  - timezone
+  - static-analysis
+  - linting
+  - bugs
+  - deprecation
+  - validation
+  - developer-tools
+  - gotcha
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 512

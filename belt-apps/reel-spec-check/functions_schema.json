@@ -1,0 +1,380 @@
+{
+  "run": {
+    "description": "",
+    "input_schema": {
+      "description": "A rendered reel, plus optional expectations to check it against.",
+      "properties": {
+        "video": {
+          "description": "Rendered video to validate (mp4/mov). Everything else is optional tuning of what counts as a pass.",
+          "format": "file",
+          "title": "Video",
+          "type": "string"
+        },
+        "voiceover": {
+          "anyOf": [
+            {
+              "format": "file",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional separate voice-over track. When supplied, the app reports whether it fits inside the video and \u2014 if not \u2014 whether the part that would be cut contains speech or just trailing silence.",
+          "title": "Voiceover"
+        },
+        "expected_width": {
+          "default": 1080,
+          "description": "Required frame width. 0 disables the check.",
+          "title": "Expected Width",
+          "type": "integer"
+        },
+        "expected_height": {
+          "default": 1920,
+          "description": "Required frame height. 0 disables the check.",
+          "title": "Expected Height",
+          "type": "integer"
+        },
+        "min_duration_seconds": {
+          "default": 15.0,
+          "description": "Shortest acceptable duration. 0 disables.",
+          "title": "Min Duration Seconds",
+          "type": "number"
+        },
+        "max_duration_seconds": {
+          "default": 60.0,
+          "description": "Longest acceptable duration. 0 disables.",
+          "title": "Max Duration Seconds",
+          "type": "number"
+        },
+        "require_bt709": {
+          "default": true,
+          "description": "Require bt709 colour primaries/transfer/matrix. Meta and YouTube reject some non-bt709 tags on upload.",
+          "title": "Require Bt709",
+          "type": "boolean"
+        },
+        "expected_audio_sample_rate": {
+          "default": 48000,
+          "description": "Required audio sample rate in Hz. 0 disables.",
+          "title": "Expected Audio Sample Rate",
+          "type": "integer"
+        },
+        "target_lufs": {
+          "default": -14.0,
+          "description": "Target EBU R128 integrated loudness.",
+          "title": "Target Lufs",
+          "type": "number"
+        },
+        "lufs_tolerance": {
+          "default": 1.0,
+          "description": "Allowed deviation from target_lufs, in LU.",
+          "title": "Lufs Tolerance",
+          "type": "number"
+        },
+        "speech_band_threshold_db": {
+          "default": -35.0,
+          "description": "Mean volume in the 1-3.4 kHz speech band above which the audio is treated as containing voice. Default sits between a measured music-only mix (-40.6 dB) and the same mix with narration (-27.7 dB).",
+          "title": "Speech Band Threshold Db",
+          "type": "number"
+        },
+        "voiceover_tail_speech_threshold_db": {
+          "default": -55.0,
+          "description": "Speech-band level above which the TRUNCATED TAIL of an overrunning voice-over counts as speech rather than silence. Deliberately separate from speech_band_threshold_db: that one discriminates voice inside a full 3-track mix (music-only measured -40.6 dB, with narration -27.7 dB), while this one discriminates speech from silence on a CLEAN voice track, where speech sits near -37 dB and trailing silence far below. Reusing a single threshold for both makes the tail check misfire on exactly the case it exists to catch.",
+          "title": "Voiceover Tail Speech Threshold Db",
+          "type": "number"
+        },
+        "voiceover_fit_tolerance_seconds": {
+          "default": 0.5,
+          "description": "How much longer than the video a voice-over may run before it counts as overrunning. TTS commonly carries 200-400 ms of trailing silence that can be clipped harmlessly.",
+          "title": "Voiceover Fit Tolerance Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "video"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "description": "Structured verdict plus every measurement behind it.",
+      "properties": {
+        "passed": {
+          "description": "True when no check failed.",
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "failures": {
+          "description": "Checks that failed.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Failures",
+          "type": "array"
+        },
+        "warnings": {
+          "description": "Things worth a look that are not hard failures.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "report": {
+          "description": "Human-readable summary.",
+          "title": "Report",
+          "type": "string"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Frame width in pixels.",
+          "title": "Width"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Frame height in pixels.",
+          "title": "Height"
+        },
+        "duration_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Duration.",
+          "title": "Duration Seconds"
+        },
+        "video_codec": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Video codec name.",
+          "title": "Video Codec"
+        },
+        "color_primaries": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Colour primaries.",
+          "title": "Color Primaries"
+        },
+        "color_transfer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Transfer function.",
+          "title": "Color Transfer"
+        },
+        "color_space": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Matrix coefficients.",
+          "title": "Color Space"
+        },
+        "has_audio": {
+          "default": false,
+          "description": "An audio stream is present.",
+          "title": "Has Audio",
+          "type": "boolean"
+        },
+        "audio_codec": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Audio codec name.",
+          "title": "Audio Codec"
+        },
+        "sample_rate": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Audio sample rate.",
+          "title": "Sample Rate"
+        },
+        "channels": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Audio channel count.",
+          "title": "Channels"
+        },
+        "integrated_lufs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "EBU R128 integrated loudness of the final audio.",
+          "title": "Integrated Lufs"
+        },
+        "true_peak_dbtp": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "True peak in dBTP.",
+          "title": "True Peak Dbtp"
+        },
+        "speech_band_mean_db": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Mean volume in the 1-3.4 kHz speech band.",
+          "title": "Speech Band Mean Db"
+        },
+        "likely_has_voice": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the mix appears to contain speech, from the speech-band measurement. Heuristic, not ASR.",
+          "title": "Likely Has Voice"
+        },
+        "voiceover_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Duration of the supplied voice-over.",
+          "title": "Voiceover Seconds"
+        },
+        "voiceover_fits": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Voice-over fits inside the video within tolerance.",
+          "title": "Voiceover Fits"
+        },
+        "voiceover_overrun_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How far the voice-over exceeds the video.",
+          "title": "Voiceover Overrun Seconds"
+        },
+        "voiceover_truncated_tail_is_speech": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When it overruns: whether the segment that would be cut contains speech rather than trailing silence. True means a sentence gets clipped.",
+          "title": "Voiceover Truncated Tail Is Speech"
+        }
+      },
+      "required": [
+        "passed",
+        "failures",
+        "warnings",
+        "report"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

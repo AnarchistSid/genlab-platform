@@ -1,0 +1,28 @@
+namespace: anarchistsid
+name: av-duration-drift-check
+description: Find the gap between how long a media file claims to be and how long it can actually be decoded. A container reports one duration, its video stream reports another, and the decodable frames imply a third; the disagreement is invisible in every player, which is why it breaks tooling instead of playback. Reports container/stream/frame-derived durations, the drift between them, the last decodable frame, and -- crucially -- actually attempts the end-of-file seek and reports whether it failed, so you get a reproduction rather than a prediction. Run it before handing video to anything that trims, loops, thumbnails or samples the final frame. ffmpeg/ffprobe, CPU only.
+metadata:
+  tags:
+  - video
+  - ffmpeg
+  - ffprobe
+  - duration
+  - metadata
+  - qc
+  - validation
+  - debugging
+  - media
+  - utility
+category: video
+images:
+    card: ""
+    thumbnail: ""
+    banner: ""
+env: {}
+kernel: python-3.11
+resources:
+    gpu:
+        count: 0
+        vram: 0
+        type: none
+    ram: 2048

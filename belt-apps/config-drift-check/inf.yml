@@ -1,0 +1,37 @@
+namespace: anarchistsid
+name: config-drift-check
+description: 'Compare sibling config files and find the ones that quietly drifted apart. Per-environment
+  settings, per-tenant configs, i18n locale files, Kubernetes overlays -- any time N documents share a
+  shape, that shape is a contract nothing enforces. Files get edited one at a time and a key added to four
+  of five siblings is invisible; the loader does not error on the missing key, it returns the default, so
+  the feature is silently off for that one tenant while everything reports healthy. The worst version is
+  a TYPO: relevance_treshold beside four files with relevance_threshold is not a missing key you might
+  notice, it is a key that exists, reads fine in review, and is loaded by nothing -- so near-miss detection
+  is the headline check and rated critical. Also reports missing keys with prevalence, type drift (bool-vs-int
+  included), nulls and empty collections where siblings are populated, and unique keys. Lists are compared
+  as leaves and value differences are OFF by default, because sibling configs differ in values by design.'
+metadata:
+  tags:
+  - config
+  - yaml
+  - json
+  - drift
+  - validation
+  - linting
+  - devops
+  - multi-tenant
+  - developer-tools
+  - ci
+category: text
+images:
+  card: ''
+  thumbnail: ''
+  banner: ''
+env: {}
+kernel: python-3.11
+resources:
+  gpu:
+    count: 0
+    vram: 0
+    type: none
+  ram: 512

@@ -1,0 +1,161 @@
+{
+  "run": {
+    "description": "",
+    "input_schema": {
+      "description": "Python source to scan, plus what counts as a finding.",
+      "properties": {
+        "source": {
+          "default": "",
+          "description": "Python source code to scan. Leave empty and pass `file` instead.",
+          "title": "Source",
+          "type": "string"
+        },
+        "file": {
+          "anyOf": [
+            {
+              "format": "file",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A .py file to scan. Used when `source` is empty.",
+          "title": "File"
+        },
+        "min_severity": {
+          "default": "low",
+          "description": "Report findings at this severity or above: low | medium | high.",
+          "title": "Min Severity",
+          "type": "string"
+        },
+        "ignore_bare_reraise": {
+          "default": true,
+          "description": "Skip handlers that re-raise \u2014 those propagate the error and hide nothing.",
+          "title": "Ignore Bare Reraise",
+          "type": "boolean"
+        }
+      },
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Finding": {
+          "properties": {
+            "line": {
+              "description": "1-indexed line of the `except` clause.",
+              "title": "Line",
+              "type": "integer"
+            },
+            "rule": {
+              "description": "Which check fired.",
+              "title": "Rule",
+              "type": "string"
+            },
+            "severity": {
+              "description": "high | medium | low.",
+              "title": "Severity",
+              "type": "string"
+            },
+            "handler": {
+              "description": "The exception type(s) caught, as written.",
+              "title": "Handler",
+              "type": "string"
+            },
+            "snippet": {
+              "description": "The handler's source, trimmed.",
+              "title": "Snippet",
+              "type": "string"
+            },
+            "why": {
+              "description": "What this hides, in one sentence.",
+              "title": "Why",
+              "type": "string"
+            },
+            "fix": {
+              "description": "The smallest change that keeps the fail-open behaviour but restores the signal.",
+              "title": "Fix",
+              "type": "string"
+            }
+          },
+          "required": [
+            "line",
+            "rule",
+            "severity",
+            "handler",
+            "snippet",
+            "why",
+            "fix"
+          ],
+          "title": "Finding",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "ok": {
+          "description": "True when no findings at or above min_severity.",
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "total_handlers": {
+          "description": "How many except clauses were examined.",
+          "title": "Total Handlers",
+          "type": "integer"
+        },
+        "finding_count": {
+          "description": "How many were reported.",
+          "title": "Finding Count",
+          "type": "integer"
+        },
+        "high": {
+          "description": "Count of high-severity findings.",
+          "title": "High",
+          "type": "integer"
+        },
+        "medium": {
+          "description": "Count of medium-severity findings.",
+          "title": "Medium",
+          "type": "integer"
+        },
+        "low": {
+          "description": "Count of low-severity findings.",
+          "title": "Low",
+          "type": "integer"
+        },
+        "findings": {
+          "description": "Every reported handler, in line order.",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "report": {
+          "description": "Human-readable summary.",
+          "title": "Report",
+          "type": "string"
+        },
+        "syntax_error": {
+          "default": "",
+          "description": "Set when the source could not be parsed.",
+          "title": "Syntax Error",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ok",
+        "total_handlers",
+        "finding_count",
+        "high",
+        "medium",
+        "low",
+        "findings",
+        "report"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

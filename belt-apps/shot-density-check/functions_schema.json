@@ -1,0 +1,164 @@
+{
+  "run": {
+    "description": "",
+    "input_schema": {
+      "properties": {
+        "video": {
+          "description": "The video to analyse (mp4/mov/webm).",
+          "format": "file",
+          "title": "Video",
+          "type": "string"
+        },
+        "scene_threshold": {
+          "default": 0.3,
+          "description": "ffmpeg scene-change score that counts as a cut, 0-1. 0.30 suits most edited footage. Lower it (0.15-0.20) for subtle cuts within a single scene; raise it (0.40+) if camera motion is being counted as cuts.",
+          "title": "Scene Threshold",
+          "type": "number"
+        },
+        "target_cuts_per_second_min": {
+          "default": 0.33,
+          "description": "Lower bound of the pacing you want \u2014 0.33 is a cut every 3 seconds. 0 disables the verdict.",
+          "title": "Target Cuts Per Second Min",
+          "type": "number"
+        },
+        "target_cuts_per_second_max": {
+          "default": 1.5,
+          "description": "Upper bound \u2014 above this the edit may read as frantic.",
+          "title": "Target Cuts Per Second Max",
+          "type": "number"
+        },
+        "max_static_stretch_seconds": {
+          "default": 5.0,
+          "description": "Longest single shot you will tolerate before calling it static. This is usually the number that matters most.",
+          "title": "Max Static Stretch Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "video"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Shot": {
+          "properties": {
+            "index": {
+              "description": "0-based shot number.",
+              "title": "Index",
+              "type": "integer"
+            },
+            "start_seconds": {
+              "description": "Where the shot begins.",
+              "title": "Start Seconds",
+              "type": "number"
+            },
+            "duration_seconds": {
+              "description": "How long it holds.",
+              "title": "Duration Seconds",
+              "type": "number"
+            }
+          },
+          "required": [
+            "index",
+            "start_seconds",
+            "duration_seconds"
+          ],
+          "title": "Shot",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "passed": {
+          "description": "True when pacing is inside your targets.",
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "duration_seconds": {
+          "description": "Total video length.",
+          "title": "Duration Seconds",
+          "type": "number"
+        },
+        "cut_count": {
+          "description": "Hard cuts detected.",
+          "title": "Cut Count",
+          "type": "integer"
+        },
+        "shot_count": {
+          "description": "Shots (cuts + 1).",
+          "title": "Shot Count",
+          "type": "integer"
+        },
+        "cuts_per_second": {
+          "description": "Cut density.",
+          "title": "Cuts Per Second",
+          "type": "number"
+        },
+        "avg_shot_seconds": {
+          "description": "Mean shot length.",
+          "title": "Avg Shot Seconds",
+          "type": "number"
+        },
+        "median_shot_seconds": {
+          "description": "Median shot length \u2014 more robust than the mean when one long tail shot dominates.",
+          "title": "Median Shot Seconds",
+          "type": "number"
+        },
+        "longest_static_seconds": {
+          "description": "The longest single unbroken shot.",
+          "title": "Longest Static Seconds",
+          "type": "number"
+        },
+        "longest_static_at": {
+          "description": "Where that stretch starts.",
+          "title": "Longest Static At",
+          "type": "number"
+        },
+        "verdict": {
+          "description": "static | well-paced | frantic | unknown.",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "findings": {
+          "description": "What failed, in plain language.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "shots": {
+          "description": "Every detected shot, so you can check the detector's work.",
+          "items": {
+            "$ref": "#/$defs/Shot"
+          },
+          "title": "Shots",
+          "type": "array"
+        },
+        "report": {
+          "description": "Human-readable summary.",
+          "title": "Report",
+          "type": "string"
+        }
+      },
+      "required": [
+        "passed",
+        "duration_seconds",
+        "cut_count",
+        "shot_count",
+        "cuts_per_second",
+        "avg_shot_seconds",
+        "median_shot_seconds",
+        "longest_static_seconds",
+        "longest_static_at",
+        "verdict",
+        "findings",
+        "shots",
+        "report"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

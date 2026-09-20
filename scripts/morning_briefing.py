@@ -29,12 +29,13 @@ from dotenv import load_dotenv
 load_dotenv(_ROOT / ".env")
 
 import requests
+from genlab_core.paths import state_dir
 
 logger = logging.getLogger("morning_briefing")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-BRIEFING_FILE = pathlib.Path.home() / ".genlab" / "morning_briefing.json"
-HEALTH_FILE = pathlib.Path.home() / ".genlab" / "token_health.json"
+BRIEFING_FILE = state_dir("morning_briefing.json")
+HEALTH_FILE = state_dir("token_health.json")
 
 
 # ── Infrastructure Checks ──────────────────────────────────────────

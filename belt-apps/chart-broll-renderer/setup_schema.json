@@ -1,0 +1,6 @@
+{
+  "description": "No setup config needed \u2014 the app is a thin ffmpeg wrapper.",
+  "properties": {},
+  "title": "AppSetup",
+  "type": "object"
+}

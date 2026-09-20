@@ -1,0 +1,13 @@
+# Matte worker: SAM2 video predictor + birefnet, on Apple MPS.
+# ISOLATED from the GenLab project venv on purpose (rule #31): a torch-adjacent
+# install without an index pin once replaced torch==2.12.1+cpu with the full
+# NVIDIA CUDA stack on a GPU-less box. Nothing here may touch that venv.
+torch
+torchvision
+numpy
+pillow
+opencv-python-headless
+hydra-core
+iopath
+rembg[cpu]
+onnxruntime

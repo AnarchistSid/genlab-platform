@@ -37,6 +37,7 @@ point. From that time series we can:
 Fewer than 3 data points → 'insufficient_data' verdict (avoids
 noisy forecasts from cold-start). Any exception → returns None.
 """
+
 from __future__ import annotations
 
 import logging
@@ -67,10 +68,10 @@ class SloForecast:
 
     check_name: str
     niche_id: str | None  # None = system-wide
-    current_rate: float   # smoothed EWMA of today's daily count
+    current_rate: float  # smoothed EWMA of today's daily count
     forecast_rate: float  # projected daily count 24h ahead
-    trend_pct: float      # (forecast - current) / current × 100
-    verdict: str          # stable | watch | forecast_warning | forecast_critical | insufficient_data
+    trend_pct: float  # (forecast - current) / current × 100
+    verdict: str  # stable | watch | forecast_warning | forecast_critical | insufficient_data
     ttb_hours: float | None  # hours until warning threshold breach, if trend is up
 
 
@@ -124,9 +125,13 @@ def compute_forecast(
     try:
         if len(daily_counts) < _MIN_SAMPLES:
             return SloForecast(
-                check_name=check_name, niche_id=niche_id,
-                current_rate=0.0, forecast_rate=0.0, trend_pct=0.0,
-                verdict="insufficient_data", ttb_hours=None,
+                check_name=check_name,
+                niche_id=niche_id,
+                current_rate=0.0,
+                forecast_rate=0.0,
+                trend_pct=0.0,
+                verdict="insufficient_data",
+                ttb_hours=None,
             )
         smoothed = _ewma(daily_counts)
         current = smoothed[-1]
@@ -134,16 +139,14 @@ def compute_forecast(
         # Forecast 24h ahead = current + 1 day of slope
         forecast = max(0.0, current + slope)
         # Trend %: avoid div-by-zero when current is 0
-        trend_pct = (
-            ((forecast - current) / current * 100.0)
-            if current > 0 else 0.0
-        )
+        trend_pct = ((forecast - current) / current * 100.0) if current > 0 else 0.0
 
         verdict = _classify_verdict(current, forecast)
         ttb = _time_to_warning_breach(current, slope) if slope > 0 else None
 
         return SloForecast(
-            check_name=check_name, niche_id=niche_id,
+            check_name=check_name,
+            niche_id=niche_id,
             current_rate=round(current, 3),
             forecast_rate=round(forecast, 3),
             trend_pct=round(trend_pct, 1),
@@ -153,7 +156,8 @@ def compute_forecast(
     except Exception as exc:
         logger.warning(
             "[slo_forecast] compute_forecast failed check=%s: %s",
-            check_name, exc,
+            check_name,
+            exc,
         )
         return None
 
@@ -188,7 +192,10 @@ def _time_to_warning_breach(current: float, slope: float) -> float | None:
 
 
 def bucket_by_day(
-    events: list[datetime], *, days_back: int = 14, now: datetime | None = None,
+    events: list[datetime],
+    *,
+    days_back: int = 14,
+    now: datetime | None = None,
 ) -> list[float]:
     """Bucket a list of alert-fired datetimes into daily counts.
     Returns days_back-long list, oldest-to-newest, missing days = 0."""

@@ -1,0 +1,156 @@
+{
+  "run": {
+    "description": "",
+    "capabilities": [],
+    "input_schema": {
+      "$defs": {
+        "SourceFile": {
+          "properties": {
+            "name": {
+              "description": "Filename or path, echoed in findings",
+              "title": "Name",
+              "type": "string"
+            },
+            "content": {
+              "description": "Full text of the Python source",
+              "title": "Content",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "content"
+          ],
+          "title": "SourceFile",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "sources": {
+          "description": "Python source files to scan",
+          "items": {
+            "$ref": "#/$defs/SourceFile"
+          },
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sources"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Finding": {
+          "properties": {
+            "code": {
+              "description": "Stable machine-readable identifier",
+              "title": "Code",
+              "type": "string"
+            },
+            "severity": {
+              "description": "critical, error, warn or info",
+              "title": "Severity",
+              "type": "string"
+            },
+            "file": {
+              "description": "Source file",
+              "title": "File",
+              "type": "string"
+            },
+            "line": {
+              "description": "1-indexed line number",
+              "title": "Line",
+              "type": "integer"
+            },
+            "col": {
+              "description": "0-indexed column",
+              "title": "Col",
+              "type": "integer"
+            },
+            "expression": {
+              "description": "The call as written, resolved through aliases",
+              "title": "Expression",
+              "type": "string"
+            },
+            "detail": {
+              "description": "What it produces and why that hurts",
+              "title": "Detail",
+              "type": "string"
+            },
+            "fix": {
+              "description": "Concrete replacement",
+              "title": "Fix",
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "severity",
+            "file",
+            "line",
+            "col",
+            "expression",
+            "detail",
+            "fix"
+          ],
+          "title": "Finding",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "verdict": {
+          "description": "clean, warn or broken",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "files_scanned": {
+          "description": "Files successfully parsed",
+          "title": "Files Scanned",
+          "type": "integer"
+        },
+        "files_skipped": {
+          "description": "Files that did not parse, with reason",
+          "items": {
+            "type": "string"
+          },
+          "title": "Files Skipped",
+          "type": "array"
+        },
+        "findings": {
+          "description": "Problems found, worst first",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "by_code": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Finding code -> count",
+          "title": "By Code",
+          "type": "object"
+        },
+        "summary": {
+          "description": "One-line human-readable result",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "verdict",
+        "files_scanned",
+        "files_skipped",
+        "findings",
+        "by_code",
+        "summary"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

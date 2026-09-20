@@ -1,0 +1,165 @@
+{
+  "run": {
+    "description": "",
+    "capabilities": [],
+    "input_schema": {
+      "properties": {
+        "prompt": {
+          "description": "The prompt text that declares the output contract. Paste the whole prompt or just the output-format block.",
+          "title": "Prompt",
+          "type": "string"
+        },
+        "enforced_fields": {
+          "description": "Field names your CODE actually checks for. This is the comparison that matters: a field the prompt calls REQUIRED and your checker omits will fail silently whenever the model drops it.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Enforced Fields",
+          "type": "array"
+        },
+        "response_json": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional sample model response (a JSON object) to check against the declared contract.",
+          "title": "Response Json"
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "DeclaredField": {
+          "properties": {
+            "name": {
+              "description": "Field name as declared in the prompt.",
+              "title": "Name",
+              "type": "string"
+            },
+            "marked_required": {
+              "description": "True if the line carried an explicit REQUIRED marker.",
+              "title": "Marked Required",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name",
+            "marked_required"
+          ],
+          "title": "DeclaredField",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "declared_fields": {
+          "description": "Output keys the prompt declares.",
+          "items": {
+            "$ref": "#/$defs/DeclaredField"
+          },
+          "title": "Declared Fields",
+          "type": "array"
+        },
+        "declared_count_claim": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Count asserted in prose, e.g. \"ALL SIX KEYS ARE REQUIRED\".",
+          "title": "Declared Count Claim"
+        },
+        "count_claim_matches": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "False when the prose count disagrees with the key list.",
+          "title": "Count Claim Matches"
+        },
+        "declared_but_not_enforced": {
+          "description": "THE SILENT FAILURE: the prompt calls these required, your code does not check them. When the model omits one, nothing retries or logs.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Declared But Not Enforced",
+          "type": "array"
+        },
+        "enforced_but_not_declared": {
+          "description": "THE LOUD FAILURE: your code demands these, the prompt never asks for them, so every call pays a retry.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Enforced But Not Declared",
+          "type": "array"
+        },
+        "response_missing": {
+          "description": "Declared keys absent from the sample response.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Response Missing",
+          "type": "array"
+        },
+        "response_empty": {
+          "description": "Declared keys PRESENT but empty. These pass a naive 'key in response' check and are usually the actual bug.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Response Empty",
+          "type": "array"
+        },
+        "response_extra": {
+          "description": "Keys in the response the prompt never declared.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Response Extra",
+          "type": "array"
+        },
+        "contract_aligned": {
+          "description": "True when prompt and code agree and no count contradiction exists.",
+          "title": "Contract Aligned",
+          "type": "boolean"
+        },
+        "findings": {
+          "description": "Human-readable findings, most severe first.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "verdict": {
+          "description": "One line.",
+          "title": "Verdict",
+          "type": "string"
+        }
+      },
+      "required": [
+        "contract_aligned",
+        "verdict"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "properties": {
+    "max_chars": {
+      "default": 60,
+      "description": "Hard character ceiling. 60 suits IG/TikTok/Shorts overlays.",
+      "title": "Max Chars",
+      "type": "integer"
+    },
+    "min_chars": {
+      "default": 15,
+      "description": "Floor below which a hook is almost always a truncation artefact.",
+      "title": "Min Chars",
+      "type": "integer"
+    },
+    "strict": {
+      "default": false,
+      "description": "Promote every warn to fail. Use in CI where any weak hook should block.",
+      "title": "Strict",
+      "type": "boolean"
+    }
+  },
+  "title": "AppSetup",
+  "type": "object"
+}

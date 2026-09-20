@@ -1,0 +1,191 @@
+{
+  "run": {
+    "description": "",
+    "input_schema": {
+      "properties": {
+        "expression": {
+          "description": "5-field cron expression, or an alias like @daily. Examples: '30 2 * * *', '*/15 * * * *', '0 0 13 * 5'",
+          "title": "Expression",
+          "type": "string"
+        },
+        "timezone": {
+          "default": "UTC",
+          "description": "IANA timezone the scheduler runs in -- the box's zone, not yours. Check with `timedatectl`. Examples: Asia/Kolkata, Europe/London.",
+          "title": "Timezone",
+          "type": "string"
+        },
+        "from_iso": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "UTC instant to start from, ISO-8601. Defaults to now. Set it for reproducible output.",
+          "title": "From Iso"
+        }
+      },
+      "required": [
+        "expression"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Finding": {
+          "properties": {
+            "code": {
+              "description": "Stable machine-readable identifier",
+              "title": "Code",
+              "type": "string"
+            },
+            "severity": {
+              "description": "error, warn or info",
+              "title": "Severity",
+              "type": "string"
+            },
+            "detail": {
+              "description": "What was found, with dates",
+              "title": "Detail",
+              "type": "string"
+            },
+            "fix": {
+              "description": "Concrete suggestion",
+              "title": "Fix",
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "severity",
+            "detail",
+            "fix"
+          ],
+          "title": "Finding",
+          "type": "object"
+        },
+        "Fire": {
+          "properties": {
+            "local": {
+              "description": "Wall-clock time in the server timezone -- what cron matches on",
+              "title": "Local",
+              "type": "string"
+            },
+            "utc": {
+              "description": "The same instant in UTC",
+              "title": "Utc",
+              "type": "string"
+            },
+            "offset": {
+              "description": "Server offset from UTC at that instant",
+              "title": "Offset",
+              "type": "string"
+            },
+            "note": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Set when this fire is unusual",
+              "title": "Note"
+            }
+          },
+          "required": [
+            "local",
+            "utc",
+            "offset"
+          ],
+          "title": "Fire",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "expression": {
+          "description": "The expression as parsed",
+          "title": "Expression",
+          "type": "string"
+        },
+        "timezone": {
+          "description": "Scheduler timezone",
+          "title": "Timezone",
+          "type": "string"
+        },
+        "verdict": {
+          "description": "clean, warn or broken",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "utc_offset_now": {
+          "description": "Current offset of the scheduler zone from UTC",
+          "title": "Utc Offset Now",
+          "type": "string"
+        },
+        "fires_per_day": {
+          "description": "Fires on an ordinary matching day",
+          "title": "Fires Per Day",
+          "type": "integer"
+        },
+        "next_fires": {
+          "description": "Upcoming fires, local and UTC side by side",
+          "items": {
+            "$ref": "#/$defs/Fire"
+          },
+          "title": "Next Fires",
+          "type": "array"
+        },
+        "findings": {
+          "description": "Problems found, worst first",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "dst_gap_dates": {
+          "description": "Dates where a scheduled time does not exist",
+          "items": {
+            "type": "string"
+          },
+          "title": "Dst Gap Dates",
+          "type": "array"
+        },
+        "dst_overlap_dates": {
+          "description": "Dates where a scheduled time occurs twice",
+          "items": {
+            "type": "string"
+          },
+          "title": "Dst Overlap Dates",
+          "type": "array"
+        },
+        "summary": {
+          "description": "One-line human-readable result",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expression",
+        "timezone",
+        "verdict",
+        "utc_offset_now",
+        "fires_per_day",
+        "next_fires",
+        "findings",
+        "dst_gap_dates",
+        "dst_overlap_dates",
+        "summary"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

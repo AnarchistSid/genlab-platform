@@ -1,0 +1,6 @@
+{
+  "description": "Stateless \u2014 pure arithmetic.",
+  "properties": {},
+  "title": "AppSetup",
+  "type": "object"
+}
