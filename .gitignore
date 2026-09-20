@@ -193,3 +193,9 @@ deploy/.deploy.log
 /*.bak.*
 .audit/screenshots/
 .backups/
+
+# baseline_compare.sh worktrees — created under the repo, removed by cleanup(),
+# and pinned to be gone. Never in $HOME: a harness that creates things in the
+# home directory is creating them in the wrong place.
+/.bc-base/
+/.bc-head/

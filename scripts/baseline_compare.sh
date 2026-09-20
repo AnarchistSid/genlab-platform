@@ -69,6 +69,17 @@ cleanup() {
   git -C "$SRC" worktree remove --force "$WT_B" 2>/dev/null
   git -C "$SRC" worktree remove --force "$WT_H" 2>/dev/null
   rm -rf "$WT_B" "$WT_H" 2>/dev/null
+  # A HARNESS THAT CREATES WORKTREES OWNS THEIR REMOVAL. `remove --force` leaves
+  # the administrative entry behind when the directory is already gone, and a
+  # stale entry makes the next `worktree add` at the same path fail. Pruning is
+  # what makes "exactly one worktree after a run" true rather than usually true.
+  git -C "$SRC" worktree prune 2>/dev/null
+  local _left
+  _left="$(git -C "$SRC" worktree list 2>/dev/null | wc -l | tr -d ' ')"
+  if [[ "${_left:-1}" != "1" ]]; then
+    say "WARN: $_left worktrees remain after cleanup (expected 1):"
+    git -C "$SRC" worktree list 2>/dev/null | sed 's/^/  /'
+  fi
 }
 trap cleanup EXIT
 

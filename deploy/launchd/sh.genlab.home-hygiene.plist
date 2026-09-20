@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Weekly home-directory hygiene report (CLEAN-02 §4 / CLEAN-03 §7).
+
+  Sundays 09:00 local. RunAtLoad is false: this is a report, not a boot task,
+  and a report that fires on every load trains the reader to ignore it.
+
+  The script always exits 0 (rule #26): findings are data the operator reads on
+  stdout and in Slack, not an incident that should page. Eight stray worktree
+  directories are a tidy-up note, and a non-zero exit would make them a CRITICAL
+  every Sunday until someone silenced the check.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>              <string>sh.genlab.home-hygiene</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/anarchistsid/GenLab/scripts/home_hygiene_report.sh</string>
+  </array>
+  <key>WorkingDirectory</key>   <string>/Users/anarchistsid/GenLab</string>
+  <key>RunAtLoad</key>          <false/>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key>          <integer>0</integer>
+    <key>Hour</key>             <integer>9</integer>
+    <key>Minute</key>           <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>    <string>/Users/anarchistsid/GenLab/.logs/home_hygiene.log</string>
+  <key>StandardErrorPath</key>  <string>/Users/anarchistsid/GenLab/.logs/home_hygiene.err</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>             <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>GENLAB_ROOT</key>      <string>/Users/anarchistsid/GenLab</string>
+  </dict>
+</dict>
+</plist>
