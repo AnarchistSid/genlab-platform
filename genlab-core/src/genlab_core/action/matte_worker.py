@@ -42,7 +42,13 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_ROOT = Path(os.environ.get("GENLAB_MATTE_QUEUE", "/opt/genlab/.matte_jobs"))
+#: The queue, in ONE place. The library defaulted to /opt/genlab/.matte_jobs
+#: while the worker CLI and its launchd plist both used
+#: /opt/genlab/.runtime/mattes -- so `worker_alive()` stat'd a directory that
+#: has never existed, returned False, and every craft attempt was skipped
+#: `worker_unavailable` with a live worker heartbeating 34 seconds away.
+#: The worker CLI imports this now rather than repeating the literal.
+DEFAULT_ROOT = Path(os.environ.get("GENLAB_MATTE_QUEUE", "/opt/genlab/.runtime/mattes"))
 # §2: 20 minutes. The measured Mac run is ~9 min for 384 frames, so this is
 # roughly 2x headroom -- long enough to absorb a slow pull, short enough that a
 # dead worker costs one fire rather than the publish window.

@@ -205,10 +205,30 @@ def _log_job(job_id: str, clip: str, result: dict) -> None:
         fh.write(json.dumps(row, default=str) + "\n")
 
 
+def _queue_default():
+    """The library's queue root, so there is one literal and not three.
+
+    The stage asks `matte_worker.DEFAULT_ROOT`; this CLI used to carry its own
+    copy of the path, and when the two drifted the stage reported
+    `worker_unavailable` against a worker that was running.
+    """
+    try:
+        from genlab_core.action.matte_worker import DEFAULT_ROOT
+
+        return DEFAULT_ROOT
+    except ImportError:
+        return Path("/opt/genlab/.runtime/mattes")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--host", help="ssh host holding the queue (e.g. genlab-prod)")
-    ap.add_argument("--root", default="/opt/genlab/.runtime/mattes")
+    ap.add_argument(
+        "--root",
+        default=str(_queue_default()),
+        help="job queue root; defaults to matte_worker.DEFAULT_ROOT so the "
+        "worker and the stage cannot disagree about where the queue is",
+    )
     ap.add_argument("--local", help="serve a LOCAL queue directory instead")
     ap.add_argument("--device", default="mps")
     ap.add_argument("--once", action="store_true", help="one poll, then exit")

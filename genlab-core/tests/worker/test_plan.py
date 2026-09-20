@@ -660,3 +660,33 @@ def test_one_unscored_candidate_refuses_the_whole_job():
         )
     )
     assert not r.ok and r.reason == P.PlanFailure.UNSCORED
+
+
+def test_the_worker_cli_and_the_library_agree_on_the_queue_root():
+    """They did not, and it cost a render.
+
+    The library defaulted to /opt/genlab/.matte_jobs while the worker CLI and
+    its launchd plist used /opt/genlab/.runtime/mattes. `worker_alive()` stat'd
+    a directory that has never existed, returned False, and craft skipped
+    `worker_unavailable` against a worker heartbeating 34 seconds away.
+    """
+    import re
+    from pathlib import Path as _P
+
+    from genlab_core.action.matte_worker import DEFAULT_ROOT
+
+    cli = (_P(__file__).resolve().parents[3] / "scripts" / "matte_worker.py").read_text()
+    literals = set(re.findall(r'"(/opt/genlab/[a-z_./]*matte[a-z_./]*)"', cli))
+    stray = {p for p in literals if p != str(DEFAULT_ROOT)}
+    assert not stray, f"the CLI carries its own queue path(s) {stray}, library says {DEFAULT_ROOT}"
+
+
+def test_the_launchd_plist_points_at_the_same_queue():
+    from pathlib import Path as _P
+
+    from genlab_core.action.matte_worker import DEFAULT_ROOT
+
+    plist = (
+        _P(__file__).resolve().parents[3] / "deploy" / "launchd" / "sh.genlab.matte-worker.plist"
+    ).read_text()
+    assert str(DEFAULT_ROOT) in plist, f"plist does not use {DEFAULT_ROOT}"
