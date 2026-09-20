@@ -419,6 +419,16 @@ def plan(
 
     # Closest finish to the window's own start; a tie goes to the earlier window.
     chosen = sorted(anchored, key=lambda c: (c.finish_frame, c.start_s))[0]
+    _anchor = next(
+        (c.get("anchor_s") for c in candidates if float(c.get("start_s", 0.0)) == chosen.start_s),
+        None,
+    )
+    logger.info(
+        "[finish] winning window %.2fs came from anchor %s",
+        chosen.start_s,
+        f"{_anchor:.2f}s" if _anchor is not None else "(untagged)",
+    )
+    invariance["winning_anchor_s"] = _anchor
     finish = int(chosen.finish_frame)
     n_frames = _frames_of(chosen)
     frames = frames_for(chosen.start_s, n_frames)

@@ -66,6 +66,19 @@ SEED_AREA_FLOOR = 0.0025
 #: commits. First crossing of this share of the bracket's maximum.
 EDGE_FRACTION = 0.70
 
+#: ONE EVENT PER CLIP IS AN ASSUMPTION. Measured on the UFC-05 span: five
+#: comparable sustained crowd rises in 60 s (9.25 +0.0874, 13.20 +0.0679,
+#: 25.65 +0.0572, 59.45 +0.0507, 16.50 +0.0495), and the wanted one ranked
+#: THIRD. An argmax anchor picks 9.25 and never looks at the finish.
+#:
+#: Two is the cap, not a parameter to raise: a clip needing more than two
+#: anchors is not a highlight, and each surviving anchor costs a full vote.
+ANCHOR_COUNT = 2
+
+#: Two anchors inside this of each other are the same crowd reaction sampled
+#: twice, not two events.
+ANCHOR_MIN_SEPARATION_S = 2.0
+
 #: A maximum on the bracket's boundary is a maximum OF THE BRACKET, not of the
 #: signal -- the real peak is outside. Measured on UFC-05 window 24.9: the pick
 #: and the peak were both frame 7 of a (7, 25) bracket. Widen once on that side
@@ -524,3 +537,53 @@ def pick_with_edge_guard(
             "[finish] pick %d sat on a bracket edge — widening to %s and re-picking", f, bound
         )
     return None, bound
+
+
+def level_shift_anchors(
+    path: str,
+    start_s: float = 0.0,
+    duration_s: float | None = None,
+    fps: float = 30.0,
+    *,
+    k: int = ANCHOR_COUNT,
+    min_sep_s: float = ANCHOR_MIN_SEPARATION_S,
+    run=subprocess.run,
+) -> list[tuple[float, float]]:
+    """[(time_s_in_clip, step), ...] — the top-k sustained level rises.
+
+    The same statistic `audio_onset_frame` uses in level mode, read over a range
+    rather than a window, and returned as a RANKED LIST instead of an argmax.
+
+    THE LIMIT, PLAINLY: this ranks crowd reactions by size, and the reaction to
+    the shot you want is not necessarily the biggest. On the UFC-05 span the
+    archive's finish ranked third of five. Two anchors cover it when the clip is
+    a highlight of one or two moments; for a long multi-event clip the fetcher's
+    own highlight timestamp should seed the search instead, and a clip needing
+    more than two anchors is not a highlight.
+    """
+    n_frames = int((duration_s or 0) * fps) or None
+    env = _envelope(path, start_s, n_frames or int(3600 * fps), fps, run)
+    if env is None:
+        return []
+    w = LEVEL_WIN_HOPS
+    if len(env) < 2 * w + 1:
+        logger.warning("[finish] range too short for a %d-hop level shift", w)
+        return []
+    mean = np.convolve(env, np.ones(w) / w, "valid")
+    step = mean[w:] - mean[:-w]
+    out: list[tuple[float, float]] = []
+    for idx in np.argsort(step)[::-1]:
+        t = start_s + (int(idx) + w) * ONSET_WIN_S
+        if float(step[idx]) <= 0:
+            break
+        if any(abs(t - prev) < min_sep_s for prev, _ in out):
+            continue
+        out.append((round(t, 3), float(step[idx])))
+        if len(out) >= k:
+            break
+    logger.info(
+        "[finish] top-%d level-shift anchors: %s",
+        k,
+        ", ".join(f"{t:.2f}s (+{v:.4f})" for t, v in out) or "none",
+    )
+    return out

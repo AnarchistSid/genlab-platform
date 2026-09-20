@@ -63,9 +63,7 @@ def _strips(rgb: np.ndarray) -> list[np.ndarray]:
 
 def derive_std_threshold(frames) -> float:
     """Uniformity threshold below which a strip is a BAR, not dark content."""
-    spread = np.array(
-        [float(s.std()) for f in frames for s in _strips(np.asarray(f, np.float32))]
-    )
+    spread = np.array([float(s.std()) for f in frames for s in _strips(np.asarray(f, np.float32))])
     return max(float(np.percentile(spread, STD_PERCENTILE) * STD_MARGIN), MIN_BAR_STD)
 
 

@@ -50,8 +50,9 @@ def _beat(transport: Transport) -> bool:
         return False
 
 
-def run_once(transport: Transport, matte_fn: Callable[[dict], dict],
-             stats: WorkerStats | None = None) -> bool:
+def run_once(
+    transport: Transport, matte_fn: Callable[[dict], dict], stats: WorkerStats | None = None
+) -> bool:
     """Claim and run at most one job. Returns True if one was processed."""
     stats = stats or WorkerStats()
     names = transport.list_queued()
@@ -60,7 +61,7 @@ def run_once(transport: Transport, matte_fn: Callable[[dict], dict],
     for name in names:
         job = transport.claim(name)
         if job is None:
-            continue                     # another worker won the rename
+            continue  # another worker won the rename
         stats.claimed += 1
         job_id = job.get("job_id") or Path(name).stem
         t0 = time.time()
@@ -73,24 +74,35 @@ def run_once(transport: Transport, matte_fn: Callable[[dict], dict],
             transport.finish(job_id, result, ok=ok)
             stats.succeeded += int(ok)
             stats.failed += int(not ok)
-            logger.info("[matte-worker] %s %s in %.1fs", job_id,
-                        "ok" if ok else "FAILED", time.time() - t0)
+            logger.info(
+                "[matte-worker] %s %s in %.1fs", job_id, "ok" if ok else "FAILED", time.time() - t0
+            )
         except Exception as exc:  # noqa: BLE001 — one bad clip must not end the loop
             logger.warning("[matte-worker] %s raised: %s", job_id, exc, exc_info=True)
-            transport.finish(job_id, {"reason": f"{type(exc).__name__}: {exc}"[:300],
-                                      "traceback": traceback.format_exc()[-800:],
-                                      "seconds": round(time.time() - t0, 1)},
-                             ok=False)
+            transport.finish(
+                job_id,
+                {
+                    "reason": f"{type(exc).__name__}: {exc}"[:300],
+                    "traceback": traceback.format_exc()[-800:],
+                    "seconds": round(time.time() - t0, 1),
+                },
+                ok=False,
+            )
             stats.failed += 1
         return True
     return False
 
 
-def serve(transport: Transport, matte_fn: Callable[[dict], dict], *,
-          idle_poll_s: float = IDLE_POLL_S,
-          heartbeat_every_s: float = HEARTBEAT_EVERY_S,
-          max_iterations: int | None = None,
-          sleep=time.sleep, now=time.time) -> WorkerStats:
+def serve(
+    transport: Transport,
+    matte_fn: Callable[[dict], dict],
+    *,
+    idle_poll_s: float = IDLE_POLL_S,
+    heartbeat_every_s: float = HEARTBEAT_EVERY_S,
+    max_iterations: int | None = None,
+    sleep=time.sleep,
+    now=time.time,
+) -> WorkerStats:
     """Poll forever (or ``max_iterations`` times, for tests)."""
     stats = WorkerStats()
     last_beat = 0.0

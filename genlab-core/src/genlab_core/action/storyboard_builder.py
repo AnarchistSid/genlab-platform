@@ -134,11 +134,14 @@ def _candidate(c) -> dict:
     """One candidate for the worker. `motion_score` is REQUIRED downstream — the
     worker refuses a job without it rather than ranking on a default."""
     if isinstance(c, dict):
-        return {
+        row = {
             "start_s": float(c["start_s"]),
             "frames": WINDOW_FRAMES,
             "motion_score": float(c["motion_score"]),
         }
+        if c.get("anchor_s") is not None:
+            row["anchor_s"] = float(c["anchor_s"])
+        return row
     raise TypeError(
         f"candidate must carry its measured motion_score, got {c!r}. "
         "window_candidates() returns these; do not build them by hand."
@@ -172,6 +175,36 @@ def audio_anchored_candidates(anchor_s, cuts_s, motion_at, *, offsets=ANCHOR_OFF
             "the invariance gate cannot run",
             len(out),
         )
+    return out
+
+
+def candidates_for_anchors(anchors, cuts_s, motion_at, *, offsets=ANCHOR_OFFSETS_S):
+    """Candidates across EVERY anchor, tagged with the anchor they came from.
+
+    An argmax anchor assumes one event per clip. Measured on the UFC-05 span
+    there are five comparable crowd rises in 60 s and the wanted one ranks
+    third, so the anchor is a ranked list and the candidates are the union.
+
+    The vote, presence and the invariance gate choose among them; whichever
+    candidate wins names its anchor, so the log says which event was rendered
+    rather than only which three seconds.
+    """
+    out = []
+    seen = set()
+    for a in anchors:
+        t = float(a[0]) if isinstance(a, (tuple, list)) else float(a)
+        for c in audio_anchored_candidates(t, cuts_s, motion_at, offsets=offsets):
+            if c["start_s"] in seen:
+                continue
+            seen.add(c["start_s"])
+            out.append({**c, "anchor_s": round(t, 3)})
+    out.sort(key=lambda c: -c["motion_score"])
+    logger.info(
+        "[builder] %d candidate(s) across %d anchor(s): %s",
+        len(out),
+        len(anchors),
+        ", ".join(f"{c['start_s']:.2f}<-{c['anchor_s']:.2f}" for c in out),
+    )
     return out
 
 

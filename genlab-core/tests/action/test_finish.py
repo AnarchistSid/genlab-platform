@@ -325,3 +325,62 @@ def test_a_pick_in_the_middle_is_left_alone():
     sm = F.velocity_samples(masks_from_x(x, h=200, w=900))
     f, bound = F.pick_with_edge_guard(sm, opponent_on_right=True, bound=(4, 18))
     assert f is not None and bound == (4, 18)
+
+
+# ── the anchor is top-K, not argmax ─────────────────────────────────────────
+
+
+def test_anchors_come_back_ranked_and_separated():
+    """One event per clip is an assumption. Measured on the UFC-05 span: five
+    comparable rises in 60 s, the wanted one third."""
+    sr = F.ONSET_SR
+    rng = np.random.default_rng(5)
+    a = rng.normal(0, 0.05, sr * 30).astype(np.float32)
+    # ABSOLUTE levels, not cumulative multipliers: three events whose STEPS
+    # decrease (+1.4, +0.6, +0.3). Multiplying gains compounds them and makes
+    # the LAST step the biggest, which is a property of the fixture.
+    gain = np.ones(len(a), np.float32)
+    for t, lvl in ((5.0, 2.4), (12.0, 3.0), (20.0, 3.3)):
+        gain[int(sr * t) :] = lvl
+    a = a * gain
+    got = F.level_shift_anchors("x.mp4", 0.0, 30.0, 30.0, run=fake_ffmpeg(pcm(a)))
+    assert len(got) == F.ANCHOR_COUNT == 2, got
+    assert [round(t) for t, _ in got] == [5, 12], got
+    assert got[0][1] >= got[1][1], "anchors must come back ranked by step size"
+
+
+def test_two_rises_within_the_separation_are_one_event():
+    sr = F.ONSET_SR
+    a = np.random.default_rng(6).normal(0, 0.05, sr * 30).astype(np.float32)
+    a[int(sr * 8.0) :] *= 2.2
+    a[int(sr * 8.6) :] *= 1.2  # the same reaction still rising
+    a[int(sr * 20.0) :] *= 1.8
+    got = F.level_shift_anchors("x.mp4", 0.0, 30.0, 30.0, run=fake_ffmpeg(pcm(a)))
+    assert all(abs(got[0][0] - t) >= F.ANCHOR_MIN_SEPARATION_S for t, _ in got[1:]), got
+
+
+def test_silence_yields_no_anchors_not_time_zero():
+    got = F.level_shift_anchors(
+        "x.mp4", 0.0, 10.0, 30.0, run=fake_ffmpeg(pcm(np.zeros(F.ONSET_SR * 10, np.float32)))
+    )
+    assert got == []
+
+
+def test_the_measured_limit_of_ranking_crowd_reactions():
+    """MEASURED on the UFC-05 span, top sustained rises across 60 s:
+
+        9.25s +0.0874   13.20s +0.0679   25.65s +0.0572   59.45s +0.0507
+
+    The archive's finish is the one at 25.65 — THIRD. With a 60 s range and
+    k=2 the anchors are 9.25 and 13.20, and the drop at 25.65 is not reachable:
+    the plan must return `finish_unresolved` with the anchors listed, not a
+    finish from the wrong event.
+
+    This is the limit of ranking crowd reactions by size. For a long
+    multi-event clip the fetcher's own highlight timestamp seeds the search
+    instead; a clip needing more than two anchors is not a highlight.
+    """
+    measured = [(9.25, 0.0874), (13.20, 0.0679), (25.65, 0.0572), (59.45, 0.0507)]
+    top2 = sorted(measured, key=lambda x: -x[1])[: F.ANCHOR_COUNT]
+    assert [t for t, _ in top2] == [9.25, 13.20]
+    assert 25.65 not in [t for t, _ in top2]

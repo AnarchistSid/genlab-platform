@@ -52,10 +52,10 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 VOTE_FRAMES = 10
-MIN_BODY_FRAC = 0.04      # a silhouette smaller than this is not a body
-UPRIGHT_ASPECT = 1.2      # measured on the SILHOUETTE, not on a garment patch
-HUE_SAME_BODY = 45.0      # votes this close name the same fighter
-STACKED_DY = 0.12         # centroid gap that means one body is ON the other
+MIN_BODY_FRAC = 0.04  # a silhouette smaller than this is not a body
+UPRIGHT_ASPECT = 1.2  # measured on the SILHOUETTE, not on a garment patch
+HUE_SAME_BODY = 45.0  # votes this close name the same fighter
+STACKED_DY = 0.12  # centroid gap that means one body is ON the other
 STACKED_X_OVERLAP = 0.50  # ...and they must overlap horizontally to be stacked
 
 
@@ -89,8 +89,12 @@ def _stats(mask: np.ndarray) -> tuple[float, float, float, tuple[int, int]]:
         return 0.0, 0.0, 1.0, (0, 0)
     h = float(ys.max() - ys.min() + 1)
     w = float(xs.max() - xs.min() + 1)
-    return (float((mask > 0.5).mean()), h / max(w, 1.0),
-            float(ys.mean()) / mask.shape[0], (int(xs.min()), int(xs.max())))
+    return (
+        float((mask > 0.5).mean()),
+        h / max(w, 1.0),
+        float(ys.mean()) / mask.shape[0],
+        (int(xs.min()), int(xs.max())),
+    )
 
 
 def _x_overlap(a: tuple[int, int], b: tuple[int, int]) -> float:
@@ -112,8 +116,15 @@ def _pick_one(sils: dict[float, np.ndarray]) -> tuple[float | None, str, dict, d
     # Area floor FIRST. Residue never competes on shape.
     live = {h: a for h, a in areas.items() if a >= MIN_BODY_FRAC}
     if not live:
-        return None, (f"no silhouette over the {MIN_BODY_FRAC:.0%} floor "
-                      f"(areas {({h: round(a, 4) for h, a in areas.items()})})"), areas, aspects
+        return (
+            None,
+            (
+                f"no silhouette over the {MIN_BODY_FRAC:.0%} floor "
+                f"(areas { ({h: round(a, 4) for h, a in areas.items()}) })"
+            ),
+            areas,
+            aspects,
+        )
     if len(live) == 1:
         h = next(iter(live))
         return h, f"only body over the floor (area {live[h]:.1%})", areas, aspects
@@ -127,10 +138,13 @@ def _pick_one(sils: dict[float, np.ndarray]) -> tuple[float | None, str, dict, d
     # is a STANDING-KO signal; vertical order survives both.
     if len(live) == 2:
         a, b = sorted(live, key=lambda h: tops[h])
-        if (tops[b] - tops[a] >= STACKED_DY
-                and _x_overlap(xext[a], xext[b]) >= STACKED_X_OVERLAP):
-            return a, (f"stacked: on top (centroid y {tops[a]:.2f} vs "
-                       f"{tops[b]:.2f})"), areas, aspects
+        if tops[b] - tops[a] >= STACKED_DY and _x_overlap(xext[a], xext[b]) >= STACKED_X_OVERLAP:
+            return (
+                a,
+                (f"stacked: on top (centroid y {tops[a]:.2f} vs {tops[b]:.2f})"),
+                areas,
+                aspects,
+            )
 
     upright = [h for h in live if aspects[h] >= UPRIGHT_ASPECT]
     if len(upright) == 1:
@@ -138,7 +152,7 @@ def _pick_one(sils: dict[float, np.ndarray]) -> tuple[float | None, str, dict, d
         return h, f"only upright silhouette (aspect {aspects[h]:.2f})", areas, aspects
 
     pool = upright or list(live)
-    hi = min(pool, key=lambda h: tops[h])          # smaller y = higher in frame
+    hi = min(pool, key=lambda h: tops[h])  # smaller y = higher in frame
     others = [h for h in pool if h != hi]
     if others and abs(tops[hi] - tops[max(others, key=lambda h: tops[h])]) > 0.05:
         return hi, f"higher in frame (centroid y {tops[hi]:.2f})", areas, aspects
@@ -149,7 +163,8 @@ def _pick_one(sils: dict[float, np.ndarray]) -> tuple[float | None, str, dict, d
 def choose_subject_by_vote(
     frames: list,
     silhouette_fn: Callable[[object], dict[float, np.ndarray]],
-    *, vote_frames: int = VOTE_FRAMES,
+    *,
+    vote_frames: int = VOTE_FRAMES,
 ) -> SubjectVote:
     """Vote the finisher over the LAST ``vote_frames`` frames of the window.
 
@@ -180,11 +195,13 @@ def choose_subject_by_vote(
         hue, reason, areas, aspects = _pick_one(sils)
         for h, a in areas.items():
             area_sums.setdefault(h, []).append(a)
-        verdicts.append(FrameVerdict(len(frames) - len(tail) + i, hue, reason,
-                                     areas, aspects))
-        logger.info("[subject-vote] frame %d -> %s (%s)",
-                    verdicts[-1].frame_index,
-                    "none" if hue is None else f"{hue:.1f}", reason)
+        verdicts.append(FrameVerdict(len(frames) - len(tail) + i, hue, reason, areas, aspects))
+        logger.info(
+            "[subject-vote] frame %d -> %s (%s)",
+            verdicts[-1].frame_index,
+            "none" if hue is None else f"{hue:.1f}",
+            reason,
+        )
 
     # Merge votes for the SAME body. The hue histogram bins at 10 degrees, so
     # one fighter can be named 225 on nine frames and 235 on the tenth; counting
@@ -197,15 +214,17 @@ def choose_subject_by_vote(
         merged.append(near[0] if near else h)
     tally = Counter(merged)
     if not tally:
-        return SubjectVote(None, 0, len(tail), False, verdicts,
-                           "no frame produced a body over the area floor")
+        return SubjectVote(
+            None, 0, len(tail), False, verdicts, "no frame produced a body over the area floor"
+        )
     top = tally.most_common()
     best, votes = top[0]
     if len(top) > 1 and top[1][1] == votes:
         tied = [h for h, c in top if c == votes]
         best = max(tied, key=lambda h: float(np.mean(area_sums.get(h, [0.0]))))
-        reason = (f"tie at {votes}/{len(tail)} between {tied} — larger mean "
-                  f"silhouette wins ({best:.1f})")
+        reason = (
+            f"tie at {votes}/{len(tail)} between {tied} — larger mean silhouette wins ({best:.1f})"
+        )
     else:
         reason = f"majority {votes}/{len(tail)}"
     vote = SubjectVote(float(best), votes, len(tail), votes == len(tail), verdicts, reason)

@@ -315,3 +315,52 @@ live (`using_api_key: True`, `auth_status: ok`, control call returned a
 balance with the session hidden). What remained open until now was whether the
 OLD key had been revoked at the provider, which is dashboard state I cannot
 observe. It has been.
+
+---
+
+## Q — `EDGE_FRACTION` calibration (Part 20 §2, filed 2026-09-20)
+
+**Filed, not tuned.** `EDGE_FRACTION = 0.70` stays at its current value.
+
+**The measurement it would be tuned against, on one clip.** UFC-05, two
+independently anchored windows:
+
+| window | finish frame | absolute |
+|---|---|---|
+| 24.75 | 22 | 25.483 s |
+| 25.05 | 12 | 25.450 s |
+| | archive | 25.333 s |
+
+Spread **0.033 s** (gate 0.20) — the pick is window-invariant. It sits
+**+0.117 s** (3.5 frames at 30 fps) after the archive's hand-marked finish.
+
+**Why this is a calibration and not a defect.** The +0.117 s is one number from
+one clip against one hand-marked reference, and the reference itself was
+measured over frames 1–25 only. Moving a threshold to close a 3.5-frame gap on
+a single sample fits the sample, and the whole arc of this work has been
+learning what that costs.
+
+**The gate for doing it:** five clips per sport with hand-marked finishes.
+Then sweep `EDGE_FRACTION` against all of them, publish both columns with
+pass/miss, and take the value that minimises spread ACROSS clips — not the one
+that hits any single archive. If the residual is a consistent sign and
+magnitude across all five, it is a lag to subtract, not a fraction to tune.
+
+**Do not tune it before that.** Related: the level shift's own +0.317 s lag is
+recorded on `ONSET_MODE_LEVEL` and left visible for the same reason.
+
+## Q — the anchor ranks crowd reactions, not shots (Part 20 §1, filed 2026-09-20)
+
+`level_shift_anchors` returns the top-2 sustained level rises. On the UFC-05
+60 s span the rises rank 9.25 (+0.0874), 13.20 (+0.0679), **25.65 (+0.0572 —
+the archive's finish)**, 59.45, 16.50. With k=2 the archive's moment is **not
+reachable**, and the plan correctly returns `finish_unresolved` with the anchors
+listed rather than a finish from the wrong event.
+
+Two anchors cover a clip that is a highlight of one or two moments. For a long
+multi-event clip the **fetcher's own highlight timestamp** should seed the
+anchor search. A clip needing more than two anchors is not a highlight, and
+raising k is not the fix — each surviving anchor costs a full vote.
+
+**Open:** does `TrendingVideoFetcher` carry a per-clip highlight timestamp we
+can use as a seed? If not, what is the cheapest signal that scopes the search?

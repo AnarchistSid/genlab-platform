@@ -38,7 +38,7 @@ from genlab_core.action.subject import choose_subject, garment_groups
 
 logger = logging.getLogger(__name__)
 
-SCENE_THRESHOLD = 0.4        # ffmpeg scene score that counts as a hard cut
+SCENE_THRESHOLD = 0.4  # ffmpeg scene score that counts as a hard cut
 # The finisher's share of the GARMENT visible in the foreground, not of the raw
 # foreground. Measured on real frames, a garment component runs 3.6-13.0% of the
 # foreground silhouette -- a person's trunks are a small part of their body -- so
@@ -49,8 +49,8 @@ SCENE_THRESHOLD = 0.4        # ffmpeg scene score that counts as a hard cut
 # denominator, but the two bodies are one merged component -- which is the whole
 # reason identity is derived from hue in the first place.
 MIN_SUBJECT_FRAC = 0.20
-MIN_SUBJECT_FRAMES = 0.80    # ...on this share of sampled frames
-IDENTITY_SAMPLES = 8         # frames sampled per window for the identity test
+MIN_SUBJECT_FRAMES = 0.80  # ...on this share of sampled frames
+IDENTITY_SAMPLES = 8  # frames sampled per window for the identity test
 
 
 @dataclass(frozen=True)
@@ -65,10 +65,12 @@ class WindowScore:
 
     def row(self) -> str:
         hue = "--" if self.subject_hue is None else f"{self.subject_hue:5.1f}"
-        return (f"  t={self.start_s:7.2f}s  motion={self.motion:6.2f}  "
-                f"cuts={self.cuts:2d}  subject_hue={hue}  "
-                f"held={self.subject_frames_frac * 100:5.1f}%  "
-                f"{'ELIGIBLE' if self.eligible else self.reason}")
+        return (
+            f"  t={self.start_s:7.2f}s  motion={self.motion:6.2f}  "
+            f"cuts={self.cuts:2d}  subject_hue={hue}  "
+            f"held={self.subject_frames_frac * 100:5.1f}%  "
+            f"{'ELIGIBLE' if self.eligible else self.reason}"
+        )
 
 
 # NOTE ON FFMPEG VERBOSITY, measured 2026-09-17: `-v error` SILENCES
@@ -79,9 +81,22 @@ class WindowScore:
 def cut_times(path: str, threshold: float = SCENE_THRESHOLD) -> list[float]:
     """Timestamps of hard cuts, via ffmpeg scene detection."""
     r = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-nostats", "-i", path, "-vf",
-         f"select='gt(scene,{threshold})',metadata=print:file=-", "-an", "-f", "null", "-"],
-        capture_output=True, text=True)
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-i",
+            path,
+            "-vf",
+            f"select='gt(scene,{threshold})',metadata=print:file=-",
+            "-an",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+    )
     out = []
     for line in (r.stdout or "").splitlines():
         if "pts_time:" in line:
@@ -94,8 +109,19 @@ def cut_times(path: str, threshold: float = SCENE_THRESHOLD) -> list[float]:
 
 def duration_s(path: str) -> float:
     r = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-of", "default=nw=1:nk=1", path], capture_output=True, text=True)
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=nw=1:nk=1",
+            path,
+        ],
+        capture_output=True,
+        text=True,
+    )
     return float((r.stdout or "0").strip() or 0.0)
 
 
@@ -109,9 +135,22 @@ def motion_profile(path: str) -> tuple[list[float], float]:
     from the real duration instead of assuming one.
     """
     r = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-nostats", "-i", path, "-vf",
-         "signalstats,metadata=print:key=lavfi.signalstats.YDIF", "-an", "-f", "null", "-"],
-        capture_output=True, text=True)
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-i",
+            path,
+            "-vf",
+            "signalstats,metadata=print:key=lavfi.signalstats.YDIF",
+            "-an",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+    )
     vals = [float(x.split("=")[1]) for x in (r.stderr or "").splitlines() if "YDIF=" in x]
     if not vals:
         raise RuntimeError("no YDIF samples — motion profile unmeasurable")
@@ -132,16 +171,22 @@ def _subject_hold(rgbs, fgs) -> tuple[float | None, float]:
         if not groups:
             continue
         garment_total = float(sum(g["body_px"] for g in groups)) or 1.0
-        mine = [g for g in groups
-                if abs((g["hue"] - subj.hue_deg + 180) % 360 - 180) <= 45]
+        mine = [g for g in groups if abs((g["hue"] - subj.hue_deg + 180) % 360 - 180) <= 45]
         if mine and max(g["body_px"] for g in mine) / garment_total >= MIN_SUBJECT_FRAC:
             held += 1
     return subj.hue_deg, held / max(len(rgbs), 1)
 
 
-def scan(path: str, frame_fn: Callable, matte_fn: Callable, *,
-         duration_s: float = 3.2, stride_s: float = 1.0,
-         skip_s: float = 30.0, top_n: int = 12) -> list[WindowScore]:
+def scan(
+    path: str,
+    frame_fn: Callable,
+    matte_fn: Callable,
+    *,
+    duration_s: float = 3.2,
+    stride_s: float = 1.0,
+    skip_s: float = 30.0,
+    top_n: int = 12,
+) -> list[WindowScore]:
     """Score every candidate window in the clip. Returns them ranked.
 
     ``frame_fn(path, t) -> rgb`` and ``matte_fn(rgb) -> float mask`` are injected
@@ -150,8 +195,13 @@ def scan(path: str, frame_fn: Callable, matte_fn: Callable, *,
     vals, total = motion_profile(path)
     cuts = cut_times(path)
     fps_est = len(vals) / max(total, 1e-6)
-    logger.info("[window] %.1fs clip, %d motion samples (%.1f fps), %d cuts",
-                total, len(vals), fps_est, len(cuts))
+    logger.info(
+        "[window] %.1fs clip, %d motion samples (%.1f fps), %d cuts",
+        total,
+        len(vals),
+        fps_est,
+        len(cuts),
+    )
 
     starts = np.arange(skip_s, max(total - duration_s - skip_s, skip_s + 1), stride_s)
     rough: list[tuple[float, float, int]] = []
@@ -164,8 +214,12 @@ def scan(path: str, frame_fn: Callable, matte_fn: Callable, *,
         rough.append((float(s), float(np.mean(seg)), n_cuts))
 
     clean = [r for r in rough if r[2] == 0]
-    logger.info("[window] %d windows, %d with zero cuts; testing identity on the "
-                "top %d by motion", len(rough), len(clean), top_n)
+    logger.info(
+        "[window] %d windows, %d with zero cuts; testing identity on the top %d by motion",
+        len(rough),
+        len(clean),
+        top_n,
+    )
     clean.sort(key=lambda r: -r[1])
 
     scored: list[WindowScore] = []
@@ -177,14 +231,23 @@ def scan(path: str, frame_fn: Callable, matte_fn: Callable, *,
         if hue is None:
             reason = "no subject on the last frame"
         elif frac < MIN_SUBJECT_FRAMES:
-            reason = (f"subject holds only {frac * 100:.0f}% of frames "
-                      f"(want {MIN_SUBJECT_FRAMES * 100:.0f}%)")
+            reason = (
+                f"subject holds only {frac * 100:.0f}% of frames "
+                f"(want {MIN_SUBJECT_FRAMES * 100:.0f}%)"
+            )
         else:
             reason = ""
-        scored.append(WindowScore(start_s=s, motion=mot, cuts=n_cuts,
-                                  subject_hue=hue, subject_frames_frac=frac,
-                                  eligible=bool(hue is not None and frac >= MIN_SUBJECT_FRAMES),
-                                  reason=reason))
+        scored.append(
+            WindowScore(
+                start_s=s,
+                motion=mot,
+                cuts=n_cuts,
+                subject_hue=hue,
+                subject_frames_frac=frac,
+                eligible=bool(hue is not None and frac >= MIN_SUBJECT_FRAMES),
+                reason=reason,
+            )
+        )
     scored.sort(key=lambda w: (not w.eligible, -w.subject_frames_frac, -w.motion))
     return scored
 
@@ -214,7 +277,11 @@ def finish_frame(opponent_centroid_y: list[float], frame_indices: list[int]) -> 
     sm = np.convolve(np.pad(y, (k // 2, k // 2), mode="edge"), np.ones(k) / k, "valid")
     grad = np.diff(sm)
     i = int(np.argmax(grad))
-    logger.info("[finish] steepest opponent descent %+.3f between frames %d and %d "
-                "-> finish frame %d", float(grad[i]), frame_indices[i],
-                frame_indices[i + 1], frame_indices[i])
+    logger.info(
+        "[finish] steepest opponent descent %+.3f between frames %d and %d -> finish frame %d",
+        float(grad[i]),
+        frame_indices[i],
+        frame_indices[i + 1],
+        frame_indices[i],
+    )
     return frame_indices[i]

@@ -61,7 +61,7 @@ class LocalTransport:
         out = self.root / ("done" if ok else "failed") / f"{job_id}.json"
         tmp = out.with_name(f".{out.name}.tmp")
         tmp.write_text(json.dumps(payload))
-        tmp.rename(out)                      # the waiter must never read a partial
+        tmp.rename(out)  # the waiter must never read a partial
         running = self.root / "running" / f"{job_id}.json"
         if running.exists():
             running.unlink()
@@ -89,8 +89,7 @@ class SSHTransport:
         self.ssh = ("ssh", *ssh_opts, host)
 
     def _run(self, cmd: str, timeout: int = 60) -> subprocess.CompletedProcess:
-        return subprocess.run([*self.ssh, cmd], capture_output=True, text=True,
-                              timeout=timeout)
+        return subprocess.run([*self.ssh, cmd], capture_output=True, text=True, timeout=timeout)
 
     def list_queued(self) -> list[str]:
         r = self._run(f"ls -1 {shlex.quote(self.root)}/queued/*.json 2>/dev/null || true")
@@ -99,8 +98,9 @@ class SSHTransport:
     def claim(self, name: str) -> dict | None:
         q = f"{self.root}/queued/{name}"
         run = f"{self.root}/running/{name}"
-        r = self._run(f"mv {shlex.quote(q)} {shlex.quote(run)} 2>/dev/null "
-                      f"&& cat {shlex.quote(run)}")
+        r = self._run(
+            f"mv {shlex.quote(q)} {shlex.quote(run)} 2>/dev/null && cat {shlex.quote(run)}"
+        )
         if r.returncode != 0 or not r.stdout.strip():
             return None
         try:
@@ -112,22 +112,35 @@ class SSHTransport:
         sub = "done" if ok else "failed"
         blob = shlex.quote(json.dumps(payload))
         dest = f"{self.root}/{sub}/{job_id}.json"
-        self._run(f"printf '%s' {blob} > {shlex.quote(dest)}.tmp "
-                  f"&& mv {shlex.quote(dest)}.tmp {shlex.quote(dest)} "
-                  f"&& rm -f {shlex.quote(self.root)}/running/{job_id}.json")
+        self._run(
+            f"printf '%s' {blob} > {shlex.quote(dest)}.tmp "
+            f"&& mv {shlex.quote(dest)}.tmp {shlex.quote(dest)} "
+            f"&& rm -f {shlex.quote(self.root)}/running/{job_id}.json"
+        )
 
     def heartbeat(self) -> None:
-        self._run(f"mkdir -p {shlex.quote(self.root)} && "
-                  f"date +%s > {shlex.quote(self.root)}/worker.heartbeat", timeout=30)
+        self._run(
+            f"mkdir -p {shlex.quote(self.root)} && "
+            f"date +%s > {shlex.quote(self.root)}/worker.heartbeat",
+            timeout=30,
+        )
 
     def fetch(self, remote: str, local: Path) -> bool:
         local.parent.mkdir(parents=True, exist_ok=True)
-        r = subprocess.run(["scp", "-q", "-r", f"{self.host}:{remote}", str(local)],
-                           capture_output=True, text=True, timeout=900)
+        r = subprocess.run(
+            ["scp", "-q", "-r", f"{self.host}:{remote}", str(local)],
+            capture_output=True,
+            text=True,
+            timeout=900,
+        )
         return r.returncode == 0
 
     def push(self, local: Path, remote: str) -> bool:
         self._run(f"mkdir -p {shlex.quote(str(Path(remote).parent))}")
-        r = subprocess.run(["scp", "-q", "-r", str(local), f"{self.host}:{remote}"],
-                           capture_output=True, text=True, timeout=900)
+        r = subprocess.run(
+            ["scp", "-q", "-r", str(local), f"{self.host}:{remote}"],
+            capture_output=True,
+            text=True,
+            timeout=900,
+        )
         return r.returncode == 0
