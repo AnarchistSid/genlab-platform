@@ -378,3 +378,71 @@ class TestRulesOrdering:
         )
         assert r.ok is False
         assert r.reason == "hook_title_truncation"
+
+
+class TestRule3TitleFunctionWords:
+    """Rule 3 must not read a Title Case function word as a verb.
+
+    ``_has_verb_signal`` treated any lowercase-initial token as evidence
+    of a verb, on the stated premise that "genuine title-only hooks are
+    ALL Title Case". That premise is false: Title Case lowercases short
+    prepositions and articles, so ``League of Legends`` scored a verb
+    signal on the word ``of`` and sailed through the bare-title rule.
+
+    Every hook below is a real production hook that reached a render.
+    """
+
+    REAL_BARE_TITLES = [
+        "League of Legends",
+        "World of Warcraft",
+        "Escape from Tarkov",
+        "Dark and Darker",
+        "GPT-6 Astra with Tom Krcha",
+        "East of Eden | Official Trailer | Netflix",
+    ]
+
+    @pytest.mark.parametrize("hook", REAL_BARE_TITLES)
+    def test_bare_title_with_function_word_rejects(self, hook):
+        r = check_pre_render_quality(hook, niche_id="gaming")
+        assert r.ok is False
+        assert r.reason == "hook_bare_title", f"{hook!r} -> {r.reason}"
+
+    # Real hooks that were approved or published. A function word in the
+    # hook must not by itself cause a rejection — these carry actual verbs.
+    REAL_GOOD_HOOKS = [
+        "Steel Ball Run's 1st stage left us DESTROYED",
+        "Why Duolingo is invading Brawl Stars right now",
+        "190 Plant enemies in one roguelike is unhinged",
+        "Hitsugaya vs someone who makes him look like a child",
+        "Scalpers finally getting ratio'd into oblivion",
+        "Trails in the Sky hit 8,884 players today",
+        "She has weeks to live and one chance at marriage",
+    ]
+
+    @pytest.mark.parametrize("hook", REAL_GOOD_HOOKS)
+    def test_real_hooks_still_pass(self, hook):
+        r = check_pre_render_quality(hook, niche_id="anime")
+        assert r.ok is True, f"{hook!r} wrongly rejected as {r.reason}"
+
+    def test_lowercase_verb_still_signals(self):
+        """The exclusion is scoped to function words, not to lowercase."""
+        r = check_pre_render_quality("Elden Ring destroyed my weekend", niche_id="gaming")
+        assert r.ok is True
+
+    def test_short_bare_title_is_reported_as_truncation_first(self):
+        """``Path of Exile`` is 13 chars, so rule 2 wins before rule 3.
+
+        Documented ordering: a hook that is both short and bare-title is
+        almost certainly a truncation bug, and the length is the more
+        useful thing to tell the operator. Pinned so the ordering is not
+        "fixed" into reporting the stylistic reason instead.
+        """
+        r = check_pre_render_quality("Path of Exile", niche_id="gaming")
+        assert r.ok is False
+        assert r.reason == "hook_too_short"
+
+    def test_function_word_alone_is_not_a_verb(self):
+        from genlab_core.rendering.pre_render_quality import _has_verb_signal
+
+        assert _has_verb_signal("Legends of Tomorrow") is False
+        assert _has_verb_signal("Legends of Tomorrow aired") is True

@@ -172,6 +172,50 @@ _VERB_TOKENS: frozenset[str] = frozenset(
 _MIN_HOOK_LENGTH = 15
 
 
+# Title Case lowercases short function words, so a lowercase-initial
+# token does NOT imply "not a title". That wrong premise ("genuine
+# title-only hooks are ALL Title Case", below) is what let these ship:
+#
+#   "League of Legends"        -> verb signal on "of"
+#   "World of Warcraft"        -> verb signal on "of"
+#   "Escape from Tarkov"       -> verb signal on "from"
+#   "Path of Exile"            -> verb signal on "of"
+#   "East of Eden | Official Trailer | Netflix"
+#
+# Measured over 120 days of prod hooks: excluding these words rejects
+# 54 more hooks, of which 44 were already ARCHIVED and only 8 ever
+# rendered — about one per 15 days across all five niches, every one a
+# bare title. Cheap correctness, not a new restriction.
+_TITLE_FUNCTION_WORDS: frozenset[str] = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "of",
+        "in",
+        "on",
+        "at",
+        "to",
+        "for",
+        "and",
+        "or",
+        "nor",
+        "but",
+        "vs",
+        "with",
+        "from",
+        "by",
+        "into",
+        "onto",
+        "over",
+        "per",
+        "via",
+    }
+)
+
+
+
+
 def _is_title_verbatim(hook: str, title: str) -> bool:
     """True if the hook is EXACTLY the title (case-insensitive, whitespace-stripped).
 
@@ -253,9 +297,11 @@ def _has_verb_signal(text: str) -> bool:
 
       1. Any token ends in a verb-ish suffix (-s, -ed, -ing, 's, etc.)
       2. Any token matches a known copula / modal / imperative
-      3. Any token starts with lowercase (implies non-title-case, which
-         usually means a verb or preposition — genuine title-only hooks
-         are ALL Title Case)
+      3. Any token starts with lowercase AND is not a title function
+         word ("of", "the", "from", ...). Title Case lowercases those,
+         so they carry no evidence either way — before 2026-09-21 this
+         rule read "genuine title-only hooks are ALL Title Case", which
+         is false and let "League of Legends" score a verb on "of".
 
     A single positive signal → verb present. Returns True iff verb
     signal found. Bare-title hooks like "Grand Theft Auto V" score 0.
@@ -272,9 +318,10 @@ def _has_verb_signal(text: str) -> bool:
         if not clean:
             continue
 
-        if clean[0].islower():
-            # Lowercase-starting token — very likely a verb, preposition,
-            # or article. Title-only hooks capitalise every word.
+        if clean[0].islower() and clean.lower() not in _TITLE_FUNCTION_WORDS:
+            # Lowercase-starting token — likely a verb. Function words
+            # are excluded because Title Case lowercases them, so they
+            # appear in bare titles just as readily as in sentences.
             return True
 
         lower = clean.lower()
