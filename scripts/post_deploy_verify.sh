@@ -315,22 +315,34 @@ fi
 # referenced. A root .env copy is a leak waiting for a `git add -A`.
 STEP="9. Repo root contains only what belongs there"
 note "[verify] $STEP"
+# Repo files, plus the RUNTIME STATE the services legitimately keep beside the
+# checkout on prod: the deployed-version stamp, the Threads token file and its
+# flock sidecar (rule #20), the cookie/session jars the fetchers refresh, the
+# router's persisted state, and gunicorn's control file. These are not clutter
+# and a guard that fails on them fails every prod deploy.
 ROOT_ALLOWED="README.md CLAUDE.md CHANGELOG.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md \
 LICENSE Makefile pyproject.toml uv.lock docker-compose.yml .gitignore .gitattributes \
-.editorconfig .dockerignore .pre-commit-config.yaml .env.example .env"
+.editorconfig .dockerignore .pre-commit-config.yaml .env.example .env \
+.version.env .threads_tokens.json .threads_tokens.lock .reddit_cookies.txt \
+.youtube_cookies.txt .youtube_session.json .conformal_router_state.json gunicorn.ctl"
 ROOT_STRAY=0
 for f in "${GENLAB_ROOT:-/opt/genlab}"/* "${GENLAB_ROOT:-/opt/genlab}"/.*; do
     b="$(basename "$f")"
     [ -d "$f" ] && continue
     [ "$b" = "." ] || [ "$b" = ".." ] && continue
     case " $ROOT_ALLOWED " in *" $b "*) continue ;; esac
-    note "  [ x ] stray at repo root: $b"
+    case "$b" in
+        .env.bak*|.env.backup*)
+            note "  [ x ] SECRET COPY at repo root: $b ($(stat -c %a "$f" 2>/dev/null))"
+            ;;
+        *) note "  [ x ] stray at repo root: $b" ;;
+    esac
     ROOT_STRAY=$((ROOT_STRAY + 1))
 done
 if [ "$ROOT_STRAY" -eq 0 ]; then
     note "  [ ✓ ] repo root clean"
 else
-    fail "repo root has $ROOT_STRAY stray file(s) — screenshots go to .audit/screenshots/<date>/"
+    fail "repo root has $ROOT_STRAY stray file(s) — env backups belong in .backups/env/ at 600, screenshots in .audit/screenshots/<date>/"
 fi
 
 note ""
