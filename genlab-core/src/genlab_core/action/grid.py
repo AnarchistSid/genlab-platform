@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 import subprocess
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import numpy as np
 
@@ -65,6 +66,14 @@ class BeatGrid:
     def is_integer_frame(self, fps: float, tol: float = 1e-6) -> bool:
         p = self.period_frames(fps)
         return abs(p - round(p)) < tol
+
+
+class BeatFit(NamedTuple):
+    """A tempo fit. ``(score, phase)`` — two floats in opposite units, which is
+    the shape that bound a duration to `fps` in craft_render (Part 30 §1)."""
+
+    score: float
+    phase: float
 
 
 def _decode_mono(path: str, sr: int) -> np.ndarray:
@@ -104,23 +113,23 @@ def detect_grid(
     if not len(flux):
         raise ValueError(f"no onset envelope from {path}")
 
-    def fit(bpm: float) -> tuple[float, float]:
+    def fit(bpm: float) -> BeatFit:
         step = (60.0 / bpm) * fps_env
-        best = (-1e9, 0.0)
+        best = BeatFit(score=-1e9, phase=0.0)
         for ph in np.arange(0, step, 0.2):
             idx = np.round(np.arange(ph, len(flux) - 1, step)).astype(int)
             v = float(flux[idx].mean())
-            if v > best[0]:
-                best = (v, float(ph))
+            if v > best.score:
+                best = BeatFit(score=v, phase=float(ph))
         return best
 
-    score, bpm = max((fit(b)[0], b) for b in np.arange(lo_bpm, hi_bpm + 0.01, 0.25))
+    score, bpm = max((fit(b).score, b) for b in np.arange(lo_bpm, hi_bpm + 0.01, 0.25))
     for alt in (bpm / 2, bpm * 2):
-        if lo_bpm <= alt <= hi_bpm and fit(alt)[0] > score * OCTAVE_MARGIN:
-            score, bpm = fit(alt)[0], alt
+        if lo_bpm <= alt <= hi_bpm and fit(alt).score > score * OCTAVE_MARGIN:
+            score, bpm = fit(alt).score, alt
             logger.info("octave check moved the tempo to %.2f BPM", bpm)
 
-    _, phase = fit(bpm)
+    phase = fit(bpm).phase
     step = (60.0 / bpm) * fps_env
     idx = np.arange(phase, len(flux) - 1, step)
     return BeatGrid(

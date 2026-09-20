@@ -32,6 +32,7 @@ from __future__ import annotations
 import logging
 import subprocess
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import numpy as np
 
@@ -256,12 +257,20 @@ def _centroid(mask: np.ndarray) -> tuple[float, float] | None:
     return float(xs.mean()), float(ys.mean())
 
 
-def audio_bound(audio_frame: int, fps: float) -> tuple[int, int]:
+class Bracket(NamedTuple):
+    """A frame bracket. Named because ``lo, hi`` swapped is an empty range that
+    reads as "no candidates" rather than as an error (Part 30 §1)."""
+
+    lo: int
+    hi: int
+
+
+def audio_bound(audio_frame: int, fps: float) -> Bracket:
     """The bracket the video picks inside. Asymmetric: the strike precedes the
     crowd's reaction and never follows it."""
-    return (
-        int(round(audio_frame - BOUND_BEFORE_S * fps)),
-        int(round(audio_frame + BOUND_AFTER_S * fps)),
+    return Bracket(
+        lo=int(round(audio_frame - BOUND_BEFORE_S * fps)),
+        hi=int(round(audio_frame + BOUND_AFTER_S * fps)),
     )
 
 

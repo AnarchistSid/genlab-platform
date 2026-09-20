@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -62,9 +63,19 @@ def kit_value(kit: dict, name: str, default=None):
 # ───────────────────────────── grading ──────────────────────────────────────
 
 
+class WorldMultipliers(NamedTuple):
+    """The two grade multipliers. Named because both are floats in the same
+    unit and swapping them inverts the whole look — a bright world and a dim
+    subject is precisely the thing `dim the world, light the subject` forbids
+    (Part 30 §1)."""
+
+    world: float
+    subject: float
+
+
 def solve_world_multipliers(
     frame: np.ndarray, matte: np.ndarray, kit: dict, *, iterations: int = 12
-) -> tuple[float, float]:
+) -> WorldMultipliers:
     """Solve (world_luma, subject_luma) for THIS source against the kit targets.
 
     Not a constant: UFC's ungraded corner luma is 84.5 against the reference's
@@ -91,7 +102,7 @@ def solve_world_multipliers(
             break
         wl *= want_world / max(got_world, 1e-6)
         sl *= want_subj / max(got_subj, 1e-6)
-    return float(wl), float(sl)
+    return WorldMultipliers(world=float(wl), subject=float(sl))
 
 
 def grade_world(
