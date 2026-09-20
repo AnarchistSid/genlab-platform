@@ -50,6 +50,23 @@ def _stub_client(blueprints: list[dict]) -> MagicMock:
 # ── Safety: default is no-op ──────────────────────────────────────────────
 
 
+@pytest.fixture(autouse=True)
+def _stub_durable_copy(monkeypatch):
+    """These tests are about the GATE, not the media store.
+
+    The accept path now copies a blueprint's reel into the durable store before
+    approving, and refuses to approve when there is nothing to copy — which is
+    correct, and which every fixture here trips, because they describe
+    blueprints with no `visual_paths` at all. Stub the copy so the gate logic is
+    what is under test. The store's own contract is pinned in
+    tests/publishing/test_durable_media.py, against real files.
+    """
+    monkeypatch.setattr(
+        "genlab_core.publishing.durable_media.copy_for_schedule",
+        lambda rid, fields, root=None: ["/durable/stub.mp4"],
+    )
+
+
 class TestSafetyDefaults:
     def test_disabled_policy_skips_everything_no_db_touch(self, monkeypatch):
         """The headline safety invariant: if the operator hasn't flipped
@@ -408,8 +425,7 @@ class TestPolicyLoading:
         # GENLAB_AUTO_APPROVE_DISABLED=1, kill_switch file.
         if policy.enabled:
             assert policy.rollout_pct is not None, (
-                "BlackboxBrief publishing.yaml has enabled=true but no "
-                "rollout_pct set."
+                "BlackboxBrief publishing.yaml has enabled=true but no rollout_pct set."
             )
             assert 0.0 < policy.rollout_pct <= 1.0, (
                 f"BlackboxBrief publishing.yaml has rollout_pct="
@@ -1161,19 +1177,16 @@ class TestCliExitCodeRule26:
 
     def test_zero_errors_returns_0(self, monkeypatch, capsys):
         """Happy path: clean run exits 0."""
-        from genlab_core.scheduling import auto_approver as m
-
         # NICHE_DIR_NAMES is lazy-imported inside _cli — patch at the
         # source module (pattern from tests/pipeline test suite)
         import sys
 
         from genlab_core.pipeline import cli as pipeline_cli
+        from genlab_core.scheduling import auto_approver as m
 
         monkeypatch.setattr(pipeline_cli, "NICHE_DIR_NAMES", {"gaming": "CriticalRush"})
         monkeypatch.setattr(sys, "argv", ["auto_approver", "--niche", "gaming"])
-        monkeypatch.setattr(
-            m, "run_pass", lambda nid, dry_run=False: self._stub_run_pass_result()
-        )
+        monkeypatch.setattr(m, "run_pass", lambda nid, dry_run=False: self._stub_run_pass_result())
         assert m._cli() == 0
 
     def test_per_blueprint_errors_still_returns_0(self, monkeypatch, capsys, caplog):
@@ -1183,12 +1196,10 @@ class TestCliExitCodeRule26:
         so systemd doesn't fire OnFailure. WARN log carries the signal
         for operator visibility."""
         import logging
-
-        from genlab_core.scheduling import auto_approver as m
-
         import sys
 
         from genlab_core.pipeline import cli as pipeline_cli
+        from genlab_core.scheduling import auto_approver as m
 
         monkeypatch.setattr(pipeline_cli, "NICHE_DIR_NAMES", {"anime": "FrameDrift"})
         monkeypatch.setattr(sys, "argv", ["auto_approver", "--niche", "anime"])
@@ -1214,20 +1225,18 @@ class TestCliExitCodeRule26:
             "WARN log must fire when errors > 0 so operator sees the "
             "signal via journalctl even though the exit code is 0."
         )
-        assert any(
-            "anime" in r.message and "error" in r.message.lower() for r in warn_records
-        ), "WARN log must name the niche + error count"
+        assert any("anime" in r.message and "error" in r.message.lower() for r in warn_records), (
+            "WARN log must name the niche + error count"
+        )
 
     def test_multiple_niches_with_mixed_errors_still_returns_0(self, monkeypatch, caplog):
         """Rule #26 multi-niche: even if ALL niches have errors, exit 0.
         WARN log per niche + summary at end."""
         import logging
-
-        from genlab_core.scheduling import auto_approver as m
-
         import sys
 
         from genlab_core.pipeline import cli as pipeline_cli
+        from genlab_core.scheduling import auto_approver as m
 
         monkeypatch.setattr(
             pipeline_cli,
@@ -1258,13 +1267,12 @@ class TestCliExitCodeRule26:
         unhandled exception (infrastructure failure), the exception
         should propagate so Python's default handler exits non-zero.
         This IS a real infra failure and SHOULD alert."""
-        from genlab_core.scheduling import auto_approver as m
-
         # NICHE_DIR_NAMES is lazy-imported inside _cli — patch at the
         # source module (pattern from tests/pipeline test suite)
         import sys
 
         from genlab_core.pipeline import cli as pipeline_cli
+        from genlab_core.scheduling import auto_approver as m
 
         monkeypatch.setattr(pipeline_cli, "NICHE_DIR_NAMES", {"gaming": "CriticalRush"})
         monkeypatch.setattr(sys, "argv", ["auto_approver", "--niche", "gaming"])

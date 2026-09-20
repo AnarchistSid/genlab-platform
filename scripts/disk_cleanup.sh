@@ -221,9 +221,19 @@ log "complete — disk after: ${free_gb_after} GB free (freed: ${freed_gb} GB th
 # venv (2.5 GB, irreducible). Printing them every run means the NEXT 97% names
 # its own cause in the log rather than needing to be traced.
 log "top consumers:"
-for d in /opt/genlab/.tmp/runs /opt/genlab/.backups /home/gh-runner/actions-runner/_work /opt/genlab/.venv /var/log; do
+for d in /opt/genlab/.tmp/runs /opt/genlab/.backups /home/gh-runner/actions-runner/_work /opt/genlab/.venv /opt/genlab/.media/scheduled /var/log; do
     [ -e "$d" ] && log "  $(du -sh "$d" 2>/dev/null | cut -f1)  $d"
 done
+
+# .media/scheduled holds one reel per QUEUED blueprint, so it is bounded by the
+# schedule horizon and the daily cap: ~5 niches x 7 days x ~8 MB. 223 MB when it
+# was created. It exists because run dirs prune to keep-3 while the queue
+# schedules a week out, and 28 approved reels were living on the shorter clock.
+# A directory with no live scheduled blueprint is an ORPHAN -- a publish or
+# archive that did not release. Counted here so the leak is visible before it
+# is a disk finding.
+_media=$(find /opt/genlab/.media/scheduled -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+log "  scheduled-media directories: ${_media}"
 # The runs dir has a stated policy; say when it has drifted from it rather than
 # leaving the count to be noticed.
 _runs=$(find /opt/genlab/.tmp/runs -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)

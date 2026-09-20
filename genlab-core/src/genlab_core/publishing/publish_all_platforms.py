@@ -596,6 +596,10 @@ def run_publish(
                 exc,
                 exc_info=True,
             )
+        from genlab_core.publishing.durable_media import release
+
+        release(record_id)
+
         # ARCHIVED, NOT FINISHED. This used to `return`, ending the niche's
         # whole run: one dead blueprint cost the channel its slot even though
         # eligible content sat behind it. The caller re-selects.
@@ -647,6 +651,15 @@ def run_publish(
         )
     except Exception as exc:
         logger.error("[publish] Failed to update final status: %s", exc)
+
+    # THE DURABLE COPY HAS DONE ITS JOB. Released once, after the last platform:
+    # the reel is out, or it is not coming out. Either way the store must not
+    # accumulate a week of published reels. Fail-open — a store that cannot be
+    # cleaned must never stop a publish from being recorded.
+    if final_status in ("PUBLISHED", "ARCHIVED"):
+        from genlab_core.publishing.durable_media import release
+
+        release(record_id)
 
     # Push dashboard notification event
     try:

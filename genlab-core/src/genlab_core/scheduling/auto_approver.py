@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import logging
 import os
 from collections.abc import Callable
@@ -312,6 +313,7 @@ def _effective_min_confidence(
         return configured  # already at or below the coldstart floor
     try:
         from genlab_core.scheduling.calibration_logger import stats as cal_stats
+
         s = cal_stats(
             niche_id=niche_id,
             window_days=30,
@@ -321,7 +323,9 @@ def _effective_min_confidence(
     except Exception:  # noqa: BLE001
         logger.warning(
             "[auto_approver] coldstart calibration lookup failed for %s "
-            "— using configured threshold %s", niche_id, configured,
+            "— using configured threshold %s",
+            niche_id,
+            configured,
             exc_info=True,
         )
         return configured
@@ -329,8 +333,11 @@ def _effective_min_confidence(
         logger.info(
             "[auto_approver] %s cold-start: %d < %d outcome samples "
             "→ effective min_conf %.2f (configured %.2f)",
-            niche_id, sample_count, _COLDSTART_MIN_SAMPLES,
-            _COLDSTART_MIN_CONF, configured,
+            niche_id,
+            sample_count,
+            _COLDSTART_MIN_SAMPLES,
+            _COLDSTART_MIN_CONF,
+            configured,
         )
         return _COLDSTART_MIN_CONF
     return configured
@@ -687,8 +694,10 @@ def load_policy(niche_id: str, *, genlab_root: Path | None = None) -> AutoApprov
             from genlab_core.scheduling.ratchet_advancer import (
                 get_state_override_for_niche,
             )
+
             rollout_pct = get_state_override_for_niche(
-                niche_id, yaml_pct=rollout_pct,
+                niche_id,
+                yaml_pct=rollout_pct,
             )
         except Exception:
             pass  # observability wired in ratchet_advancer
@@ -780,6 +789,7 @@ def run_pass(
     # Fail-open per module docstring.
     try:
         from genlab_core.scheduling.ratchet_advancement import log_ratchet_signal
+
         log_ratchet_signal(niche_id)
     except Exception:
         pass  # observability never blocks the pass
@@ -1106,6 +1116,7 @@ def run_pass(
         scheduled_iso = _execute_approval(
             backlog_client=backlog_client,
             record_id=record_id,
+            fields=fields,
             decision=decision,
             niche_id=niche_id,
             result=result,
@@ -1123,9 +1134,8 @@ def run_pass(
             from datetime import datetime as _dt
             from zoneinfo import ZoneInfo as _Z
 
-            _dt_ist = (
-                _dt.fromisoformat(scheduled_iso.replace("Z", "+00:00"))
-                .astimezone(_Z("Asia/Kolkata"))
+            _dt_ist = _dt.fromisoformat(scheduled_iso.replace("Z", "+00:00")).astimezone(
+                _Z("Asia/Kolkata")
             )
             _day_key = _dt_ist.strftime("%Y-%m-%d")
             _in_flight_slot_counts[_day_key] = _in_flight_slot_counts.get(_day_key, 0) + 1
@@ -1139,6 +1149,7 @@ def _execute_approval(
     *,
     backlog_client: Any,
     record_id: str,
+    fields: dict,
     decision: AutoApprovalDecision,
     niche_id: str,
     result: AutoApprovalPassResult,
@@ -1195,7 +1206,39 @@ def _execute_approval(
         result.errors.append(f"no slot available for {record_id}")
         return None
 
+    # APPROVED MEANS DURABLE. The reel's media is copied into the store BEFORE
+    # the status changes, in the same update, because a blueprint approved with
+    # media that only exists in a run directory has a lifespan of three runs --
+    # and the queue schedules a week out. Two blueprints lost theirs that way
+    # and jammed the publisher for three days.
+    #
+    # A copy failure leaves this blueprint unapproved with the reason. Never
+    # approved-anyway: the publisher would select it, find nothing, and archive
+    # a reel someone had reviewed.
+    from genlab_core.publishing.durable_media import MediaCopyError, copy_for_schedule
+
+    durable_paths: list[str] = []
+    copy_refusal = ""
+    try:
+        durable_paths = copy_for_schedule(record_id, fields)
+    except MediaCopyError as exc:
+        # A NAMED REFUSAL, not a crash. Like "no slot available", this is a
+        # business condition with nothing to traceback: the media is gone, so
+        # the blueprint must not be approved. The append lives outside the
+        # except for exactly that reason.
+        copy_refusal = str(exc)
+    if copy_refusal:
+        logger.warning(
+            "[auto_approver] niche=%s bp=%s — NOT approving: media_copy_failed:%s",
+            niche_id,
+            record_id,
+            copy_refusal,
+        )
+        result.errors.append(f"media_copy_failed:{copy_refusal} for {record_id}")
+        return None
+
     update_fields = {
+        "visual_paths": json.dumps(durable_paths),
         "action_taken": "approved",
         "reviewed_at": datetime.now(UTC).isoformat(),
         "scheduled_for": scheduled_for,
