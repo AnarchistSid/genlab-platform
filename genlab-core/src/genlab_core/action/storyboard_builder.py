@@ -94,16 +94,38 @@ def window_candidates(cuts_s, duration_s, motion_at, *, n=MAX_CANDIDATES):
     window containing a cut is discarded outright rather than penalised — a cut
     inside the window is a different shot, and SAM2 walks from one fighter to
     the other across it.
+
+    Returns ``[{"start_s", "motion_score"}, ...]``, highest motion first. The
+    SCORE TRAVELS WITH THE WINDOW. It used to be computed here, used to sort,
+    and then discarded -- so the worker, which ranks candidates by motion before
+    the vote, had nothing to rank by. Filling that gap by hand is how three
+    invented scores excluded the archive's own window from a verification run
+    and produced a false area-band failure.
     """
     out = []
     start = 0.0
     while start + WINDOW_S <= duration_s:
         end = start + WINDOW_S
         if not any(start < c < end for c in cuts_s):
-            out.append((motion_at(start), round(start, 3)))
+            out.append((float(motion_at(start)), round(start, 3)))
         start += 0.4
     out.sort(reverse=True)
-    return [s for _, s in out[:n]]
+    return [{"start_s": s, "motion_score": m} for m, s in out[:n]]
+
+
+def _candidate(c) -> dict:
+    """One candidate for the worker. `motion_score` is REQUIRED downstream — the
+    worker refuses a job without it rather than ranking on a default."""
+    if isinstance(c, dict):
+        return {
+            "start_s": float(c["start_s"]),
+            "frames": WINDOW_FRAMES,
+            "motion_score": float(c["motion_score"]),
+        }
+    raise TypeError(
+        f"candidate must carry its measured motion_score, got {c!r}. "
+        "window_candidates() returns these; do not build them by hand."
+    )
 
 
 def build_plan_request(clip_path, candidates, subject_hint, niche_id, blueprint_id, src_h):
@@ -113,7 +135,7 @@ def build_plan_request(clip_path, candidates, subject_hint, niche_id, blueprint_
     return {
         "kind": "plan+matte",
         "clip_path": clip_path,
-        "candidates": [{"start_s": c, "frames": WINDOW_FRAMES} for c in candidates],
+        "candidates": [_candidate(c) for c in candidates],
         "subject_hint": subject_hint,
         "vote_frames": VOTE_FRAMES,
         "vote_floor": VOTE_FLOOR,

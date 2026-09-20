@@ -86,6 +86,11 @@ SUBJECT_DILATE_PX = 6.0
 
 class PlanFailure:
     NO_CANDIDATES = "no_candidates"
+    #: Candidates arrived without the measured motion the ranking needs. The
+    #: builder writes it; anything else is a number someone made up, and three
+    #: made-up scores once excluded the archive's own window from a
+    #: verification run and produced a false area-band failure.
+    UNSCORED = "candidates_unscored"
     VOTE_TOO_SPLIT = "vote_too_split"
     NO_MATTES = "worker_failed"
     #: Fewer than three separable frames. The window is designed to BEGIN at
@@ -190,26 +195,35 @@ def plan(
     results: list[CandidateResult] = []
     tail_silhouettes: dict[int, np.ndarray] = {}
 
+    unscored = [c for c in candidates if c.get("motion_score") is None]
+    if unscored:
+        logger.error(
+            "[plan] %d of %d candidate(s) carry no motion_score — refusing. "
+            "window_candidates() measures it; do not hand-build candidates.",
+            len(unscored),
+            len(candidates),
+        )
+        return PlanResult(
+            reason=PlanFailure.UNSCORED, candidates=results, seconds=round(now() - t0, 1)
+        )
+
     # ONLY THE STRONGEST REACH THE VOTE. The vote is the expensive half — six
     # SAM2 image calls per candidate — and a low-motion window is not an ACTION
     # window whatever its silhouettes say. Candidates carrying no motion score
     # cannot be ranked, so they all go through and the log says so.
-    ranked = sorted(candidates, key=lambda c: -float(c.get("motion") or 0.0))
-    if any(c.get("motion") is not None for c in candidates):
-        skipped = ranked[VOTE_CANDIDATES:]
-        for c in skipped:
-            results.append(
-                CandidateResult(start_s=float(c.get("start_s", 0.0)), reason="not top-2 by motion")
-            )
-        ranked = ranked[:VOTE_CANDIDATES]
-        if skipped:
-            logger.info(
-                "[plan] %d candidate(s) below the top-%d by motion — not voted",
-                len(skipped),
-                VOTE_CANDIDATES,
-            )
-    else:
-        logger.info("[plan] no motion scores on candidates — all %d voted", len(ranked))
+    ranked = sorted(candidates, key=lambda c: -float(c["motion_score"]))
+    skipped = ranked[VOTE_CANDIDATES:]
+    for c in skipped:
+        results.append(
+            CandidateResult(start_s=float(c.get("start_s", 0.0)), reason="not top-2 by motion")
+        )
+    ranked = ranked[:VOTE_CANDIDATES]
+    if skipped:
+        logger.info(
+            "[plan] %d candidate(s) below the top-%d by motion — not voted",
+            len(skipped),
+            VOTE_CANDIDATES,
+        )
 
     sil = half_silhouette_fn or silhouette_fn
     if rss_mb:

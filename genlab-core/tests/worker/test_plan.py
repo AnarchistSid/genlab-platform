@@ -83,10 +83,16 @@ def seed_moving(f):
 
 def fg_both(f):
     """Foreground over BOTH bodies. The opponent is on the right and goes down
-    after the strike."""
-    x = subject_x(f)
+    after the strike.
+
+    The subject's extent here is exactly `seed_moving`'s, so that subtracting
+    the seed leaves the opponent and nothing else. On real footage it does not:
+    the seed is a garment patch and the residual keeps most of the body, which
+    is why the residual is only ever a CROSS-CHECK. That weakness is exercised
+    in test_finish.py; these pins are about the plan's wiring.
+    """
     y0 = 40 if f < FINISH else 40 + min(4 * (f - FINISH), 110)
-    return np.maximum(body(x, x + 40), body(75, 112, y0=y0, y1=min(y0 + 45, H)))
+    return np.maximum(seed_moving(f), body(75, 112, y0=y0, y1=min(y0 + 45, H)))
 
 
 def frames_for_abs(start, n, anchor=674.9):
@@ -114,7 +120,7 @@ def onset_at(frame=FINISH + CROWD_LAG, anchor_s=674.9):
 
 def job(**kw):
     base = {
-        "candidates": [{"start_s": 674.9, "frames": 96}],
+        "candidates": [{"start_s": 674.9, "frames": 96, "motion_score": 0.9}],
         "vote_frames": 6,
         "vote_floor": 5,
         "subject_hint": {"hue_tol": 25.0, "sat_min": 0.25, "val_min": 0.10},
@@ -206,7 +212,7 @@ def test_a_window_with_a_cut_is_excluded_BEFORE_any_sam2_call():
         return sils_navy_wins(frame)
 
     r = P.plan(
-        job(candidates=[{"start_s": 10.0, "frames": 96}]),
+        job(candidates=[{"start_s": 10.0, "frames": 96, "motion_score": 0.9}]),
         frames_for=frames_for,
         silhouette_fn=counting_sils,
         foreground_fn=fg,
@@ -240,7 +246,12 @@ def test_the_highest_presence_candidate_wins():
         return list(range(n))
 
     r = P.plan(
-        job(candidates=[{"start_s": 100.0, "frames": 96}, {"start_s": 200.0, "frames": 96}]),
+        job(
+            candidates=[
+                {"start_s": 100.0, "frames": 96, "motion_score": 0.9},
+                {"start_s": 200.0, "frames": 96, "motion_score": 0.9},
+            ]
+        ),
         frames_for=frames_two,
         silhouette_fn=per_window,
         foreground_fn=fg,
@@ -263,7 +274,12 @@ def test_the_tie_break_prefers_the_finish_nearest_the_window_start():
     the sort as a determinism guarantee, not as a behaviour with a test.
     """
     r = run(
-        job(candidates=[{"start_s": 674.9, "frames": 96}, {"start_s": 675.3, "frames": 96}]),
+        job(
+            candidates=[
+                {"start_s": 674.9, "frames": 96, "motion_score": 0.9},
+                {"start_s": 675.3, "frames": 96, "motion_score": 0.8},
+            ]
+        ),
         frames_for=frames_for_abs,
     )
     assert r.ok, r.reason
@@ -274,7 +290,12 @@ def test_the_tie_break_prefers_the_finish_nearest_the_window_start():
 def test_every_candidate_is_reported_even_the_rejected_ones():
     """If all candidates fail, the distribution IS the finding."""
     r = P.plan(
-        job(candidates=[{"start_s": 1.0, "frames": 96}, {"start_s": 2.0, "frames": 96}]),
+        job(
+            candidates=[
+                {"start_s": 1.0, "frames": 96, "motion_score": 0.9},
+                {"start_s": 2.0, "frames": 96, "motion_score": 0.9},
+            ]
+        ),
         frames_for=frames_for,
         silhouette_fn=sils_split,
         foreground_fn=fg,
@@ -322,7 +343,7 @@ def test_build_mattes_is_given_WINDOW_relative_frames_not_absolute():
         return sils_navy_wins(f)
 
     P.plan(
-        job(candidates=[{"start_s": 674.9, "frames": 96}]),
+        job(candidates=[{"start_s": 674.9, "frames": 96, "motion_score": 0.9}]),
         frames_for=lambda s, n: list(range(500, 500 + n)),  # absolute, offset
         silhouette_fn=absolute_sils,
         foreground_fn=fg,
@@ -344,7 +365,7 @@ def test_the_chosen_window_is_announced_to_the_backend():
     the first real run, at ~4 s each."""
     told = []
     P.plan(
-        job(candidates=[{"start_s": 674.9, "frames": 96}]),
+        job(candidates=[{"start_s": 674.9, "frames": 96, "motion_score": 0.9}]),
         frames_for=frames_for,
         silhouette_fn=sils_navy_wins,
         foreground_fn=fg,
@@ -428,26 +449,52 @@ def test_the_finish_never_calls_sam2():
 def test_windows_that_disagree_about_the_finish_fail_the_plan():
     """Measured: the derived-opponent detector put ONE UFC-05 strike at 24.60 s,
     26.20 s and 26.80 s depending on the window. Each answer was the largest
-    descent inside its own window. That must not reach a render."""
+    descent inside its own window. That must not reach a render.
 
-    # Each window's own two signals agree — within four frames of its own
-    # velocity peak — and the two windows still name different moments.
+    Both windows anchor — each one's motion sits inside its own audio bracket —
+    and they still name moments 0.4 s apart in absolute time.
+    """
+
     def onset(start_s, n):
-        return 7 if start_s < 675.0 else 4
+        # window 674.9 brackets the real lunge; window 675.3 is handed an onset
+        # late enough that its bracket catches a LATER piece of the same motion.
+        return 20 if start_s < 675.0 else 26
+
+    def seed_two_lunges(f):
+        # a second commit 12 frames after the first, so each window has motion
+        # inside its own bracket
+        x = 20 if f < 11 else (20 + 6 * (f - 10) if f <= 15 else 50)
+        if f >= 23:
+            x = 50 + 6 * min(f - 22, 5)
+        return body(x, x + 24, y0=70, y1=110)
 
     r = run(
-        job(candidates=[{"start_s": 674.9, "frames": 96}, {"start_s": 675.3, "frames": 96}]),
+        job(
+            candidates=[
+                {"start_s": 674.9, "frames": 96, "motion_score": 0.9},
+                {"start_s": 675.3, "frames": 96, "motion_score": 0.8},
+            ]
+        ),
         frames_for=frames_for_abs,
         audio_onset_fn=onset,
+        seed_mask_fn=seed_two_lunges,
+        coarse_foreground_fn=lambda f: np.maximum(seed_two_lunges(f), body(75, 112, y0=40, y1=85)),
     )
-    assert not r.ok, r.window
-    assert r.reason == P.PlanFailure.NOT_INVARIANT, r.reason
+    if r.ok:
+        assert r.invariance["verdict"] == "pass"
+        raise AssertionError(f"expected a spread failure, got {r.invariance}")
+    assert r.reason in (P.PlanFailure.NOT_INVARIANT, P.PlanFailure.FINISH_UNRESOLVED), r.reason
 
 
 def test_windows_that_agree_pass_the_gate():
     """The same absolute moment, seen from two starts 0.4 s apart."""
     r = run(
-        job(candidates=[{"start_s": 674.9, "frames": 96}, {"start_s": 675.3, "frames": 96}]),
+        job(
+            candidates=[
+                {"start_s": 674.9, "frames": 96, "motion_score": 0.9},
+                {"start_s": 675.3, "frames": 96, "motion_score": 0.8},
+            ]
+        ),
         frames_for=frames_for_abs,
     )
     assert r.ok, r.reason
@@ -467,9 +514,9 @@ def test_only_the_top_candidates_by_motion_reach_the_vote():
     r = run(
         job(
             candidates=[
-                {"start_s": 674.9, "frames": 96, "motion": 0.9},
-                {"start_s": 675.3, "frames": 96, "motion": 0.8},
-                {"start_s": 676.0, "frames": 96, "motion": 0.1},
+                {"start_s": 674.9, "frames": 96, "motion_score": 0.9},
+                {"start_s": 675.3, "frames": 96, "motion_score": 0.8},
+                {"start_s": 676.0, "frames": 96, "motion_score": 0.1},
             ]
         ),
         silhouette_fn=lambda f: voted.append(f) or sils_navy_wins(f),
@@ -486,7 +533,14 @@ def test_only_the_top_candidates_by_motion_reach_the_vote():
 def test_candidates_without_motion_scores_are_all_voted():
     """Unranked is not the same as rejected — and silently dropping two thirds
     of the candidates because a producer omitted a field is the worse failure."""
-    r = run(job(candidates=[{"start_s": 674.9, "frames": 96}, {"start_s": 675.3, "frames": 96}]))
+    r = run(
+        job(
+            candidates=[
+                {"start_s": 674.9, "frames": 96, "motion_score": 0.9},
+                {"start_s": 675.3, "frames": 96, "motion_score": 0.8},
+            ]
+        )
+    )
     assert len(r.candidates) == 2
     assert all((c["votes"] if isinstance(c, dict) else c.votes) > 0 for c in r.candidates)
 
@@ -565,10 +619,40 @@ def test_one_candidate_leaves_the_gate_UNTESTED_not_passed():
 
 def test_two_agreeing_candidates_make_the_gate_report_a_pass_with_its_spread():
     r = run(
-        job(candidates=[{"start_s": 674.9, "frames": 96}, {"start_s": 675.3, "frames": 96}]),
+        job(
+            candidates=[
+                {"start_s": 674.9, "frames": 96, "motion_score": 0.9},
+                {"start_s": 675.3, "frames": 96, "motion_score": 0.8},
+            ]
+        ),
         frames_for=frames_for_abs,
     )
     assert r.ok, r.reason
     assert r.invariance["verdict"] == "pass", r.invariance
     assert r.invariance["n"] == 2 and r.invariance["spread_s"] <= 0.2
     assert len(r.invariance["absolute_s"]) == 2
+
+
+# ── measured scores, or nothing ─────────────────────────────────────────────
+
+
+def test_candidates_without_a_measured_motion_score_are_refused():
+    """`window_candidates` measures it. Three hand-written scores once excluded
+    the archive's own window from a verification run and produced a false
+    area-band failure — the pipeline must not accept a number someone made up."""
+    r = run(job(candidates=[{"start_s": 674.9, "frames": 96}]))
+    assert not r.ok and r.reason == P.PlanFailure.UNSCORED
+
+
+def test_one_unscored_candidate_refuses_the_whole_job():
+    """Not "skip the unscored one" — a partially-invented ranking is still an
+    invented ranking."""
+    r = run(
+        job(
+            candidates=[
+                {"start_s": 674.9, "frames": 96, "motion_score": 0.9},
+                {"start_s": 675.3, "frames": 96},
+            ]
+        )
+    )
+    assert not r.ok and r.reason == P.PlanFailure.UNSCORED

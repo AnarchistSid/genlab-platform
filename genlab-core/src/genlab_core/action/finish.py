@@ -59,6 +59,13 @@ BOUND_AFTER_S = 0.10
 #: centroid is wherever the few surviving pixels happen to be.
 SEED_AREA_FLOOR = 0.0025
 
+#: THE STRIKE IS THE RISING EDGE, NOT THE PEAK. Velocity keeps climbing into the
+#: follow-through, so the maximum lands after contact -- measured on UFC-05, the
+#: peak sat 6 frames (0.200 s) after the archive's finish, with the archive's
+#: own frame inside the bracket and available. The edge is where the body
+#: commits. First crossing of this share of the bracket's maximum.
+EDGE_FRACTION = 0.70
+
 #: Fewer valid samples than this inside the bracket and the colour heuristic has
 #: not answered; the quarter-res tracker is asked instead.
 MIN_VALID_SAMPLES = 5
@@ -288,13 +295,21 @@ def subject_velocity_peak(
     toward = v if opponent_on_right else -v
     k = min(3, len(toward))
     sm = np.convolve(np.pad(toward, (k // 2, k // 2), mode="edge"), np.ones(k) / k, "valid")
-    j = int(np.argmax(sm))
+
+    peak = float(sm.max())
+    if peak <= 0:
+        logger.warning("[finish] no motion toward the opponent inside the bracket")
+        return None
+    # FIRST CROSSING of the edge threshold, not the argmax.
+    j = int(np.argmax(sm >= EDGE_FRACTION * peak))
     logger.info(
-        "[finish] subject velocity peaks %+.2f px/frame toward the %s at frame %d "
-        "(%d samples in bound)",
-        float(sm[j]),
+        "[finish] velocity rises through %.0f%% of %.2f px/frame toward the %s at frame %d "
+        "(peak at frame %d, %d samples in bound)",
+        EDGE_FRACTION * 100,
+        peak,
         "right" if opponent_on_right else "left",
         idx[j],
+        idx[int(np.argmax(sm))],
         len(kept),
     )
     return idx[j]

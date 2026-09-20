@@ -254,3 +254,42 @@ def test_a_detector_that_returns_the_max_in_what_it_saw_fails_the_gate():
 def test_one_window_cannot_disagree_with_itself():
     assert F.is_window_invariant([25.33])
     assert F.is_window_invariant([])
+
+
+# ── the strike is the rising edge, not the peak ─────────────────────────────
+
+
+def test_the_edge_is_picked_over_a_later_higher_peak():
+    """Velocity keeps climbing into the FOLLOW-THROUGH, so the maximum lands
+    after contact. Measured on UFC-05: the peak sat 6 frames after the archive's
+    finish with the archive's own frame inside the bracket and available."""
+    # commits at 10 (+12/frame), keeps accelerating to a peak at 16 (+34/frame)
+    x = [100.0] * 10
+    for step in (12, 14, 18, 22, 26, 30, 34, 34, 34):
+        x.append(x[-1] + step)
+    sm = F.velocity_samples(masks_from_x(x, h=200, w=900))
+    got = F.subject_velocity_peak(sm, opponent_on_right=True)
+    # the argmax of this profile is the last frame; the edge must be well before
+    assert got is not None
+    assert got <= 13 and got < len(x) - 4, f"{got} — picked the follow-through"
+
+
+def test_the_edge_threshold_is_a_share_of_the_brackets_own_maximum():
+    """Not an absolute px/frame: a slow grapple and a fast strike have different
+    maxima and the same shape."""
+    assert F.EDGE_FRACTION == 0.70
+    slow = [100.0] * 8 + [100.0 + 3 * k for k in range(1, 10)]
+    fast = [100.0] * 8 + [100.0 + 30 * k for k in range(1, 10)]
+    a = F.subject_velocity_peak(
+        F.velocity_samples(masks_from_x(slow, h=200, w=900)), opponent_on_right=True
+    )
+    b = F.subject_velocity_peak(
+        F.velocity_samples(masks_from_x(fast, h=200, w=900)), opponent_on_right=True
+    )
+    assert a == b, (a, b)
+
+
+def test_no_motion_toward_the_opponent_is_none_not_frame_zero():
+    x = [100.0 - i for i in range(20)]  # retreating the whole time
+    sm = F.velocity_samples(masks_from_x(x, h=200, w=900))
+    assert F.subject_velocity_peak(sm, opponent_on_right=True) is None

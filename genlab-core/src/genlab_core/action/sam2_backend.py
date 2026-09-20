@@ -568,12 +568,25 @@ def plan_backends(job: dict, *, device: str = "mps") -> dict:
         )
 
     def rss_mb() -> int:
+        """CURRENT resident set, in MB.
+
+        `ru_maxrss` is a HIGH-WATER MARK: it only rises, so a threshold on it
+        can fire once and never clear. It reported 7843 MB three phase
+        boundaries running while the release had just freed 141 frames. Peak is
+        still logged, labelled as peak, because it is what predicts an OOM.
+        """
         import resource
 
-        r = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        # macOS reports bytes, Linux kilobytes. Guessing wrong here reports a
-        # 1000x error as a fact, so key off the platform rather than magnitude.
-        return int(r / (1024 * 1024)) if sys.platform == "darwin" else int(r / 1024)
+        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        peak_mb = int(peak / (1024 * 1024)) if sys.platform == "darwin" else int(peak / 1024)
+        try:
+            import psutil
+        except ImportError:
+            logger.warning("[sam2] psutil missing — current RSS unavailable, reporting peak")
+            return peak_mb
+        cur_mb = int(psutil.Process().memory_info().rss / (1024 * 1024))
+        logger.info("[sam2] RSS current %d MB / peak %d MB", cur_mb, peak_mb)
+        return cur_mb
 
     def window_silhouette_fn(i: int) -> dict:
         """Window-relative index -> the ABSOLUTE frame the vote also used.

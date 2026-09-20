@@ -60,12 +60,39 @@ def test_a_window_containing_a_cut_is_discarded_not_penalised():
     fighter to the other across it. Motion alone returns a highlight MONTAGE."""
     cuts = [1.0]
     got = B.window_candidates(cuts, 20.0, motion_at=lambda s: 100.0 if s < 2 else 1.0)
-    assert all(not (s < 1.0 < s + B.WINDOW_S) for s in got)
+    assert all(not (c["start_s"] < 1.0 < c["start_s"] + B.WINDOW_S) for c in got)
 
 
 def test_the_highest_motion_zero_cut_window_wins():
     got = B.window_candidates([], 20.0, motion_at=lambda s: s)  # later = more motion
-    assert got[0] == pytest.approx(max(got), abs=1e-6)
+    assert got[0]["start_s"] == pytest.approx(max(c["start_s"] for c in got), abs=1e-6)
+
+
+def test_the_measured_score_travels_with_the_window():
+    """It used to be computed, used to sort, and then DISCARDED — so the worker,
+    which ranks by motion before the expensive vote, had nothing to rank by.
+    Filling that gap by hand excluded the archive's own window from a
+    verification run and produced a false area-band failure."""
+    got = B.window_candidates([], 20.0, motion_at=lambda s: s * 2)
+    assert all("motion_score" in c for c in got), got
+    for c in got:
+        assert c["motion_score"] == pytest.approx(c["start_s"] * 2, abs=1e-6)
+
+
+def test_a_hand_built_candidate_without_a_score_is_refused():
+    """No more invented numbers."""
+    import pytest as _p
+
+    with _p.raises(TypeError, match="motion_score"):
+        B.build_plan_request("/tmp/x.mp4", [23.2], {}, "sports", "bp1", 1080)
+    with _p.raises(KeyError):
+        B.build_plan_request("/tmp/x.mp4", [{"start_s": 23.2}], {}, "sports", "bp1", 1080)
+
+
+def test_a_builder_scored_candidate_reaches_the_job():
+    cands = B.window_candidates([], 20.0, motion_at=lambda s: s)
+    job = B.build_plan_request("/tmp/x.mp4", cands, {}, "sports", "bp1", 1080)
+    assert all(c.get("motion_score") is not None for c in job["candidates"])
 
 
 def test_no_qualifying_window_returns_empty_not_a_guess():
