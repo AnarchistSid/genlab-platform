@@ -754,3 +754,50 @@ def test_a_queued_plan_job_carries_its_plan_flag(tmp_path):
     assert job["plan"] is True, job
     assert job["candidates"][0]["motion_score"] == 2.0
     assert job["fps"] == 30.0
+
+
+def test_cuts_arrive_in_seconds_and_land_in_window_space():
+    """MEASURED FAILURE. `annotation_frames` keeps only 0 <= c < n_frames, and
+    an absolute clip frame is never under 96 — so every cut was silently
+    dropped and SAM2 propagated across shot changes. At frame 90 of a real
+    96-frame window the matte was a ghost outline of the PREVIOUS shot's
+    fighter, traced over a different camera angle.
+    """
+    seen = {}
+
+    def spy_build(n, *, cuts=(), **kw):
+        seen["cuts"] = tuple(cuts)
+        return {i: body(20, 60) for i in range(96)}, object()
+
+    import genlab_core.worker.plan as PP
+
+    real = PP.build_mattes
+    PP.build_mattes = spy_build
+    try:
+        # window starts at 674.9; cuts at 675.0 and 700.0 clip-seconds.
+        # 675.0 is 3 frames in; 700.0 is far outside and must not appear.
+        run(job(cuts_s=[675.0, 700.0], fps=30.0))
+    finally:
+        PP.build_mattes = real
+    assert seen["cuts"] == (3,), seen
+
+
+def test_an_absolute_frame_in_cuts_is_not_silently_kept():
+    """The old field still exists for matte jobs, which ARE window-relative.
+    A value outside the window is dropped by build_mattes, as before — this
+    asserts we no longer *generate* such values."""
+    import inspect
+
+    from genlab_core.pipeline.stages import craft_render
+
+    src = inspect.getsource(craft_render)
+    assert "cuts_s=[float(c) for c in cuts]" in src
+    assert "int(c * fps)" not in src, "the stage is generating absolute frames again"
+
+
+def test_the_plan_timeout_exceeds_the_measured_plan_duration():
+    """A detached replay reported `worker_timeout` at 1200 s while the worker
+    went on to finish the same plan in 2914 s — and nobody collected it."""
+    from genlab_core.action.matte_worker import DEFAULT_TIMEOUT_S
+
+    assert DEFAULT_TIMEOUT_S >= 2914, "the timeout is shorter than a measured plan"

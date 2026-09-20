@@ -52,7 +52,13 @@ DEFAULT_ROOT = Path(os.environ.get("GENLAB_MATTE_QUEUE", "/opt/genlab/.runtime/m
 # §2: 20 minutes. The measured Mac run is ~9 min for 384 frames, so this is
 # roughly 2x headroom -- long enough to absorb a slow pull, short enough that a
 # dead worker costs one fire rather than the publish window.
-DEFAULT_TIMEOUT_S = 1200
+#: MEASURED, not guessed. A plan job on the Mac took 2914 s end to end -- two
+#: candidate votes at ~6 half-res SAM2 calls each, two finishes, a 96-frame
+#: propagation. At 1200 s the stage gave up 28 minutes before the worker
+#: finished, reported `worker_timeout`, and the worker went on to complete a
+#: plan nobody collected. 3600 s leaves headroom over the slowest measured run
+#: without letting a genuinely hung worker hold a fire all night.
+DEFAULT_TIMEOUT_S = 3600
 POLL_INTERVAL_S = 5.0
 # Older than this and a worker is not running, whatever the queue looks like.
 WORKER_STALE_AFTER_S = 180
@@ -194,6 +200,16 @@ class MatteRequest:
     #: than ranking on a default.
     candidates: list[dict] = field(default_factory=list)
     fps: float = 30.0
+    #: Cut timestamps in CLIP SECONDS, for a plan job.
+    #:
+    #: `cuts` is window-relative frame indices, which a plan job cannot know:
+    #: the worker chooses the window. Sending absolute clip frames in that field
+    #: silently dropped every cut -- `annotation_frames` keeps only
+    #: `0 <= c < n_frames`, and an absolute frame is never under 96 -- so SAM2
+    #: re-seeded at no cut and propagated across them. Seen on real footage: at
+    #: frame 90 of a 96-frame window the matte was a ghost outline of the
+    #: PREVIOUS shot's fighter, traced over a different camera angle.
+    cuts_s: list[float] = field(default_factory=list)
 
     def as_job(self, job_id: str) -> dict:
         """The payload the worker receives — whole spec, whole plan."""
@@ -210,6 +226,7 @@ class MatteRequest:
             "plan": bool(self.plan),
             "subject_hint": self.subject_spec.as_dict() if self.subject_spec else {},
             "candidates": [dict(c) for c in self.candidates],
+            "cuts_s": [float(c) for c in self.cuts_s],
             "fps": float(self.fps),
         }
 

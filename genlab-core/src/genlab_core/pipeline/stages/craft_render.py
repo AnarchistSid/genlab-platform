@@ -320,7 +320,9 @@ class CraftRenderStage:
             frames_dir=str(Path(context.get("run_dir", ".")) / "frames" / bid),
             subject_spec=None,
             crop_plan=None,
-            cuts=[int(c * fps) for c in cuts],
+            # SECONDS, not frames: the worker converts once it knows the window.
+            cuts=[],
+            cuts_s=[float(c) for c in cuts],
             niche_id=context.get("niche_id", ""),
             blueprint_id=bid,
             plan=True,

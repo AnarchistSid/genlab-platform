@@ -449,9 +449,21 @@ def plan(
     # a wrong answer carrying no error.
     if select_window is not None:
         select_window(chosen.start_s, n_frames)
+    # CUTS INTO THE WINDOW'S OWN SPACE. `cuts_s` is clip seconds; build_mattes
+    # wants indices inside the chosen 96 frames. Sending absolute frames here
+    # meant every cut fell outside 0..95 and was dropped, and SAM2 propagated
+    # across shot changes -- visible as a matte of the previous shot's subject
+    # traced over a new camera angle.
+    _cuts = [int(c) for c in (job.get("cuts") or ())]
+    for c_s in job.get("cuts_s") or ():
+        rel = int(round((float(c_s) - chosen.start_s) * fps))
+        if 0 <= rel < n_frames:
+            _cuts.append(rel)
+    if _cuts:
+        logger.info("[plan] %d cut(s) inside the chosen window: %s", len(_cuts), sorted(_cuts))
     masks, report = build_mattes(
         len(frames),
-        cuts=tuple(job.get("cuts") or ()),
+        cuts=tuple(sorted(set(_cuts))),
         foreground_fn=window_foreground_fn or foreground_fn,
         silhouette_fn=window_silhouette_fn or silhouette_fn,
         propagate_fn=propagate_fn,
