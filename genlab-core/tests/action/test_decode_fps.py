@@ -63,3 +63,23 @@ def test_a_96_frame_window_is_32_seconds_of_footage(clip_60fps):
     assert len(got) == pytest.approx(30, abs=2)  # the clip is only 1 s long
     full = _decode_frames(clip_60fps, fps=30.0)
     assert len(full) / 30.0 == pytest.approx(1.0, abs=0.1)
+
+
+def test_a_category_less_niche_searches_more_than_a_category_one():
+    """Anime has no YouTube category, so its keyword-search cap IS its supply.
+
+    The others get `mostPopular` for their category and use search as a top-up.
+    Measured live on 2026-09-20 with three of anime's eight keywords: 45 raw
+    results, 25 past relevance, 21 clearing the velocity floor — while the
+    pipeline ingested 2. The cap was the ceiling, and quota was never the
+    constraint (321 of 10,000 units used).
+    """
+    import inspect
+
+    from genlab_core.media import trending_video_fetcher as T
+
+    src = inspect.getsource(T)
+    assert "_max_searches = 6 if not _has_category else 2" in src
+    assert len(T.NICHE_SEARCH_KEYWORDS["anime"]) >= 6, (
+        "the cap is pointless if fewer keywords are defined than it allows"
+    )

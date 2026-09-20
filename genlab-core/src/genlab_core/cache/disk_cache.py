@@ -46,6 +46,33 @@ class Cache:
         self.max_entries = max_entries
         self._auto_purge()
 
+    @staticmethod
+    def safe_key(*parts: str) -> str:
+        """Build a key that `_validate_key` will accept, from arbitrary text.
+
+        The validator is a FILENAME guard -- the key becomes a path -- so it
+        rejects anything outside [A-Za-z0-9_.-], and that is correct. What was
+        not correct was building keys from free text and letting the rejection
+        be a warning nobody read: `yt_search_anime_anime fight scene new` was
+        refused on every run, so anime's keyword searches never cached and
+        re-paid 100 quota units each, every fire, while the 6-hour TTL did
+        nothing.
+
+        Readable slug plus a short hash of the original: the slug keeps the log
+        line greppable, the hash keeps two queries that slugify alike apart.
+        """
+        import hashlib
+        import re as _re
+
+        raw = "_".join(str(p) for p in parts)
+        # Dots are legal in a key and harmless in a single filename component,
+        # but `..` in anything that becomes a path is a shape worth not having
+        # at all. The hash carries the uniqueness, so the slug can afford to be
+        # stricter than the validator.
+        slug = _re.sub(r"[^A-Za-z0-9_-]+", "_", raw).strip("_")[:200]
+        digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+        return f"{slug}_{digest}" if slug else digest
+
     def _validate_key(self, key: str) -> bool:
         if not _SAFE_KEY.match(key):
             logger.warning("Cache: rejected unsafe key: %s", key[:50])

@@ -53,6 +53,7 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
+from genlab_core.cache.disk_cache import Cache as _DiskCache
 from genlab_core.config.tuning import get_tuning_config
 from genlab_core.http.circuit_breaker import YOUTUBE_CB, CircuitOpenError
 from genlab_core.pipeline.models import FetcherStage, merge_stories
@@ -500,9 +501,19 @@ class TrendingVideoFetcher:
             keywords = list(NICHE_SEARCH_KEYWORDS.get(niche_id, []))
             if extra_keywords:
                 keywords = list(extra_keywords[:3]) + keywords
-            # Niches without a category get 3 searches (more diversity needed);
-            # niches with a category keep the original 2-search cap.
-            _max_searches = 3 if not _has_category else 2
+            # A CATEGORY-LESS NICHE HAS NO OTHER SOURCE, so its search cap is
+            # its whole supply. Anime is the only one: the others get
+            # `mostPopular` for their category free of charge, and keyword
+            # search is a top-up. At 3 searches anime was fetching 1-2 usable
+            # videos a day against gaming's 12, and could not fill a 7-day
+            # queue at one reel per day.
+            #
+            # MEASURED 2026-09-20, three of anime's eight keywords, live:
+            # 45 raw results -> 25 past the 0.35 relevance threshold -> 21
+            # clearing the 100 views/hour floor. The candidates are there; the
+            # cap was the ceiling. Quota is not the constraint either: 321 of
+            # 10,000 units used that day, and three more searches cost 300.
+            _max_searches = 6 if not _has_category else 2
             for keyword in keywords[:_max_searches]:
                 search_videos = self._search_recent(
                     query=keyword,
@@ -1031,7 +1042,9 @@ class TrendingVideoFetcher:
         """Search YouTube for recent videos matching a keyword (100 units)."""
         # R-37: a fresh cache entry returns before we spend the 100 units (the
         # cache check sits ABOVE the quota gate so a hit costs nothing).
-        cache_key = f"yt_search_{niche_id}_{query}"
+        # Keys are filenames, so a query with spaces is REFUSED by the cache and
+        # every search re-pays its 100 units. `safe_key` slugs and hashes.
+        cache_key = _DiskCache.safe_key("yt_search", niche_id, query)
         cached = _cached_videos(cache_key)
         if cached is not None:
             logger.info("[cache] search '%s' hit (%d videos, 0 quota)", query, len(cached))
