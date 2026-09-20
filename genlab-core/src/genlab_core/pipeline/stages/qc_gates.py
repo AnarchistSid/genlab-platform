@@ -311,9 +311,7 @@ class QCGates:
                 metadata=metadata,
             )
         except Exception as exc:  # noqa: BLE001 — best-effort
-            logger.warning(
-                "[QCGates] trace emission failed: %s", exc, exc_info=True
-            )
+            logger.warning("[QCGates] trace emission failed: %s", exc, exc_info=True)
 
         return context
 

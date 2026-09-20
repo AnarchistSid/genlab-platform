@@ -272,16 +272,13 @@ class GenerateAudio:
                     # cascade shape change must not break synthesis.
                     chain = list(getattr(cascade, "_providers", []) or [])
                     attempted = (
-                        str(getattr(chain[0], "name", "") or "unknown")
-                        if chain else "unknown"
+                        str(getattr(chain[0], "name", "") or "unknown") if chain else "unknown"
                     )
                     fell_back = bool(attempted != "unknown" and used != attempted)
 
                     media["audio_provider"] = used
                     media["audio_provider_attempted"] = attempted
-                    media["audio_fallback_reason"] = (
-                        f"{attempted}_unavailable" if fell_back else ""
-                    )
+                    media["audio_fallback_reason"] = f"{attempted}_unavailable" if fell_back else ""
                     logger.info(
                         "[GenerateAudio] tts tier attempted=%s used=%s "
                         "fell_back=%s duration=%.1fs cost=$%.4f bp=%s",

@@ -32,13 +32,13 @@ class FetchAINewsWithVideo(FetcherStage):
     EMITTED_SOURCES = frozenset()  # dynamic: ainewsyt:<feed_domain>
 
     def execute(self, context: StageContext) -> StageContext:
-        if os.environ.get(
-            "GENLAB_AI_NEWS_WITH_VIDEO_ENABLED", ""
-        ).strip().lower() not in ("1", "true", "yes", "on"):
-            logger.debug(
-                "[AINewsWithVideo] GENLAB_AI_NEWS_WITH_VIDEO_ENABLED not set, "
-                "skipping"
-            )
+        if os.environ.get("GENLAB_AI_NEWS_WITH_VIDEO_ENABLED", "").strip().lower() not in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        ):
+            logger.debug("[AINewsWithVideo] GENLAB_AI_NEWS_WITH_VIDEO_ENABLED not set, skipping")
             return context
 
         niche_id = context.get("niche_id", "")
@@ -67,7 +67,8 @@ class FetchAINewsWithVideo(FetcherStage):
         except Exception as exc:
             logger.warning(
                 "[AINewsWithVideo] fetch failed for niche=%s: %s",
-                niche_id, exc,
+                niche_id,
+                exc,
             )
             return context
 
@@ -78,8 +79,7 @@ class FetchAINewsWithVideo(FetcherStage):
         existing = context.get("stories", []) or []
         existing_urls = {s.get("source_url") for s in existing}
         new_stories = [
-            s for s in stories
-            if s.get("source_url") and s["source_url"] not in existing_urls
+            s for s in stories if s.get("source_url") and s["source_url"] not in existing_urls
         ]
         merge_stories(context, new_stories)
 
@@ -90,7 +90,9 @@ class FetchAINewsWithVideo(FetcherStage):
         logger.info(
             "[AINewsWithVideo] niche=%s added %d new stories (%d total "
             "candidates after pre-existing dedup)",
-            niche_id, len(new_stories), len(stories),
+            niche_id,
+            len(new_stories),
+            len(stories),
         )
         return context
 

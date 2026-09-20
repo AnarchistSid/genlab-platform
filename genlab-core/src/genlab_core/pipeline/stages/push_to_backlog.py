@@ -49,6 +49,7 @@ def _degrade_reason(content: dict) -> str:
         return "reason_unavailable"
     return ""
 
+
 # R-53: text fields that ship to platforms / Postgres and must be HTML-stripped.
 # LLM output can carry <cite>/<p>/<strong> tags; the Graph sanitizer runs on the
 # SharePoint path but is bypassed on the Postgres path, so strip here — the one
@@ -1599,6 +1600,10 @@ class PushToBacklog:
     at execution time. Raises ``ValueError`` if the key is missing.
     """
 
+    #: The context contract. Checked in tests/pipeline/test_stage_context_contract.py
+    context_reads = ("stories", "niche_id", "niche_config", "clip_index", "metrics")
+    context_writes = ("blueprints",)
+
     def __init__(self) -> None:
         self._client: BacklogClient | None = None
 
@@ -1674,6 +1679,13 @@ class PushToBacklog:
 
         stories_pushed = 0
         blueprints_pushed = 0
+        # THE JOIN. Stages after this one need the records that were just
+        # created, with their record_id -- CraftRenderStage reads
+        # ``context["blueprints"]`` and nothing wrote that key, so it logged
+        # "no blueprints in this run" and completed in 0.0s on every fire since
+        # it shipped, including five-story runs. Counting them was never the
+        # same as publishing them.
+        created_blueprints: list[dict] = []
         video_dedup_skipped = 0
         errors: list[str] = []
 
@@ -2510,8 +2522,7 @@ class PushToBacklog:
                     (
                         bp
                         for bp in existing_bp_raw
-                        if not _is_blocking(bp)
-                        and not _is_terminally_archived(bp)
+                        if not _is_blocking(bp) and not _is_terminally_archived(bp)
                     ),
                     None,
                 )
@@ -2570,10 +2581,7 @@ class PushToBacklog:
                         text = text or ""
                         if not _src_attr:
                             return text
-                        if (
-                            "\U0001f3ac Original:" in text
-                            or "\U0001f3ac Original creator:" in text
-                        ):
+                        if "\U0001f3ac Original:" in text or "\U0001f3ac Original creator:" in text:
                             return text
                         return text.rstrip() + "\n\n" + _src_attr
 
@@ -2634,12 +2642,8 @@ class PushToBacklog:
                         # storytime_mutex is a ROUTING outcome and must
                         # be excluded from degradation-rate aggregation
                         # (see plan §4 "Aggregation rule").
-                        "narration_script": str(
-                            content.get("narration_script", "")
-                        ),
-                        "narration_degraded": bool(
-                            content.get("narration_degraded", False)
-                        ),
+                        "narration_script": str(content.get("narration_script", "")),
+                        "narration_degraded": bool(content.get("narration_degraded", False)),
                         # A degraded row MUST carry a reason. Today every
                         # upstream site sets one (base_writing:903,
                         # generate_audio:130, transformation_orchestrator's
@@ -2661,12 +2665,8 @@ class PushToBacklog:
                         # None (not "") on historical rows: absent must stay
                         # distinguishable from "synthesised on an unknown tier".
                         "audio_provider": (media.get("audio_provider") or None),
-                        "audio_provider_attempted": (
-                            media.get("audio_provider_attempted") or None
-                        ),
-                        "audio_fallback_reason": (
-                            media.get("audio_fallback_reason") or None
-                        ),
+                        "audio_provider_attempted": (media.get("audio_provider_attempted") or None),
+                        "audio_fallback_reason": (media.get("audio_fallback_reason") or None),
                         # T-65 (2026-09-12): the exact string handed to TTS.
                         # Stamped in GenerateAudio (15); this is stage 21, so it
                         # is the same six-stage pass-through that killed
@@ -2739,8 +2739,7 @@ class PushToBacklog:
                         # was disabled or fail-opened (fine — gate treats
                         # absent as cold-start-tolerant "no contribution").
                         "render_qc_min_score": (
-                            ((story.get("media") or {})
-                             .get("video_validation") or {})
+                            ((story.get("media") or {}).get("video_validation") or {})
                             .get("render_qc", {})
                             .get("min_quality_score")
                         ),
@@ -2828,9 +2827,7 @@ class PushToBacklog:
                     media = story.get("media") or {}
                     _transform_reject_reason = media.get("transform_reject_reason")
                     if _transform_reject_reason:
-                        fields["transform_reject_reason"] = str(
-                            _transform_reject_reason
-                        )[:200]
+                        fields["transform_reject_reason"] = str(_transform_reject_reason)[:200]
 
                     # Persist urgency classification for express lane publishing
                     urgency = story.get("urgency_classification", {})
@@ -3167,6 +3164,13 @@ class PushToBacklog:
 
                         client.blueprints.update(non_blocking_match["id"], revive_fields)
                         blueprints_pushed += 1
+                        created_blueprints.append(
+                            {
+                                **non_blocking_match,
+                                **revive_fields,
+                                "record_id": non_blocking_match["id"],
+                            }
+                        )
                         logger.info(
                             "[PUSH] Revived blueprint '%s' (was %s → %s)",
                             title,
@@ -3285,8 +3289,9 @@ class PushToBacklog:
                             )
                             continue
 
-                        client.blueprints.create(fields, typecast=True)
+                        _new_id = client.blueprints.create(fields, typecast=True)
                         blueprints_pushed += 1
+                        created_blueprints.append({**fields, "record_id": _new_id})
                         logger.info(
                             "[PUSH] Created blueprint '%s' (status=%s)",
                             title,
@@ -3414,6 +3419,19 @@ class PushToBacklog:
             len(errors),
         )
 
+        # Published for the stages that run after this one. Named ``blueprints``
+        # because that is what they read; see the contract check in
+        # tests/pipeline/test_stage_context_contract.py, which fails if any
+        # stage reads a key no earlier stage writes.
+        context["blueprints"] = created_blueprints
+        if len(created_blueprints) != blueprints_pushed:
+            logger.warning(
+                "[PUSH] published %d blueprint record(s) to context but counted %d — "
+                "a creation path is not appending to the join",
+                len(created_blueprints),
+                blueprints_pushed,
+            )
+
         # C3 (2026-06-30): emit per-content_type dedup drop counts.
         # "before" = the stories list as PushToBacklog received it
         # (already post-VideoGate); "after" = stories that cleared
@@ -3493,8 +3511,6 @@ class PushToBacklog:
                 metadata=metadata,
             )
         except Exception as exc:  # noqa: BLE001 — best-effort
-            logger.warning(
-                "[PushToBacklog] trace emission failed: %s", exc, exc_info=True
-            )
+            logger.warning("[PushToBacklog] trace emission failed: %s", exc, exc_info=True)
 
         return context

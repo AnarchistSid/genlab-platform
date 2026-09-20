@@ -526,8 +526,7 @@ class RunReport:
                 # Fail-open — same contract as the webhook above.
                 # DB write failure must not block run_report writing.
                 logger.warning(
-                    "[RunReport] slo→pipeline_alerts write failed for "
-                    "%s run %s: %s",
+                    "[RunReport] slo→pipeline_alerts write failed for %s run %s: %s",
                     niche_id,
                     run_id,
                     exc,

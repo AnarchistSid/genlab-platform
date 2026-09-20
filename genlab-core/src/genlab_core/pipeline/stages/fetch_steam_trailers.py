@@ -56,10 +56,7 @@ def _build_steam_summary(
     if sd:
         return f"{game_name} — {movie_name}. {sd}"[:500]
     # Synthesized fallback — pad with trailer type + app_id.
-    return (
-        f"Official {movie_name} trailer for {game_name} "
-        f"(Steam app {app_id})"
-    )
+    return f"Official {movie_name} trailer for {game_name} (Steam app {app_id})"
 
 
 def _fetch_trailers_for_app(app_id: int, max_trailers: int = 2) -> list[dict]:

@@ -241,6 +241,7 @@ class GenericPipelineRunner:
         # of whether feature-specific codepaths fire this run.
         try:
             from genlab_core.observability.flag_audit import log_active_flags
+
             log_active_flags(context=f"pipeline_{niche_id}")
         except Exception:
             pass  # observability never blocks pipeline

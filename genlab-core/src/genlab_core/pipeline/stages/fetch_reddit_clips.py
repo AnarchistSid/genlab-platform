@@ -61,7 +61,10 @@ class FetchRedditClips(FetcherStage):
         import os as _os
 
         if _os.environ.get("GENLAB_REDDIT_FETCH_DISABLED", "").strip().lower() in (
-            "1", "true", "yes", "on",
+            "1",
+            "true",
+            "yes",
+            "on",
         ):
             logger.info(
                 "[RedditClips] niche=%s — GENLAB_REDDIT_FETCH_DISABLED set, "

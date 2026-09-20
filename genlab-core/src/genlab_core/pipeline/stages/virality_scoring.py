@@ -271,9 +271,7 @@ class ViralityScoring:
                 metadata=metadata,
             )
         except Exception as exc:  # noqa: BLE001 — trace emission is best-effort
-            logger.warning(
-                "[ViralityScoring] trace emission failed: %s", exc, exc_info=True
-            )
+            logger.warning("[ViralityScoring] trace emission failed: %s", exc, exc_info=True)
 
         return context
 

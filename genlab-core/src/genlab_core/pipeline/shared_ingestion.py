@@ -1086,7 +1086,7 @@ def main() -> int:
         # journal rotation eats stderr; the durable file survives.
         import sys as _sys
         import traceback as _tb
-        from datetime import datetime as _dt, timezone as _tz
+        from datetime import datetime as _dt
         from pathlib import Path as _Path
 
         print(f"ERROR: {exc}", file=_sys.stderr)
@@ -1095,7 +1095,7 @@ def main() -> int:
             error_path = _Path("/opt/genlab/.runtime/shared_ingestion_last_error.txt")
             error_path.parent.mkdir(parents=True, exist_ok=True)
             with error_path.open("w") as f:
-                f.write(f"{_dt.now(_tz.utc).isoformat()}\n")
+                f.write(f"{_dt.now(UTC).isoformat()}\n")
                 f.write(f"ERROR: {exc}\n\n")
                 _tb.print_exc(file=f)
         except Exception as write_exc:
@@ -1108,4 +1108,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(main())

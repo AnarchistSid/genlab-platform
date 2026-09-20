@@ -40,6 +40,7 @@ $5 in a single run.
   * Set ``GENLAB_ANIME_BACKFILL_MAX_PER_RUN=0`` — flag on, cap zero.
   * ``touch /opt/genlab/.runtime/anime_backfill_kill`` — hard block.
 """
+
 from __future__ import annotations
 
 import logging
@@ -147,16 +148,19 @@ class FetchGeneratedBackfill(FetcherStage):
         threshold = _threshold()
         if len(stories) >= threshold:
             logger.info(
-                "[GenBackfill] pool has %d stories ≥ threshold %d — "
-                "no backfill needed",
-                len(stories), threshold,
+                "[GenBackfill] pool has %d stories ≥ threshold %d — no backfill needed",
+                len(stories),
+                threshold,
             )
             return context
 
         logger.warning(
             "[GenBackfill] pool has %d stories < threshold %d — "
             "generating up to %d backfill clip(s) for niche=%s",
-            len(stories), threshold, max_gen, niche_id,
+            len(stories),
+            threshold,
+            max_gen,
+            niche_id,
         )
 
         topic = _todays_topic(niche_id)
@@ -180,7 +184,9 @@ class FetchGeneratedBackfill(FetcherStage):
             if not result.ok:
                 logger.warning(
                     "[GenBackfill] generation %d/%d failed: %s",
-                    i + 1, max_gen, result.error,
+                    i + 1,
+                    max_gen,
+                    result.error,
                 )
                 continue
             if result.cost_usd:
@@ -243,7 +249,8 @@ class FetchGeneratedBackfill(FetcherStage):
             _arm_id = _bandit_ctx.get("_video_backfill_arm_id")
             if _arm_id:
                 story.setdefault(
-                    "arm_ids_by_dimension", {},
+                    "arm_ids_by_dimension",
+                    {},
                 )["video_backfill_model"] = _arm_id
             new_stories.append(story)
 
@@ -259,7 +266,10 @@ class FetchGeneratedBackfill(FetcherStage):
         }
         logger.info(
             "[GenBackfill] niche=%s generated=%d topic=%r cost=$%.4f",
-            niche_id, len(new_stories), topic, total_cost,
+            niche_id,
+            len(new_stories),
+            topic,
+            total_cost,
         )
         return context
 

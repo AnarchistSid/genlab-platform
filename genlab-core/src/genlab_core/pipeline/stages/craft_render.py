@@ -64,6 +64,18 @@ class CraftSkip:
 class CraftRenderStage:
     """Runs after the legacy render. Reads a storyboard, writes a second reel."""
 
+    #: The context contract. Checked in tests/pipeline/test_stage_context_contract.py
+    context_reads = (
+        "blueprints",
+        "stories",
+        "niche_id",
+        "niche_config",
+        "storyboards",
+        "run_dir",
+        "project_root",
+    )
+    context_writes = ()
+
     name = "CraftRender"
 
     def execute(self, context: StageContext) -> StageContext:
@@ -77,7 +89,20 @@ class CraftRenderStage:
 
         blueprints = context.get("blueprints") or []
         if not blueprints:
-            logger.info("[craft] no blueprints in this run")
+            # A STAGE'S SUCCESS IS JUDGED AGAINST THE RUN'S INPUT. "no
+            # blueprints" on a five-story fire is a false green, and it read as
+            # a normal empty queue at INFO for as long as this stage has
+            # existed. Upstream count decides the level.
+            upstream = len(context.get("stories") or [])
+            if upstream:
+                logger.warning(
+                    "[craft] no blueprints (context key 'blueprints'), but the run "
+                    "had %d story/stories upstream — the key is empty, missing, or "
+                    "this stage runs before its producer",
+                    upstream,
+                )
+            else:
+                logger.info("[craft] no blueprints (stories=0)")
             return context
 
         for bp in blueprints:

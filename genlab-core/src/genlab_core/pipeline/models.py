@@ -278,9 +278,7 @@ def merge_stories(
 
     for item in incoming:
         try:
-            candidate = (
-                item if isinstance(item, StoryCandidate) else StoryCandidate.from_raw(item)
-            )
+            candidate = item if isinstance(item, StoryCandidate) else StoryCandidate.from_raw(item)
         except ValidationError as exc:
             # Contract violation — drop the story, log the diagnostic. Rest
             # of the batch continues. If this fires repeatedly for a specific
@@ -293,8 +291,7 @@ def merge_stories(
                 item.get("title", "?") if isinstance(item, dict) else getattr(item, "title", "?")
             )
             logger.warning(
-                "[merge_stories] DROPPED story from fetcher; niche=%s source=%s "
-                "title=%r reason=%s",
+                "[merge_stories] DROPPED story from fetcher; niche=%s source=%s title=%r reason=%s",
                 niche_id,
                 source,
                 title[:80] if isinstance(title, str) else title,
@@ -356,9 +353,7 @@ def replace_stories(
 
     for item in incoming:
         try:
-            candidate = (
-                item if isinstance(item, StoryCandidate) else StoryCandidate.from_raw(item)
-            )
+            candidate = item if isinstance(item, StoryCandidate) else StoryCandidate.from_raw(item)
         except ValidationError as exc:
             source = (
                 item.get("source", "?") if isinstance(item, dict) else getattr(item, "source", "?")

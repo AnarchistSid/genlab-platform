@@ -162,16 +162,6 @@ pipeline:
 
     # Layered post-render effects — these keep fail_mode=continue
     # (a missing overlay is acceptable, missing primary video is not).
-    # Craft renders BESIDE the legacy reel and publishes nothing while
-    # ``craft_publishes`` is False. Gated internally by ``dual_render_enabled``,
-    # so this entry is inert for every niche that has not opted in — it is here
-    # rather than in one niche.yaml because the opt-in is a flag, not a fork.
-    #
-    # fail_mode stays continue: craft is an observation running next to a render
-    # that has already succeeded. It must never block a publish.
-    - class: genlab_core.pipeline.stages.craft_render.CraftRenderStage
-      fail_mode: continue
-
     - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
       parallel_group: post_render
     - class: genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions
@@ -191,6 +181,24 @@ pipeline:
       # downstream FetchInsights/PerformanceLearner have nothing to
       # fetch if we couldn't persist the blueprint (P6, 2026-06-19).
       fail_mode: abort
+
+    # Craft renders BESIDE the legacy reel and publishes nothing while
+    # ``craft_publishes`` is False. Gated internally by ``dual_render_enabled``,
+    # so this entry is inert for every niche that has not opted in — it is here
+    # rather than in one niche.yaml because the opt-in is a flag, not a fork.
+    #
+    # AFTER PushToBacklog, not before it. It reads ``context["blueprints"]``,
+    # and nothing wrote that key until PushToBacklog created the records: sat
+    # in Phase 4 it logged "no blueprints in this run" and completed in 0.0s on
+    # every fire since it shipped, including a five-story run. The records only
+    # exist once they have been persisted and carry a ``record_id``, which is
+    # what craft names its deliverables by.
+    #
+    # fail_mode stays continue: craft is an observation running next to a render
+    # that has already succeeded, and a publish that has already happened. It
+    # must never block either.
+    - class: genlab_core.pipeline.stages.craft_render.CraftRenderStage
+      fail_mode: continue
 
     # ── Phase 6: Analytics & Learning ─────────────────────────────
     - class: genlab_core.pipeline.stages.fetch_insights.FetchInsights

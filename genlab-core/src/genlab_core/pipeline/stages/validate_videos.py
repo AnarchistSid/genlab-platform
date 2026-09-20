@@ -597,10 +597,21 @@ class ValidateVideos:
 
         try:
             proc = subprocess.run(
-                ["ffmpeg", "-hide_banner", "-nostats", "-i", str(path),
-                 "-af", audio_loudness.loudnorm_filter() + ":print_format=json",
-                 "-f", "null", "-"],
-                capture_output=True, text=True, timeout=300,
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-nostats",
+                    "-i",
+                    str(path),
+                    "-af",
+                    audio_loudness.loudnorm_filter() + ":print_format=json",
+                    "-f",
+                    "null",
+                    "-",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300,
             )
             blob = _re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", proc.stderr, _re.S)
             if not blob:
@@ -763,17 +774,38 @@ class ValidateVideos:
         out = path.with_name(f"{path.stem}_ln{path.suffix}")
         logger.info(
             "[ValidateVideos] loudness repair for %s — issues=%s chain=%s",
-            path.name, ",".join(issues) or "(none)", "+".join(chain),
+            path.name,
+            ",".join(issues) or "(none)",
+            "+".join(chain),
         )
         try:
             subprocess.run(
-                ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(path),
-                 "-c:v", "copy",
-                 "-af", ",".join(chain),
-                 "-c:a", "aac", "-b:a", "192k",
-                 "-ar", str(SPEC["audio_sample_rate"]),
-                 "-ac", str(SPEC["audio_channels"]), str(out)],
-                capture_output=True, text=True, timeout=600, check=True,
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-i",
+                    str(path),
+                    "-c:v",
+                    "copy",
+                    "-af",
+                    ",".join(chain),
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "192k",
+                    "-ar",
+                    str(SPEC["audio_sample_rate"]),
+                    "-ac",
+                    str(SPEC["audio_channels"]),
+                    str(out),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=600,
+                check=True,
             )
             return out if out.exists() and out.stat().st_size > 0 else None
         except Exception as exc:
