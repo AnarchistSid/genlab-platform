@@ -293,3 +293,35 @@ def test_no_motion_toward_the_opponent_is_none_not_frame_zero():
     x = [100.0 - i for i in range(20)]  # retreating the whole time
     sm = F.velocity_samples(masks_from_x(x, h=200, w=900))
     assert F.subject_velocity_peak(sm, opponent_on_right=True) is None
+
+
+# ── a maximum on the bracket edge is a maximum of the bracket ───────────────
+
+
+def test_a_pick_on_the_lower_edge_widens_once_and_resolves():
+    """MEASURED on UFC-05 window 24.9: pick and peak were both frame 7 of a
+    (7, 25) bracket — the signal was still rising where the bracket stopped."""
+    # a localised rise: accelerate into the strike, decelerate after it
+    x = [100.0] * 10
+    for step in (5, 10, 20, 30, 20, 10, 5):
+        x.append(x[-1] + step)
+    x += [x[-1]] * 12
+    sm = F.velocity_samples(masks_from_x(x, h=200, w=900))
+    f, bound = F.pick_with_edge_guard(sm, opponent_on_right=True, bound=(13, 25))
+    assert f is not None, "widening should have found the real rise"
+    assert bound[0] < 13, bound
+
+
+def test_still_on_an_edge_after_widening_is_unresolved():
+    """A monotone ramp has its maximum wherever you stop looking."""
+    x = [100.0 + 10 * k for k in range(30)]
+    sm = F.velocity_samples(masks_from_x(x, h=200, w=900))
+    f, _ = F.pick_with_edge_guard(sm, opponent_on_right=True, bound=(10, 20))
+    assert f is None
+
+
+def test_a_pick_in_the_middle_is_left_alone():
+    x = [100.0] * 8 + [100.0 + 12 * k for k in range(1, 6)] + [160.0] * 12
+    sm = F.velocity_samples(masks_from_x(x, h=200, w=900))
+    f, bound = F.pick_with_edge_guard(sm, opponent_on_right=True, bound=(4, 18))
+    assert f is not None and bound == (4, 18)

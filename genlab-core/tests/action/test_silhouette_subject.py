@@ -18,7 +18,7 @@ NAVY, CRIMSON = 225.0, 15.0
 
 def _mask(x0, y0, w, h):
     m = np.zeros((H, W), np.float32)
-    m[y0:y0 + h, x0:x0 + w] = 1.0
+    m[y0 : y0 + h, x0 : x0 + w] = 1.0
     return m
 
 
@@ -40,8 +40,8 @@ def _scattered_tall_garment():
     under the area floor it cannot compete at all.
     """
     m = np.zeros((H, W), np.float32)
-    m[40:58, 200:218] = 1.0       # glove, high
-    m[330:352, 150:186] = 1.0     # trunks, low
+    m[40:58, 200:218] = 1.0  # glove, high
+    m[330:352, 150:186] = 1.0  # trunks, low
     return {NAVY: _mask(60, 40, 60, 240), CRIMSON: m}
 
 
@@ -100,8 +100,9 @@ def test_a_flapping_decision_still_resolves_by_majority():
 
 
 def test_a_genuine_split_is_reported_not_hidden():
-    flip = [{NAVY: _mask(60, 40, 60, 240), CRIMSON: _mask(150, 330, 130, 40)}] * 5 + \
-           [{CRIMSON: _mask(60, 40, 60, 240), NAVY: _mask(150, 330, 130, 40)}] * 5
+    flip = [{NAVY: _mask(60, 40, 60, 240), CRIMSON: _mask(150, 330, 130, 40)}] * 5 + [
+        {CRIMSON: _mask(60, 40, 60, 240), NAVY: _mask(150, 330, 130, 40)}
+    ] * 5
     it = iter(flip)
     v = choose_subject_by_vote(list(range(10)), lambda _f: next(it), vote_frames=10)
     assert not v.unanimous and v.votes == 5
@@ -124,8 +125,9 @@ def test_votes_for_the_same_body_under_different_hue_bins_are_merged():
     """The hue histogram bins at 10 degrees, so one fighter can be named 225 on
     nine frames and 235 on the tenth. Counting those apart understates the
     majority -- measured on the real window it read 8/10 instead of 9/10."""
-    scenes = ([{225.0: _mask(60, 40, 60, 240), CRIMSON: _mask(150, 330, 130, 40)}] * 9 +
-              [{235.0: _mask(60, 40, 60, 240), CRIMSON: _mask(150, 330, 130, 40)}])
+    scenes = [{225.0: _mask(60, 40, 60, 240), CRIMSON: _mask(150, 330, 130, 40)}] * 9 + [
+        {235.0: _mask(60, 40, 60, 240), CRIMSON: _mask(150, 330, 130, 40)}
+    ]
     it = iter(scenes)
     v = choose_subject_by_vote(list(range(10)), lambda _f: next(it), vote_frames=10)
     assert v.votes == 10, f"same body split across bins: got {v.votes}/10"
@@ -135,7 +137,8 @@ def test_votes_for_the_same_body_under_different_hue_bins_are_merged():
 def test_distinct_bodies_are_not_merged():
     """15 and 225 are 150 degrees apart and must stay separate candidates."""
     flip = [_standing_over_downed()] * 6 + [
-        {CRIMSON: _mask(60, 40, 60, 240), NAVY: _mask(150, 330, 130, 40)}] * 4
+        {CRIMSON: _mask(60, 40, 60, 240), NAVY: _mask(150, 330, 130, 40)}
+    ] * 4
     it = iter(flip)
     v = choose_subject_by_vote(list(range(10)), lambda _f: next(it), vote_frames=10)
     assert v.hue_deg == NAVY and v.votes == 6
@@ -148,13 +151,14 @@ def test_ground_finish_picks_the_man_on_top_whatever_his_posture():
     ground-and-pound, his silhouette goes wide, and an upright-first rule voted
     10/10 UNANIMOUSLY for the man being hit.
     """
-    crouched_on_top = _mask(80, 120, 150, 90)      # wide, aspect 0.6, HIGH
-    sprawled_below = _mask(100, 250, 60, 130)      # taller, aspect 2.2, LOW
+    crouched_on_top = _mask(80, 120, 150, 90)  # wide, aspect 0.6, HIGH
+    sprawled_below = _mask(100, 250, 60, 130)  # taller, aspect 2.2, LOW
     scene = {NAVY: crouched_on_top, CRIMSON: sprawled_below}
 
     ys, xs = np.nonzero(scene[CRIMSON] > 0.5)
     assert (ys.max() - ys.min() + 1) / (xs.max() - xs.min() + 1) > 1.2, (
-        "fixture: the loser must look 'upright' for this to bite")
+        "fixture: the loser must look 'upright' for this to bite"
+    )
 
     v = choose_subject_by_vote([0], lambda _f: scene, vote_frames=1)
     assert v.hue_deg == NAVY, "voted for the man being hit"
@@ -176,14 +180,13 @@ def test_a_one_frame_shift_must_not_change_the_answer():
     """
     scenes = [_standing_over_downed() for _ in range(12)]
     answers = []
-    for offset in (0, 1, 2):                     # -33ms, base, +33ms at 30fps
-        window = scenes[offset:offset + 10]
+    for offset in (0, 1, 2):  # -33ms, base, +33ms at 30fps
+        window = scenes[offset : offset + 10]
         # Bind the iterator as a default arg: a bare closure over a loop
         # variable is B023, and would read whichever window ran last.
         v = choose_subject_by_vote(
-            list(range(10)),
-            lambda _f, it=iter(window): next(it),
-            vote_frames=10)
+            list(range(10)), lambda _f, it=iter(window): next(it), vote_frames=10
+        )
         answers.append(v.hue_deg)
     assert len(set(answers)) == 1, f"answer moved with a 1-frame shift: {answers}"
     assert answers[0] == NAVY

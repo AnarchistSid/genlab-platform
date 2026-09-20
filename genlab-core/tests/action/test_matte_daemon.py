@@ -82,9 +82,14 @@ def test_the_heartbeat_still_beats_after_a_failing_job(t):
     def boom(job):
         raise RuntimeError("nope")
 
-    serve(t, boom, max_iterations=3, heartbeat_every_s=1,
-          sleep=lambda s: clock.__setitem__("t", clock["t"] + 10),
-          now=lambda: clock["t"])
+    serve(
+        t,
+        boom,
+        max_iterations=3,
+        heartbeat_every_s=1,
+        sleep=lambda s: clock.__setitem__("t", clock["t"] + 10),
+        now=lambda: clock["t"],
+    )
     assert (t.root / "worker.heartbeat").exists()
     assert (t.root / "failed" / "bad.json").exists()
 
@@ -96,8 +101,7 @@ def test_a_failing_heartbeat_does_not_kill_the_loop(t, monkeypatch):
         raise OSError("ssh unreachable")
 
     monkeypatch.setattr(t, "heartbeat", boom)
-    stats = serve(t, good, max_iterations=2, sleep=lambda s: None,
-                  now=lambda: 0.0)
+    stats = serve(t, good, max_iterations=2, sleep=lambda s: None, now=lambda: 0.0)
     assert stats.succeeded == 1, "a missed heartbeat stopped the worker"
 
 

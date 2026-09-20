@@ -57,6 +57,23 @@ WINDOW_FRAMES = int(WINDOW_S * FPS)
 #: is the expensive part, and a fourth candidate rarely wins.
 MAX_CANDIDATES = 3
 
+#: CANDIDATES ARE GENERATED FROM THE INVARIANT SIGNAL AND RANKED BY THE PRECISE
+#: ONE. The audio level shift is window-invariant; the strike precedes it by
+#: ~0.3 s. Starting windows at these offsets before the anchor means every
+#: candidate CONTAINS the finish by construction -- so the invariance gate has
+#: n >= 2 on every plan, instead of the one candidate that survived before.
+#:
+#: Ranking by motion and SELECTING by motion are different jobs. Selecting by
+#: motion excluded the archive's own window: measured on UFC-05 it scores 9.36
+#: against 11.88 for the top window, because it was framed on the finish rather
+#: than on the busiest three seconds.
+#:
+#: The smallest offset must EXCEED the measured lag, or the nearest window
+#: starts after the strike. The lag is +0.317 s (UFC-05, level shift at 25.650
+#: against a finish at 25.333), and an offset of 0.3 puts the window start at
+#: 25.350 -- 0.017 s too late, which defeats the whole construction.
+ANCHOR_OFFSETS_S = (0.4, 0.6, 0.9)
+
 #: The finisher vote must be near-unanimous. 8/10 was the floor that separated a
 #: real subject from a coin-flip on the UFC footage; below it the "winner" was a
 #: 0.05pp area difference, i.e. noise.
@@ -126,6 +143,36 @@ def _candidate(c) -> dict:
         f"candidate must carry its measured motion_score, got {c!r}. "
         "window_candidates() returns these; do not build them by hand."
     )
+
+
+def audio_anchored_candidates(anchor_s, cuts_s, motion_at, *, offsets=ANCHOR_OFFSETS_S):
+    """Windows that all contain the finish, ranked by motion.
+
+    `anchor_s` is the audio level shift in CLIP time. Each offset starts a
+    window that far before it; a window containing a cut is discarded outright,
+    because a cut is a different shot and the tracker walks from one fighter to
+    the other across it.
+
+    Returns ``[{"start_s", "motion_score"}, ...]``, highest motion first.
+    """
+    out = []
+    for off in offsets:
+        start = round(anchor_s - off, 3)
+        if start < 0:
+            continue
+        end = start + WINDOW_S
+        if any(start < c < end for c in cuts_s):
+            logger.info("[builder] candidate at %.2fs contains a cut — discarded", start)
+            continue
+        out.append({"start_s": start, "motion_score": float(motion_at(start))})
+    out.sort(key=lambda c: -c["motion_score"])
+    if len(out) < 2:
+        logger.warning(
+            "[builder] only %d anchored candidate(s) survived the cut filter — "
+            "the invariance gate cannot run",
+            len(out),
+        )
+    return out
 
 
 def build_plan_request(clip_path, candidates, subject_hint, niche_id, blueprint_id, src_h):

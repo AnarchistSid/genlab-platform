@@ -137,14 +137,21 @@ def test_measured_constants_live_in_the_kit_not_in_code():
     reg = __import__("genlab_core.action.kits.registry", fromlist=["x"])
     d = yaml.safe_load((pathlib.Path(reg.__file__).parent / "impact.yaml").read_text())
     m = d["measured"]
-    for key in ("full_bleed_floor_1080p", "torso_box_target", "matte_area_band",
-                "subject_vote_frames", "drawing_pose_iou_gate", "tail_live_frames",
-                "cuts_per_s_band"):
+    for key in (
+        "full_bleed_floor_1080p",
+        "torso_box_target",
+        "matte_area_band",
+        "subject_vote_frames",
+        "drawing_pose_iou_gate",
+        "tail_live_frames",
+        "cuts_per_s_band",
+    ):
         assert key in m, f"{key} missing from the kit's measured block"
     assert abs(m["full_bleed_floor_1080p"] - 1920 / 1080) < 1e-3
     assert m["matte_area_band"] == [0.12, 0.55]
     assert m["drawing_pose_iou_gate"] > 0.291, (
-        "the pose gate must sit above the measured wrong-fighter floor")
+        "the pose gate must sit above the measured wrong-fighter floor"
+    )
 
 
 def test_kit_constants_agree_with_the_code_that_still_holds_them():
@@ -173,4 +180,5 @@ def test_matte_module_constants_match_the_kit():
     reg = __import__("genlab_core.action.kits.registry", fromlist=["x"])
     m = yaml.safe_load((pathlib.Path(reg.__file__).parent / "impact.yaml").read_text())["measured"]
     assert list(MATTE_AREA_BAND) == m["matte_area_band"], (
-        "matte.py and impact.yaml disagree on the area band")
+        "matte.py and impact.yaml disagree on the area band"
+    )

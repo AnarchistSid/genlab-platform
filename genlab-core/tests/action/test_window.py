@@ -17,8 +17,8 @@ def _canvas(h=240, w=360):
 
 
 def _put(rgb, fg, x0, y0, ww, hh, colour):
-    rgb[y0:y0 + hh, x0:x0 + ww] = colour
-    fg[y0:y0 + hh, x0:x0 + ww] = 1.0
+    rgb[y0 : y0 + hh, x0 : x0 + ww] = colour
+    fg[y0 : y0 + hh, x0 : x0 + ww] = 1.0
 
 
 RED, BLUE = (200, 30, 40), (30, 60, 200)
@@ -31,7 +31,7 @@ def _pair(subject_big: bool):
     if subject_big:
         _put(rgb, fg, 200, 20, 90, 200, BLUE)
     else:
-        _put(rgb, fg, 300, 150, 26, 30, BLUE)   # barely present
+        _put(rgb, fg, 300, 150, 26, 30, BLUE)  # barely present
     return rgb, fg
 
 
@@ -47,8 +47,8 @@ def test_subject_absent_for_most_of_the_window_fails_the_criterion():
     hue, frac = W._subject_hold([f[0] for f in frames], [f[1] for f in frames])
     assert hue is not None, "a subject IS chosen -- on the last frame"
     assert frac < W.MIN_SUBJECT_FRAMES, (
-        f"held {frac:.2f}; a window the subject only enters at the end must not "
-        f"be eligible")
+        f"held {frac:.2f}; a window the subject only enters at the end must not be eligible"
+    )
 
 
 def test_the_subject_is_chosen_on_the_LAST_frame_not_the_first():
@@ -59,9 +59,15 @@ def test_the_subject_is_chosen_on_the_LAST_frame_not_the_first():
 
 
 def test_eligibility_needs_all_three_criteria():
-    w = W.WindowScore(start_s=10.0, motion=50.0, cuts=0, subject_hue=225.0,
-                      subject_frames_frac=0.5, eligible=False,
-                      reason="subject holds only 50% of frames (want 80%)")
+    w = W.WindowScore(
+        start_s=10.0,
+        motion=50.0,
+        cuts=0,
+        subject_hue=225.0,
+        subject_frames_frac=0.5,
+        eligible=False,
+        reason="subject holds only 50% of frames (want 80%)",
+    )
     assert not w.eligible
     assert "50%" in w.row() and "ELIGIBLE" not in w.row()
 
@@ -74,7 +80,7 @@ def test_row_prints_all_three_numbers():
 
 
 def test_no_subject_on_the_last_frame_is_not_eligible():
-    rgb, fg = _canvas()          # empty foreground, no garment
+    rgb, fg = _canvas()  # empty foreground, no garment
     hue, frac = W._subject_hold([rgb] * 4, [fg] * 4)
     assert hue is None and frac == 0.0
 
@@ -113,20 +119,27 @@ def test_the_criterion_is_measured_against_garment_not_raw_foreground():
     assert groups, "no garment found"
     assert all(g["body_px"] / fg_px < 0.20 for g in groups), (
         f"fixture no longer reproduces the scale problem: "
-        f"{[round(g['body_px'] / fg_px, 3) for g in groups]}")
+        f"{[round(g['body_px'] / fg_px, 3) for g in groups]}"
+    )
 
     hue, frac = W._subject_hold([rgb] * 4, [fg] * 4)
     assert frac == 1.0, (
-        f"a fighter holding half the garment in frame must count as held, got "
-        f"{frac}")
+        f"a fighter holding half the garment in frame must count as held, got {frac}"
+    )
 
 
 def test_a_replay_montage_is_rejected_by_the_zero_cut_rule():
     """Motion ALONE returned a replay montage on the UFC clip -- maximum motion,
     no continuity, nothing for SAM2 to track. Cuts are what reject it."""
-    montage = W.WindowScore(start_s=330.0, motion=99.0, cuts=4,
-                            subject_hue=225.0, subject_frames_frac=1.0,
-                            eligible=False, reason="cuts")
+    montage = W.WindowScore(
+        start_s=330.0,
+        motion=99.0,
+        cuts=4,
+        subject_hue=225.0,
+        subject_frames_frac=1.0,
+        eligible=False,
+        reason="cuts",
+    )
     assert montage.cuts > 0
     assert not montage.eligible, "a montage passed on motion alone"
 
@@ -138,7 +151,8 @@ def test_a_re_entangled_window_is_rejected_on_subject_hold():
     hue, frac = W._subject_hold([f[0] for f in frames], [f[1] for f in frames])
     assert frac < W.MIN_SUBJECT_FRAMES, (
         f"held {frac:.2f}; a window where the subject is only separable at the "
-        f"end must not be eligible")
+        f"end must not be eligible"
+    )
 
 
 def test_the_eligible_window_and_the_rejected_one_differ_only_in_hold():

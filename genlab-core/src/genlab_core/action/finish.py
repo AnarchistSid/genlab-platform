@@ -66,6 +66,12 @@ SEED_AREA_FLOOR = 0.0025
 #: commits. First crossing of this share of the bracket's maximum.
 EDGE_FRACTION = 0.70
 
+#: A maximum on the bracket's boundary is a maximum OF THE BRACKET, not of the
+#: signal -- the real peak is outside. Measured on UFC-05 window 24.9: the pick
+#: and the peak were both frame 7 of a (7, 25) bracket. Widen once on that side
+#: and re-pick; still on an edge means the bracket is in the wrong place.
+EDGE_WIDEN_FRAMES = 6
+
 #: Fewer valid samples than this inside the bracket and the colour heuristic has
 #: not answered; the quarter-res tracker is asked instead.
 MIN_VALID_SAMPLES = 5
@@ -478,3 +484,43 @@ def is_window_invariant(finishes_abs: list[float], spread_s: float = INVARIANCE_
         "PASS" if ok else "FAIL",
     )
     return ok
+
+
+def _in_bracket(samples: list, bound: tuple) -> list:
+    lo, hi = bound
+    return [s for s in continuous_samples(samples) if lo <= s[0] <= hi]
+
+
+def pick_with_edge_guard(
+    samples: list, *, opponent_on_right: bool, bound: tuple, widen: int = EDGE_WIDEN_FRAMES
+) -> tuple:
+    """(frame, bound_used) — the velocity pick, refusing boundary maxima.
+
+    A pick sitting on the first or last sample of the bracket means the signal
+    was still rising (or falling) where the bracket stopped looking. Widen once
+    on that side. If it is still on an edge, the bracket is in the wrong place
+    and there is no finish to report.
+    """
+    for attempt in (0, 1):
+        f = subject_velocity_peak(samples, opponent_on_right=opponent_on_right, bound=bound)
+        if f is None:
+            return None, bound
+        kept = _in_bracket(samples, bound)
+        if not kept:
+            return None, bound
+        on_lo, on_hi = f == kept[0][0], f == kept[-1][0]
+        if not (on_lo or on_hi):
+            return f, bound
+        if attempt:
+            logger.warning(
+                "[finish] pick %d is still on a bracket edge after widening %s — unresolved",
+                f,
+                bound,
+            )
+            return None, bound
+        lo, hi = bound
+        bound = (lo - widen if on_lo else lo, hi + widen if on_hi else hi)
+        logger.info(
+            "[finish] pick %d sat on a bracket edge — widening to %s and re-picking", f, bound
+        )
+    return None, bound

@@ -277,14 +277,14 @@ def test_the_tie_break_prefers_the_finish_nearest_the_window_start():
         job(
             candidates=[
                 {"start_s": 674.9, "frames": 96, "motion_score": 0.9},
-                {"start_s": 675.3, "frames": 96, "motion_score": 0.8},
+                {"start_s": 675.1, "frames": 96, "motion_score": 0.8},
             ]
         ),
         frames_for=frames_for_abs,
     )
     assert r.ok, r.reason
-    assert r.window["start_s"] == 675.3, r.window
-    assert r.finish_frame <= 2, r.finish_frame
+    assert r.window["start_s"] == 675.1, r.window
+    assert r.finish_frame <= 8, r.finish_frame
 
 
 def test_every_candidate_is_reported_even_the_rejected_ones():
@@ -408,7 +408,8 @@ def test_a_collapsed_seed_falls_back_to_the_quarter_res_tracker():
     called = []
 
     def dead_seed(f):
-        return np.zeros((H, W), np.float32) if 5 <= f <= 30 else seed_moving(f)
+        # dead across the bracket AND the widening margin
+        return np.zeros((H, W), np.float32) if f <= 45 else seed_moving(f)
 
     def tracker(start_s, n, seed_frame, seed_mask):
         called.append((start_s, seed_frame))
@@ -618,11 +619,14 @@ def test_one_candidate_leaves_the_gate_UNTESTED_not_passed():
 
 
 def test_two_agreeing_candidates_make_the_gate_report_a_pass_with_its_spread():
+    """Both windows start BEFORE the strike, which is what audio-anchored
+    candidate generation guarantees — so both contain it and the gate has
+    something to compare."""
     r = run(
         job(
             candidates=[
                 {"start_s": 674.9, "frames": 96, "motion_score": 0.9},
-                {"start_s": 675.3, "frames": 96, "motion_score": 0.8},
+                {"start_s": 675.1, "frames": 96, "motion_score": 0.8},
             ]
         ),
         frames_for=frames_for_abs,

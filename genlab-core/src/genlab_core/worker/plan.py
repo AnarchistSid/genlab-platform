@@ -29,15 +29,17 @@ import numpy as np
 
 from genlab_core.action.effects._ops import dilate
 from genlab_core.action.finish import (
+    EDGE_WIDEN_FRAMES,
     MIN_VALID_SAMPLES,
     FinishFailure,
     audio_bound,
     audio_onset_frame,
+    continuous_samples,
     descent_frame,
     invariance_spread_s,
     is_window_invariant,
     largest_component,
-    subject_velocity_peak,
+    pick_with_edge_guard,
     velocity_samples,
 )
 from genlab_core.action.finish import resolve as finish_resolve
@@ -316,19 +318,41 @@ def plan(
             c.finish_reason = FinishFailure.NO_AUDIO
             logger.info("[finish] candidate %.2fs -> None (%s)", c.start_s, c.finish_reason)
             continue
-        lo_b, hi_b = audio_bound(a_f, fps)
+        bound = audio_bound(a_f, fps)
+
+        # THE OPPONENT, ONCE, FOR BOTH JOBS. Its centroid x gives the DIRECTION
+        # the subject must move to be striking; its centroid y gives the descent
+        # cross-check. Both come from the same continuity-filtered component, so
+        # the two cannot disagree about which blob the opponent is.
+        opp_x, opp_y = [], []
+        for i in range(0, len(wf), FINISH_STRIDE):
+            fgm = np.asarray(fg_for_finish(wf[i]), np.float32)
+            if fgm.size < 4:
+                continue
+            subj = _match_shape(sub_mask(seed_mask_fn, wf[i], fgm.shape), fgm.shape)
+            resid = ((fgm > 0.5) & ~(dilate(subj, SUBJECT_DILATE_PX) > 0.5)).astype(np.float32)
+            opp = largest_component(resid)
+            area = float(opp.mean())
+            if area < OPPONENT_AREA_FLOOR:
+                continue
+            ys, xs = np.nonzero(opp > 0.5)
+            if len(ys):
+                opp_y.append((i, float(ys.mean()), area))
+                opp_x.append((i, float(xs.mean()), area))
 
         # THE VIDEO PICKS, inside the bracket. Only the bracketed frames are
-        # sampled: the seed is cheap but not free, and everything outside is
-        # work whose answer would be discarded.
-        want = [i for i in range(len(wf)) if lo_b - 2 <= i <= hi_b + 2]
+        # seeded: the seed is cheap but not free, and everything outside is work
+        # whose answer would be discarded.
+        lo_b, hi_b = bound
+        want = [
+            i
+            for i in range(len(wf))
+            if lo_b - EDGE_WIDEN_FRAMES - 2 <= i <= hi_b + EDGE_WIDEN_FRAMES + 2
+        ]
         seeds = {i: sub_mask(seed_mask_fn, wf[i], None) for i in want}
         samples = velocity_samples(seeds)
         used_tracker = False
         if len(samples) < MIN_VALID_SAMPLES and quarter_track_fn is not None:
-            # The colour seed has not answered inside the bracket. Ask the
-            # tracker, seeded from the vote's own mask so the two cannot
-            # disagree about which fighter this is.
             best = max(
                 seeds, key=lambda k: float((np.asarray(seeds[k]) > 0.5).mean()), default=None
             )
@@ -342,30 +366,14 @@ def plan(
                     samples = velocity_samples({k: v for k, v in tracked.items() if k in want})
                     used_tracker = True
 
-        right, left = _opponent_side(seeds, fg_for_finish, wf)
-        v_f = subject_velocity_peak(samples, opponent_on_right=right >= left, bound=(lo_b, hi_b))
-
-        # The descent stays a cross-check and never anchors.
-        d_samples = []
-        for i in range(0, len(wf), FINISH_STRIDE):
-            fgm = np.asarray(fg_for_finish(wf[i]), np.float32)
-            if fgm.size < 4:
-                continue
-            subj = _match_shape(sub_mask(seed_mask_fn, wf[i], fgm.shape), fgm.shape)
-            resid = ((fgm > 0.5) & ~(dilate(subj, SUBJECT_DILATE_PX) > 0.5)).astype(np.float32)
-            opp = largest_component(resid)
-            area = float(opp.mean())
-            if area < OPPONENT_AREA_FLOOR:
-                continue
-            ys = np.nonzero(opp > 0.5)[0]
-            if len(ys):
-                d_samples.append((i, float(ys.mean()), area))
+        on_right = _opponent_side(continuous_samples(opp_x), samples)
+        v_f, bound = pick_with_edge_guard(samples, opponent_on_right=on_right, bound=bound)
 
         res = finish_resolve(
             a_f,
             v_f,
-            descent_frame(d_samples),
-            bound=(lo_b, hi_b),
+            descent_frame(opp_y),
+            bound=bound,
             samples_in_bound=len(samples),
             used_tracker=used_tracker,
         )
@@ -511,24 +519,31 @@ def _match_shape(m: np.ndarray, shape) -> np.ndarray:
     return m[np.ix_(r, c)]
 
 
-def _opponent_side(seeds: dict, foreground_fn, wf: list) -> tuple[float, float]:
-    """(right_mass, left_mass) of what is NOT the subject.
+def _opponent_side(opponent_samples: list, subject_samples: list) -> bool:
+    """True when the opponent is to the RIGHT of the subject.
 
-    Only ever used for a left/right decision, so it needs no continuity filter —
-    a coarse mass comparison over several frames cannot be flipped by one bad
-    seed the way a centroid can.
+    From two BODIES' centroids, not from residual mass either side of the frame
+    centre. Measured on UFC-05, where the subject sits at x=520 of 960 — dead
+    centre — the half-plane residual split 299k/360k in one window and 259k/246k
+    in another, and the verdict FLIPPED between two windows of the same footage
+    on a 5.6% margin. The sign of the velocity depends on this, so a coin flip
+    here is a coin flip on the whole finish.
+
+    The residual is everything the seed missed: crowd, cage, and the subject's
+    own body. Summed across half-planes it measures the arena. Compared as
+    centroids, it measures the two people.
     """
-    right = left = 0.0
-    for i in sorted(seeds)[:: max(len(seeds) // 6, 1)]:
-        fgm = np.asarray(foreground_fn(wf[i]), np.float32)
-        if fgm.size < 4:
-            continue
-        subj = _match_shape(np.asarray(seeds[i], np.float32), fgm.shape)
-        resid = (fgm > 0.5) & ~(dilate(subj, SUBJECT_DILATE_PX) > 0.5)
-        half = resid.shape[1] // 2
-        left += float(resid[:, :half].sum())
-        right += float(resid[:, half:].sum())
-    return right, left
+    if not opponent_samples or not subject_samples:
+        return True
+    opp = float(np.median([x for _, x, _ in opponent_samples]))
+    sub = float(np.median([x for _, x, _ in subject_samples]))
+    logger.info(
+        "[finish] opponent centroid x=%.0f, subject x=%.0f -> opponent on the %s",
+        opp,
+        sub,
+        "right" if opp >= sub else "left",
+    )
+    return opp >= sub
 
 
 def sub_mask(seed_mask_fn, f: int, shape=None) -> np.ndarray:

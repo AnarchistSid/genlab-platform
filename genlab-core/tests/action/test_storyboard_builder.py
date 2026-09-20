@@ -252,3 +252,41 @@ def test_a_one_frame_window_does_not_explode():
 
 def test_an_empty_window_yields_no_shots():
     assert B.shot_list(0, 0, lambda f: 2.0) == []
+
+
+# ── candidates come from the audio anchor ───────────────────────────────────
+
+
+def test_every_anchored_candidate_contains_the_finish():
+    """On the UFC-05 span the level shift is at 25.65 s and the strike at
+    25.333. Windows starting 0.3/0.5/0.8 s before the anchor all contain it —
+    which is the point: the invariance gate then has n >= 2 on every plan."""
+    anchor, strike = 25.65, 25.333
+    got = B.audio_anchored_candidates(anchor, [], motion_at=lambda s: 1.0)
+    assert len(got) == 3
+    for c in got:
+        assert c["start_s"] <= strike <= c["start_s"] + B.WINDOW_S, c
+
+
+def test_the_archives_window_is_among_the_anchored_candidates():
+    """24.9 scored 9.36 on motion against 11.88 for the busiest window, so
+    selecting by motion excluded it. Anchoring reaches it."""
+    got = B.audio_anchored_candidates(25.65, [], motion_at=lambda s: 1.0)
+    assert any(abs(c["start_s"] - 24.9) < 0.3 for c in got), got
+
+
+def test_motion_ranks_the_anchored_candidates_it_does_not_select_them():
+    got = B.audio_anchored_candidates(25.65, [], motion_at=lambda s: s)
+    assert [c["start_s"] for c in got] == sorted((c["start_s"] for c in got), reverse=True)
+    assert all(c["motion_score"] == c["start_s"] for c in got)
+
+
+def test_an_anchored_candidate_containing_a_cut_is_still_discarded():
+    """A cut is a different shot and the tracker walks across it."""
+    got = B.audio_anchored_candidates(25.65, [25.4], motion_at=lambda s: 1.0)
+    assert all(not (c["start_s"] < 25.4 < c["start_s"] + B.WINDOW_S) for c in got)
+
+
+def test_an_anchor_too_close_to_the_start_drops_negative_windows():
+    got = B.audio_anchored_candidates(0.4, [], motion_at=lambda s: 1.0)
+    assert all(c["start_s"] >= 0 for c in got)
