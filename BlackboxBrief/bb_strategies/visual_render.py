@@ -60,7 +60,11 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
                             check_pre_render_quality,
                         )
 
-                        _qc = check_pre_render_quality(hook_text, niche_id="ai_creators")
+                        _qc = check_pre_render_quality(
+                            hook_text,
+                            niche_id="ai_creators",
+                            title=story.get("title", ""),
+                        )
                         if not _qc.ok:
                             logger.warning(
                                 "[ai_creators] pre-render quality gate rejected story %s (%s): %s",

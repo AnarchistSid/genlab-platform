@@ -334,7 +334,11 @@ class RenderGamingVideo(VisualRenderStrategy):
                 check_pre_render_quality,
             )
 
-            _qc = check_pre_render_quality(hook, niche_id="gaming")
+            _qc = check_pre_render_quality(
+                hook,
+                niche_id="gaming",
+                title=story.get("title", ""),
+            )
             if not _qc.ok:
                 logger.warning(
                     "[gaming] pre-render quality gate rejected story %s (%s): %s",
