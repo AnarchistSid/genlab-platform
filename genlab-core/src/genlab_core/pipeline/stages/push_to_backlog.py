@@ -2600,6 +2600,22 @@ class PushToBacklog:
                         "story_id": story_id,
                         "video_id": video_id,
                         "video_url": story.get("source_url", ""),
+                        # THE LOCAL SOURCE CLIP. `video_url` is the source URL;
+                        # `visual_paths` is the rendered legacy reel. Neither is
+                        # the downloaded footage, and the blueprint carried no
+                        # path to it at all -- so `router.route()`, which asks
+                        # `candidate.get("clip_path")`, saw None on every
+                        # blueprint and returned "no footage" for a run in which
+                        # DownloadTopVideos reported 3/3 downloaded.
+                        #
+                        # The name is the one the downloader already uses, so
+                        # the consumers do not learn an alias: the producer
+                        # starts writing what they were always reading.
+                        "clip_path": (
+                            ((context.get("clip_index") or {}).get("clips") or {})
+                            .get(story_id, {})
+                            .get("clip_path", "")
+                        ),
                         "source_channel_id": source_channel_id,
                         "source_channel_title": source_channel_title,
                         "hook": hook,

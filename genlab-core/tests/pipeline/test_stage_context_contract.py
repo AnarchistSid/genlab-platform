@@ -129,3 +129,37 @@ def test_the_check_covers_something(ordered_stages):
     assert "CraftRenderStage" in declared, declared
     print(f"\n  declared: {len(declared)}  undeclared: {len(undeclared)}")
     print("  still undeclared: " + ", ".join(sorted(undeclared)))
+
+
+# ── the blueprint must carry the footage the router asks for ────────────────
+
+
+def test_the_blueprint_carries_the_local_clip_path():
+    """MEASURED on prod: a sports blueprint had video_url='https://v.redd.it/…'
+    and clip_path=None, on a run where DownloadTopVideos reported 3/3
+    downloaded. `router.route()` asks `candidate.get("clip_path")`, saw None,
+    and returned "no footage" for all three — a supply conclusion from a wiring
+    fault.
+
+    Pinned at the PRODUCER. The consumers were always reading the right name;
+    nothing wrote it.
+    """
+    import inspect
+
+    from genlab_core.pipeline.stages import push_to_backlog
+
+    src = inspect.getsource(push_to_backlog)
+    assert '"clip_path": (' in src, "PushToBacklog no longer writes clip_path"
+    assert '"clip_index"' in src, "clip_path must come from the clip index"
+
+
+def test_the_router_and_the_producer_agree_on_the_name():
+    """The alias that never existed. If either side is renamed, this fails
+    rather than routing every blueprint to STILL."""
+    import inspect
+
+    from genlab_core.action import router
+    from genlab_core.pipeline.stages import push_to_backlog
+
+    assert 'candidate.get("clip_path")' in inspect.getsource(router)
+    assert '"clip_path"' in inspect.getsource(push_to_backlog)
