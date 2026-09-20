@@ -22,11 +22,11 @@
   <key>Label</key>              <string>sh.genlab.matte-worker</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/anarchistsid/.local/bin/uv</string>
-    <string>run</string>
-    <string>--project</string>
-    <string>/Users/anarchistsid/GenLab</string>
-    <string>python</string>
+    <!-- The ISOLATED worker venv (rule #31): torch 2.14 + sam2 + rembg live
+         there and NOT in the project venv, which still carries torch 2.12.1.
+         `uv run --project` would use the project venv, where sam2 does not
+         exist, and every job would report sam2_backend-not-available. -->
+    <string>/Users/anarchistsid/genlab-worker/.venv/bin/python</string>
     <string>/Users/anarchistsid/GenLab/scripts/matte_worker.py</string>
     <string>--host</string>
     <string>genlab-prod</string>
@@ -43,6 +43,7 @@
   <dict>
     <key>PATH</key>             <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>PYTORCH_ENABLE_MPS_FALLBACK</key><string>1</string>
+    <key>PYTHONPATH</key>       <string>/Users/anarchistsid/GenLab/genlab-core/src</string>
   </dict>
 </dict>
 </plist>
