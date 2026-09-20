@@ -673,6 +673,48 @@ class TestOpenAIFallback:
         with pytest.raises(_FakeAnthropicExhaustion):
             client.generate_report("sys", "user")
 
+    def test_belt_is_tried_even_without_an_openai_key(self, monkeypatch):
+        """No OPENAI_API_KEY must not skip belt — belt needs no OpenAI key.
+
+        The guard used to be ``if not openai_key: return None``, which threw
+        away a funded, working tier whenever the key was absent. Not
+        hypothetical: as of 2026-09-20 the OpenAI balance is zero, and
+        deleting a dead key is the obvious operator move — it would have
+        taken belt down with it and returned the strategist to the exact
+        Sunday failure this class of fallback exists to prevent.
+
+        Belt is disabled suite-wide by the conftest fixture (hermetic
+        tests), so this re-enables it in its own body, as that fixture's
+        docstring prescribes.
+        """
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.setenv("GENLAB_LLM_FALLBACK_BELT", "1")
+        exc = _FakeAnthropicExhaustion()
+        mock_client = _mk_client(side_effect=exc)
+        client = AnthropicStrategistClient(client_factory=lambda: mock_client)
+        with patch(
+            "genlab_core.llm.fallback.call_openai_fallback",
+            return_value='{"proposals": []}',
+        ) as mock_chain:
+            result = client.generate_report("sys", "user")
+        mock_chain.assert_called_once()
+        assert result.text == '{"proposals": []}'
+        # The chain is entered with an empty key; call_openai_fallback's own
+        # contract is belt-first, raising only if belt is down AND no key.
+        assert mock_chain.call_args.kwargs["api_key"] == ""
+
+    def test_no_belt_and_no_key_still_re_raises(self, monkeypatch):
+        """The widened guard must still refuse when the whole chain is out."""
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.setenv("GENLAB_LLM_FALLBACK_BELT", "0")
+        exc = _FakeAnthropicExhaustion()
+        mock_client = _mk_client(side_effect=exc)
+        client = AnthropicStrategistClient(client_factory=lambda: mock_client)
+        with patch("genlab_core.llm.fallback.call_openai_fallback") as mock_chain:
+            with pytest.raises(_FakeAnthropicExhaustion):
+                client.generate_report("sys", "user")
+        mock_chain.assert_not_called()
+
     def test_non_exhaustion_error_does_not_trigger_fallback(self, monkeypatch):
         """Non-exhaustion errors (auth, network) skip fallback path even
         when OPENAI_API_KEY is set. Auth errors need operator, not

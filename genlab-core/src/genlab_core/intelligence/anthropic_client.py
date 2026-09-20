@@ -231,9 +231,17 @@ class AnthropicStrategistClient:
         user_prompt: str,
         t0: float,
     ) -> CallResult | None:
-        """Return CallResult from OpenAI gpt-4o fallback if Anthropic is
+        """Return CallResult from the fallback CHAIN if Anthropic is
         exhausted AND OPENAI_API_KEY is set. Return None otherwise so the
         caller falls through to its regular error/retry path.
+
+        Named ``_try_openai_fallback`` for history; ``call_openai_fallback``
+        routes belt (Claude Haiku, 0% markup, separate pool) first and only
+        reaches OpenAI if belt is disabled or raises. The OPENAI_API_KEY
+        guard above therefore gates the belt tier too, which is wrong on its
+        face — belt needs no OpenAI key — but is left alone here because the
+        key gate was widened to gate on the chain instead: belt alone is
+        enough to attempt the fallback.
 
         Kept as its own method for readability + testability. gpt-4o
         chosen over gpt-4o-mini because Strategist is a reasoning task
@@ -241,6 +249,7 @@ class AnthropicStrategistClient:
         the meta-cognition prompt shape.
         """
         from genlab_core.llm.fallback import (
+            belt_fallback_enabled,
             call_openai_fallback,
             cb_record_exhaustion,
             fallback_enabled,
@@ -249,10 +258,17 @@ class AnthropicStrategistClient:
 
         if not (fallback_enabled() and should_fallback(anthropic_exc)):
             return None
+        # Gate on the CHAIN being usable, not on OpenAI specifically. belt
+        # is tier 1 inside call_openai_fallback and needs no OpenAI key, so
+        # `if not openai_key: return None` skipped a working, funded tier
+        # whenever the key was absent. That is not hypothetical: as of
+        # 2026-09-20 the OpenAI balance is zero, and deleting a dead key is
+        # the obvious operator response — which would have silently taken
+        # belt down with it.
         openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
-        if not openai_key:
+        if not openai_key and not belt_fallback_enabled():
             logger.warning(
-                "strategist.fallback_skip reason=no_openai_key exc=%s",
+                "strategist.fallback_skip reason=no_belt_and_no_openai_key exc=%s",
                 type(anthropic_exc).__name__,
             )
             return None
@@ -268,8 +284,16 @@ class AnthropicStrategistClient:
                 json_mode=True,  # strategist output must be parseable JSON
             )
             duration = time.monotonic() - t0
+            # NOT necessarily OpenAI: call_openai_fallback tries belt
+            # (Claude Haiku, 0% markup) first and only falls through to
+            # OpenAI when belt is disabled or raises. The old wording said
+            # "fallback_openai" unconditionally, which during the
+            # 2026-09-20 incident read as proof that belt had been skipped
+            # — it had not; belt was failing on a request flag. A log that
+            # names the wrong provider costs diagnostic time exactly when
+            # there is none to spare.
             logger.warning(
-                "strategist.llm_call_fallback_openai reason=%s cost_tracked_openai t=%.2fs",
+                "strategist.llm_call_fallback reason=%s served_by=belt_or_openai t=%.2fs",
                 type(anthropic_exc).__name__,
                 duration,
             )
@@ -289,8 +313,9 @@ class AnthropicStrategistClient:
             )
         except Exception as openai_exc:
             logger.warning(
-                "strategist.fallback_openai_failed openai_exc=%s — "
-                "returning None to re-raise original Anthropic error",
+                "strategist.fallback_chain_failed exc=%s — belt AND OpenAI "
+                "both unavailable; returning None to re-raise the original "
+                "Anthropic error",
                 openai_exc,
             )
             return None
