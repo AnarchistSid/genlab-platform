@@ -40,7 +40,13 @@ ExecStart=/opt/genlab/.venv/bin/gunicorn \
 #
 # ExecStartPost fails the start if nothing answers, so that shape pages in a
 # minute. Restart=always then retries it, which is what clears a lost fork race.
-ExecStartPost=/opt/genlab/deploy/systemd-phase2/lib/http_ready.sh http://127.0.0.1:5151/api/v1/compliance/stats 30
+# 90s, not 30. The FIRST boot after a deploy is the slowest one -- cold import
+# caches right after `uv sync` -- and it is exactly when this gate runs. At 30s
+# it timed out on a HEALTHY service (2026-09-20 09:24), systemd killed it, fired
+# OnFailure into a false CRITICAL, and the restart answered in 2s. A readiness
+# gate that kills a slow boot is an outage wearing a check's clothes; this one
+# exists to catch "listening but nothing answers", which stays caught.
+ExecStartPost=/opt/genlab/deploy/systemd-phase2/lib/http_ready.sh http://127.0.0.1:5151/api/v1/compliance/stats 90
 TimeoutStartSec=90
 
 Restart=always
