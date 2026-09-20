@@ -168,7 +168,7 @@ class CropPlan:
 class MatteRequest:
     clip_path: str
     frames_dir: str
-    #: REQUIRED for a matte request, OPTIONAL for a plan request.
+    #: BOTH are required for a matte request and absent from a plan request.
     #:
     #: A matte job that cannot name the subject's colour or the crop geometry is
     #: one the worker will refuse, so it is refused here. A PLAN job is the job
@@ -176,7 +176,7 @@ class MatteRequest:
     #: which needs rembg, which is in the worker's venv and not on the VPS. The
     #: worker derives it from the first candidate's own first frame.
     subject_spec: HSVSpec | None
-    crop_plan: CropPlan
+    crop_plan: CropPlan | None
     annotations: list[dict] = field(default_factory=list)
     cuts: list[int] = field(default_factory=list)
     niche_id: str = ""
@@ -201,9 +201,9 @@ class MatteRequest:
             "job_id": job_id,
             "clip_path": self.clip_path,
             "frames_dir": self.frames_dir,
-            "n_frames": len(self.crop_plan.rows),
+            "n_frames": len(self.crop_plan.rows) if self.crop_plan else 0,
             "subject_colour": self.subject_spec.as_dict() if self.subject_spec else {},
-            "crop_plan": self.crop_plan.as_dict(),
+            "crop_plan": self.crop_plan.as_dict() if self.crop_plan else {},
             "cuts": list(self.cuts),
             "niche_id": self.niche_id,
             "blueprint_id": self.blueprint_id,

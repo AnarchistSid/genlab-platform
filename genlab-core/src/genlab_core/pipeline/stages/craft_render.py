@@ -319,7 +319,7 @@ class CraftRenderStage:
             clip_path=clip,
             frames_dir=str(Path(context.get("run_dir", ".")) / "frames" / bid),
             subject_spec=None,
-            crop_plan=CropPlan(rows={}),
+            crop_plan=None,
             cuts=[int(c * fps) for c in cuts],
             niche_id=context.get("niche_id", ""),
             blueprint_id=bid,

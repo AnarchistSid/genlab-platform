@@ -690,3 +690,24 @@ def test_the_launchd_plist_points_at_the_same_queue():
         _P(__file__).resolve().parents[3] / "deploy" / "launchd" / "sh.genlab.matte-worker.plist"
     ).read_text()
     assert str(DEFAULT_ROOT) in plist, f"plist does not use {DEFAULT_ROOT}"
+
+
+def test_a_plan_request_needs_neither_subject_nor_crop():
+    """A plan job is the job that DISCOVERS both. Requiring them made the only
+    constructible request a matte request — and the one the builder needed
+    could not be built at all."""
+    from genlab_core.action.matte_worker import MatteRequest
+
+    req = MatteRequest(
+        clip_path="/tmp/x.mp4",
+        frames_dir="/tmp/f",
+        subject_spec=None,
+        crop_plan=None,
+        plan=True,
+        candidates=[{"start_s": 1.0, "frames": 96, "motion_score": 2.0}],
+        fps=30.0,
+    )
+    job = req.as_job("j1")
+    assert job["plan"] is True and job["n_frames"] == 0
+    assert job["crop_plan"] == {} and job["subject_hint"] == {}
+    assert job["candidates"][0]["motion_score"] == 2.0 and job["fps"] == 30.0
