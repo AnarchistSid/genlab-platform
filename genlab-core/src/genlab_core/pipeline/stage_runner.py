@@ -44,6 +44,15 @@ _SANDBOX_RUNNER_ATTR = "_sandbox_runner"
 # ── Result dataclass ─────────────────────────────────────────────────────────
 
 
+class AllDiscarded(RuntimeError):
+    """A stage received items and produced none of them.
+
+    Distinct from an empty input, which is a legitimate outcome ("nothing
+    trending today"). This is the shape where work arrived, every item was
+    dropped, and the stage still reported success.
+    """
+
+
 @dataclass(frozen=True)
 class StageResult:
     """Outcome of a single stage execution."""
@@ -194,6 +203,36 @@ class LocalStageRunner:
                 # from "stage silently no-op'd". Pop the sentinel so
                 # it doesn't leak to subsequent stages.
                 stage_status = context.pop("_stage_status", "ok")
+
+                # ANIME-08 §4. A stage that received items and produced NONE
+                # did not complete — it discarded everything, and "completed"
+                # must not be available to it.
+                #
+                # 2026-09-21: PushToBacklog received 3 stories, produced 0
+                # blueprints (every insert failed on a missing column), logged
+                # one WARNING per blueprint, reported "completed in 14.5s", the
+                # run exited 0 and the timer went green. Four niches produced
+                # nothing for 24 hours and nothing paged. The information was
+                # all there; none of it was a failure signal.
+                discarded = context.pop("_all_discarded", "")
+                if discarded:
+                    elapsed = time.monotonic() - t0
+                    logger.error(
+                        "[Pipeline] Stage %s all_discarded:%s — received items "
+                        "and produced none; the run is marked failed",
+                        stage_name,
+                        discarded,
+                    )
+                    if self._metrics is not None:
+                        self._metrics.record_stage(
+                            stage_name, duration_ms=elapsed * 1000.0, status="error"
+                        )
+                    return StageResult(
+                        stage_name=stage_name,
+                        success=False,
+                        elapsed_seconds=elapsed,
+                        error=AllDiscarded(f"all_discarded:{discarded}"),
+                    )
                 if self._metrics is not None:
                     self._metrics.record_stage(
                         stage_name,

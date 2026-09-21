@@ -3481,6 +3481,27 @@ class PushToBacklog:
             len(errors),
         )
 
+        # ANIME-08 §4. Work arrived and none of it survived: that is not
+        # "completed". The runner turns this sentinel into ERROR
+        # `all_discarded:<reason>` and fails the run.
+        #
+        # 2026-09-21: 3 stories in, 0 blueprints out, every insert dying on
+        # `column "source_url" ... does not exist`. One WARNING per blueprint,
+        # stage "completed in 14.5s", run exit 0, timer green, four niches
+        # silent for a day.
+        #
+        # Deliberately NOT triggered by an empty input — "nothing trending
+        # today" is a real outcome and must stay quiet, or the signal is worth
+        # nothing. The condition is: items received AND none produced.
+        candidates_in = len(context.get("stories") or [])
+        if candidates_in and not blueprints_pushed:
+            reason = (
+                f"{errors[0]}"[:120]
+                if errors
+                else f"{candidates_in}_in_0_blueprints_no_error"
+            )
+            context["_all_discarded"] = reason
+
         # Published for the stages that run after this one. Named ``blueprints``
         # because that is what they read; see the contract check in
         # tests/pipeline/test_stage_context_contract.py, which fails if any

@@ -150,6 +150,14 @@ PY
 # actually executed, and dropping them would reintroduce the silent
 # write-to-extra/read-from-NULL data loss R-63 fixed.
 #
+# Verified by direct read 2026-09-21, not inferred: as the app user
+# (genlab_app on db `genlab`), search_path "$user",public, there is exactly
+# ONE `stories` table, in schema `public`, with 13 columns and none of these
+# four. So this check is not reading the wrong schema or database. They are
+# dormant rather than broken because the only stories.create in the tree does
+# not write them — which is precisely the difference from
+# blueprints.source_url, where something HAD started writing it.
+#
 # The fix is DDL (ADD COLUMN IF NOT EXISTS) against a migration graph that
 # currently has NINE heads, which is its own piece of work. Until then this
 # list is the debt, written down and counted, and anything NOT on it fails

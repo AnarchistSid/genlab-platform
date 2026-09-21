@@ -249,6 +249,26 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         # a1b2c3d4e5f6) but were absent from this map — so writes landed in the
         # ``extra`` JSONB while reads preferred the (NULL) real column, silently
         # dropping the value. The test-storage CI job caught this on video_id.
+        #
+        # 2026-09-21 RECONCILIATION. The deploy verifier reports all four
+        # ABSENT on prod, and both statements are true of different databases:
+        #
+        #   * The migration does create them — but with
+        #     CREATE TABLE IF NOT EXISTS. Prod's `stories` predates it, so the
+        #     migration RAN, alembic recorded it applied, and it added nothing.
+        #     Read directly as the app user: one `stories` table, schema
+        #     `public`, 13 columns, none of these four.
+        #   * They are therefore DORMANT on prod, not broken: the only
+        #     `stories.create` in the tree (push_to_backlog) writes story_id,
+        #     title, url, source, published_at, summary, priority, status,
+        #     niche_id — and none of these four. That is why story inserts
+        #     succeed while blueprints.source_url killed every blueprint
+        #     insert: something had started writing THAT one.
+        #
+        # So they stay listed (correct wherever the migration executed) and are
+        # allowlisted in the verifier (absent where it did not), with the real
+        # fix being ADD COLUMN IF NOT EXISTS DDL. The moment anything writes
+        # one of these on prod, inserts break the same way.
         "source_name",
         "source_type",
         "video_id",
