@@ -151,6 +151,13 @@ def get_narration_config(niche_config: dict[str, Any] | None) -> dict[str, Any]:
         # the mix then rejects as vo_overrun. Default 1.0 = the tier's
         # measured baseline.
         "speaking_rate": 1.0,
+        # The voice the rates were measured on. `wpm` moves with the voice --
+        # inworld/Sarah delivers ~162 wpm at speaking_rate 1.0 where
+        # narration_gate's own tier default says 141 -- so a config that sets
+        # a measured wpm without naming its voice describes nothing. Empty
+        # means "the provider default", which is what every niche used before
+        # any of this was measured.
+        "voice_id": "",
         # One regeneration at this fraction of the original budget when the
         # script overruns, before degrading (NARR-11 ruling).
         "retry_budget_factor": 0.85,

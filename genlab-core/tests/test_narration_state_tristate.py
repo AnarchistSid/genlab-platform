@@ -100,5 +100,16 @@ class TestAnimeEnrolled:
         """
         cfg = yaml.safe_load((_ROOT / "FrameDrift/config/niche.yaml").read_text())
         n = cfg["narration"]
-        assert n["wpm"] == 141, "prediction rate must stay on the measured value"
-        assert n["speaking_rate"] > 1.0, "the faster register belongs here"
+        # MEASURED on rendered audio, voice Sarah, the real script:
+        #   rate 1.00 -> 157-167 wpm   rate 1.05 -> 177.4   rate 1.22 -> 201.4
+        # An earlier version of this pin asserted wpm == 141, the figure
+        # narration_gate records. Measurement showed inworld delivers ~162 at
+        # rate 1.0 on this voice, so 141 was ~14% low — and 1.22, derived from
+        # it to reach 165-180, overshot to 201.
+        assert n["wpm"] == 177, "prediction rate must be the MEASURED one"
+        assert 165 <= n["wpm"] <= 180, "the register the packet asks for"
+        assert n["speaking_rate"] == 1.05
+        assert n["voice_id"], (
+            "wpm is measured per voice; an unnamed voice makes the number "
+            "describe nothing"
+        )

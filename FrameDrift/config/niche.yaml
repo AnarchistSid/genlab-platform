@@ -208,33 +208,42 @@ pipeline:
 capabilities:
   max_generation_cost_usd: 0.25
 
-# ── narration (ANIME-03 §1) ─────────────────────────────────────────────────
-# anime joins the canary that BlackboxBrief has held alone since NARR-01
-# (2026-08-18). Until now FrameDrift had no `narration:` block at all, so
-# get_narration_config defaulted it to enabled=False and every anime blueprint
-# carried an empty narration_script while reporting narration_degraded=false.
+# ── narration (ANIME-03 §1, rates MEASURED ANIME-04) ───────────────────────
+# anime joins the canary BlackboxBrief has held alone since NARR-01. Until now
+# FrameDrift had no `narration:` block, so get_narration_config defaulted it to
+# enabled=False and every anime blueprint carried an empty narration_script
+# while reporting narration_degraded=false.
 #
-# WPM, and why it is not 165-180 here:
-#   ANIME-03 asks for a 165-180 WPM register. That is a DELIVERY target — how
-#   fast the voice reads — and it is set by `speaking_rate` on the TTS call.
-#   `wpm` in this config is something else: the rate used to PREDICT a
-#   script's duration from its word count. narration_gate.py carries
-#   inworld=141, measured from two full-chain runs, with the note "Other
-#   tiers stay at 150 until measured; do not guess them."
+# THE RATES BELOW ARE MEASURED, not chosen. Rendered audio, ffprobe duration,
+# words divided by seconds, voice Sarah, the real Firefly Wedding script:
 #
-#   Declaring 172 here would under-predict duration by ~22%, so scripts would
-#   be written long and the mix would reject them as vo_overrun — precisely
-#   the failure that note exists to prevent. So: speaking_rate carries the
-#   register, prediction stays on the measured number, and the rate at the new
-#   speaking_rate gets MEASURED on the first reels and written back here.
+#   speaking_rate 1.00 ->  19.46s / 19.88s / 11.08s  ->  166.5 / 163.0 / 157.1 wpm
+#   speaking_rate 1.05 ->  18.26s                    ->  177.4 wpm   <- chosen
+#   speaking_rate 1.08 ->  18.08s                    ->  179.2 wpm
+#   speaking_rate 1.22 ->  16.09s                    ->  201.4 wpm   (overshoots)
+#
+# Two things that measurement corrected:
+#
+# 1. narration_gate.py records inworld = 141 wpm. On this voice and this
+#    content it delivers ~162 at speaking_rate 1.0 — about 14% faster than
+#    recorded. 141 was not wrong so much as narrow: it came from one script on
+#    one voice, and the rate moves with both. Under-stating it is the SAFE
+#    direction (it over-predicts duration, so scripts come out short rather
+#    than overrunning), which is why nothing ever failed because of it.
+#
+# 2. An earlier version of this block set speaking_rate 1.22, derived from the
+#    141 figure to reach the 165-180 register. Measured, 1.22 delivers 201 wpm
+#    — well past the band. The register was reachable at 1.05.
+#
+# voice_id is part of the measurement, not decoration: change the voice and
+# the wpm above stops describing anything.
 narration:
   enabled: true
-  # 1.22 x the measured 141 wpm baseline lands ~172 wpm, mid-register.
-  speaking_rate: 1.22
-  # Unmeasured at speaking_rate 1.22. Left at the measured baseline so the
-  # error is conservative (over-predicting duration writes shorter scripts,
-  # which pass; under-predicting writes long ones, which are thrown away).
-  wpm: 141
+  voice_id: "Sarah"
+  speaking_rate: 1.05
+  # MEASURED at speaking_rate 1.05 on the voice above. Used to PREDICT a
+  # script's duration from its word count; it is not a delivery target.
+  wpm: 177
   vo_bed_duck_db: -8
   target_lufs: -14.0
   tail_buffer_seconds: 2.0
