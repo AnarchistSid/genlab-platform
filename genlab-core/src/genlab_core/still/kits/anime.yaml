@@ -1,0 +1,96 @@
+# FrameDrift STILL kit — ANIME-03 §3 / ANIME-04 §2.
+#
+# The footage-free path: narration drives the reel, stills carry the picture.
+# No worker, no matte, no SAM2 — it runs on the VPS.
+#
+# Every number here is a target the gates check, not a preference.
+name: anime
+niche_id: anime
+brand: FrameDrift
+accent: "#7B3FE4"
+
+palette:
+  # Warm, high-chroma, ink-edged. Written as prompt language because that is
+  # where it is consumed -- the `still` capability takes text, not swatches.
+  description: >-
+    warm high-chroma anime key-art palette, saturated amber and magenta light,
+    deep indigo shadows, visible ink linework, painterly cel shading
+  avoid: >-
+    photorealism, 3D render, text, watermarks, logos, signatures, extra limbs,
+    western cartoon style, muted desaturated colour
+
+still_prompt:
+  # ONE template. The packet is explicit that this lives in the kit and not
+  # inline at a call site, because a prompt inline at a call site is a prompt
+  # nobody can diff.
+  template: >-
+    {beat}. {palette}. Vertical composition, single clear subject, cinematic
+    lighting, shallow depth of field. No text of any kind.
+  negative: "{avoid}"
+  aspect_ratio: "9:16"
+
+beats:
+  # A beat is a sentence of narration. Its SHOT is clamped to this range --
+  # under 3 s reads as a flicker, over 5 s is a held frame and trips
+  # longest_static.
+  # MUST satisfy max_shot_s >= 2 * min_shot_s, or some narration lengths have
+  # NO valid shot count: at min 3.0 / max 4.0 a 4.53 s sentence fits neither
+  # n=1 (4.53 > max) nor n=2 (2.27 < min), and the splitter quietly broke the
+  # min rather than reporting an impossible kit. load_kit now refuses it.
+  min_shot_s: 2.0
+  # MUST NOT exceed gates.longest_static_s below, or every reel fails the gate
+  # it ships with. A beat whose narration runs longer is SPLIT across two
+  # stills rather than held -- which is also why 5 script beats yield the
+  # 5-7 stills this kit asks for.
+  max_shot_s: 4.0
+  # Below this, a sentence is merged into its neighbour rather than given a
+  # shot of its own.
+  merge_below_s: 1.2
+  # A 5-sentence script at 172 wpm splits to 5-9 shots at these bounds. The
+  # packet asks for 5-7 STILLS; shots that split one sentence share a beat but
+  # each still gets its own image, so this is the honest range, not 5-7.
+  count_min: 5
+  count_max: 9
+
+motion:
+  ken_burns:
+    # Direction alternates per shot so a reel does not drift one way for 25 s.
+    patterns: ["zoom_in", "pan_right", "zoom_out", "pan_left"]
+    zoom_max: 1.18
+  parallax:
+    # Hero still only, and only when a depth pass is cheap locally.
+    enabled: true
+    hero_only: true
+    strength: 0.035
+  grain:
+    opacity: 0.06
+  vignette:
+    strength: 0.28
+
+transitions:
+  # One per cut, from this set only.
+  set: ["ink_bleed", "film_burn"]
+  duration_s: 0.4
+
+type:
+  # Kinetic type fires on names and numbers, positioned from the caption
+  # engine's word timings -- not on a fixed cadence.
+  trigger: ["names", "numbers"]
+  hold_s: 0.9
+
+audio:
+  music_duck_db: -8      # within the 6-10 dB band
+  target_lufs: -14.0
+  true_peak_max: -1.0
+  tail_buffer_s: 2.0
+
+outro:
+  duration_s: 2.0
+  handle: "@FrameDrift"
+  cta: "Follow for more anime drops"
+  loop_back: true        # final frame matches frame 0
+
+gates:
+  longest_static_s: 4.0
+  hook_on_screen_by_s: 1.5
+  loop_score_max: 1.0
