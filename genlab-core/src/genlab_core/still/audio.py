@@ -106,14 +106,47 @@ def synthesize(
             "a garbled script must never reach a voice"
         )
 
-    cap = select("tts", context=context)
-    payload = {
-        "text": text,
-        "voice_id": narration.get("voice_id") or "Sarah",
-        "audio_encoding": "MP3",
-        "sample_rate_hertz": 44100,
-        "speaking_rate": float(narration.get("speaking_rate", 1.0)),
-    }
+    # ANIME-13 §4. `engine: elevenlabs` routes through belt's elevenlabs/tts,
+    # which means NO subscription, no SDK on the host and no API key: the same
+    # balance that pays for the stills pays for the voice. The direct
+    # ElevenLabs tier in tts/providers.py is still gated off by its free-plan
+    # headroom check and its missing SDK; this path does not touch it.
+    #
+    # Measured 2026-09-21: $0.0035 for 68 characters, about $0.05/1k — roughly
+    # fourteen times Inworld's rate and still a fifth of a cent per reel.
+    engine = str(narration.get("engine") or "inworld").lower()
+    if engine == "elevenlabs":
+        ref = "elevenlabs/tts"
+        payload = {
+            "text": text,
+            "voice": narration.get("voice") or "aria",
+            "model": "eleven_v3",
+            # Audio tags are the whole point — "[excited]" only does anything
+            # with this on, and v3 is the only model that takes them.
+            "audio_tags": True,
+            # Low stability and raised style is what MOVES the register. The
+            # defaults (0.5 / 0.0) are the monotone setting.
+            "stability": float(narration.get("stability", 0.35)),
+            "style": float(narration.get("style", 0.45)),
+            "similarity_boost": float(narration.get("similarity_boost", 0.75)),
+            "output_format": "mp3_44100_128",
+        }
+
+        class _Cap:
+            pass
+
+        cap = _Cap()
+        cap.ref = ref
+        cap.cost_per_unit_usd = None
+    else:
+        cap = select("tts", context=context)
+        payload = {
+            "text": text,
+            "voice_id": narration.get("voice_id") or "Sarah",
+            "audio_encoding": "MP3",
+            "sample_rate_hertz": 44100,
+            "speaking_rate": float(narration.get("speaking_rate", 1.0)),
+        }
     sub = subprocess.run(
         [
             "belt",
