@@ -151,7 +151,13 @@ _DOWNLOAD_TIMEOUT: int = get_tuning_config().download.timeout_seconds
 # ---------------------------------------------------------------------------
 
 
-def _download_video(url: str, output_path: str) -> dict[str, Any]:
+def _download_video(
+    url: str,
+    output_path: str,
+    *,
+    format_selector: str | None = None,
+    player_clients: str | None = None,
+) -> dict[str, Any]:
     """Download a video using yt-dlp subprocess.
 
     Uses the Android/iOS player clients which bypass most bot detection
@@ -187,7 +193,20 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
     # Putting mweb first + keeping the older clients as fallback preserves
     # the SABR-workaround the 2026-05 comment was chasing without
     # regressing on videos where mweb has no formats.
-    extractor_args = "youtube:player_client=mweb,web_safari,ios,tv,android,web"
+    # `player_clients=""` means "let yt-dlp choose", which is NOT the same as
+    # the pinned list. Measured 2026-09-21 on one PV with yt-dlp 2026.08.19,
+    # no cookies: with this list, one format (18, 640x360); without it,
+    # 1920x1080. The list was tuned in 2026-08 against a then-current binary
+    # and YouTube's SABR rollout has moved since; it now EXCLUDES the clients
+    # that serve high-res. Prod (2026-06-06 + a live cookie jar) still reaches
+    # 720p through it, so this is not a prod outage — it is a tuning that has
+    # started costing resolution and should be re-measured.
+    if player_clients is None:
+        extractor_args = "youtube:player_client=mweb,web_safari,ios,tv,android,web"
+    elif player_clients.strip():
+        extractor_args = f"youtube:player_client={player_clients.strip()}"
+    else:
+        extractor_args = ""
     session_path = os.path.join(project_root, ".youtube_session.json")
     if os.path.exists(session_path):
         try:
@@ -230,10 +249,25 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
     #   5) single-file best >=480p (progressive/HLS)
     #   6) any best (last resort — accept low-res 240p+ fallback)
     # `--print after_move:[F2] ...` logs which format tier fired per clip.
+    # ANIME-13: the BINARY is resolvable. yt-dlp's format availability moves
+    # with YouTube's SABR/PO-token enforcement, so the version matters as much
+    # as the cookies. Measured 2026-09-21 on the same URL, no cookies either
+    # side: yt-dlp 2026.03.03 offered exactly ONE format (18, 640x360) while
+    # 2026.08.19 offered four at 1920x1080. Prod (2026.06.06 + a live cookie
+    # jar) sees 1080p and is unaffected; a dev box with a stale binary silently
+    # caps every craft render at 360p and looks like a cookie problem.
+    # `format_selector` defaults to None so prod's string is byte-identical.
+    # Callers that do not need the ORIGINAL AUDIO can pass a video-only
+    # selector and get a far better picture: every tier below requires
+    # `bestaudio[ext=m4a]`, and YouTube served this PV only webm/opus and
+    # m3u8 audio, so all four high-res tiers failed their audio half and the
+    # chain fell through to progressive format 18 at 640x360. The cap looked
+    # like a cookie problem and was a codec predicate.
     cmd = [
-        "yt-dlp",
+        os.environ.get("YT_DLP_BINARY", "").strip() or "yt-dlp",
         "-f",
-        (
+        format_selector
+        or (
             "best[height>=1080]/"
             "bestvideo[height>=1080][ext=mp4]+bestaudio[ext=m4a]/"
             "best[height>=720]/"
@@ -262,8 +296,6 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
         "60",
         "--retries",
         "4",
-        "--extractor-args",
-        extractor_args,
         # User agent matching a real Android YouTube app
         "--user-agent",
         "com.google.android.youtube/19.09.37 (Linux; U; Android 14) gzip",
@@ -275,6 +307,9 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
         "--max-sleep-interval",
         "15",
     ]
+
+    if extractor_args:
+        cmd.extend(["--extractor-args", extractor_args])
 
     # Use cookies if available. The file should contain at least
     # __Secure-3PAPISID and PREF (captured from a fresh browser session).
