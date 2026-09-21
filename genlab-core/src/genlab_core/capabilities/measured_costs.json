@@ -1,0 +1,74 @@
+{
+  "bytedance/seedream-5-pro": {
+    "cost_per_unit_usd": 0.045,
+    "kind": "card",
+    "latency_s": 66.3,
+    "measured_at": "2026-09-21",
+    "source": "belt task cost --json, after settlement",
+    "task_id": "6jx8gnm64b29y6svcgpa9550ra",
+    "unit": "1 image @size=1K"
+  },
+  "elevenlabs/music": {
+    "cost_per_unit_usd": 0.0125,
+    "kind": "music",
+    "latency_s": 5.9,
+    "measured_at": "2026-09-21",
+    "source": "belt task cost --json, after settlement",
+    "task_id": "163t9ayrdpkxrt3ez1ne73vx33",
+    "unit": "5s (min)"
+  },
+  "elevenlabs/sound-effects": {
+    "cost_per_unit_usd": 0.00104489,
+    "kind": "sfx",
+    "latency_s": 5.1,
+    "measured_at": "2026-09-21",
+    "source": "belt task cost --json, after settlement",
+    "task_id": "36spkyjqvbds4kak973r8b80q8",
+    "unit": "0.5s"
+  },
+  "infsh/birefnet": {
+    "cost_per_unit_usd": 0.0,
+    "kind": "cutout",
+    "latency_s": 19.3,
+    "measured_at": "2026-09-21",
+    "source": "belt task cost --json, after settlement",
+    "task_id": "53dsgg0bjrgzbky4hvm0q1a7zy",
+    "unit": "1 image 512x512"
+  },
+  "inworld/text-to-speech-2": {
+    "cost_per_unit_usd": 0.00154,
+    "kind": "tts",
+    "latency_s": 2.8,
+    "measured_at": "2026-09-21",
+    "source": "belt task cost --json, after settlement",
+    "task_id": "1r6s7xdny36g7ps4tnkkfwjc4w",
+    "unit": "44-char line, MP3"
+  },
+  "pixverse/extend": {
+    "cost_per_unit_usd": 0.045,
+    "kind": "clip_extend",
+    "latency_s": 64.7,
+    "measured_at": "2026-09-21",
+    "source": "belt task cost --json, after settlement",
+    "task_id": "11afr3rk4g8gv8f335x1kzjk16",
+    "unit": "1s 720p in, +5s @720p"
+  },
+  "pruna/flux-2-klein-4b": {
+    "cost_per_unit_usd": 0.001,
+    "kind": "still",
+    "latency_s": 7.6,
+    "measured_at": "2026-09-21",
+    "source": "belt task cost --json, after settlement",
+    "task_id": "54epzv4jhrazjs6e4jm1xsc6c6",
+    "unit": "1 image @1MP 1:1"
+  },
+  "pruna/p-video-edit": {
+    "cost_per_unit_usd": 0.026,
+    "kind": "restyle",
+    "latency_s": 250.9,
+    "measured_at": "2026-09-21",
+    "source": "belt task cost --json, after settlement",
+    "task_id": "393vdzr60fcqqryyqe6qyv0mwg",
+    "unit": "1s clip, draft=true"
+  }
+}
