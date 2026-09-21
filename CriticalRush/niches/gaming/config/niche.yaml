@@ -241,3 +241,19 @@ pipeline:
   # so they leave this unset (forever-dedup) — only gaming + sports use
   # this knob today.
   url_dedup_ttl_days: 3
+
+# ── capability budget (Part 32 §1) ──────────────────────────────────────────
+# The ceiling on generated-asset spend for ONE reel. The storyboard's plan
+# gate sums the registry's MEASURED cost for every call it intends to make
+# and rejects the plan (`plan_over_budget:<sum> > <cap>`) before the first
+# call, so nothing is spent discovering the plan was too expensive.
+#
+# Only possible because the costs are billed figures. The catalog could not
+# back a cap: topaz/astra quotes "$0.0714/credit" (not a unit) and
+# pixverse/extend quotes a range spanning 4.6x. A range does not sum.
+#
+# Measured 2026-09-21, a gaming STILL reel: 1 tts + 7 still + 1 card +
+# 1 music = $0.06604. The cap is ~4x that, so a reel can grow a few stills
+# or a second card before it has to justify itself.
+capabilities:
+  max_generation_cost_usd: 0.4

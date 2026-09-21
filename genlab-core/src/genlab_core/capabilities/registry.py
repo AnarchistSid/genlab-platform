@@ -18,10 +18,18 @@ lives in ``measured_costs.json`` beside this file with its task id and date
 --- not as a literal in Python. Two reasons:
 
 * The catalog is not a per-unit price. ``topaz/astra`` is quoted at
-  "$0.0714/credit", which is not a unit anyone can budget against; it
-  advertised $0.07-$14.29 on a 3-second clip and settled at $1.29.
+  "$0.0714/credit", which is not a unit anyone can budget against.
 * A mid-run balance delta is a RESERVATION HOLD at the top of the estimate,
-  not a charge. Reading it as spend overstates by an order of magnitude.
+  not a charge. Measured on this account while probing ``topaz/astra``,
+  2026-09-21:
+
+      balance before  $108.05
+      balance during   $93.62     -> an apparent $14.43
+      belt task cost              -> $0.42858 charged
+
+  A 33.7x overstatement. Reading the balance would have reported the single
+  probe as costing three times the entire $5 probe cap. Nothing here reads a
+  balance; cost comes from ``belt task cost`` once ``charged`` is present.
 
 An app with no measured cost is ``unmeasured`` and cannot be selected for
 production, however cheap its catalog entry looks.
@@ -73,6 +81,9 @@ KINDS: frozenset[str] = frozenset(
 
 Rights = Literal["owned_channels", "eval_only", "unread"]
 
+#: Where a call happens. "fire" is inside a pipeline run and is latency-bound.
+_CONTEXTS: frozenset[str] = frozenset({"fire", "batch"})
+
 
 class UnknownKind(KeyError):
     """A niche YAML named a kind that does not exist.
@@ -95,6 +106,11 @@ class Capability:
     constraints: dict = field(default_factory=dict)
     composite_safe: bool = True
     eval_only: bool = False
+    #: Too slow to sit inside a pipeline fire. Latency is a selection
+    #: constraint, not a footnote: pruna/p-video-edit billed 250 s for ONE
+    #: second of video, so a 30 s reel is two hours. `select(context="fire")`
+    #: cannot return these; `context="batch"` can.
+    batch_only: bool = False
     notes: str = ""
 
     # ── measured, from measured_costs.json ──────────────────────────────
@@ -162,14 +178,21 @@ _REGISTRY: tuple[Capability, ...] = (
         rights="owned_channels",
         constraints={"max_input_s": 15, "draft": True},
         composite_safe=False,
-        notes="Draft mode is the measured unit. 250 s for 1 s of video — batch offline, never in a fire.",
+        batch_only=True,
+        notes="Draft mode is the measured unit. 250 s for 1 s of video — a 30 s reel is two hours.",
     ),
     Capability(
         ref="topaz/astra",
         kind="upscale",
         rights="owned_channels",
         constraints={"scale": [1.0, 4.0], "probe_cap_s": 1},
-        notes="Prices in CREDITS, so the catalog gives no per-unit figure. Capped probe per the >10x rule.",
+        batch_only=True,
+        notes=(
+            "Prices in CREDITS, so the catalog gives no per-unit figure. Measured "
+            "202 s for ONE second — batch_only is applied here by the same rule as "
+            "p-video-edit, from the measurement rather than from the spec, which "
+            "named only p-video-edit. Revert if a fire should be allowed to wait."
+        ),
     ),
     Capability(
         ref="elevenlabs/sound-effects",
@@ -221,20 +244,32 @@ def for_kind(kind: str) -> tuple[Capability, ...]:
     )
 
 
-def select(kind: str, *, production: bool = True) -> Capability:
-    """The cheapest entry of ``kind`` that may actually be used.
+def select(kind: str, *, production: bool = True, context: str = "fire") -> Capability:
+    """The cheapest entry of ``kind`` that may actually be used here.
 
     ``production=True`` (the default) excludes ``eval_only``, ``unread``
     rights, and anything unmeasured. There is no "fall back to the catalog
     price" path: an unmeasured app is unselectable, because the number that
     would rank it does not exist.
+
+    ``context`` is the latency budget, not a preference. ``"fire"`` (the
+    default) is inside a pipeline run and cannot see ``batch_only`` entries;
+    ``"batch"`` is an offline job and can. Defaulting to ``"fire"`` means a
+    caller that never thought about latency gets the safe answer.
     """
+    if context not in _CONTEXTS:
+        raise ValueError(f"context must be one of {sorted(_CONTEXTS)}, got {context!r}")
     entries = for_kind(kind)
     usable = [c for c in entries if c.selectable_for_production] if production else list(entries)
+    if context == "fire":
+        usable = [c for c in usable if not c.batch_only]
     if not usable:
         why = ", ".join(
-            f"{c.ref}(measured={c.measured}, eval_only={c.eval_only}, rights={c.rights})"
+            f"{c.ref}(measured={c.measured}, eval_only={c.eval_only}, "
+            f"rights={c.rights}, batch_only={c.batch_only})"
             for c in entries
         ) or "no entries at all"
-        raise Unselectable(f"no production-selectable entry for kind {kind!r}: {why}")
+        raise Unselectable(
+            f"no {context}-selectable entry for kind {kind!r}: {why}"
+        )
     return usable[0]

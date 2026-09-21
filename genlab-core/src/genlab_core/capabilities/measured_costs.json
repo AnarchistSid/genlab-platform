@@ -70,5 +70,14 @@
     "source": "belt task cost --json, after settlement",
     "task_id": "393vdzr60fcqqryyqe6qyv0mwg",
     "unit": "1s clip, draft=true"
+  },
+  "topaz/astra": {
+    "cost_per_unit_usd": 0.42858,
+    "kind": "upscale",
+    "latency_s": 202.4,
+    "measured_at": "2026-09-21",
+    "source": "belt task cost --json, after settlement",
+    "task_id": "2sdpg2ww2d5a0aj7jpdqdcgmrw",
+    "unit": "EXACTLY 1s 720p, scale=2"
   }
 }

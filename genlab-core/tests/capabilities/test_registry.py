@@ -28,9 +28,16 @@ class TestSelectionByKind:
             try:
                 chosen = R.select(kind)
             except R.Unselectable:
-                assert not any(c.selectable_for_production for c in entries)
+                # Either nothing may ship at all, or everything that may ship
+                # is batch_only and so invisible in the default "fire" context.
+                shippable = [c for c in entries if c.selectable_for_production]
+                assert not shippable or all(c.batch_only for c in shippable), (
+                    f"{kind} raised in fire context but has a non-batch "
+                    f"shippable entry: {[c.ref for c in shippable]}"
+                )
                 continue
             assert chosen.selectable_for_production
+            assert not chosen.batch_only, "fire context returned a batch_only entry"
 
     def test_cheapest_measured_entry_wins(self):
         """tts has two entries; the measured, production-rights one must win."""
@@ -121,3 +128,103 @@ class TestCostProvenance:
         known = {c.ref for c in R._REGISTRY}
         stray = set(json.loads(_COSTS.read_text())) - known
         assert not stray, f"measured costs for refs not in the registry: {sorted(stray)}"
+
+
+class TestLatencyIsASelectionConstraint:
+    """Four minutes per second is a batch capability; the fire can't see it.
+
+    Measured 2026-09-21: pruna/p-video-edit billed 250.9 s for ONE second of
+    video, so a 30 s reel is over two hours. topaz/astra billed 202.4 s for
+    one second. Cost alone would have ranked both as perfectly ordinary.
+    """
+
+    def test_fire_context_cannot_return_a_batch_only_entry(self):
+        batch = [c for c in R._REGISTRY if c.batch_only]
+        assert batch, "this pin is vacuous with no batch_only entries"
+        for c in batch:
+            with pytest.raises(R.Unselectable, match="fire"):
+                R.select(c.kind, context="fire")
+
+    def test_batch_context_can(self):
+        for c in (x for x in R._REGISTRY if x.batch_only and x.measured):
+            assert R.select(c.kind, context="batch").batch_only
+
+    def test_fire_is_the_default_so_a_thoughtless_caller_is_safe(self):
+        for c in (x for x in R._REGISTRY if x.batch_only):
+            with pytest.raises(R.Unselectable):
+                R.select(c.kind)  # no context= given
+
+    def test_an_unknown_context_is_rejected(self):
+        with pytest.raises(ValueError, match="context must be one of"):
+            R.select("still", context="whenever")
+
+
+class TestPlanBudgetGate:
+    """A plan's cost is gated before its first call."""
+
+    ANIME_REEL = None  # built in each test; kept literal for legibility
+
+    def _anime_reel(self):
+        from genlab_core.capabilities.plan_cost import PlannedCall
+
+        return [
+            PlannedCall("tts", 1),
+            PlannedCall("still", 7),
+            PlannedCall("card", 1),
+            PlannedCall("music", 1),
+        ]
+
+    def test_the_anime_still_reel_prices_under_its_cap(self):
+        from genlab_core.capabilities.plan_cost import check_plan_budget
+
+        cost = check_plan_budget(self._anime_reel(), cap_usd=0.25)
+        assert cost.total_usd == pytest.approx(0.06604, abs=1e-5), cost
+        assert not cost.unpriced
+
+    def test_one_card_too_many_is_rejected_before_any_call(self):
+        from genlab_core.capabilities.plan_cost import (
+            PlannedCall,
+            PlanOverBudget,
+            check_plan_budget,
+        )
+
+        over = [*self._anime_reel(), PlannedCall("card", 5)]
+        with pytest.raises(PlanOverBudget, match=r"plan_over_budget:0\.29104 > 0\.25000"):
+            check_plan_budget(over, cap_usd=0.25)
+
+    def test_a_missing_cap_does_not_silently_become_zero(self):
+        """None means "no budget configured", not "budget of nothing"."""
+        from genlab_core.capabilities.plan_cost import check_plan_budget
+
+        assert check_plan_budget(self._anime_reel(), cap_usd=None).total_usd > 0
+
+    def test_a_plan_naming_an_unusable_kind_is_not_priced_as_free(self):
+        """restyle is batch_only; in a fire it has no price, not a zero price."""
+        from genlab_core.capabilities.plan_cost import PlannedCall, check_plan_budget, price_plan
+
+        plan = [PlannedCall("still", 1), PlannedCall("restyle", 1)]
+        assert price_plan(plan, context="fire").unpriced == ("restyle",)
+        with pytest.raises(R.Unselectable, match="restyle"):
+            check_plan_budget(plan, cap_usd=1.0, context="fire")
+        assert not price_plan(plan, context="batch").unpriced
+
+    @pytest.mark.parametrize(
+        ("niche_yaml", "niche"),
+        [
+            ("FrameDrift/config/niche.yaml", "anime"),
+            ("SpliceReel/config/niche.yaml", "movies"),
+            ("BlackboxBrief/config/niche.yaml", "ai_creators"),
+            ("CriticalRush/niches/gaming/config/niche.yaml", "gaming"),
+            ("ClutchWire/config/niche.yaml", "sports"),
+        ],
+    )
+    def test_every_niche_declares_a_cap(self, niche_yaml, niche):
+        import yaml
+
+        root = pathlib.Path(__file__).resolve().parents[3]
+        cfg = yaml.safe_load((root / niche_yaml).read_text())
+        cap = cfg.get("capabilities", {}).get("max_generation_cost_usd")
+        assert isinstance(cap, int | float) and cap > 0, (
+            f"{niche} has no max_generation_cost_usd; the plan gate would pass "
+            "everything for it"
+        )
