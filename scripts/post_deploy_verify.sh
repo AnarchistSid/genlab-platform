@@ -107,6 +107,69 @@ psql_check "SELECT to_regclass('public.niche_pauses') IS NOT NULL;" "t" "niche_p
 psql_check "SELECT to_regclass('public.compliance_events') IS NOT NULL;" "t" "compliance_events table"
 psql_check "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='blueprints' AND column_name='source_channel_id');" "t" "blueprints.source_channel_id column"
 
+# ANIME-07 §3. Every name in PROMOTED_COLUMNS must be a real column, checked
+# against THIS database, on every deploy.
+#
+# 2026-09-21: `source_url` sat in PROMOTED_COLUMNS with no column behind it.
+# Dormant until something wrote the field, then every insert died with
+# `column "source_url" of relation "blueprints" does not exist` and four
+# niches produced ZERO blueprints for 24 hours. Per-blueprint WARNING, stage
+# "completed", run exit 0, timer green — nothing paged.
+#
+# This is rule #28's mirror. The rule guards column-without-promoted-name
+# (writes vanish into `extra`); this guards promoted-name-without-column
+# (writes fail outright). tests/storage/test_promoted_columns_vs_db_schema.py
+# checks the same thing but is opt-in on GENLAB_SCHEMA_PIN_DSN, which is not
+# set in CI — so it had never run. A guard that fires only when someone
+# remembers to point it at a database is not a guard. This one runs on every
+# deploy, against the database the code is about to talk to.
+note "3b. PROMOTED_COLUMNS vs the live schema"
+# Python emits the names (no DB needed); psql checks them against THIS
+# database, the same way every other schema check in this file works. An
+# earlier version opened the pool inside python and died on a missing
+# DATABASE_URL under `sudo -u genlab` — the env is not inherited there.
+promoted_pairs=$(cd "$GENLAB" && "$GENLAB/.venv/bin/python" - <<'PY'
+import sys
+sys.path.insert(0, "genlab-core/src")
+from genlab_core.storage.postgres import PROMOTED_COLUMNS
+for table, names in PROMOTED_COLUMNS.items():
+    for name in names:
+        print(f"{table}\t{name}")
+PY
+)
+# KNOWN DRIFT, 2026-09-21. Each of these is a promoted name whose column is
+# missing ON PROD ONLY, and the cause is one migration, not six mistakes:
+# a1b2c3d4e5f6 creates `stories` with `CREATE TABLE IF NOT EXISTS`. Prod's
+# stories table already existed with a narrower shape, so the migration RAN,
+# alembic recorded it as applied, and it added nothing. Same shape as every
+# other defect in this session: a statement reporting success while doing
+# nothing.
+#
+# They are allowlisted rather than removed from PROMOTED_COLUMNS: R-63 added
+# them deliberately because they ARE real columns wherever that migration
+# actually executed, and dropping them would reintroduce the silent
+# write-to-extra/read-from-NULL data loss R-63 fixed.
+#
+# The fix is DDL (ADD COLUMN IF NOT EXISTS) against a migration graph that
+# currently has NINE heads, which is its own piece of work. Until then this
+# list is the debt, written down and counted, and anything NOT on it fails
+# the deploy.
+PROMOTED_DRIFT_ALLOWED="stories.video_url stories.source_type stories.source_name stories.video_id pending_engagement.scheduled_at sources.last_fetched"
+
+promoted_drift=""
+while IFS=$'\t' read -r tbl col; do
+    [ -z "$tbl" ] && continue
+    case " $PROMOTED_DRIFT_ALLOWED " in *" $tbl.$col "*) continue;; esac
+    exists=$(sudo -u genlab psql "$DB_URL" -tA -c \
+        "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='$tbl' AND column_name='$col') OR NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='$tbl');" 2>/dev/null | tr -d ' ')
+    [ "$exists" = "t" ] || promoted_drift="$promoted_drift $tbl.$col"
+done <<< "$promoted_pairs"
+if [ -z "$promoted_drift" ]; then
+    pass "every PROMOTED_COLUMNS name exists as a column (6 known drifts allowlisted)"
+else
+    fail "PROMOTED_COLUMNS names with no column:$promoted_drift"
+fi
+
 note "4. Internal endpoint reachability (5151 = dashboard local bind)"
 for path in compliance/stats scheduling/pauses source-discovery/proposals; do
     # --max-time is load-bearing, not hygiene: without it a listening socket
