@@ -85,3 +85,31 @@ class TestPushToBacklogSetsIt:
             "the guard must require BOTH items received and none produced; "
             "firing on an empty input makes the signal worthless"
         )
+
+
+class TestVideoGateReportsItsOwnDiscard:
+    """The discard must be reported where it HAPPENS.
+
+    2026-09-21 ai_creators: VideoGate took 4 stories, dropped all 4
+    ("no valid clip"), and left remaining=0. Every later stage logged "no
+    stories", which reads as an empty pipeline rather than as a stage that
+    emptied it, and PushToBacklog's guard stayed correctly silent because by
+    then there genuinely were zero inputs.
+
+    A stage inheriting an empty list cannot distinguish "nothing arrived"
+    from "something arrived and was destroyed upstream". Only the stage that
+    destroyed it can.
+    """
+
+    def test_dropping_every_story_sets_the_sentinel(self):
+        import inspect
+
+        from genlab_core.pipeline.stages import video_gate
+
+        src = inspect.getsource(video_gate)
+        assert 'context["_all_discarded"]' in src
+        assert "video_gate:no_downloadable_clip" in src
+        assert "if stories and not context[" in src, (
+            "must require stories IN and none out — firing on an empty input "
+            "makes the signal worthless, same as PushToBacklog"
+        )

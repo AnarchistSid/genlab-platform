@@ -249,6 +249,20 @@ class VideoGate:
                 skipped,
                 len(context["stories"]),
             )
+            # ANIME-09 §1. Work arrived and none of it survived THIS stage.
+            #
+            # 2026-09-21 ai_creators: 4 stories in, 4 dropped, remaining=0.
+            # Every later stage then logged "no stories" — which reads as an
+            # empty pipeline rather than as a stage that emptied it — and
+            # PushToBacklog's all_discarded guard stayed correctly silent,
+            # because by then there genuinely were zero inputs. The discard
+            # has to be reported where it HAPPENS; the stage that inherits an
+            # empty list cannot tell "nothing arrived" from "something
+            # arrived and was destroyed upstream".
+            if stories and not context["stories"]:
+                context["_all_discarded"] = (
+                    f"video_gate:no_downloadable_clip_for_any_of_{len(stories)}"
+                )
 
         logger.info("VideoGate: %d passed, %d skipped", passed, skipped)
         context.setdefault("run_stats", {})["video_gate"] = {
