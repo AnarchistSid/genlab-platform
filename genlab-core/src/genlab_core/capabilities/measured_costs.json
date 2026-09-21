@@ -62,6 +62,24 @@
     "task_id": "54epzv4jhrazjs6e4jm1xsc6c6",
     "unit": "1 image @1MP 1:1"
   },
+  "pruna/flux-dev": {
+    "cost_per_unit_usd": 0.005,
+    "kind": "thumbnail",
+    "latency_s": 9.1,
+    "measured_at": "2026-09-21",
+    "source": "belt task cost --json, after settlement",
+    "task_id": "5k9p4pe0j1e0g0t1r1kfymjp8j",
+    "unit": "1 image @1024, 9:16"
+  },
+  "pruna/p-video": {
+    "cost_per_unit_usd": 0.02,
+    "kind": "video_gen",
+    "latency_s": 8.4,
+    "measured_at": "2026-09-21",
+    "source": "belt task cost --json, after settlement",
+    "task_id": "5281ers23e2tpx35ayv9srg0jz",
+    "unit": "1s 720p draft (min)"
+  },
   "pruna/p-video-edit": {
     "cost_per_unit_usd": 0.026,
     "kind": "restyle",

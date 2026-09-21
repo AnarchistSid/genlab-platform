@@ -186,19 +186,20 @@ def generate_backfill_clip(
     # GENLAB_ANIME_BACKFILL_MULTI_MODEL_ENABLED is on; falls back to
     # pruna-only otherwise. Same primitive as hook_thumbnail_models —
     # deterministic hash, model_id logged for future bandit reward wire.
-    from genlab_core.media.pruna_video_client_models import (
+    from genlab_core.capabilities.registry import (
         arm_id_for,
-        extract_video_url,
-        pick_model,
+        extract_url,
+        pick_deterministic,
     )
 
-    model = pick_model(prompt, niche_id)
+    model = pick_deterministic("video_gen", prompt, niche_id)
     logger.info(
-        "[pruna_video] niche=%s selected_model=%s belt_app=%s",
-        niche_id, model.model_id, model.belt_app,
+        "[pruna_video] niche=%s selected_model=%s belt_app=%s cost_per_unit=%s "
+        "via=capability_registry",
+        niche_id, model.model_id, model.ref, model.cost_per_unit_usd,
     )
     result = run_app(
-        model.belt_app,
+        model.ref,
         model.build_input(
             prompt=prompt, seed=seed, duration_s=duration_seconds,
             resolution=resolution, aspect_ratio=aspect_ratio, draft=draft,
@@ -218,7 +219,7 @@ def generate_backfill_clip(
 
     # Different models emit different response keys; the shared
     # extractor handles 4 shapes (video / video_output / output / list-of).
-    video_url = extract_video_url(result.output)
+    video_url = extract_url(result.output, kind="video_gen")
     if not video_url or not isinstance(video_url, str):
         logger.warning(
             "[pruna_video] no video URL in output for model=%s keys=%s",

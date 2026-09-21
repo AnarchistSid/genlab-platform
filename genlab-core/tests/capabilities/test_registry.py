@@ -228,3 +228,102 @@ class TestPlanBudgetGate:
             f"{niche} has no max_generation_cost_usd; the plan gate would pass "
             "everything for it"
         )
+
+
+class TestAbsorption:
+    """Two registries became one, not three.
+
+    `media/hook_thumbnail_models.py` and `media/pruna_video_client_models.py`
+    each held a parallel table with a hardcoded `cost_per_*` that had never
+    been billed. Both are deleted; their entries, builders, rotation and arm
+    ids live in `capabilities/`.
+    """
+
+    _REPO = pathlib.Path(__file__).resolve().parents[3]
+    _DELETED = ("hook_thumbnail_models", "pruna_video_client_models")
+
+    def _py_files(self):
+        skip = {".venv", "node_modules", "__pycache__", ".git", "build", "dist"}
+        for p in self._REPO.rglob("*.py"):
+            if not (skip & set(p.parts)):
+                yield p
+
+    def test_the_deleted_modules_are_gone(self):
+        for name in self._DELETED:
+            assert not (
+                self._REPO / f"genlab-core/src/genlab_core/media/{name}.py"
+            ).exists(), f"{name}.py still exists"
+
+    def test_nothing_imports_them(self):
+        offenders = []
+        for p in self._py_files():
+            try:
+                text = p.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            for name in self._DELETED:
+                if f"import {name}" in text or f"from genlab_core.media.{name}" in text:
+                    offenders.append(f"{p.relative_to(self._REPO)} -> {name}")
+        assert not offenders, "imports of deleted modules:\n  " + "\n  ".join(offenders)
+
+    def test_no_cost_literal_outside_capabilities(self):
+        """A `cost_per_*` literal anywhere else is a price nobody was billed.
+
+        AST, not grep: the comments explaining this absorption name the old
+        attributes verbatim, and a substring search cannot tell code from
+        prose. (The same trap caught a pin in Part 29.)
+        """
+        offenders = []
+        for p in self._py_files():
+            rel = p.relative_to(self._REPO)
+            if "capabilities" in rel.parts or rel.parts[0] != "genlab-core":
+                continue
+            if rel.parts[1] != "src":
+                continue
+            try:
+                tree = ast.parse(p.read_text(encoding="utf-8"))
+            except (SyntaxError, UnicodeDecodeError):
+                continue
+            for node in ast.walk(tree):
+                target = None
+                if isinstance(node, ast.AnnAssign):
+                    target = getattr(node.target, "id", None) or getattr(
+                        node.target, "attr", None
+                    )
+                elif isinstance(node, ast.keyword):
+                    target = node.arg
+                if not target or not target.startswith("cost_per"):
+                    continue
+                val = node.value
+                if isinstance(val, ast.Constant) and isinstance(val.value, int | float):
+                    offenders.append(f"{rel}:{node.lineno} {target}={val.value}")
+        assert not offenders, (
+            "cost_per_* literals outside capabilities/:\n  "
+            + "\n  ".join(offenders)
+            + "\nMeasured costs belong in measured_costs.json with a belt task id."
+        )
+
+    def test_the_absorbed_kinds_are_present_with_their_full_sets(self):
+        assert len(R.in_registration_order("thumbnail")) == 6
+        assert len(R.in_registration_order("video_gen")) == 5
+
+    def test_arm_id_prefixes_match_what_the_reward_router_joins_on(self):
+        """Changing a prefix orphans every arm that already has history."""
+        thumb = R.in_registration_order("thumbnail")[0]
+        video = R.in_registration_order("video_gen")[0]
+        assert R.arm_id_for(thumb) == "hook_thumbnail_model__flux"
+        assert R.arm_id_for(video) == "video_backfill_model__pruna-p-video"
+
+    def test_rotation_uses_registration_order_not_cost_order(self):
+        """`for_kind` sorts by cost; the rotation must not.
+
+        If the rotation ever read the cost-sorted view, every blueprint would
+        re-map to a different model and 48 h reward would join to the wrong
+        arm — silently, because both return a valid Capability.
+        """
+        reg = R.in_registration_order("thumbnail")
+        cost = R.for_kind("thumbnail")
+        assert reg[0].model_id == "flux"
+        assert [c.ref for c in reg] != [c.ref for c in cost] or len(reg) == 1, (
+            "this pin is vacuous if the two orders happen to coincide"
+        )

@@ -1,21 +1,24 @@
-"""Pin pruna_video_client_models — task #204 (2026-08-18):
+"""Absorbed from tests/media/test_pruna_video_client_models.py (Part 33 §1).
 
-Same shape as test_hook_thumbnail_models — deterministic pick,
-per-model input schemas, url extraction, flag semantics.
+The two legacy registries became `video_gen` entries in
+capabilities/registry.py. These assertions are the originals,
+repointed: the rotation, the flag semantics, the builder shapes and
+the URL extraction all still have to hold. Equivalence against the
+deleted modules was proven over 16,000 picks before they went.
 """
 from __future__ import annotations
 
 import pytest
-
-from genlab_core.media.pruna_video_client_models import (
-    _REGISTRY,
+from genlab_core.capabilities.inputs import (
     _build_kling_input,
     _build_pruna_input,
     _build_wan_input,
-    _pruna_model,
-    extract_video_url,
+)
+from genlab_core.capabilities.registry import (
+    extract_url,
+    in_registration_order,
     multi_model_enabled,
-    pick_model,
+    pick_deterministic,
 )
 
 
@@ -23,47 +26,55 @@ class TestMultiModelFlag:
     @pytest.mark.parametrize("val", ["", "0", "false", "no", "off"])
     def test_off_tokens(self, monkeypatch, val):
         monkeypatch.setenv("GENLAB_ANIME_BACKFILL_MULTI_MODEL_ENABLED", val)
-        assert multi_model_enabled() is False
+        assert multi_model_enabled("video_gen") is False
 
     def test_unset_off(self, monkeypatch):
         monkeypatch.delenv(
             "GENLAB_ANIME_BACKFILL_MULTI_MODEL_ENABLED", raising=False,
         )
-        assert multi_model_enabled() is False
+        assert multi_model_enabled("video_gen") is False
 
     @pytest.mark.parametrize("val", ["1", "true", "yes", "on"])
     def test_on_tokens(self, monkeypatch, val):
         monkeypatch.setenv("GENLAB_ANIME_BACKFILL_MULTI_MODEL_ENABLED", val)
-        assert multi_model_enabled() is True
+        assert multi_model_enabled("video_gen") is True
 
 
 class TestRegistry:
     def test_pruna_is_baseline_tier_zero(self):
-        assert _REGISTRY[0].model_id == "pruna-p-video"
-        assert _pruna_model().model_id == "pruna-p-video"
+        first = in_registration_order("video_gen")[0]
+        assert first.model_id == "pruna-p-video"
+        assert first.ref == "pruna/p-video"
+        assert pick_deterministic("video_gen", "any prompt", "anime") is first
+
 
     def test_registry_has_all_five_models(self):
         """3 originals + 2 wide-expansion adds (task #209, 2026-08-18)."""
-        ids = {m.model_id for m in _REGISTRY}
+        ids = {m.model_id for m in in_registration_order("video_gen")}
         assert ids == {
             "pruna-p-video", "alibaba-wan-2-7", "kling-v2-6",
             "seedance-2-0-fast", "veo-3",
         }
 
-    def test_registry_baseline_is_cheapest(self):
-        """Diversity math sanity: registered order[0] MUST be the
-        cheapest option (it's the fallback baseline when flag off —
-        cheap-safe by default)."""
-        for m in _REGISTRY[1:]:
-            assert _REGISTRY[0].cost_per_5s_usd <= m.cost_per_5s_usd, (
-                f"baseline {_REGISTRY[0].model_id} more expensive than "
-                f"{m.model_id} — reorder registry"
-            )
+    def test_baseline_is_the_only_measured_entry(self):
+        """Was "baseline is cheapest", compared against catalog literals.
+
+        Only the baseline is live, so only the baseline has a receipt
+        ($0.02000 for 1 s at 720p draft). Comparing a measured float against
+        four Nones is not a cheapness test, it is a TypeError — which is how
+        this failed, correctly, during the migration.
+        """
+        entries = in_registration_order("video_gen")
+        measured = [c for c in entries if c.measured]
+        assert [c.model_id for c in measured] == ["pruna-p-video"]
+        assert measured[0].cost_per_unit_usd == 0.02
+        assert all(not c.selectable_for_production for c in entries[1:])
+
 
     def test_expansion_models_have_valid_input_builders(self):
-        from genlab_core.media.pruna_video_client_models import _REGISTRY
+        from genlab_core.capabilities.registry import in_registration_order
         expansion_ids = {"seedance-2-0-fast", "veo-3"}
-        for m in _REGISTRY:
+        for m in in_registration_order("video_gen"):
             if m.model_id not in expansion_ids:
                 continue
             inp = m.build_input(
@@ -77,8 +88,8 @@ class TestRegistry:
         """seedance + veo can emit their own audio track. Must be
         disabled — we overlay our own TTS voice + music beds and
         double-audio would be jarring."""
-        from genlab_core.media.pruna_video_client_models import _REGISTRY
-        for m in _REGISTRY:
+        from genlab_core.capabilities.registry import in_registration_order
+        for m in in_registration_order("video_gen"):
             if m.model_id not in ("seedance-2-0-fast", "veo-3"):
                 continue
             inp = m.build_input(
@@ -97,21 +108,21 @@ class TestPickModelFlagOff:
         )
         for prompt in ("a", "b" * 500):
             for niche in ("anime", "gaming"):
-                assert pick_model(prompt, niche).model_id == "pruna-p-video"
+                assert pick_deterministic("video_gen", prompt, niche).model_id == "pruna-p-video"
 
 
 class TestPickModelFlagOn:
     def test_same_inputs_same_model(self, monkeypatch):
         monkeypatch.setenv("GENLAB_ANIME_BACKFILL_MULTI_MODEL_ENABLED", "1")
         for _ in range(5):
-            m1 = pick_model("anime scene A", "anime").model_id
-            m2 = pick_model("anime scene A", "anime").model_id
+            m1 = pick_deterministic("video_gen", "anime scene A", "anime").model_id
+            m2 = pick_deterministic("video_gen", "anime scene A", "anime").model_id
             assert m1 == m2
 
     def test_different_prompts_hit_multiple_models(self, monkeypatch):
         monkeypatch.setenv("GENLAB_ANIME_BACKFILL_MULTI_MODEL_ENABLED", "1")
         picks = {
-            pick_model(f"scene {i}", "anime").model_id
+            pick_deterministic("video_gen", f"scene {i}", "anime").model_id
             for i in range(30)
         }
         assert len(picks) >= 2
@@ -169,22 +180,22 @@ class TestInputBuilders:
 
 class TestExtractVideoURL:
     def test_video_string(self):
-        assert extract_video_url({"video": "https://x/y.mp4"}) == "https://x/y.mp4"
+        assert extract_url({"video": "https://x/y.mp4"}, kind="video_gen") == "https://x/y.mp4"
 
     def test_video_output_key(self):
-        assert extract_video_url({"video_output": "https://q.mp4"}) == "https://q.mp4"
+        assert extract_url({"video_output": "https://q.mp4"}, kind="video_gen") == "https://q.mp4"
 
     def test_output_key(self):
-        assert extract_video_url({"output": "https://r.mp4"}) == "https://r.mp4"
+        assert extract_url({"output": "https://r.mp4"}, kind="video_gen") == "https://r.mp4"
 
     def test_videos_list_string(self):
-        r = extract_video_url({"videos": ["https://a.mp4", "https://b.mp4"]})
+        r = extract_url({"videos": ["https://a.mp4", "https://b.mp4"]}, kind="video_gen")
         assert r == "https://a.mp4"
 
     def test_videos_list_dict_url_key(self):
-        r = extract_video_url({"videos": [{"url": "https://x.mp4"}]})
+        r = extract_url({"videos": [{"url": "https://x.mp4"}]}, kind="video_gen")
         assert r == "https://x.mp4"
 
     def test_empty_returns_none(self):
-        assert extract_video_url({}) is None
-        assert extract_video_url({"unrelated": "x"}) is None
+        assert extract_url({}, kind="video_gen") is None
+        assert extract_url({"unrelated": "x"}, kind="video_gen") is None

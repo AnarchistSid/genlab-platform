@@ -1,27 +1,24 @@
-"""Pin hook_thumbnail_models — task #203 (2026-08-18):
+"""Absorbed from tests/media/test_hook_thumbnail_models.py (Part 33 §1).
 
-  * Flag semantics on/off
-  * Deterministic selection (same hook → same model)
-  * Different hooks may pick different models
-  * All 3 models' input builders produce well-formed dicts
-  * Registry order is stable so hash-mod indices don't drift
-  * extract_image_url handles 4 output shapes
-  * Cost values match live-verified prices
+The two legacy registries became `thumbnail` entries in
+capabilities/registry.py. These assertions are the originals,
+repointed: the rotation, the flag semantics, the builder shapes and
+the URL extraction all still have to hold. Equivalence against the
+deleted modules was proven over 16,000 picks before they went.
 """
 from __future__ import annotations
 
 import pytest
-
-from genlab_core.media.hook_thumbnail_models import (
-    _REGISTRY,
-    ImageModel,
+from genlab_core.capabilities.inputs import (
     _build_flux_input,
     _build_gpt_image_input,
     _build_grok_input,
-    _flux_model,
-    extract_image_url,
+)
+from genlab_core.capabilities.registry import (
+    extract_url,
+    in_registration_order,
     multi_model_enabled,
-    pick_model,
+    pick_deterministic,
 )
 
 
@@ -29,53 +26,68 @@ class TestMultiModelFlag:
     @pytest.mark.parametrize("val", ["", "0", "false", "no", "off"])
     def test_off_tokens(self, monkeypatch, val):
         monkeypatch.setenv("GENLAB_HOOK_THUMBNAIL_MULTI_MODEL_ENABLED", val)
-        assert multi_model_enabled() is False
+        assert multi_model_enabled("thumbnail") is False
 
     def test_unset_off(self, monkeypatch):
         monkeypatch.delenv(
             "GENLAB_HOOK_THUMBNAIL_MULTI_MODEL_ENABLED", raising=False,
         )
-        assert multi_model_enabled() is False
+        assert multi_model_enabled("thumbnail") is False
 
     @pytest.mark.parametrize("val", ["1", "true", "yes", "on"])
     def test_on_tokens(self, monkeypatch, val):
         monkeypatch.setenv("GENLAB_HOOK_THUMBNAIL_MULTI_MODEL_ENABLED", val)
-        assert multi_model_enabled() is True
+        assert multi_model_enabled("thumbnail") is True
 
 
 class TestRegistry:
     def test_flux_is_baseline_tier_zero(self):
-        """The 0th slot MUST be flux — pick_model returns flux on flag-off,
-        and future bandit priors will assume flux is index 0."""
-        assert _REGISTRY[0].model_id == "flux"
-        assert _REGISTRY[0].belt_app == "pruna/flux-dev"
-        assert _flux_model().model_id == "flux"
+        """Index 0 is the baseline, and the flag-off rotation returns it.
+
+        `_flux_model()` is gone; the guarantee it encoded now lives in
+        `pick_deterministic`, which returns entries[0] whenever the canary
+        flag is off — the zero-regression behaviour, unchanged.
+        """
+        first = in_registration_order("thumbnail")[0]
+        assert first.model_id == "flux"
+        assert first.ref == "pruna/flux-dev"
+        assert pick_deterministic("thumbnail", "any hook", "anime") is first
+
 
     def test_registry_has_all_six_models(self):
         """3 originals + 3 wide-expansion adds (task #209, 2026-08-18)."""
-        ids = {m.model_id for m in _REGISTRY}
+        ids = {m.model_id for m in in_registration_order("thumbnail")}
         assert ids == {
             "flux", "gpt-image-2", "grok-imagine",
             "seedream-4-5", "gemini-3-pro-image", "reve",
         }
 
-    def test_registry_costs_match_live_pricing(self):
-        """Cost values are documented in module docstring — regression
-        pins prevent silent drift if we swap providers."""
-        cost_by_id = {m.model_id: m.cost_per_image_usd for m in _REGISTRY}
-        assert cost_by_id["flux"] == 0.005
-        assert cost_by_id["gpt-image-2"] == 0.006
-        assert cost_by_id["grok-imagine"] == 0.020
-        assert cost_by_id["seedream-4-5"] == 0.040
-        assert cost_by_id["gemini-3-pro-image"] == 0.134
-        assert cost_by_id["reve"] == 0.040
+    def test_only_billed_models_carry_a_cost(self):
+        """The literals this used to pin were never billed.
+
+        It asserted `cost_by_id["gpt-image-2"] == 0.006` — a number copied
+        from a catalog page. After absorption a cost exists only where a
+        `belt task cost` receipt does. flux-dev has one ($0.00500, measured
+        2026-09-21) because it is the model the live path actually selects;
+        the other five are None and therefore unselectable, which is the
+        correct state for an app nobody has ever been charged for.
+        """
+        entries = in_registration_order("thumbnail")
+        measured = {c.model_id: c.cost_per_unit_usd for c in entries if c.measured}
+        assert measured == {"flux": 0.005}, measured
+        for c in entries:
+            if not c.measured:
+                assert c.cost_per_unit_usd is None
+                assert not c.selectable_for_production
+                assert c.catalog_price, f"{c.ref} should keep its advisory catalog price"
+
 
     def test_expansion_models_have_valid_input_builders(self):
         """Each new model's build_input must produce a non-empty dict
         with at least `prompt`. Pin catches accidental schema drift."""
-        from genlab_core.media.hook_thumbnail_models import _REGISTRY
+        from genlab_core.capabilities.registry import in_registration_order
         expansion_ids = {"seedream-4-5", "gemini-3-pro-image", "reve"}
-        for m in _REGISTRY:
+        for m in in_registration_order("thumbnail"):
             if m.model_id not in expansion_ids:
                 continue
             inp = m.build_input("test prompt", 42, 1080, 1920)
@@ -90,7 +102,7 @@ class TestPickModelFlagOff:
         )
         for hook in ("a", "b", "c", "d" * 100):
             for niche in ("ai_creators", "gaming", "sports", "movies", "anime"):
-                assert pick_model(hook, niche).model_id == "flux"
+                assert pick_deterministic("thumbnail", hook, niche).model_id == "flux"
 
 
 class TestPickModelFlagOn:
@@ -99,8 +111,8 @@ class TestPickModelFlagOn:
         across calls, so re-renders stay idempotent."""
         monkeypatch.setenv("GENLAB_HOOK_THUMBNAIL_MULTI_MODEL_ENABLED", "1")
         for _ in range(5):
-            m1 = pick_model("hook A", "ai_creators").model_id
-            m2 = pick_model("hook A", "ai_creators").model_id
+            m1 = pick_deterministic("thumbnail", "hook A", "ai_creators").model_id
+            m2 = pick_deterministic("thumbnail", "hook A", "ai_creators").model_id
             assert m1 == m2
 
     def test_different_hooks_different_models(self, monkeypatch):
@@ -108,7 +120,7 @@ class TestPickModelFlagOn:
         but across 30 hooks we should see all 3 models represented."""
         monkeypatch.setenv("GENLAB_HOOK_THUMBNAIL_MULTI_MODEL_ENABLED", "1")
         picks = {
-            pick_model(f"hook {i}", "ai_creators").model_id
+            pick_deterministic("thumbnail", f"hook {i}", "ai_creators").model_id
             for i in range(30)
         }
         assert len(picks) >= 2, (
@@ -148,34 +160,34 @@ class TestInputBuilders:
 
 class TestExtractImageURL:
     def test_image_key_string(self):
-        assert extract_image_url({"image": "https://x.test/img.png"}) == (
+        assert extract_url({"image": "https://x.test/img.png"}) == (
             "https://x.test/img.png"
         )
 
     def test_image_output_key(self):
-        assert extract_image_url({"image_output": "https://y/z.png"}) == (
+        assert extract_url({"image_output": "https://y/z.png"}) == (
             "https://y/z.png"
         )
 
     def test_output_key(self):
-        assert extract_image_url({"output": "https://q.png"}) == "https://q.png"
+        assert extract_url({"output": "https://q.png"}) == "https://q.png"
 
     def test_images_list_of_strings(self):
         """gpt-image-2 returns a list under 'images'."""
-        r = extract_image_url({"images": ["https://a.png", "https://b.png"]})
+        r = extract_url({"images": ["https://a.png", "https://b.png"]})
         assert r == "https://a.png"
 
     def test_images_list_of_dicts_url_key(self):
         """Some apps wrap URLs in a dict with url/image_url/image key."""
-        r = extract_image_url({"images": [{"url": "https://x.png"}]})
+        r = extract_url({"images": [{"url": "https://x.png"}]})
         assert r == "https://x.png"
 
     def test_empty_returns_none(self):
-        assert extract_image_url({}) is None
-        assert extract_image_url({"unrelated": "value"}) is None
+        assert extract_url({}) is None
+        assert extract_url({"unrelated": "value"}) is None
 
     def test_empty_list_returns_none(self):
-        assert extract_image_url({"images": []}) is None
+        assert extract_url({"images": []}) is None
 
 
 class TestSelectorFlowsIntoHookThumbnail:

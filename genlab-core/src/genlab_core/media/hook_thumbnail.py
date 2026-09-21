@@ -471,19 +471,20 @@ def generate_hook_thumbnail(
     # GENLAB_HOOK_THUMBNAIL_MULTI_MODEL_ENABLED is on; falls back to
     # flux-only otherwise. Deterministic hash so re-renders stay
     # idempotent; model_id is logged for future bandit reward wire.
-    from genlab_core.media.hook_thumbnail_models import (
+    from genlab_core.capabilities.registry import (
         arm_id_for,
-        extract_image_url,
-        pick_model,
+        extract_url,
+        pick_deterministic,
     )
 
-    model = pick_model(hook, niche_id)
+    model = pick_deterministic("thumbnail", hook, niche_id)
     logger.info(
-        "[hook_thumbnail] niche=%s hook=%r selected_model=%s belt_app=%s",
-        niche_id, hook[:50], model.model_id, model.belt_app,
+        "[hook_thumbnail] niche=%s hook=%r selected_model=%s belt_app=%s "
+        "cost_per_unit=%s via=capability_registry",
+        niche_id, hook[:50], model.model_id, model.ref, model.cost_per_unit_usd,
     )
     result = run_app(
-        model.belt_app,
+        model.ref,
         model.build_input(prompt, seed, 1080, 1920),
         timeout_seconds=120,
     )
@@ -494,7 +495,7 @@ def generate_hook_thumbnail(
         )
         return False, None
 
-    image_url = extract_image_url(result.output)
+    image_url = extract_url(result.output, kind="thumbnail")
     if not image_url:
         logger.warning(
             "[hook_thumbnail] no image URL in output for model=%s keys=%s",
