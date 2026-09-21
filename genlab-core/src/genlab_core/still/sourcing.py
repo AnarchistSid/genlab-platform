@@ -61,6 +61,79 @@ def negative_prompt(kit: dict[str, Any]) -> str:
     return kit["still_prompt"]["negative"].format(avoid=kit["palette"]["avoid"].strip())
 
 
+#: Story keys holding a full-frame picture OF THE SHOW, most specific first.
+#: ``cover_image_url`` leads because it is the show's key art -- the single
+#: image most likely to be recognised as this title.
+_ART_KEYS = (
+    "cover_image_url",
+    "key_art_url",
+    "banner_image_url",
+    "press_still_url",
+    "thumbnail_url",
+    "image_url",
+)
+
+
+@dataclass(frozen=True)
+class ShowArt:
+    """Everything OF THE SHOW that the story record itself holds.
+
+    The narrow rule has not moved: this reads the story and nothing else. What
+    changed is the record. The fetcher now carries cover, banner, PV id and
+    character portraits out of the SAME AniList response it already made, so
+    material that was previously "available upstream but not ours" is now
+    genuinely carried, with ``provenance`` naming the entry it came from.
+    """
+
+    cover: str = ""
+    banner: str = ""
+    characters: tuple[dict[str, str], ...] = ()
+    attribution: str = ""
+    provenance: str = ""
+    dominant_colour: str = ""
+
+    @property
+    def has_any(self) -> bool:
+        return bool(self.cover or self.banner or self.characters)
+
+    def character_for(self, text: str) -> dict[str, str] | None:
+        """The portrait of a character NAMED in this line, if any.
+
+        Longest name first so "Yami Sukehiro" wins over a show that also has a
+        character called "Yami".
+        """
+        low = text.lower()
+        for c in sorted(self.characters, key=lambda c: -len(c.get("name", ""))):
+            if c.get("name") and c["name"].lower() in low:
+                return c
+        return None
+
+
+def show_art(story: dict[str, Any]) -> ShowArt:
+    """Assemble the show's own material from the story record."""
+
+    def pick(*keys: str) -> str:
+        for k in keys:
+            v = str(story.get(k) or "").strip()
+            if v.startswith("http"):
+                return v
+        return ""
+
+    chars = tuple(
+        {"name": str(c.get("name", "")), "image_url": str(c.get("image_url", ""))}
+        for c in (story.get("characters") or [])
+        if str(c.get("image_url", "")).startswith("http")
+    )
+    return ShowArt(
+        cover=pick("cover_image_url", "key_art_url", "thumbnail_url", "image_url"),
+        banner=pick("banner_image_url"),
+        characters=chars,
+        attribution=str(story.get("art_attribution") or story.get("source") or "").strip(),
+        provenance=str(story.get("art_provenance") or "").strip(),
+        dominant_colour=str(story.get("cover_color") or "").strip(),
+    )
+
+
 def carried_art(story: dict[str, Any]) -> tuple[str, str]:
     """(url, attribution) if the STORY ITSELF holds usable art, else ("", "").
 
@@ -68,7 +141,7 @@ def carried_art(story: dict[str, Any]) -> tuple[str, str]:
     from the upstream catalogue would be new material under someone else's
     licence, dressed as something the pipeline already had.
     """
-    for key in ("key_art_url", "press_still_url", "thumbnail_url", "image_url"):
+    for key in _ART_KEYS:
         url = str(story.get(key) or "").strip()
         if url.startswith("http"):
             attrib = str(story.get("art_attribution") or story.get("source") or "").strip()

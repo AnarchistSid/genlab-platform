@@ -33,13 +33,24 @@ query ($season: MediaSeason, $seasonYear: Int) {
       format: TV, sort: POPULARITY_DESC,
       isAdult: false
     ) {
+      id
+      siteUrl
       title { romaji english }
-      trailer { id site }
+      trailer { id site thumbnail }
+      coverImage { extraLarge large color }
+      bannerImage
+      episodes
+      season
+      seasonYear
+      startDate { year month day }
       popularity
       trending
       description(asHtml: false)
       genres
       studios(isMain: true) { nodes { name } }
+      characters(sort: FAVOURITES_DESC, perPage: 4) {
+        nodes { name { full } image { large } }
+      }
     }
   }
 }
@@ -102,6 +113,52 @@ def _build_promo_summary(p: dict) -> str:
     return (synthesized or desc)[:SUMMARY_MAX_CHARS]
 
 
+#: Fields a story carries so the STILL path can use the SHOW'S OWN material.
+#: `still/sourcing.carried_art` reads the story record and nothing else, on
+#: purpose -- fetching art from the catalogue at render time would be new
+#: material under someone else's licence dressed as something we already had.
+#: The rule was right and the record was thin: AniList hands us the cover, the
+#: banner, the PV id and the character portraits in the SAME response we
+#: already make, and dropping them was what forced the generated-anime-picture
+#: -of-nothing reels. Carrying them costs one larger query and no new request.
+ANILIST_CARRIED_FIELDS = (
+    "cover_image_url",
+    "banner_image_url",
+    "trailer_id",
+    "trailer_site",
+    "characters",
+    "art_attribution",
+    "art_provenance",
+)
+
+
+def _anilist_characters(media: dict) -> list[dict]:
+    """Top characters by favourites, each with a portrait we may use."""
+    out: list[dict] = []
+    for node in (media.get("characters") or {}).get("nodes") or []:
+        name = ((node.get("name") or {}).get("full") or "").strip()
+        image = ((node.get("image") or {}).get("large") or "").strip()
+        if name and image.startswith("http"):
+            out.append({"name": name, "image_url": image})
+    return out
+
+
+def _anilist_art(media: dict) -> dict[str, Any]:
+    """Cover, banner and the show's own dominant colour.
+
+    bannerImage is null for most seasonal entries -- 2 of the top 3 FALL 2026
+    shows had none when this was written -- so every consumer must degrade
+    rather than assume it. extraLarge is preferred over large because the
+    cover is used as a full-frame hero shot at 1080x1920.
+    """
+    cover = media.get("coverImage") or {}
+    return {
+        "cover_image_url": (cover.get("extraLarge") or cover.get("large") or "").strip(),
+        "cover_color": (cover.get("color") or "").strip(),
+        "banner_image_url": (media.get("bannerImage") or "").strip(),
+    }
+
+
 def _fetch_jikan_promos(max_promos: int = 20) -> list[dict]:
     """Fetch latest anime promotional videos from Jikan (MAL)."""
     try:
@@ -131,6 +188,15 @@ def _fetch_jikan_promos(max_promos: int = 20) -> list[dict]:
                     "mal_id": entry.get("mal_id"),
                     "source": "jikan_promos",
                     "_trending_video": True,
+                    "trailer_id": yt_id,
+                    "trailer_site": "youtube",
+                    # MAL's own entry image. Same rule as AniList: carried with
+                    # a statement of origin, or not carried.
+                    "cover_image_url": (
+                        ((entry.get("images") or {}).get("jpg") or {}).get("image_url") or ""
+                    ).strip(),
+                    "art_attribution": "Key art: MyAnimeList",
+                    "art_provenance": (entry.get("url") or "jikan").strip(),
                 }
             )
         return results
@@ -169,21 +235,42 @@ def _fetch_anilist_trailers(max_results: int = 20) -> list[dict]:
                 for s in (media.get("studios") or {}).get("nodes", [])
                 if s.get("name")
             ]
-            results.append(
-                {
-                    "title": title,
-                    "video_id": yt_id,
-                    "url": f"https://www.youtube.com/watch?v={yt_id}",
-                    "source_url": f"https://www.youtube.com/watch?v={yt_id}",
-                    "popularity": media.get("popularity", 0),
-                    "trending": media.get("trending", 0),
-                    "source": "anilist",
-                    "_trending_video": True,
-                    "description": clean_desc,
-                    "genres": media.get("genres") or [],
-                    "studios": studios,
-                }
-            )
+            sd = media.get("startDate") or {}
+            entry = {
+                "title": title,
+                "video_id": yt_id,
+                "url": f"https://www.youtube.com/watch?v={yt_id}",
+                "source_url": f"https://www.youtube.com/watch?v={yt_id}",
+                "popularity": media.get("popularity", 0),
+                "trending": media.get("trending", 0),
+                "source": "anilist",
+                "_trending_video": True,
+                "description": clean_desc,
+                "genres": media.get("genres") or [],
+                "studios": studios,
+                # ── the show's own material, carried with provenance ──
+                "trailer_id": yt_id,
+                "trailer_site": "youtube",
+                "trailer_thumbnail_url": (trailer.get("thumbnail") or "").strip(),
+                "characters": _anilist_characters(media),
+                "episodes": media.get("episodes"),
+                "season": media.get("season") or "",
+                "season_year": media.get("seasonYear"),
+                "start_date": {
+                    "year": sd.get("year"),
+                    "month": sd.get("month"),
+                    "day": sd.get("day"),
+                },
+                "anilist_id": media.get("id"),
+                "anilist_url": (media.get("siteUrl") or "").strip(),
+                # Provenance is the AniList entry itself. An art URL with no
+                # statement of where it came from is the shape that lets a
+                # later reader assume it was ours.
+                "art_attribution": (f"Key art: {studios[0]}" if studios else "Key art: AniList"),
+                "art_provenance": (media.get("siteUrl") or "anilist").strip(),
+            }
+            entry.update(_anilist_art(media))
+            results.append(entry)
         return sorted(results, key=lambda x: x.get("trending", 0), reverse=True)
     except Exception as e:
         logger.warning("[AnimePromos] AniList failed: %s", e)
@@ -265,6 +352,27 @@ class FetchAnimePromos(FetcherStage):
                         "source_mention_count": 2,
                     }
                 )
+                # Carry the show's own material onto the STORY, not just into
+                # the fetcher's scratch dict. A field held only in the promo
+                # dict dies at this boundary -- the four-gate propagator shape
+                # (fetcher -> story -> blueprint -> column). This is gate one.
+                for field in (
+                    *ANILIST_CARRIED_FIELDS,
+                    "cover_color",
+                    "trailer_thumbnail_url",
+                    "episodes",
+                    "season",
+                    "season_year",
+                    "start_date",
+                    "anilist_id",
+                    "anilist_url",
+                    "genres",
+                    "studios",
+                    "popularity",
+                    "description",
+                ):
+                    if field in p and p[field] not in (None, "", [], {}):
+                        new_stories[-1][field] = p[field]
 
             existing = context.get("stories", [])
             # Avoid duplicates with existing stories
