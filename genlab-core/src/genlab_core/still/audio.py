@@ -70,15 +70,31 @@ def sanitize_for_speech(script: str) -> str:
 def _duration(path: Path) -> float:
     return float(
         subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "csv=p=0", str(path)],
-            capture_output=True, text=True, check=True,
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "csv=p=0",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.strip()
     )
 
 
-def synthesize(script: str, out_path: Path, *, narration: dict[str, Any],
-               context: str = "fire", timeout_s: int = 300) -> Narration:
+def synthesize(
+    script: str,
+    out_path: Path,
+    *,
+    narration: dict[str, Any],
+    context: str = "fire",
+    timeout_s: int = 300,
+) -> Narration:
     """Speak the script. Refuses a script the corruption gate rejects."""
     text = sanitize_for_speech(script)
     if not text:
@@ -99,9 +115,20 @@ def synthesize(script: str, out_path: Path, *, narration: dict[str, Any],
         "speaking_rate": float(narration.get("speaking_rate", 1.0)),
     }
     sub = subprocess.run(
-        ["belt", "app", "run", cap.ref, "--no-input", "--json", "--no-wait",
-         "--input", json.dumps(payload)],
-        capture_output=True, text=True, timeout=timeout_s,
+        [
+            "belt",
+            "app",
+            "run",
+            cap.ref,
+            "--no-input",
+            "--json",
+            "--no-wait",
+            "--input",
+            json.dumps(payload),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=timeout_s,
     )
     task_id = json.loads(sub.stdout or "{}").get("id")
     if not task_id:
@@ -110,8 +137,12 @@ def synthesize(script: str, out_path: Path, *, narration: dict[str, Any],
     deadline = time.monotonic() + timeout_s
     result: dict[str, Any] = {}
     while time.monotonic() < deadline:
-        got = subprocess.run(["belt", "task", "get", str(task_id), "--json"],
-                             capture_output=True, text=True, timeout=120)
+        got = subprocess.run(
+            ["belt", "task", "get", str(task_id), "--json"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
         try:
             result = json.loads(got.stdout or "{}")
         except ValueError:
@@ -137,11 +168,19 @@ def synthesize(script: str, out_path: Path, *, narration: dict[str, Any],
     measured = n_words / dur * 60.0 if dur else 0.0
     logger.info(
         "[still] narration %.2fs, %d words, MEASURED %.1f wpm (config predicts %s)",
-        dur, n_words, measured, narration.get("wpm"),
+        dur,
+        n_words,
+        measured,
+        narration.get("wpm"),
     )
-    return Narration(path=out_path, duration_s=dur, words=n_words,
-                     measured_wpm=measured, cost_usd=cap.cost_per_unit_usd or 0.0,
-                     ref=cap.ref)
+    return Narration(
+        path=out_path,
+        duration_s=dur,
+        words=n_words,
+        measured_wpm=measured,
+        cost_usd=cap.cost_per_unit_usd or 0.0,
+        ref=cap.ref,
+    )
 
 
 def align(audio: Path, *, model: str = "base") -> list[Word]:
@@ -161,10 +200,21 @@ def align(audio: Path, *, model: str = "base") -> list[Word]:
 def measure_loudness(path: Path) -> tuple[float, float]:
     """(integrated LUFS, true peak dBTP) via ffmpeg's loudnorm analysis."""
     proc = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-nostats", "-i", str(path),
-         "-af", "loudnorm=I=-14:TP=-1:LRA=11:print_format=json", "-f", "null", "-"],
-        capture_output=True, text=True,
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-i",
+            str(path),
+            "-af",
+            "loudnorm=I=-14:TP=-1:LRA=11:print_format=json",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
     )
-    blob = proc.stderr[proc.stderr.rfind("{"): proc.stderr.rfind("}") + 1]
+    blob = proc.stderr[proc.stderr.rfind("{") : proc.stderr.rfind("}") + 1]
     data = json.loads(blob)
     return float(data["input_i"]), float(data["input_tp"])

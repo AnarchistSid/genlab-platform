@@ -29,8 +29,8 @@ FIREFLY = [
     "Firefly Wedding premieres October ninth, twenty twenty-six.",
 ]
 
-ANIME_WPM = 141.0          # measured for the inworld tier
-ANIME_RATE = 1.22          # delivery multiplier for the 165-180 register
+ANIME_WPM = 141.0  # measured for the inworld tier
+ANIME_RATE = 1.22  # delivery multiplier for the 165-180 register
 
 
 @pytest.fixture

@@ -213,6 +213,4 @@ def plan_beats(
     if hero is None:
         hero = max(beats, key=lambda x: x.words).index
 
-    return Storyboard(
-        beats=tuple(beats), hero_index=hero, total_s=round(t, 3), kit=kit
-    )
+    return Storyboard(beats=tuple(beats), hero_index=hero, total_s=round(t, 3), kit=kit)

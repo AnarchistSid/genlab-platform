@@ -45,15 +45,11 @@ class TestSourcing:
         had it. carried_art reads the record and nothing else.
         """
         assert carried_art({"title": "X", "source": "anilist"}) == ("", "")
-        url, attrib = carried_art(
-            {"key_art_url": "https://example.test/a.jpg", "source": "viz"}
-        )
+        url, attrib = carried_art({"key_art_url": "https://example.test/a.jpg", "source": "viz"})
         assert url.startswith("http") and attrib == "viz"
 
     def test_carried_art_goes_to_the_hero_and_is_not_repeated(self, board):
-        stills = plan_stills(
-            board, {"key_art_url": "https://example.test/a.jpg", "source": "viz"}
-        )
+        stills = plan_stills(board, {"key_art_url": "https://example.test/a.jpg", "source": "viz"})
         carried = [s for s in stills if s.origin == CARRIED]
         assert len(carried) == 1, "repeating one image under every beat is a slideshow"
         assert carried[0].is_hero
@@ -97,9 +93,7 @@ class TestCardRefusesToInvent:
             build_card("X", FACTS, provenance="")
 
     def test_only_allowlisted_fields_reach_the_card(self):
-        c = build_card(
-            "X", {**FACTS, "average_score": 91, "rank": 3}, provenance="AniList"
-        )
+        c = build_card("X", {**FACTS, "average_score": 91, "rank": 3}, provenance="AniList")
         rendered = {k for k, _ in c.rows}
         assert "Average Score" not in rendered and "Rank" not in rendered, (
             "scores and ranks move; a stale one on a card reads as a wrong one"
@@ -109,7 +103,8 @@ class TestCardRefusesToInvent:
     def test_empty_values_do_not_count_toward_the_two_field_floor(self):
         with pytest.raises(NoCardData):
             build_card(
-                "X", {"studio": "d", "season": "", "genres": [], "premiere": None},
+                "X",
+                {"studio": "d", "season": "", "genres": [], "premiere": None},
                 provenance="AniList",
             )
 
@@ -129,9 +124,9 @@ class TestReelCost:
             PlannedCall("music", 1),
         ]
         root = Path(__file__).resolve().parents[3]
-        cap = yaml.safe_load(
-            (root / "FrameDrift/config/niche.yaml").read_text()
-        )["capabilities"]["max_generation_cost_usd"]
+        cap = yaml.safe_load((root / "FrameDrift/config/niche.yaml").read_text())["capabilities"][
+            "max_generation_cost_usd"
+        ]
         cost = check_plan_budget(plan, cap_usd=cap)
         assert cost.total_usd < cap
         assert cost.total_usd == pytest.approx(0.02204, abs=1e-4), cost

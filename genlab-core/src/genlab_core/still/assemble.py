@@ -64,8 +64,9 @@ class AudioPlan:
     true_peak: float
 
 
-def build_concat_filter(n_shots: int, durations: list[float], transition: str,
-                        trans_s: float) -> tuple[str, str]:
+def build_concat_filter(
+    n_shots: int, durations: list[float], transition: str, trans_s: float
+) -> tuple[str, str]:
     """(filter_complex, final_label) joining shots with a transition per cut.
 
     xfade OVERLAPS by ``trans_s``, so each join shortens the timeline. The
@@ -89,8 +90,14 @@ def build_concat_filter(n_shots: int, durations: list[float], transition: str,
     return ";".join(parts), prev
 
 
-def concat_shots(shots: list[Path], durations: list[float], out: Path, *,
-                 kit: dict[str, Any], timeout_s: int = 600) -> bool:
+def concat_shots(
+    shots: list[Path],
+    durations: list[float],
+    out: Path,
+    *,
+    kit: dict[str, Any],
+    timeout_s: int = 600,
+) -> bool:
     """Join shots with one transition per cut."""
     trans = kit["transitions"]["set"][0]
     trans_s = float(kit["transitions"]["duration_s"])
@@ -102,8 +109,21 @@ def concat_shots(shots: list[Path], durations: list[float], out: Path, *,
         cmd += ["-filter_complex", fc, "-map", f"[{final}]"]
     else:
         cmd += ["-map", "0:v"]
-    cmd += ["-r", str(FPS), "-c:v", "libx264", "-crf", "20", "-preset", "fast",
-            "-pix_fmt", "yuv420p", "-colorspace", "bt709", str(out)]
+    cmd += [
+        "-r",
+        str(FPS),
+        "-c:v",
+        "libx264",
+        "-crf",
+        "20",
+        "-preset",
+        "fast",
+        "-pix_fmt",
+        "yuv420p",
+        "-colorspace",
+        "bt709",
+        str(out),
+    ]
     out.parent.mkdir(parents=True, exist_ok=True)
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
     if p.returncode != 0:
@@ -118,6 +138,12 @@ def mix_audio(plan: AudioPlan, out: Path, video_s: float, *, timeout_s: int = 30
     The bed is ducked by a fixed gain rather than sidechained: a sidechain
     compressor pumps on every consonant at this length, and the kit asks for
     a 6-10 dB bed, not a reactive one.
+
+    The result is padded to ``video_s``. It used to end with the narration,
+    and ``composite`` runs with ``-shortest`` -- so the end card, which plays
+    after the last word, was silently cut off the tail of every reel. The
+    card was in the timeline, in the concat and in the manifest, and not in
+    the file.
     """
     out.parent.mkdir(parents=True, exist_ok=True)
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(plan.narration)]
@@ -125,12 +151,16 @@ def mix_audio(plan: AudioPlan, out: Path, video_s: float, *, timeout_s: int = 30
         cmd += ["-stream_loop", "-1", "-i", str(plan.bed)]
         fc = (
             f"[1:a]volume={plan.duck_db}dB,atrim=0:{video_s:.3f},asetpts=PTS-STARTPTS[bed];"
-            f"[0:a][bed]amix=inputs=2:duration=first:dropout_transition=0,"
-            f"loudnorm=I={plan.target_lufs}:TP={plan.true_peak}:LRA=11[a]"
+            f"[0:a][bed]amix=inputs=2:duration=longest:dropout_transition=0,"
+            f"loudnorm=I={plan.target_lufs}:TP={plan.true_peak}:LRA=11,"
+            f"apad,atrim=0:{video_s:.3f}[a]"
         )
         cmd += ["-filter_complex", fc, "-map", "[a]"]
     else:
-        cmd += ["-af", f"loudnorm=I={plan.target_lufs}:TP={plan.true_peak}:LRA=11"]
+        cmd += [
+            "-af",
+            f"loudnorm=I={plan.target_lufs}:TP={plan.true_peak}:LRA=11,apad,atrim=0:{video_s:.3f}",
+        ]
     cmd += ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", str(out)]
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
     if p.returncode != 0:
@@ -148,12 +178,31 @@ def mix_audio(plan: AudioPlan, out: Path, video_s: float, *, timeout_s: int = 30
         return True
     tmp = out.with_suffix(".pass2" + out.suffix)
     p2 = subprocess.run(
-        ["ffmpeg", "-y", "-v", "error", "-i", str(out),
-         "-af", f"loudnorm=I={plan.target_lufs}:TP={plan.true_peak}:LRA=11:"
-                f"measured_I={measured_i}:measured_TP={measured_tp}:"
-                f"measured_LRA=11:measured_thresh={measured_i - 10:.2f}:linear=true",
-         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", str(tmp)],
-        capture_output=True, text=True, timeout=timeout_s,
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(out),
+            "-af",
+            f"loudnorm=I={plan.target_lufs}:TP={plan.true_peak}:LRA=11:"
+            f"measured_I={measured_i}:measured_TP={measured_tp}:"
+            f"measured_LRA=11:measured_thresh={measured_i - 10:.2f}:linear=true,"
+            f"apad,atrim=0:{video_s:.3f}",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            str(tmp),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=timeout_s,
     )
     if p2.returncode == 0 and tmp.exists():
         tmp.replace(out)
@@ -172,11 +221,42 @@ def loop_back_ok(video: Path, tolerance: float = 1.0) -> tuple[bool, float]:
 
     with tempfile.TemporaryDirectory() as td:
         first, last = Path(td) / "a.png", Path(td) / "b.png"
-        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(video),
-                        "-vf", "select=eq(n\\,0)", "-vsync", "0", "-frames:v", "1",
-                        str(first)], check=True)
-        subprocess.run(["ffmpeg", "-y", "-v", "error", "-sseof", "-0.2", "-i", str(video),
-                        "-update", "1", "-frames:v", "1", str(last)], check=True)
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-i",
+                str(video),
+                "-vf",
+                "select=eq(n\\,0)",
+                "-vsync",
+                "0",
+                "-frames:v",
+                "1",
+                str(first),
+            ],
+            check=True,
+        )
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-sseof",
+                "-0.2",
+                "-i",
+                str(video),
+                "-update",
+                "1",
+                "-frames:v",
+                "1",
+                str(last),
+            ],
+            check=True,
+        )
         # `-v info`, NOT `-v error`: metadata=print writes at INFO level, so
         # `-v error` suppresses the only output this reads. With it silenced
         # the parse found nothing and returned the 255.0 fallback — a number
@@ -184,10 +264,22 @@ def loop_back_ok(video: Path, tolerance: float = 1.0) -> tuple[bool, float]:
         # measurement did not happen". Same shape as the unsatisfiable guard:
         # the not-measured value must not look like a valid result.
         out = subprocess.run(
-            ["ffmpeg", "-v", "info", "-i", str(first), "-i", str(last),
-             "-filter_complex", "blend=all_mode=difference,signalstats,"
-             "metadata=print:key=lavfi.signalstats.YAVG", "-f", "null", "-"],
-            capture_output=True, text=True,
+            [
+                "ffmpeg",
+                "-v",
+                "info",
+                "-i",
+                str(first),
+                "-i",
+                str(last),
+                "-filter_complex",
+                "blend=all_mode=difference,signalstats,metadata=print:key=lavfi.signalstats.YAVG",
+                "-f",
+                "null",
+                "-",
+            ],
+            capture_output=True,
+            text=True,
         )
         vals = [float(x.split("=")[1]) for x in out.stderr.splitlines() if "YAVG=" in x]
         if not vals:

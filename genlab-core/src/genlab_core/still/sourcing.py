@@ -94,16 +94,22 @@ def plan_stills(
             if is_hero:
                 out.append(
                     StillSource(
-                        beat_index=beat.index, origin=CARRIED, url=url,
-                        attribution=attrib, cost_usd=0.0, is_hero=True,
+                        beat_index=beat.index,
+                        origin=CARRIED,
+                        url=url,
+                        attribution=attrib,
+                        cost_usd=0.0,
+                        is_hero=True,
                     )
                 )
                 continue
         out.append(
             StillSource(
-                beat_index=beat.index, origin=GENERATED,
+                beat_index=beat.index,
+                origin=GENERATED,
                 prompt=build_prompt(beat, board.kit),
-                cost_usd=unit, is_hero=is_hero,
+                cost_usd=unit,
+                is_hero=is_hero,
             )
         )
     logger.info(

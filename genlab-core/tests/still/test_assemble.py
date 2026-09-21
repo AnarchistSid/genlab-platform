@@ -43,16 +43,42 @@ def kit():
 @pytest.fixture(scope="module")
 def still_image(tmp_path_factory) -> Path:
     p = tmp_path_factory.mktemp("as") / "s.png"
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
-                    "-i", "gradients=s=1080x1920:n=3", "-frames:v", "1", str(p)], check=True)
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "gradients=s=1080x1920:n=3",
+            "-frames:v",
+            "1",
+            str(p),
+        ],
+        check=True,
+    )
     return p
 
 
 @pytest.fixture(scope="module")
 def tone(tmp_path_factory) -> Path:
     p = tmp_path_factory.mktemp("as") / "t.wav"
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
-                    "-i", "sine=frequency=220:duration=6", str(p)], check=True)
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=220:duration=6",
+            str(p),
+        ],
+        check=True,
+    )
     return p
 
 
@@ -102,10 +128,13 @@ class TestLoudness:
         from genlab_core.still.audio import measure_loudness
 
         out = tmp_path / "m.m4a"
-        plan = AudioPlan(narration=tone, bed=None,
-                         duck_db=kit["audio"]["music_duck_db"],
-                         target_lufs=kit["audio"]["target_lufs"],
-                         true_peak=kit["audio"]["true_peak_max"])
+        plan = AudioPlan(
+            narration=tone,
+            bed=None,
+            duck_db=kit["audio"]["music_duck_db"],
+            target_lufs=kit["audio"]["target_lufs"],
+            true_peak=kit["audio"]["true_peak_max"],
+        )
         assert mix_audio(plan, out, 6.0)
         i, tp = measure_loudness(out)
         target = kit["audio"]["target_lufs"]

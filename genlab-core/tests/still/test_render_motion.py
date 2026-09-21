@@ -44,8 +44,19 @@ SCRIPT = [
 def still_image(tmp_path_factory) -> Path:
     p = tmp_path_factory.mktemp("still") / "s.png"
     subprocess.run(
-        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
-         "-i", "gradients=s=1080x1920:n=3", "-frames:v", "1", str(p)],
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "gradients=s=1080x1920:n=3",
+            "-frames:v",
+            "1",
+            str(p),
+        ],
         check=True,
     )
     return p
@@ -94,7 +105,9 @@ class TestRenderedDuration:
         total = 0.0
         for b in board.beats:
             out = tmp_path / f"{b.index}.mp4"
-            assert render_shot(Shot(b.index, still_image, out, board.pattern_for(b.index), b.shot_s), kit)
+            assert render_shot(
+                Shot(b.index, still_image, out, board.pattern_for(b.index), b.shot_s), kit
+            )
             got = probe_duration(out)
             assert abs(got - b.shot_s) <= 0.01 + 1.0 / FPS, f"shot {b.index}"
             total += got
@@ -118,14 +131,23 @@ class TestRenderedDuration:
         # STREAM's order rather than the requested order, so positional
         # unpacking silently reads pix_fmt as color_space.
         probe = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "v:0",
-             "-show_entries", "stream=width,height,color_space,pix_fmt",
-             "-of", "default=nw=1", str(out)],
-            capture_output=True, text=True, check=True,
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height,color_space,pix_fmt",
+                "-of",
+                "default=nw=1",
+                str(out),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout
-        fields = dict(
-            line.split("=", 1) for line in probe.strip().splitlines() if "=" in line
-        )
+        fields = dict(line.split("=", 1) for line in probe.strip().splitlines() if "=" in line)
         assert (int(fields["width"]), int(fields["height"])) == (1080, 1920)
         assert fields.get("color_space") == "bt709", fields
         assert fields.get("pix_fmt") == "yuv420p", fields

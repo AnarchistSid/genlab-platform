@@ -37,8 +37,8 @@ def _zoompan(expr_z: str, expr_x: str, expr_y: str, frames: int) -> str:
     input frame index) carries the motion.
     """
     return (
-        f"scale={W*2}:{H*2}:force_original_aspect_ratio=increase,"
-        f"crop={W*2}:{H*2},"
+        f"scale={W * 2}:{H * 2}:force_original_aspect_ratio=increase,"
+        f"crop={W * 2}:{H * 2},"
         f"zoompan=z='{expr_z}':x='{expr_x}':y='{expr_y}':d=1:s={W}x{H}:fps={FPS}"
     )
 
@@ -72,10 +72,7 @@ def assert_patterns_supported(kit: dict[str, Any]) -> None:
 def _grain_vignette(kit: dict[str, Any]) -> str:
     g = kit["motion"]["grain"]["opacity"]
     v = kit["motion"]["vignette"]["strength"]
-    return (
-        f"noise=alls={max(1, int(g * 100))}:allf=t+u,"
-        f"vignette=PI/4*{v:.3f}"
-    )
+    return f"noise=alls={max(1, int(g * 100))}:allf=t+u,vignette=PI/4*{v:.3f}"
 
 
 @dataclass(frozen=True)
@@ -93,12 +90,36 @@ def render_shot(shot: Shot, kit: dict[str, Any], *, timeout_s: int = 180) -> boo
     vf = f"{build_motion_filter(shot.pattern, shot.duration_s, zoom_max)},{_grain_vignette(kit)}"
     shot.output.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
-        "ffmpeg", "-y", "-v", "error",
-        "-loop", "1", "-framerate", str(FPS), "-t", f"{shot.duration_s:.3f}", "-i", str(shot.image),
-        "-vf", vf, "-r", str(FPS),
-        "-c:v", "libx264", "-crf", "20", "-preset", "fast",
-        "-pix_fmt", "yuv420p",
-        "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
+        "ffmpeg",
+        "-y",
+        "-v",
+        "error",
+        "-loop",
+        "1",
+        "-framerate",
+        str(FPS),
+        "-t",
+        f"{shot.duration_s:.3f}",
+        "-i",
+        str(shot.image),
+        "-vf",
+        vf,
+        "-r",
+        str(FPS),
+        "-c:v",
+        "libx264",
+        "-crf",
+        "20",
+        "-preset",
+        "fast",
+        "-pix_fmt",
+        "yuv420p",
+        "-colorspace",
+        "bt709",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
         str(shot.output),
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
@@ -111,8 +132,18 @@ def render_shot(shot: Shot, kit: dict[str, Any], *, timeout_s: int = 180) -> boo
 def probe_duration(path: Path) -> float:
     return float(
         subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "csv=p=0", str(path)],
-            capture_output=True, text=True, check=True,
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "csv=p=0",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.strip()
     )
