@@ -90,13 +90,20 @@ class TestEmptyUserPrompt:
         seen = {}
 
         class _Proc:
-            returncode = 0
-            stdout = '{"status_text":"completed","output":{"response":"ok"}}'
-            stderr = ""
+            def __init__(self, stdout):
+                self.returncode = 0
+                self.stdout = stdout
+                self.stderr = ""
 
         def fake_run(cmd, *a, **k):
-            seen["cmd"] = cmd
-            return _Proc()
+            # Two legs now: `app run --no-wait` returns an id, `task get`
+            # returns the settled task. The wrapper stopped using the CLI's
+            # wait-for-completion mode because its stream reassembly spliced
+            # fragments into words on a fast model (7/10 runs).
+            if "run" in cmd:
+                seen["cmd"] = cmd
+                return _Proc('{"id":"task-1"}')
+            return _Proc('{"status_text":"completed","output":{"response":"ok"}}')
 
         # subprocess is lazily imported inside the function, so it is never an
         # attribute of the fallback module -- patch the SOURCE module (CLAUDE.md
@@ -171,17 +178,22 @@ class TestJsonModeUnwrapping:
         assert fb._extract_json("no json here at all") == "no json here at all"
 
     def test_json_mode_off_leaves_the_body_untouched(self, monkeypatch):
-        seen = {}
-
         class _Proc:
-            returncode = 0
-            stdout = '{"status_text":"completed","output":{"response":"prose {a:1} more"}}'
-            stderr = ""
+            def __init__(self, stdout):
+                self.returncode = 0
+                self.stdout = stdout
+                self.stderr = ""
 
-        monkeypatch.setattr("subprocess.run", lambda cmd, *a, **k: _Proc())
+        def fake_run(cmd, *a, **k):
+            if "run" in cmd:
+                return _Proc('{"id":"task-1"}')
+            return _Proc(
+                '{"status_text":"completed","output":{"response":"prose {a:1} more"}}'
+            )
+
+        monkeypatch.setattr("subprocess.run", fake_run)
         out = fb.call_belt_haiku_fallback("s", "u", 8, 0.0, json_mode=False)
         assert out == "prose {a:1} more"
-        seen.clear()
 
 
 def test_every_llm_response_parse_site_is_wired_to_extract_json():
@@ -239,13 +251,16 @@ class TestBeltNeverSendsOpenAIResponseFormat:
         body = json.dumps({"status_text": "completed", "output": {"response": response}})
 
         class _Proc:
-            returncode = 0
-            stdout = body
-            stderr = ""
+            def __init__(self, stdout):
+                self.returncode = 0
+                self.stdout = stdout
+                self.stderr = ""
 
         def fake_run(cmd, *a, **k):
-            seen["cmd"] = cmd
-            return _Proc()
+            if "run" in cmd:
+                seen["cmd"] = cmd
+                return _Proc('{"id":"task-1"}')
+            return _Proc(body)
 
         monkeypatch.setattr("subprocess.run", fake_run)
         return seen

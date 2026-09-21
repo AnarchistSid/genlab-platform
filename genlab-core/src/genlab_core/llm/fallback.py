@@ -95,6 +95,9 @@ def _cb_cooldown_s() -> int:
         return 3600
 
 
+from genlab_core.llm.output_integrity import LLMOutputCorrupt  # noqa: E402
+
+
 class CircuitOpen(Exception):
     """Sentinel raised internally when caller checks `cb_is_open()`
     and wants to skip Anthropic. Never raised by the helpers below;
@@ -495,6 +498,19 @@ def call_belt_haiku_fallback(
     # boolean, not a schema, and inventing one per call site is exactly
     # the per-site duplication ``call_openai_fallback`` exists to avoid.
 
+    # `--no-wait` + poll, NOT the default wait-for-completion. Measured
+    # 2026-09-21 on the same prompt, ten runs each:
+    #
+    #   belt CLI, haiku, wait-for-completion   7/10 returned SPLICED text
+    #   MCP client (HTTP API), haiku           0/3
+    #   belt CLI, sonnet, wait-for-completion  0/10
+    #   belt CLI --no-wait + `task get`        0/8
+    #
+    # e.g. "transforms water fromeans, lakes" / "droplets accum theseulate".
+    # The CLI's streaming reassembly races on a fast model; Sonnet is slow
+    # enough never to trigger it, which is why this looked model-specific at
+    # first. Submitting and then reading the settled task skips reassembly
+    # entirely. See llm/output_integrity.py for the gate behind this.
     proc = subprocess.run(
         [
             "belt",
@@ -503,6 +519,7 @@ def call_belt_haiku_fallback(
             _BELT_APP,
             "--no-input",
             "--json",
+            "--no-wait",
             "--input",
             _json.dumps(payload_in),
         ],
@@ -511,12 +528,36 @@ def call_belt_haiku_fallback(
         timeout=timeout_s,
     )
     try:
-        payload = _json.loads(proc.stdout or "{}")
+        submitted = _json.loads(proc.stdout or "{}")
     except ValueError as exc:
         raise RuntimeError(
             f"belt returned unparseable output (rc={proc.returncode}): "
             f"{(proc.stdout or proc.stderr or '')[:200]}"
         ) from exc
+    task_id = submitted.get("id")
+    if not task_id:
+        raise RuntimeError(f"belt --no-wait returned no task id: {str(submitted)[:200]}")
+
+    import time as _time
+
+    payload: dict[str, Any] = {}
+    deadline = _time.monotonic() + timeout_s
+    while _time.monotonic() < deadline:
+        got = subprocess.run(
+            ["belt", "task", "get", str(task_id), "--json"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        try:
+            payload = _json.loads(got.stdout or "{}")
+        except ValueError:
+            payload = {}
+        if payload.get("status_text") in ("completed", "failed", "cancelled"):
+            break
+        _time.sleep(2)
+    else:
+        raise RuntimeError(f"belt task {task_id} did not settle within {timeout_s}s")
 
     # T-38: never gate on proc.returncode — the belt CLI exits 0 on a failed task.
     status = payload.get("status_text") or ""
@@ -534,6 +575,19 @@ def call_belt_haiku_fallback(
     if json_mode and text:
         # Anthropic has no structured-output mode; unwrap the prose.
         text = extract_json(text)
+
+    # A writer that can emit "ev itaporates" must read its own output. The
+    # transport fix above removed the cause; this is the gate behind it, so a
+    # regression surfaces as a named failure rather than as prose nobody reads
+    # before it reaches a viewer.
+    from genlab_core.llm.output_integrity import artifacts as _artifacts
+
+    _bad = _artifacts(text)
+    if _bad:
+        raise LLMOutputCorrupt(
+            f"llm_output_corrupt:belt — splice artifacts {_bad[:6]} in "
+            f"{len(text)} chars from {_BELT_APP}"
+        )
     if not text:
         raise RuntimeError(
             f"belt returned status=completed with EMPTY content "
