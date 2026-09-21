@@ -1545,3 +1545,89 @@ def check_source_diversity(niche_id: str) -> list[Alert]:
     except Exception as exc:
         logger.debug("[source_diversity] probe failed for %s: %s", niche_id, exc)
     return alerts
+
+
+#: Niches whose blueprint production is expected. Kept explicit so a niche
+#: being retired shows up as an edit here rather than as a silently smaller
+#: denominator.
+PRODUCING_NICHES: tuple[str, ...] = ("anime", "gaming", "movies", "sports", "ai_creators")
+
+#: One niche producing nothing is a DATA outcome — nothing trending, a
+#: relevance gate doing its job, a dedup day. Two or more on the same day is
+#: infrastructure, because the niches do not share sources but do share the
+#: writer, the store and the schema.
+_OUTAGE_NICHE_FLOOR = 2
+
+
+def check_zero_blueprints_across_niches(hours: int = 24) -> list[Alert]:
+    """CRITICAL when >= 2 niches produced no blueprints in the window.
+
+    ANIME-08 §4. On 2026-09-20 anime, gaming, movies and ai_creators each
+    produced ZERO blueprints for a full day. Every insert was failing with
+    `column "source_url" of relation "blueprints" does not exist`, logged as
+    one WARNING per blueprint, and every run still exited 0 with its timer
+    green. The per-niche `check_zero_blueprints` above cannot see this: it
+    reasons about one niche at a time, and one niche at zero is ordinary.
+
+    Counting NICHES is what makes it visible. They share no sources — YouTube
+    categories, AniList, Reddit, Steam, Twitch — so simultaneous silence is
+    not a content coincidence; it is the writer, the store or the schema.
+
+    The error is named per niche in ``details`` so the alert says WHY, not
+    just that it happened. A CRITICAL that only reports a count sends the
+    operator to the journal, which is where this hid for a day.
+    """
+    counts: dict[str, int] = {}
+    errors: dict[str, str] = {}
+    try:
+        with pg_connect(os.environ.get("DATABASE_URL", "")) as conn:
+            rows = conn.execute(
+                """
+                SELECT niche_id, COUNT(*)::int AS n
+                FROM blueprints
+                WHERE created_at > now() - make_interval(hours => %s)
+                GROUP BY niche_id
+                """,
+                (hours,),
+            ).fetchall()
+            for row in rows:
+                counts[str(row["niche_id"])] = int(row["n"])
+
+            err_rows = conn.execute(
+                """
+                SELECT niche_id, error_message
+                FROM blueprints
+                WHERE error_message IS NOT NULL AND error_message <> ''
+                  AND created_at > now() - make_interval(hours => %s)
+                ORDER BY created_at DESC
+                """,
+                (hours,),
+            ).fetchall()
+            for row in err_rows:
+                errors.setdefault(str(row["niche_id"]), str(row["error_message"])[:160])
+    except Exception as exc:  # noqa: BLE001 — a monitor must not take the run down
+        logger.warning("[zero-blueprints-cross-niche] DB read failed: %s", exc)
+        return []
+
+    silent = sorted(n for n in PRODUCING_NICHES if counts.get(n, 0) == 0)
+    if len(silent) < _OUTAGE_NICHE_FLOOR:
+        return []
+
+    named = ", ".join(f"{n} ({errors.get(n, 'no error recorded')})" for n in silent)
+    return [
+        Alert(
+            check="zero_blueprints_multi_niche",
+            severity="critical",
+            message=(
+                f"{len(silent)} of {len(PRODUCING_NICHES)} niches produced NO "
+                f"blueprints in {hours}h: {named}. Niches share no sources, so "
+                "simultaneous silence is infrastructure — writer, store or schema."
+            ),
+            details={
+                "hours": hours,
+                "silent_niches": silent,
+                "counts": {n: counts.get(n, 0) for n in PRODUCING_NICHES},
+                "errors": errors,
+            },
+        )
+    ]

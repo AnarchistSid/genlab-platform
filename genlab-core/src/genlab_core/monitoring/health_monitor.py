@@ -87,6 +87,7 @@ from genlab_core.monitoring.checks.pipeline import (
     check_stale_drafted,
     check_stuck_publishing,
     check_zero_blueprints,
+    check_zero_blueprints_across_niches,
 )
 from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-5
 
@@ -130,6 +131,12 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         # 2026-06-14 engagement-loop audit follow-ups (PR #199):
         all_alerts.extend(archive_stranded_engagement_reviews(nid))
         all_alerts.extend(detect_dead_pollers(nid))
+
+    # CROSS-NICHE, deliberately outside the per-niche loop. The per-niche
+    # zero-blueprint check reasons about one niche at a time, and one niche at
+    # zero is ordinary. On 2026-09-20 FOUR niches were at zero simultaneously
+    # and nothing fired, because no check ever counted niches.
+    all_alerts.extend(check_zero_blueprints_across_niches())
 
     # System-wide checks (only on full runs)
     if niche_id is None:
@@ -655,6 +662,7 @@ __all__ = [
     "check_publish_failures",
     "check_publish_silence",
     "check_qc_collapse",
+    "check_zero_blueprints_across_niches",
     "check_services",
     "check_source_diversity",
     "check_source_starvation",
