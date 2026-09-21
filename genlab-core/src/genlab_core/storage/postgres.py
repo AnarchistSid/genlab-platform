@@ -174,7 +174,23 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "platform_publish_status",
         "video_id",
         "video_url",
-        "source_url",
+        # "source_url" REMOVED 2026-09-21. It was listed here but the
+        # blueprints table has no such column, so every insert carrying the
+        # field died with:
+        #
+        #   column "source_url" of relation "blueprints" does not exist
+        #
+        # The mismatch was dormant from 1ebf1c06 until 7935ac08 started
+        # writing the field, and then it took blueprint creation down on
+        # anime, gaming, movies and ai_creators — 4 of 5 niches, 0 blueprints
+        # in 24h. Removed rather than migrated because the value duplicates
+        # `video_url` (both are set from story["source_url"] a few lines
+        # apart in push_to_backlog) and unlisted fields land in `extra`,
+        # which is where craft_render already reads it from.
+        #
+        # This is rule #28's mirror. The rule says every DB column must be in
+        # PROMOTED_COLUMNS; the reverse — a promoted name with no column — is
+        # just as fatal and had no guard running.
         "priority_score",
         "action_taken",
         # 2026-07-24: action_taken_source column exists in the DB but
