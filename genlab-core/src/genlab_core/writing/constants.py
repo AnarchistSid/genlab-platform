@@ -25,3 +25,25 @@ MAX_HOOK_CHARS = 60
 # into 2-line max). Kept alongside MAX_HOOK_CHARS since both are
 # render-time invariants.
 HOOK_MAX_CHARS_PER_LINE = 35
+
+
+#: Persisted story-summary ceiling. ANIME-03 §2.
+#:
+#: Was 255 at the persist site in push_to_backlog, and `stories.summary` is
+#: `text` — so the 255 was never a column limit, it was a literal, and no
+#: migration was needed to lift it.
+#:
+#: What it cost: AniList returns 200-2000 characters. The Firefly Wedding
+#: description ends at character 255 on "...redeem her worth in her", and the
+#: sentence that follows is the one carrying the story:
+#:
+#:   "...she finds herself the target of the mysterious assassin Shinpei...
+#:    she makes a desperate proposal - of marriage!"
+#:
+#: Every hook for that title was written from the setup with the turn cut off.
+#: Measured 2026-09-21: 34 anime, 23 movies and 7 sports stories sat at
+#: exactly 255, i.e. truncated.
+#:
+#: Still bounded. `text` is unbounded but a story summary is not a document,
+#: and an unbounded field is a payload nobody sized.
+SUMMARY_MAX_CHARS = 4000

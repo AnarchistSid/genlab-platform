@@ -207,3 +207,34 @@ pipeline:
 # or a second card before it has to justify itself.
 capabilities:
   max_generation_cost_usd: 0.25
+
+# ── narration (ANIME-03 §1) ─────────────────────────────────────────────────
+# anime joins the canary that BlackboxBrief has held alone since NARR-01
+# (2026-08-18). Until now FrameDrift had no `narration:` block at all, so
+# get_narration_config defaulted it to enabled=False and every anime blueprint
+# carried an empty narration_script while reporting narration_degraded=false.
+#
+# WPM, and why it is not 165-180 here:
+#   ANIME-03 asks for a 165-180 WPM register. That is a DELIVERY target — how
+#   fast the voice reads — and it is set by `speaking_rate` on the TTS call.
+#   `wpm` in this config is something else: the rate used to PREDICT a
+#   script's duration from its word count. narration_gate.py carries
+#   inworld=141, measured from two full-chain runs, with the note "Other
+#   tiers stay at 150 until measured; do not guess them."
+#
+#   Declaring 172 here would under-predict duration by ~22%, so scripts would
+#   be written long and the mix would reject them as vo_overrun — precisely
+#   the failure that note exists to prevent. So: speaking_rate carries the
+#   register, prediction stays on the measured number, and the rate at the new
+#   speaking_rate gets MEASURED on the first reels and written back here.
+narration:
+  enabled: true
+  # 1.22 x the measured 141 wpm baseline lands ~172 wpm, mid-register.
+  speaking_rate: 1.22
+  # Unmeasured at speaking_rate 1.22. Left at the measured baseline so the
+  # error is conservative (over-predicting duration writes shorter scripts,
+  # which pass; under-predicting writes long ones, which are thrown away).
+  wpm: 141
+  vo_bed_duck_db: -8
+  target_lufs: -14.0
+  tail_buffer_seconds: 2.0

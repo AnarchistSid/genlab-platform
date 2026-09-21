@@ -57,6 +57,7 @@ from genlab_core.cache.disk_cache import Cache as _DiskCache
 from genlab_core.config.tuning import get_tuning_config
 from genlab_core.http.circuit_breaker import YOUTUBE_CB, CircuitOpenError
 from genlab_core.pipeline.models import FetcherStage, merge_stories
+from genlab_core.writing.constants import SUMMARY_MAX_CHARS
 
 logger = logging.getLogger(__name__)
 
@@ -771,7 +772,7 @@ class TrendingVideoFetcher:
                         "published_at": pub_el.text if pub_el is not None else None,
                         "channel_name": author_el.text if author_el is not None else "",
                         "channel_id": chan_el.text if chan_el is not None else "",
-                        "description_snippet": (desc_el.text or "")[:200]
+                        "description_snippet": (desc_el.text or "")[:SUMMARY_MAX_CHARS]
                         if desc_el is not None
                         else "",
                         "source": "youtube_rss",

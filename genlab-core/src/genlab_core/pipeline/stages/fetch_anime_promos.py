@@ -20,6 +20,7 @@ import requests
 
 from genlab_core.pipeline.models import FetcherStage, merge_stories
 from genlab_core.pipeline.stage_context import StageContext
+from genlab_core.writing.constants import SUMMARY_MAX_CHARS
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ def _build_promo_summary(p: dict) -> str:
     """
     desc = (p.get("description") or "").strip()
     if len(desc) >= _WRITER_MIN_CONTEXT_CHARS:
-        return desc[:500]
+        return desc[:SUMMARY_MAX_CHARS]
     title = (p.get("title") or "").strip()
     source = (p.get("source") or "").strip()
     genres = [str(g).strip() for g in (p.get("genres") or []) if str(g).strip()]
@@ -98,7 +99,7 @@ def _build_promo_summary(p: dict) -> str:
     if genres:
         parts.append(f"Genres: {', '.join(genres[:5])}")
     synthesized = ". ".join(parts).strip()
-    return (synthesized or desc)[:500]
+    return (synthesized or desc)[:SUMMARY_MAX_CHARS]
 
 
 def _fetch_jikan_promos(max_promos: int = 20) -> list[dict]:

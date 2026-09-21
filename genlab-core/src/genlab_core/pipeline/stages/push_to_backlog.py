@@ -27,6 +27,7 @@ from genlab_core.pipeline.video_id_dedup import VideoIdDedupGate
 from genlab_core.pipeline.video_id_dedup import is_blocking as _is_blocking
 from genlab_core.settings import settings
 from genlab_core.utils.text_sanitizer import sanitize_for_graph_api
+from genlab_core.writing.constants import SUMMARY_MAX_CHARS
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,34 @@ def _degrade_reason(content: dict) -> str:
         )
         return "reason_unavailable"
     return ""
+
+#: The three states a blueprint's narration can be in. ANIME-03 §1.
+NARRATION_NOT_ATTEMPTED = "not_attempted"
+NARRATION_OK = "ok"
+
+
+def _narration_state(content: dict) -> str:
+    """`not_attempted` / `degraded:<reason>` / `ok`.
+
+    `narration_degraded` is a BOOLEAN, and a boolean cannot say "we never
+    tried". Measured 2026-09-21 across 45 days: anime, gaming, movies and
+    sports had 0 non-empty scripts between them and every one of those rows
+    read `narration_degraded=false` — the same value a healthy narrated row
+    carries. Narration is a BlackboxBrief-only canary, so the absence was
+    correct behaviour reported as success. Four niches of false green.
+
+    The boolean stays and stays accurate (True only for a real degradation)
+    because downstream readers do `bool(narration_degraded)`, and a truthy
+    "ok" string would invert them. This is the field that carries the third
+    state.
+    """
+    reason = _degrade_reason(content)
+    if bool(content.get("narration_degraded", False)) or reason:
+        return f"degraded:{reason or 'reason_unavailable'}"
+    if not str(content.get("narration_script", "") or "").strip():
+        return NARRATION_NOT_ATTEMPTED
+    return NARRATION_OK
+
 
 
 # R-53: text fields that ship to platforms / Postgres and must be HTML-stripped.
@@ -2232,7 +2261,7 @@ class PushToBacklog:
                             "url": source_url,
                             "source": story.get("source", niche_id),
                             "published_at": published_at,
-                            "summary": (story.get("summary") or "")[:255],
+                            "summary": (story.get("summary") or "")[:SUMMARY_MAX_CHARS],
                             "priority": (
                                 story.get("final_score")
                                 if story.get("final_score") is not None
@@ -2673,6 +2702,10 @@ class PushToBacklog:
                         # (see plan §4 "Aggregation rule").
                         "narration_script": str(content.get("narration_script", "")),
                         "narration_degraded": bool(content.get("narration_degraded", False)),
+                        # Tri-state. The boolean above cannot distinguish "never
+                        # attempted" from "attempted and fine", and four niches
+                        # spent 45 days reporting the former as the latter.
+                        "narration_state": _narration_state(content),
                         # A degraded row MUST carry a reason. Today every
                         # upstream site sets one (base_writing:903,
                         # generate_audio:130, transformation_orchestrator's

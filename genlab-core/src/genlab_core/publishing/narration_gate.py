@@ -144,6 +144,13 @@ def get_narration_config(niche_config: dict[str, Any] | None) -> dict[str, Any]:
         # Follow-up task (not NARR-11): auto-fit these from the logged A4
         # (predicted, actual) triples instead of hand-measuring.
         "tts_rates": {"inworld": 141, "default": 150},
+        # ANIME-03 §1: DELIVERY rate, passed to the TTS call. Distinct from
+        # `wpm`, which PREDICTS duration from word count. A niche asking for a
+        # faster register sets this; it must not raise `wpm`, because the
+        # prediction rate is measured per tier and guessing it writes scripts
+        # the mix then rejects as vo_overrun. Default 1.0 = the tier's
+        # measured baseline.
+        "speaking_rate": 1.0,
         # One regeneration at this fraction of the original budget when the
         # script overruns, before degrading (NARR-11 ruling).
         "retry_budget_factor": 0.85,
