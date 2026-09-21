@@ -87,6 +87,39 @@ def test_no_literal_cap_on_a_summary_assignment():
     )
 
 
+def test_no_youtube_description_is_capped_at_200():
+    """The API path had THREE more caps than the first fix touched.
+
+    The first pass fixed only the RSS path (line 775) because the grep that
+    found it was piped through `head -8` and the visible rows were treated as
+    the complete set. The YouTube API path — which is where anime's
+    blueprints actually come from — kept `[:200]`, and the 2026-09-21 fire
+    produced summaries of exactly 199 and 200 chars as a result.
+
+    A negative search result is a claim about the SEARCH.
+    """
+    root = Path(__file__).resolve().parents[2]
+    src = (root / "genlab-core/src/genlab_core/media/trending_video_fetcher.py").read_text()
+    tree = ast.parse(src)
+    offenders = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Subscript) or not isinstance(node.slice, ast.Slice):
+            continue
+        upper = node.slice.upper
+        if not (isinstance(upper, ast.Constant) and upper.value == 200):
+            continue
+        seg = ast.get_source_segment(src, node) or ""
+        # The synthesized-label cap is a different thing and stays.
+        if "synthesized" in seg:
+            continue
+        offenders.append(f"line {node.lineno}: {seg[:60]}")
+    assert not offenders, (
+        "YouTube description still capped at 200:\n  "
+        + "\n  ".join(offenders)
+        + "\nUse SUMMARY_MAX_CHARS."
+    )
+
+
 def test_every_summary_cap_reads_the_same_constant():
     root = Path(__file__).resolve().parents[2]
     sites = [

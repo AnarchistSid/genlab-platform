@@ -346,6 +346,10 @@ class TrendingVideo:
         if tag_list:
             parts.append("Topics: " + ", ".join(tag_list[:5]))
         synthesized = ". ".join(parts).strip()
+        # 200 is CORRECT here and is not the SUMMARY_MAX_CHARS case: this
+        # caps a SYNTHESIZED label built from title + channel + tags, not a
+        # real description. A real description clears the floor above and is
+        # returned uncapped.
         return (synthesized or raw)[:200]
 
     def to_story(self) -> dict[str, Any]:
@@ -830,7 +834,7 @@ class TrendingVideoFetcher:
                         "published_at": snippet.get("publishedAt"),
                         "channel_name": snippet.get("channelTitle", ""),
                         "channel_id": snippet.get("channelId", channel_id),
-                        "description_snippet": snippet.get("description", "")[:200],
+                        "description_snippet": snippet.get("description", "")[:SUMMARY_MAX_CHARS],
                         "source": "youtube_playlist",
                     }
                 )
@@ -1130,7 +1134,7 @@ class TrendingVideoFetcher:
                         download_url=f"https://www.youtube.com/watch?v={vid_id}",
                         is_official_channel=False,
                         license="youtube",
-                        description_snippet=snippet.get("description", "")[:200],
+                        description_snippet=snippet.get("description", "")[:SUMMARY_MAX_CHARS],
                     )
                 )
             _store_videos(cache_key, results)
@@ -1244,7 +1248,7 @@ class TrendingVideoFetcher:
                 is_official_channel=is_official,
                 license=content.get("license", "youtube"),
                 tags=snippet.get("tags", [])[:10],
-                description_snippet=snippet.get("description", "")[:200],
+                description_snippet=snippet.get("description", "")[:SUMMARY_MAX_CHARS],
             )
         except Exception as e:
             logger.warning("Failed to parse video item: %s", e)
