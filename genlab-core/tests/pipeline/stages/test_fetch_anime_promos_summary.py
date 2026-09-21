@@ -68,8 +68,20 @@ class TestBuildPromoSummary:
         assert "seasonal anime trailer" in summary
         assert "Solo Leveling" in summary
 
-    def test_long_description_truncated(self):
-        long_desc = "A very compelling and detailed synopsis. " * 30
+    def test_long_description_is_bounded_but_not_cut_at_500(self):
+        """Was `<= 500`. ANIME-03 §2 raised the cap to SUMMARY_MAX_CHARS.
+
+        500 was below AniList's typical 200-2000 range, and downstream the
+        persist site then cut to 255 — which removed the sentence carrying
+        the story's turn on every anime title. Still bounded: a summary is
+        not a document.
+        """
+        from genlab_core.writing.constants import SUMMARY_MAX_CHARS
+
+        long_desc = "A very compelling and detailed synopsis. " * 30  # 1230 chars
         p = {"title": "Show", "source": "anilist", "description": long_desc}
         summary = _build_promo_summary(p)
-        assert len(summary) <= 500
+        assert len(summary) <= SUMMARY_MAX_CHARS
+        assert len(summary) == len(long_desc.strip()), (
+            "a 1230-char AniList description must survive intact; 500 cut it"
+        )
