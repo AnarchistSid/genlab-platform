@@ -32,6 +32,11 @@ logger = logging.getLogger(__name__)
 CARRIED = "carried"
 GENERATED = "generated"
 
+#: AniList lists these as cast entries. They have portraits and they are not
+#: characters; a reel that cuts to "Narrator" on a beat is worse than one that
+#: cuts to footage. TOUGEN ANKI's top-billed entry is exactly this.
+_NON_CHARACTERS = frozenset({"narrator", "narration", "announcer"})
+
 
 @dataclass(frozen=True)
 class StillSource:
@@ -99,14 +104,26 @@ class ShowArt:
     def character_for(self, text: str) -> dict[str, str] | None:
         """The portrait of a character NAMED in this line, if any.
 
-        Longest name first so "Yami Sukehiro" wins over a show that also has a
-        character called "Yami".
+        Matches the full name OR either part of it. AniList stores
+        "Shinpei Gotou" and "Satoko Kirigaya"; a narration script says
+        "Shinpei" and "Satoko". Requiring the full string meant the character
+        slot never fired on either real reel — the grammar asked for a
+        portrait on the beat that names someone and silently got a PV shot.
+
+        Longest match first, so "Yami Sukehiro" beats a show that also has a
+        character called "Yami", and a full name beats a bare given name.
         """
         low = text.lower()
-        for c in sorted(self.characters, key=lambda c: -len(c.get("name", ""))):
-            if c.get("name") and c["name"].lower() in low:
-                return c
-        return None
+        best: tuple[int, dict[str, str]] | None = None
+        for c in self.characters:
+            name = (c.get("name") or "").strip()
+            if not name or name.lower() in _NON_CHARACTERS:
+                continue
+            candidates = [name] + [p for p in name.split() if len(p) >= 4]
+            for cand in candidates:
+                if cand.lower() in low and (best is None or len(cand) > best[0]):
+                    best = (len(cand), c)
+        return best[1] if best else None
 
 
 def show_art(story: dict[str, Any]) -> ShowArt:

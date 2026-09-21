@@ -190,3 +190,47 @@ class TestStoryBoundary:
 
     def test_no_material_still_reports_honestly(self):
         assert not show_art({"title": "X", "source": "anilist"}).has_any
+
+
+class TestCharacterMatching:
+    """AniList stores full names; narration scripts use given names."""
+
+    def _art(self):
+        return show_art(
+            {
+                "characters": [
+                    {"name": "Shinpei Gotou", "image_url": "https://x/1.jpg"},
+                    {"name": "Satoko Kirigaya", "image_url": "https://x/2.jpg"},
+                    {"name": "Narrator", "image_url": "https://x/3.jpg"},
+                ]
+            }
+        )
+
+    def test_a_given_name_in_the_script_finds_the_portrait(self):
+        """The grammar's character slot never fired on either real reel
+        because the beat says "Shinpei" and AniList says "Shinpei Gotou"."""
+        hit = self._art().character_for("Shinpei was sent to kill her")
+        assert hit["image_url"].endswith("1.jpg")
+
+    def test_a_surname_also_matches(self):
+        assert self._art().character_for("the Kirigaya heir")["image_url"].endswith("2.jpg")
+
+    def test_the_longest_match_wins(self):
+        art = show_art(
+            {
+                "characters": [
+                    {"name": "Yami", "image_url": "https://x/short.jpg"},
+                    {"name": "Yami Sukehiro", "image_url": "https://x/long.jpg"},
+                ]
+            }
+        )
+        assert art.character_for("Yami Sukehiro draws")["image_url"].endswith("long.jpg")
+
+    def test_narrator_is_not_a_character(self):
+        """AniList top-bills 'Narrator' for TOUGEN ANKI. Cutting to its
+        portrait on a beat is worse than cutting to footage."""
+        assert self._art().character_for("the narrator explains") is None
+
+    def test_short_name_parts_do_not_match_loosely(self):
+        art = show_art({"characters": [{"name": "Jin Kougasaki", "image_url": "https://x/1.jpg"}]})
+        assert art.character_for("the jinx finally broke") is None

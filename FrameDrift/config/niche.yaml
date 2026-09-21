@@ -239,11 +239,36 @@ capabilities:
 # the wpm above stops describing anything.
 narration:
   enabled: true
+  # ── ANIME-13 §4. The CRAFT path speaks through ElevenLabs v3 on belt ───
+  # No subscription, no SDK, no API key: belt's elevenlabs/tts bills the same
+  # balance the stills do, ~$0.05 per 1000 characters (measured $0.0035 for
+  # 68 chars, 2026-09-21).
+  #
+  # stability 0.0 / style 0.90 is the MEASURED best of the settings tried,
+  # not a default. Against Inworld/Sarah on the same 79-word script:
+  #   semitone sd   4.11 -> 4.86   (+18%)
+  #   range (st)   13.31 -> 14.57  (+9%)
+  # Two of the four voices tried (aria, jessica) were WORSE than the
+  # baseline, which is why the voice is named here rather than assumed.
+  # A voice with no delivery marks is monotone whichever engine reads it —
+  # see still/delivery.py; the script carries the performance.
+  engine: "elevenlabs"
+  voice: "laura"
+  stability: 0.0
+  style: 0.90
+  # The PIPELINE path still uses Inworld. Both rates below are measured, and
+  # they differ by 27% on identical words — a script targeted at the wrong
+  # one is a script for a different reel.
   voice_id: "Sarah"
   speaking_rate: 1.05
   # MEASURED at speaking_rate 1.05 on the voice above. Used to PREDICT a
   # script's duration from its word count; it is not a delivery target.
   wpm: 177
+  # MEASURED on elevenlabs/laura at the settings above.
+  craft_wpm: 139
+  # Target reel length for the craft path (ANIME-13 §5 asks 22-30 s).
+  # target words = craft_target_seconds * craft_wpm / 60 -> 60 words.
+  craft_target_seconds: 26
   vo_bed_duck_db: -8
   target_lufs: -14.0
   tail_buffer_seconds: 2.0

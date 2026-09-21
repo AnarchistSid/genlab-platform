@@ -41,17 +41,17 @@ class TestCaptionTextDispatchForStorytime:
         cfg = {"animation": {"word_by_word": {"whisper_sync": {"enabled": True}}}}
 
         # Patch Path.exists to True so the stage doesn't skip on file check
-        with patch(
-            "genlab_core.pipeline.stages.render_whisper_captions.Path"
-        ) as MockPath:
+        with patch("genlab_core.pipeline.stages.render_whisper_captions.Path") as MockPath:
             mock_path_instance = MagicMock()
             mock_path_instance.exists.return_value = True
             MockPath.return_value = mock_path_instance
             with patch.object(stage, "_render_captions", side_effect=_fake_render_captions):
-                stage.execute({
-                    "stories": [story],
-                    "niche_config": cfg,
-                })
+                stage.execute(
+                    {
+                        "stories": [story],
+                        "niche_config": cfg,
+                    }
+                )
         return captured.get("caption_text", "")
 
     def test_storytime_uses_narration_text_not_hook(self) -> None:
@@ -86,9 +86,7 @@ class TestCaptionTextDispatchForStorytime:
             "media": {"rendered_path": "/fake/path.mp4"},
         }
         got = self._run_stage_capture_caption(story)
-        assert got == "The real hook we want", (
-            f"single_clip dispatch regressed — got: {got!r}"
-        )
+        assert got == "The real hook we want", f"single_clip dispatch regressed — got: {got!r}"
 
     def test_storytime_falls_back_to_hook_when_narration_empty(self) -> None:
         """Edge case: variant_type=storytime but narration_text empty. Rather
