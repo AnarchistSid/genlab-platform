@@ -56,19 +56,34 @@ class LengthCheck:
         )
 
 
-def target_words(target_s: float, wpm: float) -> int:
+def target_words(
+    target_s: float, wpm: float, *, tail_buffer_s: float = 2.0, fit_margin: float = 0.05
+) -> int:
+    """The word target, from the VALIDATOR's own helper.
+
+    This used to be ``round(target_s * wpm / 60)`` — the packet's arithmetic,
+    which ignores the 2 s music-bed tail and the fit margin. At a 38 s target
+    and 139 wpm it said 88 words while the validator's cap was 79, so this
+    module reported a shortfall the validator would have called too LONG.
+    That is one contract with two implementers for the fourth time in this
+    file's history; there is now one.
+    """
     if target_s <= 0 or wpm <= 0:
         raise ValueError(f"target_s={target_s} wpm={wpm} — both must be positive")
-    return round(target_s * wpm / 60.0)
+    from genlab_core.writing.narration_validator import word_cap
+
+    return word_cap(target_s, int(round(wpm)), tail_buffer_s, fit_margin)
 
 
 def check(beats: list[str], *, target_s: float, wpm: float) -> LengthCheck:
     """Measure a script against its target. Does not raise — see ``enforce``."""
     from genlab_core.still import delivery
+    from genlab_core.writing.narration_validator import word_floor
 
     n = sum(len(delivery.words(b)) for b in beats)
     target = target_words(target_s, wpm)
-    return LengthCheck(n, target, round(target * MIN_FRACTION), wpm, target_s)
+    floor = word_floor(target_s, int(round(wpm)), 2.0, 0.05, MIN_FRACTION)
+    return LengthCheck(n, target, floor, wpm, target_s)
 
 
 def enforce(beats: list[str], *, target_s: float, wpm: float) -> LengthCheck:
@@ -91,9 +106,12 @@ def prompt_clause(target_s: float, wpm: float) -> str:
     prompt ever stating the target turns a solvable instruction into a retry
     loop.
     """
+    from genlab_core.writing.narration_validator import word_floor
+
     n = target_words(target_s, wpm)
+    floor = word_floor(target_s, int(round(wpm)), 2.0, 0.05, MIN_FRACTION)
     return (
         f"Write approximately {n} words in total — this narration is read aloud "
         f"at {wpm:.0f} words per minute and must fill about {target_s:.0f} seconds. "
-        f"A script shorter than {round(n * MIN_FRACTION)} words will be rejected."
+        f"A script shorter than {floor} words will be rejected."
     )

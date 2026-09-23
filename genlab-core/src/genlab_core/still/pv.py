@@ -461,3 +461,85 @@ def without_baked_text(
         max_fraction * 100,
     )
     return kept, rejected
+
+
+# ── ANIME-15 §2: dark windows are rejected, not graded up ────────────────
+
+#: Mean luma floor for any PV frame that reaches the reel.
+LUMA_FLOOR = 40.0
+#: The reveal frame must be BRIGHT — it is the reel's loudest second.
+LUMA_FLOOR_REVEAL = 80.0
+
+
+def window_luma(path: str | Path, moment: PVMoment, *, stride_s: float = 0.5) -> float:
+    """Lowest mean Y across the window.
+
+    The MINIMUM rather than the mean of means: a window that is bright for a
+    second and black for half of it still puts a black half-second on screen,
+    and averaging hides exactly that.
+    """
+    vals: list[float] = []
+    t = moment.start_s
+    while t < moment.end_s:
+        r = subprocess.run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-nostats",
+                "-ss",
+                f"{t:.3f}",
+                "-i",
+                str(path),
+                "-frames:v",
+                "1",
+                "-vf",
+                "signalstats,metadata=print:key=lavfi.signalstats.YAVG",
+                "-f",
+                "null",
+                "-",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        got = [float(x.rsplit("=", 1)[1]) for x in (r.stderr or "").splitlines() if "YAVG=" in x]
+        if got:
+            vals.append(got[-1])
+        t += stride_s
+    return min(vals) if vals else 0.0
+
+
+def bright_enough(
+    path: str | Path, moments: list[PVMoment], *, floor: float = LUMA_FLOOR, keep_min: int = 1
+) -> tuple[list[PVMoment], list[dict]]:
+    """Drop windows below the luma floor. Returns (kept, rejected).
+
+    Rejected, never graded up: raising the level of a frame that was shot dark
+    raises its noise with it, and an anime PV's dark frames are dark because
+    the scene is — the information is not there to recover.
+    """
+    scored = [(m, window_luma(path, m)) for m in moments]
+    kept = [m for m, y in scored if y >= floor]
+    rejected = [{"start_s": m.start_s, "min_luma": round(y, 1)} for m, y in scored if y < floor]
+    if len(kept) < keep_min and scored:
+        scored.sort(key=lambda r: -r[1])
+        kept = [r[0] for r in scored[:keep_min]]
+        logger.warning(
+            "[pv] every window is below the %.0f luma floor; keeping the %d "
+            "brightest (min Y %.1f). The reel will carry a dark shot.",
+            floor,
+            keep_min,
+            scored[0][1],
+        )
+        rejected = [r for r in rejected if r["start_s"] not in {m.start_s for m in kept}]
+    logger.info(
+        "[pv] luma gate: %d kept, %d rejected below Y=%.0f", len(kept), len(rejected), floor
+    )
+    return kept, rejected
+
+
+def brightest(path: str | Path, moments: list[PVMoment]) -> PVMoment | None:
+    """The brightest window — the reveal's home, per §5."""
+    if not moments:
+        return None
+    return max(moments, key=lambda m: window_luma(path, m))

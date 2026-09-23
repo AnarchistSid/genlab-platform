@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from genlab_core.still import align as A
 from genlab_core.still import delivery as D
 from genlab_core.still.audio import Word as AsrWord

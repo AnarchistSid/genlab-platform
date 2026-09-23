@@ -1,10 +1,10 @@
 """Pins for the two text layers (ANIME-14 §1, §3)."""
+
 from __future__ import annotations
 
 import subprocess
 
 import pytest
-
 from genlab_core.still import text_layers as TL
 
 
@@ -53,14 +53,51 @@ class TestRendersWithoutCrashing:
 
     def _render(self, vf, tmp_path):
         src = tmp_path / "src.mp4"
-        subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
-                        "-i", "testsrc=s=1080x1920:d=3:r=30", "-c:v", "libx264",
-                        "-crf", "28", "-pix_fmt", "yuv420p", str(src)],
-                       check=True, timeout=180)
-        return subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(src), "-vf", vf,
-                               "-frames:v", "90", "-c:v", "libx264", "-crf", "28",
-                               "-pix_fmt", "yuv420p", str(tmp_path / "out.mp4")],
-                              capture_output=True, text=True, timeout=600)
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=s=1080x1920:d=3:r=30",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "28",
+                "-pix_fmt",
+                "yuv420p",
+                str(src),
+            ],
+            check=True,
+            timeout=180,
+        )
+        return subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-i",
+                str(src),
+                "-vf",
+                vf,
+                "-frames:v",
+                "90",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "28",
+                "-pix_fmt",
+                "yuv420p",
+                str(tmp_path / "out.mp4"),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
 
     def test_hook_renders(self, tmp_path):
         vf = TL.hook_filters(TL.Hook("She married her assassin"), tmp_path / "t")
@@ -87,15 +124,18 @@ class TestSlams:
         beats = [i * 0.4 for i in range(60)]
         slams = TL.facts_to_slams(
             {"premiere": "9 October 2026", "studio": "david production", "episodes": 24},
-            beats, start_after_s=3.0)
+            beats,
+            start_after_s=3.0,
+        )
         assert len(slams) == 3
         for s in slams:
             assert min(abs(s.at_s - b) for b in beats) < 1e-6
 
     def test_an_absent_fact_is_skipped_not_slammed_empty(self):
         beats = [i * 0.4 for i in range(60)]
-        slams = TL.facts_to_slams({"premiere": "9 October 2026", "studio": "", "episodes": None},
-                                  beats, start_after_s=3.0)
+        slams = TL.facts_to_slams(
+            {"premiere": "9 October 2026", "studio": "", "episodes": None}, beats, start_after_s=3.0
+        )
         assert [s.text for s in slams] == ["9 October 2026"]
 
     def test_the_hook_gate_catches_a_texty_frame(self):
