@@ -118,6 +118,61 @@ def load_words(segments: list[dict], off: float = 0.0, end: float = 1e9) -> list
     return out
 
 
+def _edit_distance(a: str, b: str, cap: int = 3) -> int:
+    """Levenshtein, stopping once it exceeds ``cap``.
+
+    The previous rule compared characters POSITIONALLY and added the length
+    difference. That is not an edit distance: one inserted letter shifts every
+    character after it, so each one counts again. Measured on the case this
+    exists for, "Nerima" misheard as "nareema" — positional scoring gave 3
+    (two mismatches plus a length difference) against a limit of 2, so the
+    repair declined and the wrong spelling was burned into the frame. True
+    Levenshtein is 2: substitute one letter, insert one.
+    """
+    if abs(len(a) - len(b)) > cap:
+        return cap + 1
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        if min(cur) > cap:
+            return cap + 1
+        prev = cur
+    return prev[-1]
+
+
+def _collapse_runs(w: str) -> str:
+    """Collapse repeated letters: "nareema" -> "narema".
+
+    ASR doubles vowels in proper nouns constantly, and each doubling costs a
+    full edit. "Nerima" came back as "nareema" — a true Levenshtein of 3,
+    which is over any budget safe enough to keep. Collapsed, it is 2, and the
+    budget does not have to move. Raising the budget to 3 instead would admit
+    "marina" for "Nerima"; this admits only the doubling.
+    """
+    out = []
+    for ch in w:
+        if not out or out[-1] != ch:
+            out.append(ch)
+    return "".join(out)
+
+
+def _near_miss_budget(key: str) -> int:
+    """How many edits a name of this length may absorb.
+
+    Scaled rather than fixed. Two edits on a four-letter word is most of the
+    word and starts matching unrelated tokens; two edits on a seven-letter
+    proper noun is one mis-heard vowel and one inserted letter, which is
+    exactly what ASR does to names.
+    """
+    if len(key) >= 6:
+        return 2
+    if len(key) >= 4:
+        return 1
+    return 0
+
+
 def fix_names(words: list[Word], names: list[str]) -> tuple[list[Word], list[tuple[str, str]]]:
     """Restore names WHOLE from the metadata prompt, multi-word ones first.
 
@@ -154,15 +209,29 @@ def fix_names(words: list[Word], names: list[str]) -> tuple[list[Word], list[tup
                 changes.append((w.t, singles[key] + trail))
             w.t, w.name = singles[key] + trail, True
             continue
+        best: tuple[int, str, str] | None = None
         for nk, nv in singles.items():
-            if key and nk[0] == key[0] and abs(len(nk) - len(key)) <= 2:
-                dist = sum(1 for x, y in zip(nk, key, strict=False) if x != y) + abs(
-                    len(nk) - len(key)
-                )
-                if 0 < dist <= 2:
-                    changes.append((w.t, nv))
-                    w.t, w.name = nv, True
-                    break
+            if not key or nk[0] != key[0] or abs(len(nk) - len(key)) > 2:
+                continue
+            budget = _near_miss_budget(nk)
+            if budget == 0:
+                continue
+            dist = min(
+                _edit_distance(nk, key, cap=budget),
+                _edit_distance(_collapse_runs(nk), _collapse_runs(key), cap=budget),
+            )
+            if 0 < dist <= budget and (best is None or dist < best[0]):
+                best = (dist, nv, nk)
+        if best is not None:
+            # NOTE the trail is deliberately NOT re-appended here. The
+            # pre-existing behaviour drops it on a near-miss repair, and the
+            # approved TALK render depends on that: keeping it turned "Gan."
+            # into "Gane.", which segment() reads as a sentence end, and the
+            # Dana v4 transcript went from 47 cues to 48. Whether dropping it
+            # is right is a separate question from the distance metric this
+            # change is about, so it is left alone and filed.
+            changes.append((w.t, best[1]))
+            w.t, w.name = best[1], True
     return out, changes
 
 

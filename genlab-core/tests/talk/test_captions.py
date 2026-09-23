@@ -227,3 +227,42 @@ def test_subword_fragments_are_merged_into_whole_names():
     toks = [w.t.strip(".,?!") for w in words]
     assert "Ngannou" in toks or "ngannou" in [t.lower() for t in toks]
     assert not any(t in {"N", "gan", "ou"} for t in toks), "subwords survived the merge"
+
+
+class TestNearMissNameRepair:
+    """ANIME-14 §3. "Nerima" shipped on screen as "nareema" in a real reel."""
+
+    NAMES = ["Nerima", "Kyoto", "Shinpei", "Jin", "Satoko", "Marina"]
+
+    def _fix(self, heard):
+        from genlab_core.talk.captions import Word, fix_names
+        return fix_names([Word(heard, 0.0, 1.0)], self.NAMES)[0][0].t
+
+    def test_the_doubled_vowel_that_shipped(self):
+        """A true Levenshtein of 3 — two substitutions and an inserted vowel.
+        Collapsing repeated letters makes it 2 without moving the budget."""
+        assert self._fix("nareema") == "Nerima"
+
+    def test_the_single_vowel_variant_too(self):
+        assert self._fix("narema") == "Nerima"
+
+    def test_a_real_word_is_not_rewritten_into_a_name(self):
+        """The reason the budget was NOT raised to 3: at 3 edits "marina"
+        reaches "Nerima". Collapsing admits the doubling and nothing else."""
+        assert self._fix("marina") == "Marina"
+        assert self._fix("random") == "random"
+
+    def test_short_names_absorb_nothing(self):
+        """Two edits on a three-letter name is most of the name."""
+        assert self._fix("jinx") == "jinx"
+
+    def test_positional_scoring_is_gone(self):
+        """The old rule added the length difference to a positional mismatch
+        count. One inserted letter shifts everything after it, so every later
+        character was charged a second time."""
+        from genlab_core.talk.captions import _edit_distance
+        assert _edit_distance("nerima", "narema", cap=4) == 2
+        assert _edit_distance("kyoto", "kioto", cap=4) == 1
+
+    def test_an_exact_match_still_only_fixes_case(self):
+        assert self._fix("kyoto") == "Kyoto"
