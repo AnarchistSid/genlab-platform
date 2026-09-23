@@ -6,7 +6,10 @@ persists on rejection.
 
 Rules (all must pass; short-circuit on first failure):
   1. ``not_empty``            — text has ≥ 20 non-whitespace chars
-  2. ``duration_fits``        — projected TTS duration fits the clip
+  2. ``fills_the_reel``       — projected duration is at least
+                                ``min_fraction`` of the budget (OFF by
+                                default; ANIME-15 §6 turns it on)
+  3. ``duration_fits``        — projected TTS duration fits the clip
                                 with tail buffer
   3. ``no_urls``              — no http(s)://
   4. ``no_affiliate_ctas``    — no known affiliate-marker phrases
@@ -17,6 +20,7 @@ Rules (all must pass; short-circuit on first failure):
 Returns ``(ok, reason_slug)`` where ``reason_slug`` is one of:
   ``''``                              — passed
   ``'script_generation_failed'``       — empty / whitespace-only
+  ``'script_too_short'``               — projected duration under-fills
   ``'script_too_long'``                — projected duration overruns
   ``'script_contained_urls'``          — URL present
   ``'script_contained_affiliate_cta'`` — affiliate phrase present
@@ -103,12 +107,50 @@ def project_tts_duration_seconds(text: str, wpm: int = 150) -> float:
     return word_count * 60.0 / wpm
 
 
+def fit_budget_seconds(
+    clip_duration_seconds: float, tail_buffer_seconds: float = 2.0,
+    fit_margin: float = 0.0,
+) -> float:
+    """The seconds a narration may actually occupy. ONE definition."""
+    budget = clip_duration_seconds - tail_buffer_seconds
+    return budget * (1.0 - max(0.0, min(fit_margin, 0.9)))
+
+
+def word_cap(clip_duration_seconds: float, wpm: int = 150,
+             tail_buffer_seconds: float = 2.0, fit_margin: float = 0.0) -> int:
+    """The largest word count that fits. What the prompt must state."""
+    return int(fit_budget_seconds(clip_duration_seconds, tail_buffer_seconds,
+                                  fit_margin) * max(wpm, 1) / 60)
+
+
+def word_floor(clip_duration_seconds: float, wpm: int = 150,
+               tail_buffer_seconds: float = 2.0, fit_margin: float = 0.0,
+               min_fraction: float = 0.0) -> int:
+    """The smallest word count that PASSES. What the prompt must state.
+
+    Derived from the same seconds the validator checks, then rounded UP, so
+    a script written to exactly this number is accepted. Computing it as
+    ``int(word_cap * min_fraction)`` instead gave 64 where the validator
+    required 65 — a script obeying the prompt, rejected. That is the NARR-11
+    defect for a fourth time: one contract, two implementers, allowed to
+    drift. Both callers now read this function.
+    """
+    if min_fraction <= 0.0:
+        return 0
+    import math
+
+    seconds = fit_budget_seconds(clip_duration_seconds, tail_buffer_seconds,
+                                 fit_margin) * min_fraction
+    return max(1, math.ceil(seconds * max(wpm, 1) / 60))
+
+
 def validate_narration_script(
     text: str,
     clip_duration_seconds: float,
     wpm: int = 150,
     tail_buffer_seconds: float = 2.0,
     fit_margin: float = 0.0,
+    min_fraction: float = 0.0,
 ) -> tuple[bool, str]:
     """Validate a candidate narration script.
 
@@ -118,6 +160,17 @@ def validate_narration_script(
         wpm: TTS speaking rate; matches ``narration.wpm`` niche config.
         tail_buffer_seconds: seconds at the end of the clip that the
             music bed carries alone (VO must not extend into this).
+        min_fraction: floor as a fraction of the fit budget. 0.0 disables
+            it, which is the default so every pre-existing caller is
+            unchanged. ANIME-15 §6 sets it to 0.70 for anime.
+
+            This is the twin of ``script_too_long`` and it has been named in
+            four packets without existing. TOUGEN ANKI's pipeline script is
+            20 spoken words against a 60-word target: it passes every rule
+            here, produces a correct reel, and that reel is 9 seconds long
+            against a 15-second floor. Nothing downstream can fix it —
+            stretching 20 words means holding stills longer, which the
+            longest-static rule forbids.
 
     Returns:
         (True, "") on pass. (False, "<reason_slug>") on any failure.
@@ -130,13 +183,26 @@ def validate_narration_script(
     if len(stripped) < _MIN_SCRIPT_CHARS:
         return False, "script_generation_failed"
 
-    # Rule 2: duration fits (predictive)
     projected_seconds = project_tts_duration_seconds(stripped, wpm)
     fit_budget = clip_duration_seconds - tail_buffer_seconds
+    # Both bounds read the SAME budget helper. Computing the floor against the
+    # pre-margin budget while ``word_floor`` used the post-margin one put them
+    # 4 words apart, so a script written to the stated minimum was rejected —
+    # the same drift this fix was introduced to remove, one layer down.
+    effective_budget = fit_budget_seconds(
+        clip_duration_seconds, tail_buffer_seconds, fit_margin
+    )
+
+    # Rule 2: fills the reel. Checked BEFORE the upper bound because a script
+    # can only be one of the two, and reporting the one that is actually
+    # wrong matters for which correction the retry carries.
+    if min_fraction > 0.0 and projected_seconds < effective_budget * min_fraction:
+        return False, "script_too_short"
+
+    # Rule 3: duration fits (predictive)
     # NARR-12: reject inside a safety margin, not just past the budget.
     # Projection is a model; measured TTS ran 6.6% slow on round 3. Default
     # 0.0 preserves the original behaviour for callers that don't opt in.
-    effective_budget = fit_budget * (1.0 - max(0.0, min(fit_margin, 0.9)))
     if projected_seconds > effective_budget:
         return False, "script_too_long"
 
@@ -159,6 +225,9 @@ def validate_narration_script(
 
 
 __all__ = [
+    "fit_budget_seconds",
+    "word_cap",
+    "word_floor",
     "validate_narration_script",
     "project_tts_duration_seconds",
 ]

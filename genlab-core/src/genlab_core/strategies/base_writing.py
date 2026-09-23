@@ -583,6 +583,14 @@ class BaseWritingStrategy(WritingStrategy):
             "claims about having personally used, tested, or verified the "
             "subject. Report what the source shows instead."
         ),
+        "script_too_short": (
+            "The narration_script was too SHORT and under-filled the reel. "
+            "Write to the word target stated above, not below it: a short "
+            "script cannot be fixed downstream, because the only way to "
+            "stretch it is to hold shots longer than the pacing allows. "
+            "Add specific detail from the source — what happens, to whom, "
+            "and why it matters — rather than padding."
+        ),
     }
 
     def _log_rejected_candidate(
@@ -674,11 +682,14 @@ class BaseWritingStrategy(WritingStrategy):
             tail = float(cfg.get("tail_buffer_seconds", 2.0))
             factor = float(cfg.get("retry_budget_factor", 0.85))
             margin = float(cfg.get("fit_margin", 0.05))
+            # ANIME-15 §6. Default 0.0 = OFF, so a niche that has not opted in
+            # behaves exactly as before. anime sets 0.70.
+            min_fraction = float(cfg.get("min_fill_fraction", 0.0))
         except Exception:  # noqa: BLE001
-            wpm, tail, factor, margin = 150, 2.0, 0.85, 0.05
+            wpm, tail, factor, margin, min_fraction = 150, 2.0, 0.85, 0.05, 0.0
 
         ok, reason = validate_narration_script(
-            script, target_seconds, wpm, tail, margin
+            script, target_seconds, wpm, tail, margin, min_fraction
         )
         if ok:
             return script, ""
@@ -698,7 +709,13 @@ class BaseWritingStrategy(WritingStrategy):
 
         retry_target = target_seconds
         correction = self._NARRATION_CORRECTIONS.get(reason, "")
-        if reason == "script_too_long":
+        if reason == "script_too_short":
+            logger.warning(
+                "[%s] narration attempt 1 rejected (script_too_short) at wpm=%d "
+                "— regenerating with the SAME %.1fs target restated",
+                self._niche_id, wpm, target_seconds,
+            )
+        elif reason == "script_too_long":
             retry_target = target_seconds * factor
             logger.warning(
                 "[%s] narration attempt 1 rejected (%s) at wpm=%d — "
@@ -736,7 +753,7 @@ class BaseWritingStrategy(WritingStrategy):
             return "", reason
 
         ok2, reason2 = validate_narration_script(
-            candidate, retry_target, wpm, tail, margin,
+            candidate, retry_target, wpm, tail, margin, min_fraction,
         )
         if ok2:
             logger.info(
@@ -749,6 +766,24 @@ class BaseWritingStrategy(WritingStrategy):
             candidate, attempt=2, reason=reason2, target_seconds=retry_target,
             wpm=wpm, tail=tail, margin=margin,
         )
+
+        # ASYMMETRY, deliberate. Too LONG must degrade to no narration: an
+        # oversized VO is truncated mid-sentence by the mix, which is worse
+        # than silence. Too SHORT must NOT — a short script still produces a
+        # correct, audible reel, and degrading it to no narration trades a
+        # short reel for a worse one. Keep the longer of the two candidates
+        # and report the reason so the shortfall is still visible.
+        if reason2 == "script_too_short":
+            best = max((candidate, script), key=lambda t: len((t or "").split()))
+            logger.warning(
+                "[%s] narration attempt 2 still short (%d words vs %d on attempt 1) "
+                "— KEEPING it: a short script beats no narration. The reel will "
+                "under-run its target duration and the length gate will say so.",
+                self._niche_id, len((candidate or "").split()),
+                len((script or "").split()),
+            )
+            return best, "script_too_short"
+
         logger.warning(
             "[%s] narration attempt 2 also rejected (%s) — degrading; "
             "this reel publishes without narration",

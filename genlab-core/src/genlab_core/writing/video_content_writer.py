@@ -437,7 +437,8 @@ def _complete_and_parse_json(
 
 
 def _build_narration_hint(
-    target_seconds: float, wpm: int = 150, fit_margin: float = 0.0
+    target_seconds: float, wpm: int = 150, fit_margin: float = 0.0,
+    min_fraction: float = 0.0,
 ) -> str:
     """NARR-01 narration prompt block. Injected only when the caller
     passed a target duration; otherwise the writer's system prompt is
@@ -459,7 +460,21 @@ def _build_narration_hint(
     # checks against, or every compliant script is rejected — the NARR-11
     # defect, one layer down.
     fit_seconds *= 1.0 - max(0.0, min(fit_margin, 0.9))
-    word_cap = int(fit_seconds * wpm / 60)
+    # ANIME-15 §6. Both numbers come from the VALIDATOR's own helpers, not
+    # from arithmetic repeated here. Deriving the floor locally as
+    # int(word_cap * 0.70) produced 64 where the validator required 65, so a
+    # script obeying the prompt was rejected — the NARR-11 defect a fourth
+    # time. One contract, one implementer.
+    from genlab_core.writing.narration_validator import (
+        word_cap as _cap,
+    )
+    from genlab_core.writing.narration_validator import (
+        word_floor as _floor,
+    )
+
+    word_cap = _cap(target_seconds, wpm, tail_buffer_seconds, fit_margin)
+    word_floor = _floor(target_seconds, wpm, tail_buffer_seconds, fit_margin,
+                        min_fraction)
     # 2026-08-22: the sentence range is DERIVED from the word cap instead of
     # being a second hardcoded constant.
     #
@@ -504,18 +519,27 @@ def _build_narration_hint(
         f"    (with a 2-second music-bed tail after your voice ends)\n"
         f"  - HARD word cap: {word_cap} words. Longer will be REJECTED and\n"
         f"    the reel will publish without narration.\n"
-        f"  - {sentence_ask} of ORIGINAL commentary,\n"
-        "    analysis, or context — the sentence count is derived from the word\n"
-        "    cap above, so obeying one obeys the other.\n"
-        "    NOT a summary of what the clip shows — viewers can see the clip.\n"
-        "    Your job is to ADD interpretation the visuals don't provide.\n"
-        "  - Spoken voice: conversational, opinion-forward, first-person plural\n"
-        "    (\"we\", \"our audience\") NOT first-person singular experience claims\n"
-        "    (do NOT say \"I played\", \"I watched\", \"I tried\", \"I built\").\n"
-        "  - NO URLs. NO affiliate CTAs. NO product mentions. NO 'link in bio'.\n"
-        "  - Follow-CTA is permitted if it fits naturally (e.g. \"follow for\n"
-        "    more from this creator\").\n"
-        "\n"
+        + (
+            f"  - MINIMUM: {word_floor} words. Shorter will be REJECTED — a script\n"
+            f"    that under-fills the reel cannot be fixed later, because the only\n"
+            f"    way to stretch it is to hold shots longer than the pacing allows.\n"
+            f"    Aim for {word_cap} words; do not stop early.\n"
+            if word_floor else ""
+        )
+        + (
+            f"  - {sentence_ask} of ORIGINAL commentary,\n"
+            "    analysis, or context — the sentence count is derived from the word\n"
+            "    cap above, so obeying one obeys the other.\n"
+            "    NOT a summary of what the clip shows — viewers can see the clip.\n"
+            "    Your job is to ADD interpretation the visuals don't provide.\n"
+            "  - Spoken voice: conversational, opinion-forward, first-person plural\n"
+            "    (\"we\", \"our audience\") NOT first-person singular experience claims\n"
+            "    (do NOT say \"I played\", \"I watched\", \"I tried\", \"I built\").\n"
+            "  - NO URLs. NO affiliate CTAs. NO product mentions. NO 'link in bio'.\n"
+            "  - Follow-CTA is permitted if it fits naturally (e.g. \"follow for\n"
+            "    more from this creator\").\n"
+            "\n"
+        )
     )
 
 

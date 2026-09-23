@@ -28,8 +28,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-import re
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from typing import Final
 
 logger = logging.getLogger(__name__)

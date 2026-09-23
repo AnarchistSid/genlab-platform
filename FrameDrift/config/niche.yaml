@@ -266,9 +266,19 @@ narration:
   wpm: 177
   # MEASURED on elevenlabs/laura at the settings above.
   craft_wpm: 139
-  # Target reel length for the craft path (ANIME-13 §5 asks 22-30 s).
-  # target words = craft_target_seconds * craft_wpm / 60 -> 60 words.
-  craft_target_seconds: 26
+  # ── ANIME-15 §6/§7 ───────────────────────────────────────────────────
+  # The length FLOOR, finally wired. 0.0 disables it and is the default for
+  # every other niche; anime opts in. A script below 70% of its budget is
+  # rejected and the writer retries once with the target restated.
+  #
+  # The floor is NOT symmetric with script_too_long in its consequence: too
+  # long degrades to no narration (an oversized VO is truncated mid-sentence
+  # by the mix, and silence is better), too short KEEPS the script (a short
+  # VO still produces a correct reel). See base_writing.
+  min_fill_fraction: 0.70
+  # Target reel length for the craft path. ANIME-15 §7 raises this from 26 s
+  # to the 35-45 s band; the measured corpus p50 is 45 s.
+  craft_target_seconds: 38
   vo_bed_duck_db: -8
   target_lufs: -14.0
   tail_buffer_seconds: 2.0
