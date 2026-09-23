@@ -36,7 +36,7 @@ _FONT_SIZE = C.FONT_SZ
 _PLATE_PAD = 26
 _LINE_SPACING = 12
 #: Bottom safe zone: above the platform UI, below the subject's face.
-_BASELINE_Y = "h*0.72"
+_BASELINE_Y = "h*0.80"
 
 #: Reference: talk/captions.py's own test accepts 1 function-word ending across
 #: 47 cues (~2%) on a real transcript. 20% is a rate that means the
@@ -118,38 +118,83 @@ def _textfile(textdir: Path, tag: str, text: str) -> str:
     return _esc_path(f)
 
 
-def caption_filters(cues: list[C.Cue], font: str | None = None, textdir: Path | None = None) -> str:
-    """One drawtext per cue, each enabled only for its own window."""
+#: ANIME-16 §11. ONE baseline for the whole reel, in the lower third. v4's
+#: captions sat mid-frame across the mouth and chin of a close-up, and moved
+#: between halves of the reel. A caption that moves is a caption the eye has
+#: to find again.
+_BASELINE_LOCKED = 0.80
+#: The single permitted alternate is HIGHER, never lower, and never mid-face.
+_BASELINE_ALTERNATE = 0.64
+
+
+def caption_filters(
+    cues: list[C.Cue],
+    font: str | None = None,
+    textdir: Path | None = None,
+    *,
+    body_font: Path | None = None,
+    accent: str = "#FFFFFF",
+    karaoke: bool = True,
+    baseline: float = _BASELINE_LOCKED,
+) -> str:
+    """One drawtext per line, at ONE locked baseline, with karaoke.
+
+    Karaoke (§12): the word currently being spoken is drawn again on top of
+    the line in the brand accent. Word timings already exist — the highlight
+    was simply never restored after the captions moved to the script+ASR
+    path. The x offset of each word is MEASURED with the real font, because
+    the line is centred and a character-ratio estimate puts the highlight on
+    the wrong word by the end of a long line.
+    """
     if textdir is None:
         raise ValueError("caption_filters needs a textdir to stage cue text")
-    parts = []
+    from genlab_core.still import typography as T
+
+    parts: list[str] = []
+    ff = f":fontfile={body_font}" if body_font else (f":fontfile={font}" if font else "")
+    accent_hex = accent.lstrip("#")
+    y_base = f"h*{baseline}"
+
     for i, cue in enumerate(cues):
-        # cue.lines is what layout() produced -- one line if it fits, two
-        # balanced by WIDTH if it does not. Flattening to cue.text throws that
-        # away and draws a 35-character line at x=(w-text_w)/2, which goes
-        # negative and clips off BOTH edges of the frame. Observed on reel A:
-        # "After dominating Kyoto and Nerima," ran past 1080px.
-        #
-        # ONE drawtext PER LINE, not one drawtext holding a newline. This
-        # ffmpeg build breaks the line on 0x0A *and* also renders a glyph for
-        # it -- a tofu box sat at the end of line 1 of every wrapped caption.
-        # Per-line filters also give each line its own plate, which hugs the
-        # text instead of boxing the ragged pair.
         lines = [" ".join(w.t for w in ln) for ln in cue.lines] or [cue.text]
         n = len(lines)
+        # Size the whole cue so its widest line fits, once, so every line of
+        # every cue shares a size and the block does not breathe.
+        size = _FONT_SIZE
+        if body_font:
+            fitted = T.fit(
+                max(lines, key=len), body_font, max_size=_FONT_SIZE, min_size=34, max_lines=1
+            )
+            size = fitted.size
         for j, line in enumerate(lines):
             text = _textfile(textdir, f"cue_{i:03d}_{j}", line)
-            rise = (n - 1 - j) * (_FONT_SIZE + _LINE_SPACING)
-            f = (
+            rise = (n - 1 - j) * (size + _LINE_SPACING)
+            parts.append(
                 f"drawtext=textfile='{text}'"
-                f":fontsize={_FONT_SIZE}:fontcolor=white"
+                f":fontsize={size}:fontcolor=white"
                 f":box=1:boxcolor=black@{_PLATE_ALPHA}:boxborderw={_PLATE_PAD}"
-                f":x=(w-text_w)/2:y={_BASELINE_Y}-{rise}"
-                f":enable='between(t,{cue.start:.3f},{cue.end:.3f})'"
+                f":x=(w-text_w)/2:y={y_base}-{rise}"
+                f":enable='between(t,{cue.start:.3f},{cue.end:.3f})'{ff}"
             )
-            if font:
-                f += f":fontfile={font}"
-            parts.append(f)
+            if not (karaoke and body_font):
+                continue
+            # §12 — the spoken word, in accent, over the line.
+            words_in_line = [w for w in cue.words if w.t in line.split()] or cue.words
+            line_w = T.text_width_px(line, body_font, size)
+            cursor = 0.0
+            for w in line.split():
+                wid = T.text_width_px(w, body_font, size)
+                src = next((x for x in cue.words if x.t == w), None)
+                if src is not None and src.b > src.a:
+                    wpath = _textfile(textdir, f"kar_{i:03d}_{j}_{int(cursor)}", w)
+                    dx = cursor - line_w / 2.0
+                    parts.append(
+                        f"drawtext=textfile='{wpath}'"
+                        f":fontsize={size}:fontcolor=0x{accent_hex}"
+                        f":x=(w/2)+({dx:.1f}):y={y_base}-{rise}"
+                        f":enable='between(t,{src.a:.3f},{src.b:.3f})'{ff}"
+                    )
+                cursor += wid + T.text_width_px(" ", body_font, size)
     return ",".join(parts)
 
 

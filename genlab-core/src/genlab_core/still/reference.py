@@ -138,12 +138,32 @@ def longest_static(path: Path) -> float:
     return max(runs) if runs else 0.0
 
 
-def ocr_frame(path: Path, t: float, tmp: Path) -> tuple[float, str]:
+#: Languages the OCR gate reads. ANIME-16 §1: running the ENGLISH model over
+#: an anime PV means Japanese broadcast furniture is invisible to it, and
+#: "オープニング・テーマ" sat in three shipped frames of reel B because of it.
+#: jpn_vert matters as much as jpn — the credit block is set vertically.
+OCR_LANGS = "jpn+jpn_vert+eng"
+
+#: The CORPUS was measured at eng / 540px. Those defaults are FROZEN: change
+#: them and every published corpus percentile silently describes a different
+#: measurement than our reels are scored against. The stricter settings are
+#: opt-in and the PV window gate passes them explicitly.
+CORPUS_LANGS = "eng"
+CORPUS_SCALE = 540
+GATE_SCALE = 1080
+
+
+def ocr_frame(
+    path: Path, t: float, tmp: Path, langs: str = CORPUS_LANGS, scale: int = CORPUS_SCALE
+) -> tuple[float, str]:
     """(fraction of frame area covered by detected text, the text).
 
     Tesseract TSV so the boxes are available; a word's box area is summed and
     divided by the frame area. Confidence below 60 is dropped — anime frames
     are full of shapes tesseract will happily call letters.
+
+    The threshold is on detected-region AREA, not on recognised characters,
+    so a language the model reads badly still registers as text present.
     """
     if not shutil.which("tesseract"):
         raise RuntimeError("tesseract not installed — text density unmeasurable")
@@ -168,7 +188,7 @@ def ocr_frame(path: Path, t: float, tmp: Path) -> tuple[float, str]:
     )
     if not png.exists():
         return 0.0, ""
-    r = _run(["tesseract", str(png), "stdout", "--psm", "11", "tsv"], 180)
+    r = _run(["tesseract", str(png), "stdout", "-l", langs, "--psm", "11", "tsv"], 300)
     area = 0.0
     words: list[str] = []
     W = H = 0
@@ -190,7 +210,7 @@ def ocr_frame(path: Path, t: float, tmp: Path) -> tuple[float, str]:
             area += w * h
             words.append(text)
     png.unlink(missing_ok=True)
-    frame_area = (W * H) if W and H else (540 * 960)
+    frame_area = (W * H) if W and H else (scale * scale * 16 // 9)
     return (area / frame_area if frame_area else 0.0), " ".join(words)
 
 

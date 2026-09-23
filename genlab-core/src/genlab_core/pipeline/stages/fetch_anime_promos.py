@@ -40,6 +40,8 @@ query ($season: MediaSeason, $seasonYear: Int) {
       coverImage { extraLarge large color }
       bannerImage
       episodes
+      status
+      nextAiringEpisode { episode airingAt timeUntilAiring }
       season
       seasonYear
       startDate { year month day }
@@ -122,6 +124,7 @@ def _build_promo_summary(p: dict) -> str:
 #: already make, and dropping them was what forced the generated-anime-picture
 #: -of-nothing reels. Carrying them costs one larger query and no new request.
 ANILIST_CARRIED_FIELDS = (
+    "status",
     "cover_image_url",
     "banner_image_url",
     "trailer_id",
@@ -254,6 +257,12 @@ def _fetch_anilist_trailers(max_results: int = 20) -> list[dict]:
                 "trailer_thumbnail_url": (trailer.get("thumbnail") or "").strip(),
                 "characters": _anilist_characters(media),
                 "episodes": media.get("episodes"),
+                # ANIME-16 §6. A date is not the news. "11 JULY 2025" was
+                # slammed over a show that had been airing for months; the
+                # reveal has to know whether the show is upcoming, airing or
+                # finished before it can say anything true about it.
+                "status": media.get("status") or "",
+                "next_airing": media.get("nextAiringEpisode") or None,
                 "season": media.get("season") or "",
                 "season_year": media.get("seasonYear"),
                 "start_date": {
@@ -361,6 +370,8 @@ class FetchAnimePromos(FetcherStage):
                     "cover_color",
                     "trailer_thumbnail_url",
                     "episodes",
+                    "status",
+                    "next_airing",
                     "season",
                     "season_year",
                     "start_date",

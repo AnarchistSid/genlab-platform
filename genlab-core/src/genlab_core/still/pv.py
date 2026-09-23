@@ -403,14 +403,20 @@ def window_text_fraction(
     the streaming-service bug, the date line — appears and leaves inside a
     single shot.
     """
-    from genlab_core.still.reference import ocr_frame
+    from genlab_core.still.reference import GATE_SCALE, OCR_LANGS, ocr_frame
 
     tmp = Path(path).parent / ".ocr_windows"
     tmp.mkdir(parents=True, exist_ok=True)
     worst, seen = 0.0, ""
     t = moment.start_s
     while t < moment.end_s:
-        frac, text = ocr_frame(Path(path), t, tmp)
+        # ANIME-16 §1. The GATE reads Japanese, vertical Japanese and English,
+        # at full frame width. Measured on the exact PV windows v4 shipped:
+        # eng@540 saw 0.0000 where jpn@1080 saw 0.0230, and the v4 reveal
+        # frame went 0.0159 -> 0.0310, over the 3% threshold. The English
+        # model on a downscaled frame could not see the broadcast furniture
+        # that reached three shipped frames.
+        frac, text = ocr_frame(Path(path), t, tmp, langs=OCR_LANGS, scale=GATE_SCALE)
         if frac > worst:
             worst, seen = frac, text
         t += stride_s
@@ -543,3 +549,107 @@ def brightest(path: str | Path, moments: list[PVMoment]) -> PVMoment | None:
     if not moments:
         return None
     return max(moments, key=lambda m: window_luma(path, m))
+
+
+# ── ANIME-16 §3, §5: sharpness is a window criterion ─────────────────────
+
+#: Laplacian variance floor. A motion-blurred frame scores near zero.
+SHARPNESS_FLOOR = 18.0
+
+
+def frame_sharpness(path: str | Path, t: float) -> float:
+    """Laplacian variance of one frame — high for crisp linework, near zero
+    for a motion-blurred whip pan.
+
+    Anime line art is the easiest possible case for this: a sharp frame is
+    almost all hard edges, a blurred one has none.
+    """
+    import numpy as np
+
+    r = subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-ss",
+            f"{t:.3f}",
+            "-i",
+            str(path),
+            "-frames:v",
+            "1",
+            "-vf",
+            "scale=320:-2,format=gray",
+            "-f",
+            "rawvideo",
+            "-",
+        ],
+        capture_output=True,
+        timeout=120,
+    )
+    buf = r.stdout
+    if not buf:
+        return 0.0
+    w = 320
+    h = len(buf) // w
+    a = np.frombuffer(buf[: w * h], dtype=np.uint8).reshape(h, w).astype(np.float32)
+    lap = a[:-2, 1:-1] + a[2:, 1:-1] + a[1:-1, :-2] + a[1:-1, 2:] - 4 * a[1:-1, 1:-1]
+    return float(lap.var())
+
+
+def window_sharpness(path: str | Path, moment: PVMoment, *, stride_s: float = 0.35) -> float:
+    """Best sharpness in the window — the frame a viewer's eye settles on."""
+    vals, t = [], moment.start_s
+    while t < moment.end_s:
+        vals.append(frame_sharpness(path, t))
+        t += stride_s
+    return max(vals) if vals else 0.0
+
+
+def sharp_enough(
+    path: str | Path, moments: list[PVMoment], *, floor: float = SHARPNESS_FLOOR, keep_min: int = 1
+) -> tuple[list[PVMoment], list[dict]]:
+    """Drop motion-blurred windows. A blurred frame held for 2 s reads as a
+    broken render, not as speed."""
+    scored = [(m, window_sharpness(path, m)) for m in moments]
+    kept = [m for m, v in scored if v >= floor]
+    rejected = [{"start_s": m.start_s, "sharpness": round(v, 1)} for m, v in scored if v < floor]
+    if len(kept) < keep_min and scored:
+        scored.sort(key=lambda r: -r[1])
+        kept = [r[0] for r in scored[:keep_min]]
+        logger.warning(
+            "[pv] every window is below the %.0f sharpness floor; keeping the %d sharpest (%.1f).",
+            floor,
+            keep_min,
+            scored[0][1],
+        )
+        rejected = [r for r in rejected if r["start_s"] not in {m.start_s for m in kept}]
+    logger.info(
+        "[pv] sharpness gate: %d kept, %d rejected below %.0f", len(kept), len(rejected), floor
+    )
+    return kept, rejected
+
+
+def not_reused(
+    moments: list[PVMoment], used_before: list[float], *, tol_s: float = 1.0, keep_min: int = 1
+) -> tuple[list[PVMoment], list[dict]]:
+    """Drop windows already used by an earlier version of the SAME show.
+
+    ANIME-16 §4: the green Shinpei close-up appeared in v3 and again in v4.
+    Reusing the single best window is defensible; reusing it by accident,
+    because nothing remembered, is not.
+    """
+    kept, rejected = [], []
+    for m in moments:
+        if any(abs(m.start_s - u) <= tol_s for u in used_before):
+            rejected.append({"start_s": m.start_s, "reason": "used in an earlier version"})
+        else:
+            kept.append(m)
+    if len(kept) < keep_min and moments:
+        logger.warning(
+            "[pv] de-duplication would leave %d windows; keeping the reused "
+            "ones because they are the best available.",
+            len(kept),
+        )
+        return moments, []
+    logger.info("[pv] reuse gate: %d kept, %d already seen", len(kept), len(rejected))
+    return kept, rejected

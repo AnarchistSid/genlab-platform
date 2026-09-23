@@ -38,6 +38,8 @@ HOOK_ONSET_MAX_S = 1.5
 #: Kinetic slam duration bounds from the packet.
 SLAM_MIN_S = 0.6
 SLAM_MAX_S = 1.0
+#: ANIME-16 §9. v4's slams measured ~15% of frame width; the band is 25-30%.
+SLAM_WIDTH_FRAC = 0.28
 
 
 class HookRejected(ValueError):
@@ -161,7 +163,11 @@ def fit_lines(
 
 
 def hook_filters(
-    hook: Hook, textdir: Path, accent: str = "#FFFFFF", font: str | None = None
+    hook: Hook,
+    textdir: Path,
+    accent: str = "#FFFFFF",
+    font: str | None = None,
+    display_font: Path | None = None,
 ) -> str:
     """The tension line, punching in and gone.
 
@@ -174,8 +180,14 @@ def hook_filters(
     Scale-punching the TEXT rather than the frame is deliberate — zooming the
     frame would move the footage the hook is sitting on.
     """
-    ff = f":fontfile={font}" if font else ""
-    lines, base = fit_lines(hook.text.upper(), max_size=118)
+    ff = f":fontfile={display_font}" if display_font else (f":fontfile={font}" if font else "")
+    if display_font is not None:
+        from genlab_core.still import typography as T
+
+        fitted = T.fit(hook.text.upper(), display_font, max_size=150, min_size=60)
+        lines, base = fitted.lines, fitted.size
+    else:
+        lines, base = fit_lines(hook.text.upper(), max_size=118)
     n = len(lines)
     steps = [(0.00, 0.09, 0.80), (0.09, 0.18, 1.12), (0.18, hook.duration_s, 1.0)]
     parts = []
@@ -197,10 +209,15 @@ def hook_filters(
 
 
 def slam_filters(
-    slams: list[Slam], textdir: Path, accent: str = "#FFFFFF", font: str | None = None
+    slams: list[Slam],
+    textdir: Path,
+    accent: str = "#FFFFFF",
+    font: str | None = None,
+    display_font: Path | None = None,
 ) -> str:
     """The facts, one per downbeat, in the headline band."""
     accent_hex = accent.lstrip("#")
+    ff = f":fontfile={display_font}" if display_font else (f":fontfile={font}" if font else "")
     parts = []
     for i, s in enumerate(slams):
         path = _textfile(textdir, f"slam_{i:02d}", s.text.upper())
@@ -210,7 +227,18 @@ def slam_filters(
         # #7B3FE4 on a dark anime frame is low contrast — legible, but not the
         # "big, high-contrast" the slam is for. White carries the reading and
         # the accent still marks it as ours.
-        lines, size = fit_lines(s.text.upper(), max_size=84, max_lines=1)
+        if display_font is not None:
+            from genlab_core.still import typography as T
+
+            # Grown to the §9 width band rather than capped: fit() only
+            # enforces the ceiling, and a slam that merely FITS is the 15%
+            # one that shipped.
+            fitted = T.target_width_fit(
+                s.text.upper(), display_font, target_frac=SLAM_WIDTH_FRAC, max_lines=1
+            )
+            size = fitted.size
+        else:
+            _lines, size = fit_lines(s.text.upper(), max_size=84, max_lines=1)
         parts.append(
             f"drawtext=textfile='{path}':fontsize={size}"
             f":fontcolor=white:borderw=6:bordercolor=0x{accent_hex}"

@@ -99,3 +99,72 @@ def align_script(script_words: list[str], asr: list[AlignedWord]) -> list[Word]:
             rate * 100,
         )
     return out
+
+
+#: Sentence-final punctuation. CONTENT-03's own set.
+_SENT_END = ".?!"
+
+
+def split_sentences(words: list[Word]) -> list[list[Word]]:
+    """Group timed words into sentences by the SCRIPT's punctuation.
+
+    ANIME-16 §10. Segmentation is run per sentence so a cue can never cross
+    one. On the script+ASR path the cue "to him instead. Marriage," shipped
+    with a full stop inside it: the length and function-word rules outvoted
+    the punctuation, because they were all applied to one flat run of words.
+    Sentence boundaries are not a preference to be scored against line length
+    — they are where a reader's eye stops.
+    """
+    out: list[list[Word]] = []
+    cur: list[Word] = []
+    for w in words:
+        cur.append(w)
+        if w.t.rstrip("\"”')").endswith(tuple(_SENT_END)):
+            out.append(cur)
+            cur = []
+    if cur:
+        out.append(cur)
+    return out
+
+
+def cues_from_script(
+    script_words: list[str],
+    asr: list[AlignedWord],
+    *,
+    names: list[str] | None = None,
+    captions_end: float | None = None,
+) -> list:
+    """Timed cues whose text is the SCRIPT's and whose breaks are its sentences.
+
+    Order matters and is the whole point: align, split by sentence, THEN
+    segment inside each sentence with CONTENT-03's rules, then de-overlap
+    across the whole reel.
+    """
+    from genlab_core.talk import captions as C
+
+    timed = align_script(script_words, asr)
+    timed, _ = C.fix_names(timed, names or [])
+    timed = C.recase(timed)
+
+    cues: list = []
+    for sentence in split_sentences(timed):
+        cues.extend(C.segment(sentence))
+    cues = C.make_disjoint(cues, captions_end=captions_end)
+    for cue in cues:
+        cue.lines = C.layout(cue.words)
+    crossing = [
+        c.text
+        for c in cues
+        if any(w.t.rstrip("\"”')").endswith(tuple(_SENT_END)) for w in c.words[:-1])
+    ]
+    if crossing:
+        logger.warning(
+            "[align] %d cues still cross a sentence boundary: %s", len(crossing), crossing[:2]
+        )
+    logger.info(
+        "[align] %d script words -> %d sentences -> %d cues",
+        len(script_words),
+        len(split_sentences(timed)),
+        len(cues),
+    )
+    return cues
