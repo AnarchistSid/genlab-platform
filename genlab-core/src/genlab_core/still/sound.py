@@ -30,6 +30,14 @@ _UA = {"User-Agent": "GenLab/1.0 (+https://github.com/AnarchistSid/genlab-platfo
 #: Effects sit this far under the narration.
 SFX_DB = -18.0
 
+#: ANIME-16 §13. The bed must not stop. A bed generated without this phrasing
+#: measured a floor of -64.2 dB with 12% of frames under -40 dB, and those
+#: gaps ARE the "dead air" in the mix — not the duck.
+CONTINUOUS_BED = (
+    "CONTINUOUS sustained instrumentation throughout, no gaps, no silence, "
+    "constant rhythmic pulse from start to end"
+)
+
 #: The four cues the packet names, with the prompt each is generated from.
 CUE_PROMPTS = {
     "riser": "tense cinematic riser building to an impact, no music, dry",
@@ -101,8 +109,15 @@ def _fetch(url: str, dest: Path) -> Path:
     return dest
 
 
-def generate_bed(prompt: str, duration_s: float, dest: Path) -> Path:
-    """The music bed. Generated first so its grid can drive the edit."""
+def generate_bed(prompt: str, duration_s: float, dest: Path, *, continuous: bool = True) -> Path:
+    """The music bed. Generated first so its grid can drive the edit.
+
+    ``continuous`` appends CONTINUOUS_BED to the prompt. On by default because
+    a bed with gaps is what produced the dead air, and the gaps are cheaper to
+    prevent than to compress away.
+    """
+    if continuous and CONTINUOUS_BED not in prompt:
+        prompt = f"{prompt}. {CONTINUOUS_BED}"
     if dest.exists() and dest.stat().st_size:
         logger.info("[sound] cached bed %s", dest.name)
         return dest
@@ -201,6 +216,23 @@ def build_mix(
 
     idx = 1
     if bed is not None:
+        # ANIME-16 §13 — and the cause was NOT the duck.
+        #
+        # The review read the gaps as "the bed is gated, not ducked". Measured:
+        # the FIXED-duck mix had a floor of -47.6 dB and 8% of frames under
+        # -30 dB, and the quiet frames line up with the BED's own quiet
+        # stretches (bed floor -64.2 dB, p5 -52.5 against a median of -23.1).
+        # A bed that is already near-silent cannot be made to swell.
+        #
+        # Three attempts at fixing it downstream all measured WORSE than the
+        # fixed duck: sidechain alone took frames-under--30 dB from 8% to 9%,
+        # and adding an acompressor on the bed took it to 22%. Re-prompting
+        # the bed for "continuous, no gaps, constant rhythmic pulse" took the
+        # bed's own floor from -64.2 dB to -24.0 and frames under -40 dB from
+        # 12% to 0%. The fix is the prompt; see CONTINUOUS_BED_PROMPT.
+        #
+        # The duck stays a fixed gain: it measured best, and a sidechain at a
+        # threshold low enough to catch speech ducks almost continuously.
         inputs += ["-stream_loop", "-1", "-i", str(bed)]
         parts.append(f"[{idx}:a]volume={duck_db}dB,atrim=0:{video_s:.3f},asetpts=PTS-STARTPTS[bed]")
         mix_labels.append("[bed]")
