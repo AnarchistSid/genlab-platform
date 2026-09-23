@@ -1,0 +1,44 @@
+namespace: anarchistsid
+name: ffmpeg-filtergraph-lint
+description: |
+    Lint an ffmpeg filtergraph string before ffmpeg does. Lexes the graph the
+    way ffmpeg's own parser does — a backslash escapes outside quotes, and
+    inside quotes nothing escapes at all — and reports where the parse diverges
+    from what you meant, with the exact error ffmpeg will print.
+
+    The bug it exists for: one apostrophe inside a quoted drawtext value ends
+    the quoting early, so the next comma inside enable='between(t,16.32,17.5)'
+    is read as a filter separator and ffmpeg answers "No such filter:
+    '16.320'". The message names a timestamp; nothing points at the apostrophe
+    several options earlier.
+
+    Also finds unbalanced quotes, unquoted commas and expression options,
+    drawtext with no text, % strftime expansion, newlines that render as tofu,
+    and in complex graphs labels that are undefined, duplicated or unconsumed.
+
+    Pure string analysis: no ffmpeg binary, no file access, no network.
+metadata:
+    tags:
+        - ffmpeg
+        - filtergraph
+        - drawtext
+        - lint
+        - static-analysis
+        - video
+        - escaping
+        - quoting
+        - debugging
+        - utility
+category: video
+images:
+    card: ""
+    thumbnail: ""
+    banner: ""
+env: {}
+kernel: python-3.11
+resources:
+    gpu:
+        count: 0
+        vram: 0
+        type: none
+    ram: 512

@@ -1,0 +1,214 @@
+{
+  "run": {
+    "description": "",
+    "kind": "run",
+    "capabilities": [],
+    "input_schema": {
+      "properties": {
+        "filtergraph": {
+          "description": "The filtergraph string, exactly as passed to -vf / -af / -filter_complex. Do not include the flag itself.",
+          "title": "Filtergraph",
+          "type": "string"
+        },
+        "strict": {
+          "default": false,
+          "description": "Treat warnings as failures too, so ok=false on any finding.",
+          "title": "Strict",
+          "type": "boolean"
+        },
+        "assume_complex": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Force complex-graph label checks on or off. Default: auto-detect from the presence of ';' or '[label]' syntax.",
+          "title": "Assume Complex"
+        }
+      },
+      "required": [
+        "filtergraph"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Finding": {
+          "properties": {
+            "rule": {
+              "description": "Short identifier for the check that fired",
+              "title": "Rule",
+              "type": "string"
+            },
+            "severity": {
+              "description": "error or warning",
+              "title": "Severity",
+              "type": "string"
+            },
+            "message": {
+              "description": "What is wrong, in one sentence",
+              "title": "Message",
+              "type": "string"
+            },
+            "position": {
+              "description": "0-based character offset in the input graph, or -1",
+              "title": "Position",
+              "type": "integer"
+            },
+            "filter_index": {
+              "description": "0-based index of the filter involved, or -1",
+              "title": "Filter Index",
+              "type": "integer"
+            },
+            "filter_name": {
+              "default": "",
+              "description": "Filter the finding belongs to",
+              "title": "Filter Name",
+              "type": "string"
+            },
+            "option": {
+              "default": "",
+              "description": "Option key involved, if any",
+              "title": "Option",
+              "type": "string"
+            },
+            "evidence": {
+              "default": "",
+              "description": "The exact substring the finding is about",
+              "title": "Evidence",
+              "type": "string"
+            },
+            "predicted_ffmpeg_error": {
+              "default": "",
+              "description": "What ffmpeg is expected to print, for matching against logs",
+              "title": "Predicted Ffmpeg Error",
+              "type": "string"
+            },
+            "fix": {
+              "default": "",
+              "description": "The concrete change that resolves it",
+              "title": "Fix",
+              "type": "string"
+            }
+          },
+          "required": [
+            "rule",
+            "severity",
+            "message",
+            "position",
+            "filter_index"
+          ],
+          "title": "Finding",
+          "type": "object"
+        },
+        "ParsedFilter": {
+          "properties": {
+            "index": {
+              "description": "Position in the graph",
+              "title": "Index",
+              "type": "integer"
+            },
+            "name": {
+              "description": "Filter name as the parser sees it",
+              "title": "Name",
+              "type": "string"
+            },
+            "inputs": {
+              "description": "Input labels",
+              "items": {
+                "type": "string"
+              },
+              "title": "Inputs",
+              "type": "array"
+            },
+            "outputs": {
+              "description": "Output labels",
+              "items": {
+                "type": "string"
+              },
+              "title": "Outputs",
+              "type": "array"
+            },
+            "options": {
+              "description": "Option keys in order",
+              "items": {
+                "type": "string"
+              },
+              "title": "Options",
+              "type": "array"
+            },
+            "valid_name": {
+              "description": "Whether the name is a legal filter identifier",
+              "title": "Valid Name",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "index",
+            "name",
+            "valid_name"
+          ],
+          "title": "ParsedFilter",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "ok": {
+          "description": "True when no error-severity finding fired (see strict)",
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "summary": {
+          "description": "One-line verdict",
+          "title": "Summary",
+          "type": "string"
+        },
+        "error_count": {
+          "description": "Number of error-severity findings",
+          "title": "Error Count",
+          "type": "integer"
+        },
+        "warning_count": {
+          "description": "Number of warning-severity findings",
+          "title": "Warning Count",
+          "type": "integer"
+        },
+        "findings": {
+          "description": "Everything found, in order",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "filters": {
+          "description": "The graph as the parser reads it",
+          "items": {
+            "$ref": "#/$defs/ParsedFilter"
+          },
+          "title": "Filters",
+          "type": "array"
+        },
+        "quote_balanced": {
+          "description": "Whether quoting closes cleanly across the graph",
+          "title": "Quote Balanced",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ok",
+        "summary",
+        "error_count",
+        "warning_count",
+        "quote_balanced"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}
