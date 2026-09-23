@@ -383,3 +383,81 @@ def cut_moment(
         logger.warning("[pv] cut failed at %.2fs: %s", moment.start_s, p.stderr[-300:])
         return False
     return True
+
+
+# ── ANIME-14 §4: a PV frame can carry the PV's own text ──────────────────
+
+#: A window whose frames carry more than this fraction of detected text is
+#: not usable under our own overlays. 3% of frame area is roughly one line of
+#: broadcast furniture at 1080x1920.
+MAX_BAKED_TEXT_FRACTION = 0.03
+
+
+def window_text_fraction(
+    path: str | Path, moment: PVMoment, *, stride_s: float = 0.5
+) -> tuple[float, str]:
+    """(worst text-area fraction across the window, the text seen).
+
+    OCR rather than a heuristic because the thing being detected IS text.
+    Sampled every ``stride_s`` because a PV's furniture — the title lockup,
+    the streaming-service bug, the date line — appears and leaves inside a
+    single shot.
+    """
+    from genlab_core.still.reference import ocr_frame
+
+    tmp = Path(path).parent / ".ocr_windows"
+    tmp.mkdir(parents=True, exist_ok=True)
+    worst, seen = 0.0, ""
+    t = moment.start_s
+    while t < moment.end_s:
+        frac, text = ocr_frame(Path(path), t, tmp)
+        if frac > worst:
+            worst, seen = frac, text
+        t += stride_s
+    return worst, seen[:120]
+
+
+def without_baked_text(
+    path: str | Path,
+    moments: list[PVMoment],
+    *,
+    max_fraction: float = MAX_BAKED_TEXT_FRACTION,
+    keep_min: int = 1,
+) -> tuple[list[PVMoment], list[dict]]:
+    """Drop windows carrying the PV's own text. Returns (kept, rejected).
+
+    ``keep_min`` is a floor, not a courtesy: a PV that is title-carded
+    end-to-end would otherwise return nothing and the reel would have no
+    footage at all. When the floor engages it is LOGGED as a warning, because
+    "we used a texty window" and "there were no clean windows" must not look
+    the same afterwards.
+    """
+    scored = []
+    for m in moments:
+        frac, text = window_text_fraction(path, m)
+        scored.append((m, frac, text))
+    kept = [m for m, f, _ in scored if f <= max_fraction]
+    rejected = [
+        {"start_s": m.start_s, "text_fraction": round(f, 4), "text": t}
+        for m, f, t in scored
+        if f > max_fraction
+    ]
+    if len(kept) < keep_min:
+        scored.sort(key=lambda r: r[1])
+        kept = [r[0] for r in scored[:keep_min]]
+        logger.warning(
+            "[pv] every window carries baked text above %.1f%%; keeping the %d "
+            "cleanest (%.1f%%) so the reel has footage at all. The overlays will "
+            "sit on top of the PV's own text.",
+            max_fraction * 100,
+            keep_min,
+            scored[0][1] * 100 if scored else 0.0,
+        )
+        rejected = [r for r in rejected if r["start_s"] not in {m.start_s for m in kept}]
+    logger.info(
+        "[pv] text gate: %d kept, %d rejected at <=%.1f%% frame area",
+        len(kept),
+        len(rejected),
+        max_fraction * 100,
+    )
+    return kept, rejected
