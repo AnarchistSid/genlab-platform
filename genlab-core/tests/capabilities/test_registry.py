@@ -119,6 +119,9 @@ class TestCostProvenance:
         costs = json.loads(_COSTS.read_text())
         assert costs, "no measurements at all"
         for ref, d in costs.items():
+            # Keys may be "<kind>:<ref>" when one app appears under two kinds
+            # — see Capability._measured. The receipt requirements are the
+            # same either way.
             assert d.get("task_id"), f"{ref} has a cost with no belt task id"
             assert d.get("measured_at"), f"{ref} has a cost with no date"
             assert d.get("unit"), f"{ref} has a cost with no unit — a number per WHAT?"
@@ -126,8 +129,23 @@ class TestCostProvenance:
 
     def test_measured_refs_all_exist_in_the_registry(self):
         known = {c.ref for c in R._REGISTRY}
-        stray = set(json.loads(_COSTS.read_text())) - known
+        known_scoped = {f"{c.kind}:{c.ref}" for c in R._REGISTRY}
+        stray = set(json.loads(_COSTS.read_text())) - known - known_scoped
         assert not stray, f"measured costs for refs not in the registry: {sorted(stray)}"
+
+    def test_a_kind_scoped_cost_does_not_measure_the_other_kind(self):
+        """klingai/video-v2-6 is an UNMEASURED text-to-video expansion model
+        and the MEASURED image_to_video choice. Keying costs by ref alone made
+        measuring one silently mark the other, and `measured` gates
+        `selectable_for_production`."""
+        by_kind = {(c.kind, c.ref): c for c in R._REGISTRY}
+        i2v = by_kind.get(("image_to_video", "klingai/video-v2-6"))
+        vgen = by_kind.get(("video_gen", "klingai/video-v2-6"))
+        if i2v is None or vgen is None:
+            pytest.skip("the two-kind entry this pin exists for is gone")
+        assert i2v.measured and i2v.cost_per_unit_usd == 0.35
+        assert not vgen.measured
+        assert not vgen.selectable_for_production
 
 
 class TestLatencyIsASelectionConstraint:

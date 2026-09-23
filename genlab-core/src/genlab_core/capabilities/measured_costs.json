@@ -97,5 +97,27 @@
     "source": "belt task cost --json, after settlement",
     "task_id": "2sdpg2ww2d5a0aj7jpdqdcgmrw",
     "unit": "EXACTLY 1s 720p, scale=2"
+  },
+  "image_to_video:klingai/video-v2-6": {
+    "cost_per_unit_usd": 0.35,
+    "unit": "5s clip at 1080p 9:16",
+    "latency_s": 155.3,
+    "measured": "2026-09-24 ANIME-15 \u00a74, Firefly cover, 9:16 1080p",
+    "alternatives_probed": {
+      "bytedance/seedance-2-0-mini": {
+        "cost_usd": 0.1845,
+        "latency_s": 116.1,
+        "rejected": "834x1112, under the 1080 the frame needs",
+        "task_id": "2hm3e3cfhncvv84e4z4mcgvhzw"
+      },
+      "falai/minimax-h3-max": {
+        "cost_usd": 0.4,
+        "latency_s": 13.3,
+        "rejected": "character face warps across the clip",
+        "task_id": "12vgjq7bm4fegr1npwrkad6htv"
+      }
+    },
+    "task_id": "1k4nfbd5dndar5ycxd0b3fk2a2",
+    "measured_at": "2026-09-24"
   }
 }

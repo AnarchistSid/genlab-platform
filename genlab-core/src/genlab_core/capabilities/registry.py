@@ -69,6 +69,9 @@ Kind = Literal[
     "inspect",
     "thumbnail",
     "video_gen",
+    # ANIME-15 §4. Distinct from video_gen: that is text-to-video, this
+    # animates an image we already hold, which is what key art needs.
+    "image_to_video",
 ]
 
 KINDS: frozenset[str] = frozenset(
@@ -85,6 +88,7 @@ KINDS: frozenset[str] = frozenset(
         "inspect",
         "thumbnail",
         "video_gen",
+        "image_to_video",
     }
 )
 
@@ -137,7 +141,18 @@ class Capability:
     # ── measured, from measured_costs.json ──────────────────────────────
     @property
     def _measured(self) -> dict | None:
-        return _measured_costs().get(self.ref)
+        """The receipt for THIS entry, keyed by kind first then by ref.
+
+        One app can appear under two kinds — klingai/video-v2-6 is registered
+        as an unmeasured text-to-video expansion model AND as the measured
+        image_to_video choice. Keying costs by ref alone made measuring it for
+        one kind silently mark the other as measured, and `measured` gates
+        `selectable_for_production`. A "<kind>:<ref>" key scopes the receipt to
+        the entry that earned it; the bare ref still works for every app that
+        appears once, which is all of them but this one.
+        """
+        costs = _measured_costs()
+        return costs.get(f"{self.kind}:{self.ref}") or costs.get(self.ref)
 
     @property
     def cost_per_unit_usd(self) -> float | None:
@@ -241,6 +256,24 @@ _REGISTRY: tuple[Capability, ...] = (
         rights="eval_only",
         eval_only=True,
         notes="Evaluation only — never selectable for production, so not probed.",
+    ),
+    Capability(
+        ref="klingai/video-v2-6",
+        kind="image_to_video",
+        rights="owned_channels",
+        constraints={"duration_s": [5, 10], "aspect_ratio": ["9:16", "16:9", "1:1"],
+                     "resolution": ["1080p"]},
+        batch_only=True,
+        notes=(
+            "ANIME-15 §4, probed on the real Firefly cover against Seedance "
+            "2.0-mini and Minimax H3-max. Kling: $0.35 / 155 s / 1216x1704, "
+            "gentle parallax, faces hold. Seedance: $0.1845 / 116 s but only "
+            "834x1112, under the 1080 the frame needs. Minimax: 13 s and the "
+            "fastest by far, but the male character's face visibly changes "
+            "across the 5 s — the warping the brief rules out. Chosen on "
+            "fidelity and resolution; batch_only because 155 s is past the "
+            "60 s bar, so the pipeline pre-generates at plan time."
+        ),
     ),
     Capability(
         ref="infsh/birefnet",
