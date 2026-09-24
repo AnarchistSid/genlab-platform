@@ -16,8 +16,8 @@ fights:
   show_aliases:
   - One Piece
   peak_window:
-  - 55.0
-  - 69.0
+  - 74.0
+  - 87.0
   peak_impacts:
   - - 57.0
     - 57.6
@@ -25,9 +25,11 @@ fights:
     - 62.8
   - - 66.8
     - 67.3
-  window_source: hand_mark
-  window_mark_commit: 16408e61
-  window_mark_sha256: d7950a7b8e344fcb
+  window_source: hand_mark_v2_characters
+  window_mark_commit: 4b5e4032
+  window_mark_sha256: 0ccb16c97661a7fa
+  window_note: 'cells 38-43: Zoro''s finishing cut, King falling, King''s last line. The marked impacts
+    (57/62/67s) sat in blast and rubble.'
 - id: luffy_vs_kaido
   show: One Piece
   studio: toei
@@ -43,14 +45,16 @@ fights:
   show_aliases:
   - One Piece
   peak_window:
-  - 36.0
-  - 46.0
+  - 65.0
+  - 77.0
   peak_impacts:
   - - 39.3
     - 39.8
-  window_source: hand_mark
-  window_mark_commit: 16408e61
-  window_mark_sha256: 6811345253fca8ec
+  window_source: hand_mark_v2_characters
+  window_mark_commit: 4b5e4032
+  window_mark_sha256: 60ad84cc32ffe516
+  window_note: 'cells 32-38: the final clash, Kaido close then Luffy. The marked impact (39s) was followed
+    by 10s of effect streaks.'
 - id: goku_vs_frieza
   show: Dragon Ball Z
   studio: toei
@@ -110,21 +114,25 @@ fights:
   approx_s: null
   register: edit
   aura_colour: '#4FA8FF'
-  status: unmade
+  status: source_hardsub
   show_aliases:
   - JUJUTSU KAISEN
   - Jujutsu Kaisen
   peak_window:
-  - 72.0
-  - 80.0
+  - 63.0
+  - 77.0
   peak_impacts:
   - - 75.3
     - 75.8
   - - 77.0
     - 77.5
-  window_source: hand_mark
-  window_mark_commit: 16408e61
-  window_mark_sha256: 43ffb4a9e9b837d1
+  window_source: hand_mark_v2_characters
+  window_mark_commit: 4b5e4032
+  window_mark_sha256: 079516b6505183b0
+  window_note: 'cells 22-27: Gojo raises the finger, Red charges and fires.'
+  hardsub_fraction: 0.93
+  hardsub_note: official LatAm upload; Spanish subtitles burned into 93% of the window. Licensed channel,
+    unusable frames. Needs a clean source.
 - id: sukuna_vs_mahoraga
   show: Jujutsu Kaisen
   studio: mappa
@@ -216,14 +224,15 @@ fights:
   - Boku no Hero Academia 4th Season
   - My Hero Academia Season 4
   peak_window:
-  - 56.0
-  - 64.0
+  - 66.0
+  - 78.0
   peak_impacts:
   - - 58.8
     - 59.3
-  window_source: hand_mark
-  window_mark_commit: 16408e61
-  window_mark_sha256: 7e03ae1b9f462d27
+  window_source: hand_mark_v2_characters
+  window_mark_commit: 4b5e4032
+  window_mark_sha256: 88378d6deeab43d1
+  window_note: 'cells 32-38: Overhaul close, Deku powering up, the clenched fist.'
 - id: tanjiro_vs_akaza
   show: Demon Slayer
   studio: ufotable
@@ -243,16 +252,17 @@ fights:
   - Kimetsu no Yaiba Movie Mugen Ressha-hen
   - Demon Slayer Mugen Train
   peak_window:
-  - 31.0
-  - 38.0
+  - 72.0
+  - 96.0
   peak_impacts:
   - - 32.8
     - 33.3
   - - 35.3
     - 35.8
-  window_source: hand_mark
-  window_mark_commit: 16408e61
-  window_mark_sha256: 625e7cbfe132b1e3
+  window_source: hand_mark_v2_characters
+  window_mark_commit: 4b5e4032
+  window_mark_sha256: ed15add3d1de3287
+  window_note: 'cells 33-44: twelve consecutive character-dense cells to just before the outro.'
 - id: saitama_vs_boros
   show: One Punch Man
   studio: madhouse
