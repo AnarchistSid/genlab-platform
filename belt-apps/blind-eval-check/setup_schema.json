@@ -1,0 +1,6 @@
+{
+  "description": "No setup state.",
+  "properties": {},
+  "title": "AppSetup",
+  "type": "object"
+}

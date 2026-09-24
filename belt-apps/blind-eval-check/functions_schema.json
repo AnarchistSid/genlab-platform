@@ -1,0 +1,218 @@
+{
+  "run": {
+    "description": "",
+    "kind": "run",
+    "capabilities": [],
+    "input_schema": {
+      "properties": {
+        "marks": {
+          "description": "Ground-truth positions \u2014 timestamps, frame indices, offsets. These must come from something OTHER than the detector.",
+          "items": {
+            "type": "number"
+          },
+          "title": "Marks",
+          "type": "array"
+        },
+        "picks": {
+          "description": "What the detector returned.",
+          "items": {
+            "type": "number"
+          },
+          "title": "Picks",
+          "type": "array"
+        },
+        "tolerance": {
+          "default": 0.3,
+          "description": "A pick within this distance of a mark counts as a hit. Same unit as marks and picks.",
+          "title": "Tolerance",
+          "type": "number"
+        },
+        "marks_written_at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Epoch seconds when the ground truth was recorded. Supply both this and picks_written_at to have the ordering checked.",
+          "title": "Marks Written At"
+        },
+        "picks_written_at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Epoch seconds when the detector output was recorded.",
+          "title": "Picks Written At"
+        },
+        "label": {
+          "default": "",
+          "description": "Free-text name for this run.",
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "marks",
+        "picks"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "output_schema": {
+      "$defs": {
+        "Match": {
+          "properties": {
+            "mark": {
+              "description": "A ground-truth position",
+              "title": "Mark",
+              "type": "number"
+            },
+            "nearest_pick": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Closest detector pick",
+              "title": "Nearest Pick"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Absolute distance",
+              "title": "Error"
+            },
+            "matched": {
+              "description": "Whether it fell inside tolerance",
+              "title": "Matched",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "mark",
+            "matched"
+          ],
+          "title": "Match",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "trustworthy": {
+          "description": "False if the result is circular, out of order, or degenerate",
+          "title": "Trustworthy",
+          "type": "boolean"
+        },
+        "verdict": {
+          "description": "One line on what this measurement establishes",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "precision": {
+          "description": "Picks that landed near a mark",
+          "title": "Precision",
+          "type": "number"
+        },
+        "recall": {
+          "description": "Marks that had a pick near them",
+          "title": "Recall",
+          "type": "number"
+        },
+        "f1": {
+          "description": "Harmonic mean, for completeness \u2014 read the two above",
+          "title": "F1",
+          "type": "number"
+        },
+        "n_marks": {
+          "title": "N Marks",
+          "type": "integer"
+        },
+        "n_picks": {
+          "title": "N Picks",
+          "type": "integer"
+        },
+        "tolerance": {
+          "title": "Tolerance",
+          "type": "number"
+        },
+        "matched_marks": {
+          "title": "Matched Marks",
+          "type": "integer"
+        },
+        "missed_marks": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Missed Marks",
+          "type": "array"
+        },
+        "spurious_picks": {
+          "description": "Picks with no mark near them",
+          "items": {
+            "type": "number"
+          },
+          "title": "Spurious Picks",
+          "type": "array"
+        },
+        "per_mark": {
+          "items": {
+            "$ref": "#/$defs/Match"
+          },
+          "title": "Per Mark",
+          "type": "array"
+        },
+        "circular": {
+          "description": "Ground truth appears to be derived from the picks",
+          "title": "Circular",
+          "type": "boolean"
+        },
+        "ordering_verified": {
+          "description": "Ground truth provably predates the picks",
+          "title": "Ordering Verified",
+          "type": "boolean"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "trustworthy",
+        "verdict",
+        "precision",
+        "recall",
+        "f1",
+        "n_marks",
+        "n_picks",
+        "tolerance",
+        "matched_marks",
+        "circular",
+        "ordering_verified"
+      ],
+      "title": "RunOutput",
+      "type": "object"
+    }
+  }
+}

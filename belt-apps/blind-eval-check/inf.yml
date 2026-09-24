@@ -1,0 +1,44 @@
+namespace: anarchistsid
+name: blind-eval-check
+description: |
+    Check whether a detector evaluation actually measured anything — or
+    measured the detector against itself.
+
+    Give it ground-truth positions and detector picks (timestamps, frame
+    indices, any ordered scalar) and it returns precision and recall
+    SEPARATELY, plus three verdicts most eval scripts never produce: whether
+    the ground truth looks derived from the picks, whether the detector ran
+    before the ground truth existed, and whether the detector simply fired
+    often enough to buy recall.
+
+    Built from a real pair of numbers on one detector and one clip: taking
+    its own top picks and confirming them by eye reported 100% agreement at a
+    0.002s median error; marks written before it ran reported recall 0.00,
+    with the nearest approach four times the tolerance. Same code, same
+    footage — the difference was entirely where the ground truth came from.
+
+    Pure arithmetic. No dependencies, no network, no files.
+metadata:
+    tags:
+        - evaluation
+        - calibration
+        - precision-recall
+        - ground-truth
+        - detector
+        - benchmarking
+        - methodology
+        - validation
+        - utility
+category: other
+images:
+    card: ""
+    thumbnail: ""
+    banner: ""
+env: {}
+kernel: python-3.11
+resources:
+    gpu:
+        count: 0
+        vram: 0
+        type: none
+    ram: 512
