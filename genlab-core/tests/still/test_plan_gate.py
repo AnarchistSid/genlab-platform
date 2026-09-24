@@ -70,3 +70,41 @@ class TestKeyArtCannotCarryTheReel:
             45.0,
         )
         assert any("holds key art" in p for p in problems)
+
+
+class TestSpendingTheBundle:
+    """ANIME-17 — one shot per beat leaves a rich bundle unspent."""
+
+    def _pv(self, t):
+        from genlab_core.still.pv import PVMoment
+
+        return PVMoment(t, 1.4, 10.0)
+
+    def test_a_pv_beat_gains_windows_from_the_surplus(self):
+        from genlab_core.still import grammar as GR
+
+        shots = [
+            GR.Shot(0, GR.PV_PEAK, 2.0, moment=self._pv(1.0)),
+            GR.Shot(1, GR.COVER, 3.0, url="https://x/c.jpg"),
+        ]
+        out = GR.spend_the_bundle(shots, [self._pv(5.0), self._pv(9.0)], per_beat=2)
+        assert sum(1 for s in out if s.origin == GR.PV_PEAK) == 3
+        assert [s.index for s in out] == list(range(len(out)))
+
+    def test_key_art_shots_are_not_multiplied(self):
+        from genlab_core.still import grammar as GR
+
+        shots = [GR.Shot(0, GR.COVER, 3.0), GR.Shot(1, GR.CHARACTER, 3.0)]
+        assert len(GR.spend_the_bundle(shots, [self._pv(5.0)] * 4)) == 2
+
+    def test_an_empty_surplus_changes_nothing(self):
+        from genlab_core.still import grammar as GR
+
+        shots = [GR.Shot(0, GR.PV_PEAK, 2.0, moment=self._pv(1.0))]
+        assert len(GR.spend_the_bundle(shots, [])) == 1
+
+    def test_round_robin_alternates_sources(self):
+        from genlab_core.still import grammar as GR
+
+        out = GR.round_robin({"a": [self._pv(1), self._pv(2)], "b": [self._pv(3), self._pv(4)]})
+        assert len(out) == 4

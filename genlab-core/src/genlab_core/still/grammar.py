@@ -251,3 +251,60 @@ def plan_shots(
     for s in shots:
         logger.info("%s", s.row())
     return shots
+
+
+def spend_the_bundle(shots: list[Shot], spare: list[PVMoment], *, per_beat: int = 2) -> list[Shot]:
+    """Give every PV beat additional windows from the bundle's surplus.
+
+    ANIME-17. ``plan_shots`` allocates ONE shot per narration beat, which was
+    right when a show had one PV and three usable windows. With a bundle it
+    leaves the reel short: a 5-beat script spent 5 of 29 windows and the rest
+    of the reel fell to key art and generated stills — 40% against a 25% cap,
+    caught by ``plan_gate.check_key_art_share`` on a run that otherwise looked
+    like a success.
+
+    ``spare`` should already be ordered round-robin across source uploads, so
+    consecutive shots come from different videos rather than from one grade
+    and one location.
+    """
+    out: list[Shot] = []
+    pool = list(spare)
+    for sh in shots:
+        out.append(sh)
+        if sh.origin != PV_PEAK:
+            continue
+        for _ in range(per_beat):
+            if not pool:
+                break
+            m = pool.pop(0)
+            out.append(
+                Shot(
+                    index=0,
+                    origin=PV_PEAK,
+                    duration_s=sh.duration_s,
+                    beat_index=sh.beat_index,
+                    moment=m,
+                    attribution=sh.attribution,
+                    notes="bundle fill — another window for this beat",
+                )
+            )
+    for i, sh in enumerate(out):
+        sh.index = i
+    logger.info(
+        "[grammar] spent the bundle: %d shots -> %d (%d PV windows)",
+        len(shots),
+        len(out),
+        sum(1 for s in out if s.origin == PV_PEAK),
+    )
+    return out
+
+
+def round_robin(by_source: dict[str, list[PVMoment]]) -> list[PVMoment]:
+    """Interleave windows so neighbours come from different uploads."""
+    pools = {k: sorted(v, key=lambda m: -m.motion) for k, v in by_source.items()}
+    out: list[PVMoment] = []
+    while any(pools.values()):
+        for k in list(pools):
+            if pools[k]:
+                out.append(pools[k].pop(0))
+    return out
