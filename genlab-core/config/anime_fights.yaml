@@ -44,6 +44,20 @@ fights:
   music_drop_s: 6.75
   music_sub_share: 0.495
   music_drop_step_db: 32.3
+  must_contain:
+    Zoro's cut: 76.2
+  window_intact: true
+  excused_spans: []
+  bed_fit:
+    stretch: 0.96
+    stretch_pct: -4.0
+    trim_s: 0.0
+    preroll_s: 2.169
+    loops: 0
+    loop_bars: 0
+    drop_at_reel_s: 9.2
+    effective_drop_s: 7.031
+  music_tempo_measured: 148.0
 - id: luffy_vs_kaido
   show: One Piece
   studio: toei
@@ -82,6 +96,20 @@ fights:
   music_drop_s: 13.45
   music_sub_share: 0.297
   music_drop_step_db: 17.7
+  must_contain:
+    the fall: 75.6
+  window_intact: true
+  excused_spans: []
+  bed_fit:
+    stretch: 0.9746
+    stretch_pct: -2.54
+    trim_s: 0.0
+    preroll_s: 0.0
+    loops: 0
+    loop_bars: 0
+    drop_at_reel_s: 13.8
+    effective_drop_s: 13.8
+  music_tempo_measured: 148.0
 - id: goku_vs_frieza
   show: Dragon Ball Z
   studio: toei
@@ -275,6 +303,23 @@ fights:
   music_drop_s: 12.75
   music_sub_share: 0.454
   music_drop_step_db: 3.1
+  must_contain:
+    the clash: 73.5
+  window_intact: true
+  excused_spans:
+  - start: 76.285
+    end: 78.0
+    why: source_hardsub
+  bed_fit:
+    stretch: 0.96
+    stretch_pct: -4.0
+    trim_s: 0.0
+    preroll_s: 0.22
+    loops: 0
+    loop_bars: 0
+    drop_at_reel_s: 13.501
+    effective_drop_s: 13.281
+  music_tempo_measured: 140.0
 - id: tanjiro_vs_akaza
   show: Demon Slayer
   studio: ufotable
@@ -307,7 +352,7 @@ fights:
   - 69.0
   - 72.0
   reel_body:
-  - - 76.0
+  - - 72.0
     - 96.0
   impact_source: luma rise onset, confirmed by eye
   outro_card: null
@@ -316,9 +361,22 @@ fights:
   music_drop_s: 16.55
   music_sub_share: 0.342
   music_drop_step_db: 13.6
-  windup_note: 'body starts at the 76.0 s cut, not 72.0: the generator places no drop later than ~13.7
-    s, so an 18.2 s wind-up cannot be served. The reel is shortened to the track rather than the track
-    stretched to the reel.'
+  must_contain:
+    the slash: 90.5
+  window_intact: true
+  excused_spans: []
+  bed_fit:
+    stretch: 0.96
+    stretch_pct: -4.0
+    trim_s: 0.0
+    preroll_s: 0.96
+    loops: 0
+    loop_bars: 0
+    drop_at_reel_s: 18.2
+    effective_drop_s: 17.24
+  music_tempo_measured: 150.0
+  restored_note: full marked window restored; PEAK-09 had started the body at 76.0 to meet the generator's
+    drop. The track adapts instead (fit_bed).
 - id: saitama_vs_boros
   show: One Punch Man
   studio: madhouse
