@@ -59,7 +59,15 @@ class TestItIsAdvisoryNotAGate:
     def test_no_render_module_branches_on_the_distance(self):
         """The rule that survived the measurement is structural — reference or
         no generated still — and needs no threshold. If a caller starts
-        branching on `passes`, the disqualified gate is back."""
+        branching on `passes`, the disqualified gate is back.
+
+        Scoped to modules that actually USE palette_match. The first version
+        grepped every file in the package for a bare ``.passes`` and flagged
+        ``music.py``, whose ``Candidate.passes`` is an unrelated gate on a
+        music bed. A guard that fires on a name rather than on the thing it
+        guards will be weakened by whoever hits the false positive, which is
+        worse than it being narrow.
+        """
         import pathlib
 
         root = pathlib.Path(PM.__file__).parent
@@ -68,6 +76,9 @@ class TestItIsAdvisoryNotAGate:
             if f.name == "palette_match.py":
                 continue
             src = f.read_text()
+            uses_palette = "palette_match" in src
+            if not uses_palette:
+                continue
             if ".passes" in src or "advisory_threshold(" in src:
                 offenders.append(f.name)
         assert offenders == [], offenders
