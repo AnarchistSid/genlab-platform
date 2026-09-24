@@ -312,7 +312,13 @@ def text_slate(
 
 
 def cut_moment(
-    src: Path, moment: PVMoment, out: Path, *, pad_colour: str = "#101018", timeout_s: int = 180
+    src: Path,
+    moment: PVMoment,
+    out: Path,
+    *,
+    pad_colour: str = "#101018",
+    crop_band: str = "",
+    timeout_s: int = 180,
 ) -> bool:
     """Cut one moment to 1080x1920 bt709. Full-bleed, unless it carries TEXT.
 
@@ -327,7 +333,17 @@ def cut_moment(
     SAME frame when that was last got wrong.
     """
     out.parent.mkdir(parents=True, exist_ok=True)
-    if moment.kind == TEXT_SLATE:
+    if crop_band in ("top", "bottom") and moment.kind != TEXT_SLATE:
+        # §2 — a text band is a CROP problem. Take the frame minus the band
+        # and re-fill, rather than discarding a usable window.
+        keep = 1.0 - BAND_FRAC
+        y = f"ih*{BAND_FRAC}" if crop_band == "top" else "0"
+        vf = (
+            f"crop=iw:ih*{keep}:0:{y},"
+            f"scale=1080:1920:force_original_aspect_ratio=increase,"
+            f"crop=1080:1920,setsar=1"
+        )
+    elif moment.kind == TEXT_SLATE:
         # Fit the slate whole, then fill the bars with a BLURRED, darkened
         # copy of the same frame rather than flat colour. Letterboxing 16:9
         # into 9:16 leaves two thirds of the frame empty; flat bars read as a
@@ -652,4 +668,173 @@ def not_reused(
         )
         return moments, []
     logger.info("[pv] reuse gate: %d kept, %d already seen", len(kept), len(rejected))
+    return kept, rejected
+
+
+# ── ANIME-17 §2: filters that KEEP ───────────────────────────────────────
+
+#: A text band inside the top or bottom this-much of the frame can be cropped
+#: away. Text nearer the middle cannot — cropping it would cut the subject.
+BAND_FRAC = 0.20
+#: Cropping to escape a band must not magnify past this.
+MAX_BAND_CROP_MAG = 1.5
+#: §2 lowers the luma floor: a dark-palette show is not a defective one.
+LUMA_FLOOR_RELAXED = 30.0
+#: §2 makes sharpness RELATIVE — keep the top share of this PV's own
+#: distribution. An absolute floor rejects an entire soft-graded show.
+SHARPNESS_KEEP_FRAC = 0.60
+
+
+def text_band(path: str | Path, moment: PVMoment, *, stride_s: float = 0.5) -> dict:
+    """Where the detected text sits: 'top', 'bottom', 'mid' or '' for none.
+
+    Returns the worst-case band and the crop that would remove it. A band is
+    a CROP problem; only text through the middle is a footage problem.
+    """
+    from genlab_core.still.reference import GATE_SCALE, OCR_LANGS
+
+    tmp = Path(path).parent / ".ocr_windows"
+    tmp.mkdir(parents=True, exist_ok=True)
+    worst = {"band": "", "fraction": 0.0, "text": ""}
+    t = moment.start_s
+    while t < moment.end_s:
+        frac, text, boxes = _ocr_boxes(Path(path), t, tmp, OCR_LANGS, GATE_SCALE)
+        if frac > worst["fraction"]:
+            band = _band_of(boxes)
+            worst = {"band": band, "fraction": frac, "text": text[:80]}
+        t += stride_s
+    return worst
+
+
+def _ocr_boxes(path: Path, t: float, tmp: Path, langs: str, scale: int):
+    """(fraction, text, [(y0, y1, frame_h), ...]) for one frame."""
+    from genlab_core.still.reference import _run
+
+    png = tmp / f"band_{t:.2f}.png"
+    _run(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(path),
+            "-ss",
+            f"{t:.3f}",
+            "-frames:v",
+            "1",
+            "-vf",
+            f"scale={scale}:-2",
+            str(png),
+        ],
+        120,
+    )
+    if not png.exists():
+        return 0.0, "", []
+    r = _run(["tesseract", str(png), "stdout", "-l", langs, "--psm", "11", "tsv"], 300)
+    area = 0.0
+    W = H = 0
+    words, boxes = [], []
+    for i, line in enumerate((r.stdout or "").splitlines()):
+        parts = line.split("\t")
+        if i == 0 or len(parts) < 12:
+            continue
+        try:
+            conf = float(parts[10])
+            top, w, h = int(parts[7]), int(parts[8]), int(parts[9])
+            lvl = int(parts[0])
+        except ValueError:
+            continue
+        if lvl == 1:
+            W, H = w, h
+            continue
+        txt = parts[11].strip()
+        if conf >= 60 and txt and len(txt) > 1:
+            area += w * h
+            words.append(txt)
+            boxes.append((top, top + h))
+    fa = (W * H) if W and H else 1
+    return area / fa, " ".join(words), [(a, b, H or 1) for a, b in boxes]
+
+
+def _band_of(boxes: list[tuple[int, int, int]]) -> str:
+    if not boxes:
+        return ""
+    h = boxes[0][2]
+    tops = [b[0] / h for b in boxes]
+    bots = [b[1] / h for b in boxes]
+    if all(b <= BAND_FRAC for b in bots):
+        return "top"
+    if all(t >= 1.0 - BAND_FRAC for t in tops):
+        return "bottom"
+    return "mid"
+
+
+def keep_or_crop(
+    path: str | Path, moments: list[PVMoment], *, max_fraction: float = MAX_BAKED_TEXT_FRACTION
+) -> tuple[list[tuple[PVMoment, str]], list[dict]]:
+    """§2 — keep the window, cropping a band away when that is enough.
+
+    Returns [(moment, crop_band)] where crop_band is '', 'top' or 'bottom',
+    plus the windows genuinely rejected. v5 rejected every window carrying any
+    text and left three usable out of a 101-second PV; most of that text was a
+    subtitle strip along the bottom.
+    """
+    kept: list[tuple[PVMoment, str]] = []
+    rejected: list[dict] = []
+    n_cropped = 0
+    for m in moments:
+        info = text_band(path, m)
+        if info["fraction"] <= max_fraction:
+            kept.append((m, ""))
+            continue
+        if info["band"] in ("top", "bottom"):
+            kept.append((m, info["band"]))
+            n_cropped += 1
+            continue
+        rejected.append(
+            {
+                "start_s": m.start_s,
+                "text_fraction": round(info["fraction"], 4),
+                "band": info["band"],
+                "text": info["text"],
+            }
+        )
+    logger.info(
+        "[pv] text gate: %d kept (%d by cropping a band), %d rejected for mid-frame text",
+        len(kept),
+        n_cropped,
+        len(rejected),
+    )
+    return kept, rejected
+
+
+def sharp_relative(
+    path: str | Path, moments: list[PVMoment], *, keep_frac: float = SHARPNESS_KEEP_FRAC
+) -> tuple[list[PVMoment], list[dict]]:
+    """Keep the top ``keep_frac`` of THIS clip's own sharpness distribution.
+
+    An absolute floor is a judgement about grading, not about blur: a softly
+    graded show fails all of it and a crisp one passes all of it. Relative
+    keeps the sharpest of whatever this PV actually is.
+    """
+    if not moments:
+        return [], []
+    scored = sorted(((m, window_sharpness(path, m)) for m in moments), key=lambda r: -r[1])
+    n = max(1, int(round(len(scored) * keep_frac)))
+    kept = [m for m, _ in scored[:n]]
+    rejected = [
+        {
+            "start_s": m.start_s,
+            "sharpness": round(v, 1),
+            "reason": f"outside the top {keep_frac:.0%} of this clip",
+        }
+        for m, v in scored[n:]
+    ]
+    logger.info(
+        "[pv] sharpness gate (relative): %d kept of %d, cut at %.1f",
+        len(kept),
+        len(scored),
+        scored[min(n, len(scored)) - 1][1],
+    )
     return kept, rejected
