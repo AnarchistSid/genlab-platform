@@ -569,3 +569,81 @@ def snap_cuts(shots: list[dict], bpm: float, impact_source_t: float,
         sh["reel_start"] = round(t, 3)
         t += d
     return impact_rel, t
+
+
+# ── PEAK-10 §3 — tempo, with the octave actually resolved ───────────────
+
+TEMPO_TOLERANCE = 0.05   # of the asked tempo
+WIDE_BAND = (60.0, 200.0)
+#: Share of on-beat flux the intermediate beats must carry for the doubled
+#: tempo to be the true one. Measured on the four v3 beds: 0.89-1.38, i.e.
+#: the intermediate beats are as strong as the others and the tracks are at
+#: the asked tempo, not half of it.
+OFF_BEAT_RATIO = 0.50
+
+
+def _flux(path: Path):
+    from genlab_core.action.grid import onset_envelope
+
+    return onset_envelope(str(path))
+
+
+def _beat_score(flux, fps: float, bpm: float) -> tuple[float, float]:
+    import numpy as np
+
+    step = (60.0 / bpm) * fps
+    best = (-1e9, 0.0)
+    for ph in np.arange(0, step, 0.2):
+        idx = np.round(np.arange(ph, len(flux) - 1, step)).astype(int)
+        s = float(flux[idx].mean())
+        if s > best[0]:
+            best = (s, float(ph))
+    return best
+
+
+def off_beat_ratio(path: Path, bpm: float) -> float:
+    """Strength of the INTERMEDIATE beats relative to the others at `bpm`.
+
+    This is the measurement that resolves the octave, and nothing else in
+    this file does. A flux-autocorrelation fit scores the mean onset strength
+    at sampled positions, so halving the tempo can SCORE BETTER simply by
+    sampling the stronger subset -- which is why a wide band reported 74 BPM
+    for four beds that are demonstrably at 148/148/140/150. Widening the
+    search band does not resolve an octave; it only moves where the ambiguity
+    lands.
+    """
+    import numpy as np
+
+    flux, fps, _ = _flux(path)
+    step = (60.0 / bpm) * fps
+    _, ph = _beat_score(flux, fps, bpm)
+    idx = np.round(np.arange(ph, len(flux) - 1, step)).astype(int)
+    if len(idx) < 4:
+        return 0.0
+    on = float(flux[idx[0::2]].mean())
+    off = float(flux[idx[1::2]].mean())
+    return off / on if abs(on) > 1e-9 else 0.0
+
+
+def detect_tempo(path: Path, expected_bpm: float | None = None) -> float:
+    """Tempo with the octave resolved by the intermediate-beat test."""
+    from genlab_core.action.grid import detect_grid
+
+    bpm = float(detect_grid(str(path), *WIDE_BAND).bpm)
+    # Walk UP while the intermediate beats are carrying real onsets.
+    for _ in range(2):
+        doubled = bpm * 2
+        if doubled > WIDE_BAND[1]:
+            break
+        if off_beat_ratio(path, doubled) >= OFF_BEAT_RATIO:
+            bpm = doubled
+        else:
+            break
+    if expected_bpm:
+        logger.info("[music] tempo %.1f vs asked %.1f (%.0f%% off)", bpm, expected_bpm,
+                    100 * abs(bpm - expected_bpm) / expected_bpm)
+    return bpm
+
+
+def tempo_ok(measured: float, asked: float, tol: float = TEMPO_TOLERANCE) -> bool:
+    return abs(measured - asked) <= tol * asked

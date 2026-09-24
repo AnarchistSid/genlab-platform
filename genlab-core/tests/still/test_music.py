@@ -163,3 +163,32 @@ def test_usable_drop_is_the_nearest_one_not_the_biggest(tmp_path):
     # the biggest step is the first one; the second is the one near 15 s
     assert max(drops, key=lambda d: d[1])[0] < 10.0
     assert any(abs(t - 15.0) <= 2.0 for t, _ in drops)
+
+
+def _click_track(path: Path, bpm: float, seconds: float = 20.0) -> Path:
+    period = 60.0 / bpm
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi",
+                    "-i", "sine=frequency=60:sample_rate=44100", "-t", str(seconds),
+                    "-af", f"volume='if(lt(mod(t,{period:.4f}),0.05),4,0.02)':eval=frame",
+                    "-c:a", "pcm_s16le", "-y", str(path)], check=True)
+    return path
+
+
+def test_tempo_resolves_the_octave_both_ways(tmp_path):
+    """Widening the search band does not resolve an octave, it moves it.
+
+    A flux fit scores mean onset strength at sampled positions, so HALVING
+    the tempo can score better by sampling the stronger subset -- which is
+    how four beds demonstrably at 148/148/140/150 read as 74 BPM.
+    """
+    fast = _click_track(tmp_path / "fast.wav", 148.0)
+    slow = _click_track(tmp_path / "slow.wav", 74.0)
+    assert M.detect_tempo(fast) == pytest.approx(148.0, rel=0.06)
+    assert M.detect_tempo(slow) == pytest.approx(74.0, rel=0.06)
+
+
+def test_tempo_gate_rejects_a_half_tempo_generation(tmp_path):
+    slow = _click_track(tmp_path / "slow.wav", 74.0)
+    assert not M.tempo_ok(M.detect_tempo(slow, 148.0), 148.0)
+    fast = _click_track(tmp_path / "fast.wav", 148.0)
+    assert M.tempo_ok(M.detect_tempo(fast, 148.0), 148.0)
