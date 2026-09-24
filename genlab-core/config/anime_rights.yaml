@@ -61,6 +61,16 @@ studios:
   pierrot:
     posture: hostile
     shows: ["Naruto", "Naruto Shippuden", "Boruto", "Bleach"]
+  mappa:
+    posture: hostile
+    shows: ["Jujutsu Kaisen", "Chainsaw Man", "Vinland Saga", "Hell's Paradise"]
+    note: "Named separately from shueisha_mappa so a per-studio pause is per STUDIO."
+  ufotable:
+    posture: moderate
+    shows: ["Demon Slayer", "Kimetsu no Yaiba", "Fate/stay night"]
+    note: >-
+      Historically tolerant of short clips; Aniplex handles its enforcement and
+      has been claim-first rather than strike-first.
   kyoto_animation:
     posture: moderate
     shows: ["Violet Evergarden", "A Silent Voice", "Hyouka"]

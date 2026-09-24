@@ -1,0 +1,138 @@
+# FrameDrift's evergreen fight catalog. ANIME-PEAK-02 §1, §5.
+#
+# Peak moments do not age, so this is a backlog rather than a feed. Seeded
+# from community best-fights lists and the shows' own episode numbering.
+#
+# `episode` is the gate for licensed FULL-EPISODE channels (Muse Asia,
+# Ani-One, Medialink): a licensed full episode is a licensed source of every
+# fight inside it, so the question is the episode number, not whether the
+# fight is named in the upload's title.
+#
+# `approx_s` is a coarse in-episode hint for the selector, not a mark. Where
+# it is null the selector searches the whole episode.
+#
+# `status`: unmade | made | paused
+
+version: 1
+updated: 2026-09-24
+
+fights:
+  - id: zoro_vs_king
+    show: "One Piece"
+    studio: toei
+    arc: "Wano — Onigashima"
+    episode: 1062
+    combatants: ["Zoro", "King"]
+    approx_s: null
+    register: epic
+    aura_colour: "#2FBF5B"      # Zoro's green
+    status: unmade
+
+  - id: luffy_vs_kaido
+    show: "One Piece"
+    studio: toei
+    arc: "Wano — Onigashima"
+    episode: 1015
+    combatants: ["Luffy", "Kaido"]
+    approx_s: null
+    register: epic
+    aura_colour: "#D93B3B"
+    status: unmade
+
+  - id: goku_vs_frieza
+    show: "Dragon Ball Z"
+    studio: toei
+    arc: "Namek / Frieza Saga"
+    episode: 95
+    combatants: ["Goku", "Frieza"]
+    approx_s: null
+    register: epic
+    aura_colour: "#F5C518"      # Super Saiyan gold
+    status: unmade
+
+  - id: yuta_vs_yuji
+    show: "Jujutsu Kaisen"
+    studio: mappa
+    arc: "Jujutsu Kaisen 0 / Culling Game"
+    episode: null               # film, not an episode
+    combatants: ["Yuta", "Yuji"]
+    approx_s: null
+    register: edit
+    aura_colour: "#7B5BE0"
+    status: unmade
+
+  - id: maki_vs_zenin
+    show: "Jujutsu Kaisen"
+    studio: mappa
+    arc: "Perfect Preparation"
+    episode: [43, 20]
+    season: 2
+    combatants: ["Maki", "Zenin"]
+    approx_s: null
+    register: edit
+    aura_colour: "#C0C6CC"
+    status: unmade
+
+  # ── the non-Toei spread ANIME-PEAK-02 §1 asks for ──────────────────────
+  - id: gojo_vs_jogo
+    show: "Jujutsu Kaisen"
+    studio: mappa
+    arc: "Vs. Mahito"
+    episode: 7
+    combatants: ["Gojo", "Jogo"]
+    approx_s: null
+    register: edit
+    aura_colour: "#4FA8FF"      # cursed-energy blue
+    status: unmade
+
+  - id: sukuna_vs_mahoraga
+    show: "Jujutsu Kaisen"
+    studio: mappa
+    arc: "Shibuya Incident"
+    episode: [41, 18]
+    season: 2
+    combatants: ["Sukuna", "Mahoraga"]
+    approx_s: null
+    register: edit
+    aura_colour: "#B03030"
+    status: unmade
+
+  - id: tanjiro_vs_rui
+    show: "Demon Slayer"
+    studio: ufotable
+    arc: "Natagumo Mountain"
+    episode: 19
+    season: 1
+    # The episode is famous by its TITLE, not by its combatants — clip
+    # channels name it "Hinokami" or "Dance of the Fire God".
+    aka: ["Hinokami", "Dance of the Fire God", "Hinokami Kagura"]
+    combatants: ["Tanjiro", "Rui"]
+    approx_s: null
+    register: epic
+    aura_colour: "#FF6A1A"      # Hinokami flame
+    status: unmade
+
+  - id: mob_vs_toichiro
+    show: "Mob Psycho 100"
+    studio: bones
+    arc: "Claw's 7th Division"
+    # An episode number is meaningless without its numbering. Muse Asia
+    # hosts this as "S2E12"; the absolute number is 25. Both are listed.
+    episode: [25, 12]
+    season: 2
+    combatants: ["Mob", "Toichiro"]
+    approx_s: null
+    register: edit
+    aura_colour: "#66E0C8"
+    status: unmade
+
+  - id: denji_vs_katana_man
+    show: "Chainsaw Man"
+    studio: mappa
+    arc: "Katana Man"
+    episode: 9
+    combatants: ["Denji", "Katana Man"]
+    approx_s: null
+    register: edit
+    aura_colour: "#E03A3A"
+    status: unmade

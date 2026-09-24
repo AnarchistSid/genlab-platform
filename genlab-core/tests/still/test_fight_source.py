@@ -94,3 +94,51 @@ class TestCalibrationHonesty:
         cal = FM.calibrate([57.4, 62.5], [57.4, 62.5, 91.0])
         assert cal["within_tolerance"] == 2 and cal["marks"] == 3
         assert cal["worst_s"] > 1.0
+
+
+class TestTheAllowlistIsAnAllowlist:
+    """A rights allowlist that admits a one-word generic name is not one."""
+
+    def test_a_channel_named_anime_is_not_official(self):
+        """Substring matching ran BOTH ways, so "anime" matched "Netflix
+        Anime" and a channel literally called "anime" passed as official —
+        and supplied the only source for one pilot fight."""
+        for impostor in ("anime", "Anime", "One", "Official", "official",
+                         "TV", "Asia", "Collection"):
+            assert FS.channel_tier(impostor) == "", impostor
+
+    def test_the_real_channels_still_pass(self):
+        for real in ("Netflix Anime", "Crunchyroll Collection", "Muse Asia",
+                     "Ani-One Asia", "TOEI Animation", "Crunchyroll en Español"):
+            assert FS.channel_tier(real), real
+
+
+class TestTheEpisodeGate:
+    """A licensed full episode is a licensed source of every fight in it."""
+
+    def test_a_full_episode_channel_uses_the_episode_number(self):
+        assert FS.is_full_episode_channel("Muse Asia")
+        assert FS.is_full_episode_channel("Ani-One Asia")
+        assert not FS.is_full_episode_channel("Crunchyroll")
+
+    def test_absolute_and_season_relative_numbering_both_match(self):
+        """Muse Asia hosts Mob vs Toichiro as "S2E12"; the catalog recorded
+        the absolute 25, and a licensed episode sitting right there was
+        refused. An episode number is meaningless without its numbering."""
+        title = "Mob Psycho 100 II - Episode 12 (S2E12) [English Sub]"
+        assert not FS.episode_matches(title, 25)
+        assert FS.episode_matches(title, [25, 12])
+        assert FS.episode_matches(title, [25, 12], season=2)
+
+    def test_the_distributors_numbering_conventions(self):
+        for title, ep in (("One Piece Episode 1062", 1062),
+                          ("ONE PIECE EP1062 English Sub", 1062),
+                          ("鬼滅の刃 第19話", 19),
+                          ("Demon Slayer #19", 19)):
+            assert FS.episode_matches(title, ep), title
+
+    def test_the_wrong_episode_is_refused(self):
+        assert not FS.episode_matches("One Piece Episode 1061", 1062)
+
+    def test_no_episode_number_means_no_match(self):
+        assert not FS.episode_matches("One Piece Episode 1062", None)
