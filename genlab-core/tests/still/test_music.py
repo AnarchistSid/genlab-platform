@@ -119,3 +119,25 @@ def test_hook_goes_on_a_bar_line_not_the_nearest_beat():
     assert abs((at - 12.0) / bar - round((at - 12.0) / bar)) < 1e-6
     assert at >= 0.30
     assert at != M.snap_to_beat(0.30, beats) or abs(at - 0.30) < 1e-9
+
+
+def test_snap_cuts_recomputes_the_impact_after_snapping():
+    """Aligning a bed to a PRE-snap impact puts the drop off the hit."""
+    shots = [{"start": 0.0, "end": 2.13}, {"start": 10.0, "end": 13.07},
+             {"start": 20.0, "end": 24.44}]
+    impact_rel, total = M.snap_cuts(shots, bpm=150.0, impact_source_t=11.5)
+    period = 60.0 / 150.0
+    assert impact_rel is not None
+    # the impact sits inside shot 2, after that shot's snapped start
+    assert abs(impact_rel - (shots[1]["reel_start"] + 1.5)) < 1e-6
+    for sh in shots[:-1]:
+        edge = sh["reel_start"] + (sh["end"] - sh["start"])
+        assert abs(edge / period - round(edge / period)) < 1e-6, "cut is off grid"
+
+
+def test_snap_cuts_never_drops_a_short_shot():
+    shots = [{"start": 0.0, "end": 0.32}, {"start": 5.0, "end": 5.31}]
+    before = len(shots)
+    _, total = M.snap_cuts(shots, bpm=150.0, impact_source_t=99.0)
+    assert len(shots) == before
+    assert total > 0.5

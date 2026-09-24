@@ -23,16 +23,16 @@ registers:
     tempo: 148
     prompt: >-
       Brazilian phonk montagem, {tempo} BPM, EXTREMELY heavy distorted 808 sub
-      bass dominating the mix, deep low-end, minimal treble, cavalgada triplet
-      cowbell pattern, low-pass-filtered {intro}-second intro building into a
-      hard drop, aggressive, club-ready, no vocals
+      bass dominating the mix, deep low-end, muffled, minimal treble,
+      cavalgada triplet cowbell LOW IN THE MIX, low-pass-filtered
+      {intro}-second intro building into a hard drop, aggressive, no vocals
   old_phonk:
     tempo: 140
     prompt: >-
       old school Memphis phonk, {tempo} BPM, ENORMOUS distorted 808 sub bass
       dominating the mix, deep low-end, muffled and dark, minimal treble,
-      detuned cowbell, low-pass-filtered {intro}-second intro opening into a
-      hard drop, menacing, no vocals
+      detuned cowbell LOW IN THE MIX, low-pass-filtered {intro}-second intro
+      opening into a hard drop, menacing, no vocals
   phonk_slowed:
     tempo: 132
     prompt: >-
@@ -43,9 +43,9 @@ registers:
     tempo: 150
     prompt: >-
       epic orchestral phonk hybrid, {tempo} BPM, ENORMOUS distorted 808 sub
-      bass dominating the low end under taiko and brass, deep and muffled,
-      triplet cowbell, low-pass-filtered {intro}-second build into a hard
-      orchestral drop, cinematic and aggressive, no vocals
+      bass dominating the mix, deep low-end, muffled, minimal treble, distant
+      taiko and brass LOW IN THE MIX, triplet cowbell, low-pass-filtered
+      {intro}-second build into a hard drop, cinematic, no vocals
 
 fights:
   zoro_vs_king: brazilian_phonk

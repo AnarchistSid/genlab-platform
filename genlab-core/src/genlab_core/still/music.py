@@ -470,3 +470,47 @@ def check_mix(reel: Path, impact_rel: float) -> MixCheck:
     lufs, tp = measure_loudness(reel)
     return MixCheck(sub_share=sub_share(reel), loudest_s=loudest_second(reel),
                     impact_s=impact_rel, lufs=lufs, true_peak=tp)
+
+
+#: MEASURED: `loudest_second` uses a 1 s RMS window, so the sound intended to
+#: be the loudest second has to be long enough to fill one. With the impact at
+#: 9.20 s in a synthetic mix, a 0.4 s and a 0.8 s hit both left the loudest
+#: second at the reel's end; 1.5 s and 2.0 s hits (faded) put it at 9.70 s.
+#: The hit and this gate are a matched pair -- shortening one breaks the other.
+MIN_IMPACT_HIT_S = 1.5
+
+
+def snap_cuts(shots: list[dict], bpm: float, impact_source_t: float,
+              *, min_shot_s: float = 0.30,
+              max_shift_s: float = 0.18) -> tuple[float | None, float]:
+    """Snap every cut onto the beat grid; report where the impact LANDS.
+
+    Mutates each shot's ``end`` and sets ``reel_start``. Returns
+    ``(impact_rel, total_s)``.
+
+    Three constraints that are easy to lose when this is re-described:
+
+    * the grid is in REEL time and starts at 0. The bed is aligned to the
+      result afterwards, so the grid's absolute phase does not matter --
+      only that cuts land a whole number of beats apart.
+    * a shot is never DROPPED for being short, only nudged. Dropping one
+      silently shortens the reel, measured at 2.2 s on Luffy in PEAK-08.
+    * the impact's reel time is recomputed AFTER snapping, never assumed
+      before it, because snapping moves every boundary and with it the
+      impact. Aligning a bed to a pre-snap impact puts the drop off the hit.
+    """
+    period = 60.0 / bpm
+    t = 0.0
+    impact_rel: float | None = None
+    for sh in shots:
+        d = sh["end"] - sh["start"]
+        if sh["start"] <= impact_source_t < sh["end"]:
+            impact_rel = t + (impact_source_t - sh["start"])
+        target = round((t + d) / period) * period
+        nd = target - t
+        if abs(nd - d) <= max_shift_s and nd >= min_shot_s:
+            sh["end"] = round(sh["start"] + nd, 3)
+            d = nd
+        sh["reel_start"] = round(t, 3)
+        t += d
+    return impact_rel, t
