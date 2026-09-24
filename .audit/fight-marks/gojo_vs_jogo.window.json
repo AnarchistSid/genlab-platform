@@ -1,0 +1,21 @@
+{
+  "fight": "gojo_vs_jogo",
+  "window": [
+    72.0,
+    80.0
+  ],
+  "impacts": [
+    [
+      75.3,
+      75.8
+    ],
+    [
+      77.0,
+      77.5
+    ]
+  ],
+  "marker_note": "Red charges from 72, fires 75.5, second burst 77.25, field fades by 80.",
+  "written_at": 1790239911.40989,
+  "protocol": "window marks written before coarse_windows ran on any clip",
+  "sha256": "43ffb4a9e9b837d1"
+}

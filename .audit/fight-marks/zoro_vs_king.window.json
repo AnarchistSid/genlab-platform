@@ -1,0 +1,25 @@
+{
+  "fight": "zoro_vs_king",
+  "window": [
+    55.0,
+    69.0
+  ],
+  "impacts": [
+    [
+      57.0,
+      57.6
+    ],
+    [
+      62.3,
+      62.8
+    ],
+    [
+      66.8,
+      67.3
+    ]
+  ],
+  "marker_note": "grid-verified 52-72s: green/red energy builds ~54, white impact fields 57-60, black-silhouette hit ~62, debris settling to ~70.",
+  "written_at": 1790239911.408847,
+  "protocol": "window marks written before coarse_windows ran on any clip",
+  "sha256": "d7950a7b8e344fcb"
+}

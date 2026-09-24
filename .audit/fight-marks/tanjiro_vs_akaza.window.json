@@ -1,0 +1,21 @@
+{
+  "fight": "tanjiro_vs_akaza",
+  "window": [
+    31.0,
+    38.0
+  ],
+  "impacts": [
+    [
+      32.8,
+      33.3
+    ],
+    [
+      35.3,
+      35.8
+    ]
+  ],
+  "marker_note": "blue water-breathing burst 33.0, orange spark clash 35.5.",
+  "written_at": 1790239911.410155,
+  "protocol": "window marks written before coarse_windows ran on any clip",
+  "sha256": "625e7cbfe132b1e3"
+}

@@ -1,0 +1,17 @@
+{
+  "fight": "luffy_vs_kaido",
+  "window": [
+    36.0,
+    46.0
+  ],
+  "impacts": [
+    [
+      39.3,
+      39.8
+    ]
+  ],
+  "marker_note": "Haki wind-up into the red impact flash at 39.5, speed-line aftermath.",
+  "written_at": 1790239911.4097779,
+  "protocol": "window marks written before coarse_windows ran on any clip",
+  "sha256": "6811345253fca8ec"
+}

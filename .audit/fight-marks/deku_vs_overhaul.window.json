@@ -1,0 +1,17 @@
+{
+  "fight": "deku_vs_overhaul",
+  "window": [
+    56.0,
+    64.0
+  ],
+  "impacts": [
+    [
+      58.8,
+      59.3
+    ]
+  ],
+  "marker_note": "black/grey flash frames 56.5-57, Detroit Smash effect field from 59.0, fades ~63.",
+  "written_at": 1790239911.41008,
+  "protocol": "window marks written before coarse_windows ran on any clip",
+  "sha256": "7e03ae1b9f462d27"
+}
