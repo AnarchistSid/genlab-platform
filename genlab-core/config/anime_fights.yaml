@@ -1,202 +1,246 @@
-# FrameDrift's evergreen fight catalog. ANIME-PEAK-02 §1, §5.
-#
-# Peak moments do not age, so this is a backlog rather than a feed. Seeded
-# from community best-fights lists and the shows' own episode numbering.
-#
-# `episode` is the gate for licensed FULL-EPISODE channels (Muse Asia,
-# Ani-One, Medialink): a licensed full episode is a licensed source of every
-# fight inside it, so the question is the episode number, not whether the
-# fight is named in the upload's title.
-#
-# `approx_s` is a coarse in-episode hint for the selector, not a mark. Where
-# it is null the selector searches the whole episode.
-#
-# `status`: unmade | made | paused
-
 version: 1
 updated: 2026-09-24
-
-# WARNING (ANIME-PEAK-04 §1). Every `episode` below was entered by hand from
-# recall and NONE has been verified against an authoritative source. Treat
-# each as provisional.
+# EPISODE NUMBERS — status after ANIME-PEAK-05 §1.
 #
-# Fan-clip title consensus was tried as a corrector and is NOT good enough.
-# With voting restricted to titles that name the fight, and a floor of 3 votes
-# at >=10%, 13 fights gave 4 disagreements — and one of them is impossible:
+# Resolved against AniList per-episode titles: 1 of 13.
 #
-#   maki_vs_zenin   catalog S2 ep[43,20]   "community" JJK S3E4 (3 votes)
+#   tanjiro_vs_rui   ep 19  "Episode 19 - Hinokami"  (alias match, high)
 #
-# Jujutsu Kaisen has no season 3. A signal that confidently returns a
-# non-existent season on a 3-vote plurality cannot be trusted to overwrite the
-# other three, however plausible those look:
+# The other twelve are `episode_unresolved`. The reason is structural, not a
+# bug: ANIME EPISODE TITLES ARE THEMATIC, NOT DESCRIPTIVE. "Hinokami",
+# "Right and Wrong", "Cruelty" — none of them say which fight is inside. The
+# alias path works only where a fight is famous enough that its nickname IS
+# the episode title. Jikan, the second authority, returned HTTP 504 on every
+# request during this pass.
 #
-#   sukuna_vs_mahoraga  catalog S2 ep[41,18]  community S2E17 (4)
-#   mob_vs_toichiro     catalog S2 ep[25,12]  community ep 10 (3)
-#   deku_vs_overhaul    catalog S4 ep[74,11]  community S4E13 (3)
+# The useful corollary: an episode number only matters for a FULL-EPISODE
+# source. Fights sourced from clip channels — Zoro, Luffy, Gojo, Deku,
+# Tanjiro vs Akaza all came from Crunchyroll clips — need no episode number
+# at all, because the clip IS the fight and names itself. Only the two
+# full-episode sources depend on it:
 #
-# So episode_consensus is a FLAG, not a corrector, and it is wired that way.
-# The resolution is authoritative episode data — AniList/Jikan episode lists
-# carry per-episode TITLES ("Hinokami"), which can be matched to a fight's
-# `aka` without asking a crowd. Until that is done, do not use a catalog
-# episode number as a source gate: mob_vs_toichiro was accepted in PEAK-03 on
-# an "S2E12" match that may well be the wrong episode.
+#   sukuna_vs_mahoraga   Ani-One  "#41"      unverified
+#   mob_vs_toichiro      Muse Asia "S2E12"   unverified, and suspect
+#
+# So the blocker is two fights, not thirteen, and hand-verification of two is
+# cheap. Do not mark regions for those two until they are verified.
 
 fights:
-  - id: zoro_vs_king
-    show: "One Piece"
-    studio: toei
-    arc: "Wano — Onigashima"
-    episode: 1062
-    combatants: ["Zoro", "King"]
-    approx_s: null
-    register: epic
-    aura_colour: "#2FBF5B"      # Zoro's green
-    status: unmade
-
-  - id: luffy_vs_kaido
-    show: "One Piece"
-    studio: toei
-    arc: "Wano — Onigashima"
-    episode: 1015
-    combatants: ["Luffy", "Kaido"]
-    approx_s: null
-    register: epic
-    aura_colour: "#D93B3B"
-    status: unmade
-
-  - id: goku_vs_frieza
-    show: "Dragon Ball Z"
-    studio: toei
-    arc: "Namek / Frieza Saga"
-    episode: 95
-    combatants: ["Goku", "Frieza"]
-    approx_s: null
-    register: epic
-    aura_colour: "#F5C518"      # Super Saiyan gold
-    status: unmade
-
-  - id: yuta_vs_yuji
-    show: "Jujutsu Kaisen"
-    studio: mappa
-    arc: "Jujutsu Kaisen 0 / Culling Game"
-    episode: null               # film, not an episode
-    combatants: ["Yuta", "Yuji"]
-    approx_s: null
-    register: edit
-    aura_colour: "#7B5BE0"
-    status: unmade
-
-  - id: maki_vs_zenin
-    show: "Jujutsu Kaisen"
-    studio: mappa
-    arc: "Perfect Preparation"
-    episode: [43, 20]
-    season: 2
-    combatants: ["Maki", "Zenin"]
-    approx_s: null
-    register: edit
-    aura_colour: "#C0C6CC"
-    status: unmade
-
-  # ── the non-Toei spread ANIME-PEAK-02 §1 asks for ──────────────────────
-  - id: gojo_vs_jogo
-    show: "Jujutsu Kaisen"
-    studio: mappa
-    arc: "Vs. Mahito"
-    episode: 7
-    combatants: ["Gojo", "Jogo"]
-    approx_s: null
-    register: edit
-    aura_colour: "#4FA8FF"      # cursed-energy blue
-    status: unmade
-
-  - id: sukuna_vs_mahoraga
-    show: "Jujutsu Kaisen"
-    studio: mappa
-    arc: "Shibuya Incident"
-    episode: [41, 18]
-    season: 2
-    combatants: ["Sukuna", "Mahoraga"]
-    approx_s: null
-    register: edit
-    aura_colour: "#B03030"
-    status: unmade
-
-  - id: tanjiro_vs_rui
-    show: "Demon Slayer"
-    studio: ufotable
-    arc: "Natagumo Mountain"
-    episode: 19
-    season: 1
-    # The episode is famous by its TITLE, not by its combatants — clip
-    # channels name it "Hinokami" or "Dance of the Fire God".
-    aka: ["Hinokami", "Dance of the Fire God", "Hinokami Kagura"]
-    combatants: ["Tanjiro", "Rui"]
-    approx_s: null
-    register: epic
-    aura_colour: "#FF6A1A"      # Hinokami flame
-    status: unmade
-
-  - id: mob_vs_toichiro
-    show: "Mob Psycho 100"
-    studio: bones
-    arc: "Claw's 7th Division"
-    # An episode number is meaningless without its numbering. Muse Asia
-    # hosts this as "S2E12"; the absolute number is 25. Both are listed.
-    episode: [25, 12]
-    season: 2
-    combatants: ["Mob", "Toichiro"]
-    approx_s: null
-    register: edit
-    aura_colour: "#66E0C8"
-    status: unmade
-
-  - id: denji_vs_katana_man
-    show: "Chainsaw Man"
-    studio: mappa
-    arc: "Katana Man"
-    episode: 9
-    combatants: ["Denji", "Katana Man"]
-    approx_s: null
-    register: edit
-    aura_colour: "#E03A3A"
-    status: unmade
-
-  # ── ANIME-PEAK-03 §1 test-set candidates ───────────────────────────────
-  - id: deku_vs_overhaul
-    show: "My Hero Academia"
-    studio: bones
-    arc: "Shie Hassaikai"
-    episode: [74, 11]
-    season: 4
-    combatants: ["Deku", "Overhaul"]
-    aka: ["Izuku vs Overhaul", "Deku vs Chisaki"]
-    approx_s: null
-    register: epic
-    aura_colour: "#3FA9A0"
-    status: unmade
-
-  - id: tanjiro_vs_akaza
-    show: "Demon Slayer"
-    studio: ufotable
-    arc: "Mugen Train"
-    episode: null
-    combatants: ["Tanjiro", "Akaza"]
-    aka: ["Rengoku vs Akaza", "Mugen Train Akaza"]
-    approx_s: null
-    register: epic
-    aura_colour: "#FF6A1A"
-    status: unmade
-
-  - id: saitama_vs_boros
-    show: "One Punch Man"
-    studio: madhouse
-    arc: "Alien Conquerors"
-    episode: [12]
-    season: 1
-    combatants: ["Saitama", "Boros"]
-    aka: ["Serious Punch", "Saitama vs Lord Boros"]
-    approx_s: null
-    register: epic
-    aura_colour: "#F2C14E"
-    status: unmade
+- id: zoro_vs_king
+  show: One Piece
+  studio: toei
+  arc: Wano — Onigashima
+  episode: 1062
+  combatants:
+  - Zoro
+  - King
+  approx_s: null
+  register: epic
+  aura_colour: '#2FBF5B'
+  status: unmade
+  show_aliases:
+  - One Piece
+- id: luffy_vs_kaido
+  show: One Piece
+  studio: toei
+  arc: Wano — Onigashima
+  episode: 1015
+  combatants:
+  - Luffy
+  - Kaido
+  approx_s: null
+  register: epic
+  aura_colour: '#D93B3B'
+  status: unmade
+  show_aliases:
+  - One Piece
+- id: goku_vs_frieza
+  show: Dragon Ball Z
+  studio: toei
+  arc: Namek / Frieza Saga
+  episode: 95
+  combatants:
+  - Goku
+  - Frieza
+  approx_s: null
+  register: epic
+  aura_colour: '#F5C518'
+  status: unmade
+  show_aliases:
+  - Dragon Ball Z
+  - Dragon Ball Z
+- id: yuta_vs_yuji
+  show: Jujutsu Kaisen
+  studio: mappa
+  arc: Jujutsu Kaisen 0 / Culling Game
+  episode: null
+  combatants:
+  - Yuta
+  - Yuji
+  approx_s: null
+  register: edit
+  aura_colour: '#7B5BE0'
+  status: unmade
+  show_aliases:
+  - Jujutsu Kaisen 0
+  - Jujutsu Kaisen 0 the Movie
+- id: maki_vs_zenin
+  show: Jujutsu Kaisen
+  studio: mappa
+  arc: Perfect Preparation
+  episode:
+  - 43
+  - 20
+  season: 2
+  combatants:
+  - Maki
+  - Zenin
+  approx_s: null
+  register: edit
+  aura_colour: '#C0C6CC'
+  status: unmade
+  show_aliases:
+  - Jujutsu Kaisen 2nd Season
+  - JUJUTSU KAISEN Season 2
+- id: gojo_vs_jogo
+  show: Jujutsu Kaisen
+  studio: mappa
+  arc: Vs. Mahito
+  episode: 7
+  combatants:
+  - Gojo
+  - Jogo
+  approx_s: null
+  register: edit
+  aura_colour: '#4FA8FF'
+  status: unmade
+  show_aliases:
+  - JUJUTSU KAISEN
+  - Jujutsu Kaisen
+- id: sukuna_vs_mahoraga
+  show: Jujutsu Kaisen
+  studio: mappa
+  arc: Shibuya Incident
+  episode:
+  - 41
+  - 18
+  season: 2
+  combatants:
+  - Sukuna
+  - Mahoraga
+  approx_s: null
+  register: edit
+  aura_colour: '#B03030'
+  status: unmade
+  show_aliases:
+  - Jujutsu Kaisen 2nd Season
+  - JUJUTSU KAISEN Season 2
+- id: tanjiro_vs_rui
+  show: Demon Slayer
+  studio: ufotable
+  arc: Natagumo Mountain
+  episode: 19
+  season: 1
+  aka:
+  - Hinokami
+  - Dance of the Fire God
+  - Hinokami Kagura
+  combatants:
+  - Tanjiro
+  - Rui
+  approx_s: null
+  register: epic
+  aura_colour: '#FF6A1A'
+  status: unmade
+  show_aliases:
+  - Kimetsu no Yaiba
+  - 'Demon Slayer: Kimetsu no Yaiba'
+- id: mob_vs_toichiro
+  show: Mob Psycho 100
+  studio: bones
+  arc: Claw's 7th Division
+  episode:
+  - 25
+  - 12
+  season: 2
+  combatants:
+  - Mob
+  - Toichiro
+  approx_s: null
+  register: edit
+  aura_colour: '#66E0C8'
+  status: unmade
+  show_aliases:
+  - Mob Psycho 100 II
+- id: denji_vs_katana_man
+  show: Chainsaw Man
+  studio: mappa
+  arc: Katana Man
+  episode: 9
+  combatants:
+  - Denji
+  - Katana Man
+  approx_s: null
+  register: edit
+  aura_colour: '#E03A3A'
+  status: unmade
+  show_aliases:
+  - Chainsaw Man
+- id: deku_vs_overhaul
+  show: My Hero Academia
+  studio: bones
+  arc: Shie Hassaikai
+  episode:
+  - 74
+  - 11
+  season: 4
+  combatants:
+  - Deku
+  - Overhaul
+  aka:
+  - Izuku vs Overhaul
+  - Deku vs Chisaki
+  approx_s: null
+  register: epic
+  aura_colour: '#3FA9A0'
+  status: unmade
+  show_aliases:
+  - Boku no Hero Academia 4th Season
+  - My Hero Academia Season 4
+- id: tanjiro_vs_akaza
+  show: Demon Slayer
+  studio: ufotable
+  arc: Mugen Train
+  episode: null
+  combatants:
+  - Tanjiro
+  - Akaza
+  aka:
+  - Rengoku vs Akaza
+  - Mugen Train Akaza
+  approx_s: null
+  register: epic
+  aura_colour: '#FF6A1A'
+  status: unmade
+  show_aliases:
+  - Kimetsu no Yaiba Movie Mugen Ressha-hen
+  - Demon Slayer Mugen Train
+- id: saitama_vs_boros
+  show: One Punch Man
+  studio: madhouse
+  arc: Alien Conquerors
+  episode:
+  - 12
+  season: 1
+  combatants:
+  - Saitama
+  - Boros
+  aka:
+  - Serious Punch
+  - Saitama vs Lord Boros
+  approx_s: null
+  register: epic
+  aura_colour: '#F2C14E'
+  status: unmade
+  show_aliases:
+  - One Punch Man
