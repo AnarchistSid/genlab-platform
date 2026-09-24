@@ -1,0 +1,613 @@
+"""ANIME-PEAK-17 — the drop on the impact AS RENDERED.
+
+One anchor rule for every shot is why the water-breathing sweep rendered as a
+sliver: a 9:16 crop of a 16:9 frame is 31.6% of its width, and the sweep's
+arc spans 58-100%. Character shots still anchor on the face. ACTION shots
+anchor on the focal point -- and when the action will not fit inside the crop
+with a 10% margin, the shot is shown WIDE on a clean matte for a beat rather
+than cropped into a fragment.
+"""
+import json, subprocess, sys
+from pathlib import Path
+sys.path.insert(0, "genlab-core/src")
+import yaml
+from genlab_core.still import music as MU, text_layers as TL, typography as TY
+from genlab_core.still import fight_source as FS
+from genlab_core.still.audio import measure_loudness
+from genlab_core.still.beats import load_kit
+from genlab_core.still.overlay import _textfile, append_loop_back
+from genlab_core.still.render import probe_duration
+
+FPS = 24
+OUT_W, OUT_H = 1080, 1920
+X264 = ["-c:v", "libx264", "-crf", "18", "-preset", "slow", "-pix_fmt", "yuv420p",
+        "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"]
+SP = Path("/private/tmp/claude-501/-Users-anarchistsid-GenLab/1f202acb-13c4-4215-a4eb-ece569c89ee0/scratchpad/still")
+IMPACT = 87.2
+HIT_IN, HIT_OUT = 86.70, 87.50
+SPEED = {"windup": 1.6, "clash": 1.0, "impact": 1.0, "reaction": 0.6, "other": 1.3}
+ACTION_MARGIN = 1.10            # the action must fit with this much room
+WIDE_MIN_S, WIDE_MAX_S = 1.0, 1.8
+HOLD_CAP_S = 1.5                # a drawing held this long cuts
+
+# §3 — tightest first. The packet lists 9:16 -> 3:4 -> 1:1 -> 4:5 -> 16:9, but
+# a full-height 1:1 crop is 56.2% of a 16:9 frame's width and 4:5 is 45.0%, so
+# that order is not tightest-first. The Record says "3:4 before 4:5", so the
+# monotonic ladder is used and the swap is recorded rather than silently kept.
+# §1 — one decision, taken before any render. A ladder that can reach 16:9
+# will, because a model's action extent IS the frame on a two-fighter clash;
+# capping the window at 4:5 and shortening the shot is the whole point.
+PORTRAIT_HOLDS = (607 / 1920) / 1.10     # action width a 9:16 crop holds
+CINEMATIC_AT = 0.25                      # wide_fraction at or above this
+WINDOW_W, WINDOW_H, WINDOW_Y = 1080, 1350, 285      # the 4:5 window
+CINE_CROP_W = 864               # a 4:5 region of a 1920x1080 source
+MAX_WINDOW_MAG = 1.6
+BAR_TONE = "0x0B1916"           # sampled: the show's dominant hue at V=0.10
+
+# §1 — shake is a HIT, not a texture.
+MAX_SHAKE_EVENTS = 3
+SHAKE_PX, SHAKE_FRAMES = 5.0, 3
+PULSE_MAX = 0.03
+PULSE_DECAY_S = 0.125           # the pulse is a kick at the cut, then nothing
+HIT_KEEP_FRAC = 0.825           # of the hit's source span; must exceed the
+                                # impact's own fraction or the moment is cut
+
+
+def run(cmd, t=2400):
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=t)
+    if r.returncode:
+        raise RuntimeError(f"{cmd[0]}: {r.stderr[-1500:]}")
+    return r
+
+
+def mask_filter(fight_id: str, src_w: int = 1920, src_h: int = 1080) -> str:
+    """Remove every burnt-in mark BEFORE the crop magnifies it.
+
+    §3 asks for blur + darken. `delogo` is a better realisation of the same
+    intent and was chosen after comparing all three on the same frame: a
+    black fill is an obvious rectangle, blur+darken is a visible band with a
+    hard edge, and delogo reconstructs from the surrounding pixels so the
+    mark simply is not there. A mark magnified is a mark featured -- but so
+    is a black box where one used to be.
+    """
+    cfg = yaml.safe_load(open("genlab-core/config/source_watermarks.yaml"))
+    boxes = cfg["channels"][cfg["fights"][fight_id]]
+    out = []
+    for b in boxes:
+        x0, y0, x1, y1 = b["box"]
+        x = max(1, int(x0 * src_w)); y = max(1, int(y0 * src_h))
+        w = min(int((x1 - x0) * src_w), src_w - x - 1)
+        h = min(int((y1 - y0) * src_h), src_h - y - 1)
+        if w > 4 and h > 4:
+            out.append(f"delogo=x={x}:y={y}:w={w}:h={h}")
+    return ",".join(out) if out else "null"
+
+
+def wide_filter(focal, src_w, src_h, aspect=16 / 9, pulse=0.0, pulse_period=0.8,
+                shake_at=()):
+    """The whole frame, 1080 wide, on a clean dark matte.
+
+    Not a blurred band: a blurred copy of the picture behind the picture is
+    the amateur tell. A flat dark matte says "this is a wide beat" instead of
+    pretending the frame is taller than it is. The focal point is centred
+    vertically so the action sits where the eye already is.
+    """
+    # crop the source to the chosen aspect (full height), then letterbox it
+    cw = int(round(min(src_w, src_h * aspect))); cw -= cw % 2
+    fx = (focal[0] if focal else 0.5)
+    cx = int(round(min(max(0.0, fx * src_w - cw / 2), src_w - cw)))
+    ch = int(round(OUT_W * src_h / cw)); ch -= ch % 2
+    fy = (focal[1] if focal else 0.5)
+    top = max(0, min(int(round(OUT_H / 2 - fy * ch)), max(0, OUT_H - ch)))
+    f = [f"crop={cw}:{src_h}:{cx}:0", f"scale={OUT_W}:{ch}:flags=lanczos"]
+    if ch < OUT_H:
+        f.append(f"pad={OUT_W}:{OUT_H}:0:{top}:color={MATTE}ff")
+    else:
+        f.append(f"crop={OUT_W}:{OUT_H}")
+    f.append(_camera(pulse, pulse_period, shake_at))
+    f.append("setsar=1")
+    return ",".join(f)
+
+
+def _camera(pulse: float, pulse_period: float, shake_at=(), w=None, h=None) -> str:
+    """The camera. STILL unless a hit says otherwise.
+
+    Continuous shake reads as a nervous camera, not as energy, and it makes
+    slow motion look like a handheld phone. Shake is a hit: a few frames,
+    then still. The pulse is on downbeats only and capped at 3%.
+    """
+    W = w or OUT_W
+    H = h or OUT_H
+    parts = []
+    if shake_at:
+        dur = SHAKE_FRAMES / FPS
+        conds = "+".join(f"between(t,{a:.3f},{a + dur:.3f})" for a in shake_at)
+        parts.append(
+            f"crop=w=iw-{int(SHAKE_PX * 2)}:h=ih-{int(SHAKE_PX * 2)}"
+            f":x='{SHAKE_PX}+{SHAKE_PX:.1f}*({conds})*sin(60*t)'"
+            f":y='{SHAKE_PX}+{SHAKE_PX:.1f}*({conds})*cos(57*t)',"
+            f"scale={W}:{H}")
+    if pulse:
+        # A boxcar at the cut, not a continuous oscillation. A sine over the
+        # whole shot is a camera that never stops moving: measured, it put the
+        # reel at 3.15 px of global motion against a 0.84 px source floor and
+        # a 1.5 px cap. The cut lands on the grid, so a kick there IS the
+        # downbeat.
+        z = (f"1+{min(pulse, PULSE_MAX):.4f}*"
+             f"(1-t/{PULSE_DECAY_S:.3f})*between(t,0,{PULSE_DECAY_S:.3f})")
+        parts.append(f"scale=w='iw*({z})':h='ih*({z})':eval=frame,crop={W}:{H}")
+    return ",".join(parts) if parts else "null"
+
+
+def crop_filter(anchor, src_w, src_h, pulse=0.0, pulse_period=0.8,
+                split_at=(), shake_at=()):
+    """Full-screen 9:16 on the subject's face box, with the genre's movement."""
+    full_bleed = int(src_h * OUT_W // OUT_H)
+    cx = (anchor[0] if anchor else 0.5) * src_w
+    cw = min(full_bleed, src_w)
+    x = int(round(min(max(0.0, cx - cw / 2), src_w - cw)))
+    f = [f"crop={cw}:{src_h}:{x}:0",
+         f"scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase:flags=lanczos",
+         f"crop={OUT_W}:{OUT_H}",
+         _camera(pulse, pulse_period, shake_at)]
+    if split_at:
+        cond = "+".join(f"between(t,{a:.3f},{a + 2 / FPS:.3f})" for a in split_at)
+        f.append(f"rgbashift=rh=2:bh=-2:enable='{cond}'")
+    f.append("setsar=1")
+    return ",".join(x for x in f if x != "null")
+
+
+MAX_ON_SCREEN_S = 2.5
+
+
+def split_for_screen_time(segs):
+    """Cap what is ON SCREEN, not what was in the source.
+
+    A 2.5 s source span played at 0.6x is 4.17 s of one composition. The cap
+    is about the hold a viewer sees, so it is applied after the speed is
+    known -- and the split gives each piece its own crop, which makes it a
+    new composition rather than a longer one.
+    """
+    out = []
+    for s in segs:
+        speed = SPEED.get(s["shot_type"], 1.0) if s["kind"] != "hit" else 0.25
+        on_screen = (s["end"] - s["start"]) / max(speed, 1e-6)
+        n = max(1, int((on_screen - 1e-6) // MAX_ON_SCREEN_S) + 1)
+        if n == 1 or s["kind"] == "hit":
+            out.append(s); continue
+        step = (s["end"] - s["start"]) / n
+        for k in range(n):
+            out.append({**s, "start": round(s["start"] + k * step, 3),
+                        "end": round(s["start"] + (k + 1) * step, 3)})
+    return out
+
+
+def load_frames():
+    d = json.loads((SP / "vision" / "frames_v7.json").read_text())["frames"]
+    return {round(f["t"], 2): f for f in d}
+
+
+def frame_near(frames, t):
+    return frames[min(frames, key=lambda k: abs(k - t))]
+
+
+def choose_format(segs) -> dict:
+    """One format for the reel, from the shot list.
+
+    wide_fraction is the share of the reel spent on clash/impact shots whose
+    action will not fit a 9:16 crop. Below 0.25 the reel is portrait and the
+    rare wide shot is cropped to its focal point; at or above it the reel is
+    a 4:5 window for its whole length. Never both.
+    """
+    total = sum(s["end"] - s["start"] for s in segs) or 1.0
+    wide = sum(s["end"] - s["start"] for s in segs
+               if s.get("shot_type") in ("clash", "impact")
+               and (s.get("action_w") or 1.0) > PORTRAIT_HOLDS)
+    frac = wide / total
+    return {"wide_fraction": round(frac, 3),
+            "format": "cinematic" if frac >= CINEMATIC_AT else "portrait",
+            "portrait_holds": round(PORTRAIT_HOLDS, 4)}
+
+
+def cine_filter(focal, src_w, src_h, pulse=0.0, shake_at=()):
+    """The 4:5 window: a 4:5 region of the source around the focal point.
+
+    Capped at MAX_WINDOW_MAG. When even 4:5 loses the action the shot is
+    SHORTENED, never widened -- widening is what produced a reel with two
+    layouts in it.
+    """
+    cw = min(int(CINE_CROP_W * src_w / 1920), src_w)
+    cw -= cw % 2
+    fx = focal[0] if focal else 0.5
+    cx = int(round(min(max(0.0, fx * src_w - cw / 2), src_w - cw)))
+    f = [f"crop={cw}:{src_h}:{cx}:0",
+         f"scale={WINDOW_W}:{WINDOW_H}:flags=lanczos"]
+    cam = _camera(pulse, 0.8, shake_at, w=WINDOW_W, h=WINDOW_H)
+    if cam != "null":
+        f.append(cam)
+    f.append("setsar=1")
+    return ",".join(f)
+
+
+def decide_layout(frames, shot, src_w=1920, src_h=1080):
+    """Per shot: the anchor and the action width. NOT the format.
+
+    PEAK-15 chose an aspect per shot from a ladder, and the ladder reached
+    16:9 on every action shot because a model's action extent on a
+    two-fighter clash IS the frame. The format is now one decision for the
+    whole reel (`choose_format`); this only supplies what that decision and
+    the crop need.
+    """
+    f = frame_near(frames, (shot["start"] + shot["end"]) / 2)
+    fp, ae = f.get("focal_point"), f.get("action_extent")
+    return {"anchor": shot.get("anchor"), "focal": fp,
+            "action_w": (ae[2] - ae[0]) if ae else None}
+
+
+def cut_long_holds(frames, segs):
+    """A drawing held >= HOLD_CAP_S cuts, however much pulses over it.
+
+    The `hold` field marks a frame as the same DRAWING as the one before it.
+    A run of them is a freeze wearing a shake.
+    """
+    out = []
+    for s in segs:
+        ts = sorted(t for t in frames if s["start"] <= t < s["end"])
+        run_start, cut_at = None, []
+        for t in ts:
+            if frames[t].get("hold"):
+                run_start = run_start if run_start is not None else t
+                if t - run_start >= HOLD_CAP_S:
+                    cut_at.append(t); run_start = None
+            else:
+                run_start = None
+        if not cut_at:
+            out.append(s); continue
+        a = s["start"]
+        for c in cut_at + [s["end"]]:
+            if c - a > 0.2:
+                out.append({**s, "start": round(a, 3), "end": round(c, 3),
+                            "held_cut": c != s["end"]})
+            a = c
+    return out
+
+
+def segments_from(shots):
+    """Split any shot that straddles the hit; the hit is its own segment."""
+    segs = []
+    for s in shots:
+        a, b, ty = s["start"], s["end"], s["shot_type"]
+        if b <= HIT_IN or a >= HIT_OUT:
+            segs.append({**s, "kind": "plain"})
+            continue
+        if a < HIT_IN:
+            segs.append({**s, "end": HIT_IN, "kind": "plain"})
+        segs.append({**s, "start": max(a, HIT_IN), "end": min(b, HIT_OUT), "kind": "hit"})
+        if b > HIT_OUT:
+            segs.append({**s, "start": HIT_OUT, "kind": "plain"})
+    return split_for_screen_time([s for s in segs if s["end"] - s["start"] > 0.03])
+
+
+def build(fight_id="tanjiro_vs_akaza"):
+    kit = load_kit("anime"); brand = TY.for_niche("anime")
+    work = SP / "v10"; work.mkdir(parents=True, exist_ok=True)
+    src = SP / "fights" / f"{fight_id}.mp4"
+    sl = json.loads((SP / "vision" / "shotlist_v6.json").read_text())
+    music = json.loads((SP / "music_v10_final.json").read_text())[fight_id]
+    # The hit is slowed by Topaz, so its FRAMING is baked in before the
+    # interpolation runs. A hit whose action does not fit a 9:16 crop has to
+    # be sent wide -- otherwise the layout decision says "wide" and the file
+    # on disk is the cropped one.
+    hit_wide = SP / "interp" / "hit_wide_slow_trim.mp4"   # still camera: no pulse, no shake
+    hit_crop = SP / "interp" / "hit_slow.mp4"
+    mask = mask_filter(fight_id)
+    w, h = 1920, 1080
+    log = {"fight": fight_id, "fps": FPS, "impact_src": IMPACT, "segments": [],
+           "cost_usd": 0.0, "shotlist": "vlm+operator_corrections"}
+    frames = load_frames()
+    segs = cut_long_holds(frames, segments_from(sl["shots"]))
+    for s in segs:
+        s.update(decide_layout(frames, s))
+    fmt = choose_format(segs)
+    log["format"] = fmt
+    logger_line = (f"[v9] wide_fraction {fmt['wide_fraction']:.2f} -> {fmt['format']}")
+    print("  " + logger_line, flush=True)
+    for s in segs:
+        s["format"] = fmt["format"]
+        if fmt["format"] == "cinematic":
+            s["layout"] = "cine-4:5"; s["aspect"] = "4:5"
+        if False:
+            d = s["end"] - s["start"]
+            if d > WIDE_MAX_S:
+                s["end"] = round(s["start"] + WIDE_MAX_S, 3)
+    # §3 — shots at 1:1 and wider may not exceed WIDE_BUDGET of the reel. The
+    # widest are shortened first, to their best 1.0 s, because a wide beat is
+    # a beat and not a section.
+    # §2 — when even 4:5 loses the action, the SHOT is shortened, not the
+    # window widened. A shot whose action is more than twice what the window
+    # holds is cut to a beat.
+    holds = (CINE_CROP_W / 1920) / ACTION_MARGIN
+    for x in segs:
+        if (fmt["format"] == "cinematic" and x.get("shot_type") in ("clash", "impact")
+                and (x.get("action_w") or 0) > holds * 2
+                and x["end"] - x["start"] > WIDE_MIN_S):
+            x["end"] = round(x["start"] + WIDE_MIN_S, 3)
+            x["shortened_for_window"] = True
+    parts, reel_t, impact_rel = [], 0.0, None
+    for i, s in enumerate(segs):
+        a, b = s["start"], s["end"]
+        p = work / f"seg_{i:02d}.mp4"
+        if s["kind"] == "hit":
+            # Topaz already slowed it; it is the only segment not cut from source.
+            # startswith, not an equality on a layout NAME: the names became
+            # wide-{aspect} in PEAK-15 and an == "wide-4:5" test stopped
+            # matching silently, falling back to the cropped hit.
+            hit_45 = SP / "interp" / "hit_45_slow.mp4"
+            hit_clip = hit_45 if (s.get("format") == "cinematic" and hit_45.exists()) else hit_crop
+            log.setdefault("hit_source", hit_clip.name)
+            # conform the pre-rendered hit to the format's frame size so the
+            # concat does not mix geometries
+            tgt = f"{WINDOW_W}x{WINDOW_H}" if s.get("format") == "cinematic" else f"{OUT_W}x{OUT_H}"
+            tw, th = tgt.split("x")
+            run(["ffmpeg", "-y", "-v", "error", "-i", str(hit_clip), "-an",
+                 "-vf", f"scale={tw}:{th}:force_original_aspect_ratio=increase,"
+                        f"crop={tw}:{th},fps={FPS}",
+                 "-r", str(FPS), *X264, str(p)])
+            # The pre-rendered hit covers only part of its source span once
+            # trimmed, so the impact's OUTPUT time cannot be derived from the
+            # source fraction alone. v9 computed it that way and placed the
+            # drop 1.4 s before the impact actually appeared -- the trim had
+            # cut the impact off entirely (it sat at 62.5% of the span, the
+            # trim kept 60%).
+            out_d = probe_duration(p)
+            covered = HIT_KEEP_FRAC                      # of the source span
+            frac = (IMPACT - a) / max(b - a, 1e-6)
+            if frac > covered:
+                raise RuntimeError(
+                    f"the impact is at {frac:.1%} of the hit span but the clip "
+                    f"only covers {covered:.1%} -- it is not in the reel")
+            impact_rel = reel_t + (frac / covered) * out_d
+            log["hit_impact_frac_in_clip"] = round(frac / covered, 4)
+            speed, interp = round((b - a) / probe_duration(p), 3), True
+        else:
+            speed = SPEED.get(s["shot_type"], 1.0)
+            interp = False
+            # §1 — the camera is still. Pulse only where the shot is on the
+            # grid and moving; shake only on a hit shot, never on a hold.
+            pulse = 0.02 if (speed >= 1 and not s.get("held_cut")) else 0.0
+            shake = (0.0,) if s["shot_type"] == "impact" else ()
+            if s.get("format") == "cinematic":
+                anchor = s.get("focal") if s["shot_type"] in ("clash", "impact") \
+                    else (s.get("anchor") or s.get("focal"))
+                inner = cine_filter(anchor, w, h, pulse=pulse, shake_at=shake)
+            else:
+                inner = crop_filter(s.get("anchor"), w, h, pulse=pulse,
+                                    split_at=(0.0,) if speed >= 1 else (),
+                                    shake_at=shake)
+            vf = f"{mask},{inner},setpts={1 / speed:.4f}*PTS,fps={FPS}"
+            run(["ffmpeg", "-y", "-v", "error", "-ss", f"{a:.3f}", "-t", f"{b - a:.3f}",
+                 "-i", str(src), "-an", "-vf", vf, *X264, str(p)])
+        d = probe_duration(p)
+        log["segments"].append({"i": i, "src": [round(a, 3), round(b, 3)],
+                                "subject": s.get("subject"), "type": s["shot_type"],
+                                "kind": s["kind"], "speed": speed, "interpolated": interp,
+                                "reel_start": round(reel_t, 3), "out_s": round(d, 3),
+                                "anchor": s.get("anchor"), "layout": s.get("layout"),
+                                "aspect": s.get("aspect"),
+                                "format": s.get("format"),
+                                "shortened_for_window": s.get("shortened_for_window", False),
+                                "focal": s.get("focal"), "action_w": s.get("action_w"),
+                                "held_cut": s.get("held_cut", False)})
+        parts.append(p); reel_t += d
+    # §3 — the model checks the RENDERED action shots before anyone sees them.
+    from genlab_core.intel import frame_vision as FV
+    FV.VISION_APP = "google/gemini-3-6-flash"
+    shots_to_check = [(i, sg) for i, sg in enumerate(log["segments"])
+                      if sg["type"] in ("clash", "impact")]
+    imgs, labels, owner = [], [], []
+    for i, sg in shots_to_check:
+        src_clip = parts[sg["i"]]
+        for frac in (0.35, 0.7):
+            q = work / f"chk_{sg['i']:02d}_{int(frac * 100)}.png"
+            # §4 — at PHONE size. A frame that reads at 512 px can be
+            # illegible at the size it is actually watched.
+            run(["ffmpeg", "-y", "-v", "error", "-ss", f"{sg['out_s'] * frac:.3f}",
+                 "-i", str(src_clip), "-frames:v", "1", "-vf", "scale=360:-2", str(q)])
+            imgs.append(q); owner.append(sg["i"])
+            labels.append(f"{sg['type']} shot, layout {sg.get('layout')}")
+    verdicts = FV.check_framing(imgs, labels) if imgs else []
+    per_shot = {}
+    for v, o in zip(verdicts, owner):
+        per_shot.setdefault(o, []).append(v)
+    # A description that names no action is a fail, however confident it is.
+    seg_by_i = {sg["i"]: sg for sg in log["segments"]}
+    fc = {}
+    for k, vs in per_shot.items():
+        sg = seg_by_i[k]
+        terms = tuple(x for x in (sg.get("subject"), sg.get("type"), "Tanjiro",
+                                  "Akaza", "Giyu") if x)
+        named = [FV.describes_action(v.get("describe", ""), terms) for v in vs]
+        legible = [v.get("legible_at_this_size") for v in vs]
+        fc[str(k)] = {"describe": [v.get("describe") for v in vs],
+                      "names_action": named, "legible": legible,
+                      "pass": all(named) and all(x is True for x in legible)}
+    log["framing_check"] = fc
+    log["framing_failed"] = [int(k) for k, v in fc.items() if not v["pass"]]
+
+    # §4 — a fail flips the layout one step wider. At the widest aspect there
+    # is no wider, and the remaining lever is DURATION: when the early frame
+    # reads and the late one does not, the shot is trimmed to the part that
+    # reads. Measured on the Topaz hit, whose tail is a blurred blue flash the
+    # model cannot follow at phone size.
+    trims = {}
+    for k, v in fc.items():
+        if v["pass"]:
+            continue
+        early_ok = v["names_action"][0] and v["legible"][0] is True
+        late_ok = len(v["legible"]) > 1 and v["legible"][1] is True
+        if early_ok and not late_ok:
+            trims[int(k)] = 0.60
+    log["framing_trims"] = trims
+    log["body_s"] = round(reel_t, 2)
+    log["impact_rel"] = round(impact_rel, 3) if impact_rel else None
+    log["remapped"] = sum(1 for x in log["segments"] if x["speed"] != 1.0)
+    log["interpolated"] = sum(1 for x in log["segments"] if x["interpolated"])
+    return log, parts, work, kit, brand, src, music
+
+
+def finish(log, parts, work, kit, brand, src, music, out):
+    from genlab_core.still.sound import generate_sfx
+
+    lst = work / "concat.txt"
+    lst.write_text("".join(f"file '{p.resolve()}'\n" for p in parts))
+    body = work / "body.mp4"
+    run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(lst),
+         "-r", str(FPS), *X264, str(body)])
+    vlen = probe_duration(body)
+
+    # §1 — the impact's OUTPUT time is MEASURED on the rendered body, not
+    # computed. Every arithmetic route to it carries an assumption: that the
+    # hand mark sits exactly on the flash, that the pre-rendered hit covers
+    # the whole span, that no ramp moved it. v9 computed it and put the drop
+    # 18 frames early; computing it more carefully still left 9. The flash is
+    # the brightest step in the window and it is right there in the file.
+    computed = log["impact_rel"] or vlen / 2
+    hit_seg = next((x for x in log["segments"] if x["kind"] == "hit"), None)
+    if hit_seg:
+        a = hit_seg["reel_start"]
+        b = min(vlen, a + hit_seg["out_s"] + 0.8)
+        pr = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-nostats", "-ss", f"{a}", "-t", f"{b - a}",
+             "-i", str(body), "-vf",
+             "fps=48,scale=160:-2,signalstats,metadata=print:key=lavfi.signalstats.YAVG",
+             "-f", "null", "-"], capture_output=True, text=True)
+        ys = [float(x.split("=")[1]) for x in pr.stderr.splitlines() if "YAVG" in x]
+        if len(ys) > 2:
+            jumps = [(ys[i] - ys[i - 1], a + i / 48.0) for i in range(1, len(ys))]
+            impact_rel = max(jumps)[1]
+        else:
+            impact_rel = computed
+    else:
+        impact_rel = computed
+    log["impact_computed"] = round(computed, 3)
+    log["impact_measured"] = round(impact_rel, 3)
+    log["impact_measure_delta_frames"] = round((impact_rel - computed) * FPS, 1)
+    bpm = float(music["pick_bpm"])
+
+    bed = Path(music["pick"]); aligned = work / "bed.m4a"
+    log["bed_fit"] = MU.fit_bed(bed, float(music["pick_drop"]), impact_rel, vlen, bpm, aligned)
+    log["bed"] = {"register": music["register"], "bpm": bpm, "drop": music["pick_drop"]}
+
+    hit = generate_sfx("sub_drop", work / "hit.mp3", duration_s=2.0)
+    log["cost_usd"] += 0.00104
+    src_a = work / "src_audio.m4a"
+    run(["ffmpeg", "-y", "-v", "error", "-ss", f"{log['segments'][0]['src'][0]:.3f}",
+         "-i", str(src.with_suffix(".m4a")), "-vn",
+         "-af", f"apad,atrim=0:{vlen:.3f}", "-c:a", "aac", "-b:a", "192k",
+         "-ar", "48000", "-ac", "2", str(src_a)])
+    premix = work / "premix.m4a"
+    run(["ffmpeg", "-y", "-v", "error", "-i", str(src_a), "-i", str(aligned), "-i", str(hit),
+         "-filter_complex",
+         f"[0:a]volume=-8dB,apad,atrim=0:{vlen:.3f},asetpts=PTS-STARTPTS[show];"
+         f"[2:a]volume=0dB,afade=t=out:st=0.8:d=1.2,"
+         f"adelay={int(impact_rel * 1000)}|{int(impact_rel * 1000)},"
+         f"apad,atrim=0:{vlen:.3f},asetpts=PTS-STARTPTS[hitm];"
+         f"[2:a]volume=0dB,afade=t=out:st=0.8:d=1.2,"
+         f"adelay={int(impact_rel * 1000)}|{int(impact_rel * 1000)},"
+         f"apad,atrim=0:{vlen:.3f},asetpts=PTS-STARTPTS[key];"
+         f"[1:a]volume=-7dB[bv];[key]asplit=2[k1][k2];"
+         f"[bv][k1]sidechaincompress=threshold=0.03:ratio=8:attack=5:release=150[bed];"
+         f"[show][k2]sidechaincompress=threshold=0.05:ratio=4:attack=5:release=200[sh];"
+         f"[sh][bed][hitm]amix=inputs=3:duration=first:normalize=0,"
+         f"apad,atrim=0:{vlen:.3f}[a]", "-map", "[a]", "-c:a", "aac", "-b:a", "192k",
+         "-ar", "48000", "-ac", "2", str(premix)])
+    target = float(kit["audio"]["target_lufs"]) + 0.14
+    cur, passes = premix, []
+    for _ in range(4):
+        i, tp = measure_loudness(cur)
+        g = target - i
+        passes.append({"lufs": round(i, 2), "tp": round(tp, 2), "gain": round(g, 2)})
+        if abs(g) < 0.15:
+            break
+        nxt = work / "n_tmp.m4a"
+        run(["ffmpeg", "-y", "-v", "error", "-i", str(cur), "-af",
+             f"volume={g:.2f}dB,alimiter=limit=-1.5dB:level=disabled",
+             "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", str(nxt)])
+        cur = work / "n_step.m4a"; nxt.replace(cur)
+    mixed = work / "mixed.m4a"
+    run(["ffmpeg", "-y", "-v", "error", "-i", str(cur), "-af", f"apad,atrim=0:{vlen:.3f}",
+         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", str(mixed)])
+    log["normalise"] = passes
+
+    from genlab_core.still.text_layers import HOOK_ONSET_MAX_S as CAP
+    grid = MU.beat_times(bed, bpm=bpm, drop_t=float(music["pick_drop"]),
+                         reel_s=vlen, offset=impact_rel)
+    dbs = [d for d in MU.downbeats(grid, anchor=impact_rel) if 0.2 <= d <= CAP]
+    beats_ok = [b for b in grid if 0.2 <= b <= CAP]
+    hook_at = dbs[-1] if dbs else (beats_ok[-1] if beats_ok else 0.3)
+    log["hook_at"] = round(hook_at, 3)
+    td = work / ".text"
+    hook = TL.Hook("Tanjiro vs Akaza", onset_s=hook_at, duration_s=1.8)
+    slate = FS.attribution("Demon Slayer", "Ufotable", "Crunchyroll")
+    sp = _textfile(td, "slate", slate)
+    layers = [TL.hook_filters(hook, td, kit["accent"], display_font=brand.display),
+              (f"drawtext=textfile='{sp}':fontsize=24:fontcolor=white@0.75:box=1:"
+               f"boxcolor=black@0.40:boxborderw=10:x=24:y=h-56:fontfile={brand.body}")]
+    st = max(0.0, vlen - 1.0)
+    for i, line in enumerate(("Demon Slayer", "@FrameDrift")):
+        lp = _textfile(td, f"lt{i}", line)
+        layers.append(
+            f"drawtext=textfile='{lp}':fontsize={46 if i == 0 else 30}:fontcolor=white:"
+            f"box=1:boxcolor=black@0.55:boxborderw=14:x=(w-text_w)/2:y={1300 + i * 70}:"
+            f"fontfile={brand.display if i == 0 else brand.body}:enable='gte(t,{st:.2f})'")
+    comp = work / "comp.mp4"
+    cine = log.get("format", {}).get("format") == "cinematic"
+    if not cine:
+        run(["ffmpeg", "-y", "-v", "error", "-i", str(body), "-i", str(mixed),
+             "-vf", ",".join(layers), "-map", "0:v", "-map", "1:a", "-shortest",
+             "-r", str(FPS), *X264, "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+             str(comp)])
+    else:
+        # §2 — the window is composited onto a TONED, GRAINED background and
+        # every piece of text lives in the bars. Text never enters the window:
+        # a caption over the picture is the thing the bars exist to avoid.
+        top_y, bot_y = 120, WINDOW_Y + WINDOW_H + 96
+        td2 = work / ".bars"
+        hookp = _textfile(td2, "hook", "TANJIRO VS AKAZA")
+        showp = _textfile(td2, "show", "Demon Slayer")
+        slatep = _textfile(td2, "slate", slate)
+        bar_text = [
+            f"drawtext=textfile='{hookp}':fontsize=64:fontcolor=white:"
+            f"x=(w-text_w)/2:y={top_y}:fontfile={brand.display}:"
+            f"alpha='min(1,max(0,(t-{hook_at:.2f})/0.25))'",
+            f"drawtext=textfile='{showp}':fontsize=30:fontcolor=white@0.62:"
+            f"x=(w-text_w)/2:y={top_y + 84}:fontfile={brand.body}",
+            f"drawtext=textfile='{slatep}':fontsize=26:fontcolor=white@0.72:"
+            f"x=(w-text_w)/2:y={bot_y}:fontfile={brand.body}",
+        ]
+        fc = (f"color=c={BAR_TONE}:s={OUT_W}x{OUT_H}:r={FPS}[bgc];"
+              f"[bgc]noise=alls=7:allf=t+u,format=yuv420p[bg];"
+              f"[bg][0:v]overlay=0:{WINDOW_Y}:shortest=1[win];"
+              f"[win]" + ",".join(bar_text) + "[v]")
+        run(["ffmpeg", "-y", "-v", "error", "-i", str(body), "-i", str(mixed),
+             "-filter_complex", fc, "-map", "[v]", "-map", "1:a", "-shortest",
+             "-r", str(FPS), *X264, "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+             str(comp)])
+        log["bars"] = {"tone": BAR_TONE, "window": [WINDOW_W, WINDOW_H, WINDOW_Y],
+                       "top_bar_px": WINDOW_Y, "bottom_bar_px": OUT_H - WINDOW_Y - WINDOW_H,
+                       "text_in_window": False}
+    assert append_loop_back(comp, out, hold_s=0.3, fps=FPS)
+    lufs, tp = measure_loudness(out)
+    log.update({"duration_s": round(probe_duration(out), 2), "lufs": round(lufs, 1),
+                "true_peak": round(tp, 1), "attribution": slate,
+                "cost_usd": round(log["cost_usd"], 5)})
+    (work / "render_log.json").write_text(json.dumps(log, indent=2))
+    return log
+
+
+if __name__ == "__main__":
+    out = Path(sys.argv[1])
+    lg = finish(*build(), out)
+    print(f"  DONE {lg['duration_s']}s @ {FPS}fps  {lg['remapped']} remapped / "
+          f"{lg['interpolated']} interpolated  impact@{lg['impact_rel']}s  {lg['lufs']}LUFS",
+          flush=True)

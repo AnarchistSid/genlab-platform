@@ -52,3 +52,18 @@ fights:
   luffy_vs_kaido: brazilian_phonk
   deku_vs_overhaul: old_phonk
   tanjiro_vs_akaza: epic_hybrid
+
+# ANIME-PEAK-17 §2 — the register follows the fight's TONE, read by the VLM
+# from the shot list and the cover frame, not from the franchise.
+tone_map:
+  rage: brazilian_phonk
+  triumph: brazilian_phonk
+  grief: phonk_slowed
+  awe: epic_hybrid
+  dread: old_phonk
+# The drop's SHAPE is part of the register: phonk steps, a hybrid swells.
+drop_shape:
+  brazilian_phonk: {kind: step, max_rise_s: 0.5}
+  old_phonk:       {kind: step, max_rise_s: 0.5}
+  phonk_slowed:    {kind: swell, min_rise_s: 0.8}
+  epic_hybrid:     {kind: swell, min_rise_s: 0.8}
