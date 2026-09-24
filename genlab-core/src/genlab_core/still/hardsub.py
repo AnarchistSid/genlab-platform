@@ -157,3 +157,24 @@ def check(path: Path, start: float, end: float,
     logger.info("[hardsub] %s %.1f-%.1fs subbed=%.0f%% -> %s",
                 path.name, start, end, frac * 100, "ok" if ok else "source_hardsub")
     return ok, frac, lines
+
+
+def prints_in(path: Path, start: float, end: float,
+              furniture: set[str] | frozenset[str] = frozenset(),
+              samples: int = 3) -> bool:
+    """Does this SHOT put somebody else's subtitle on screen?
+
+    `check` decides whether a SOURCE is usable and tolerates 15%, because a
+    source carrying the odd line is still worth cutting from. A reel needs
+    the decision per shot: at 7% over its window, one My Hero Academia shot
+    still burned "...a hero who saves everyone?" into the finished reel.
+    Same gate, different unit -- and at the shot level the tolerance is zero.
+
+    Pass `furniture` from `learn_furniture` so the legal notice does not
+    read as a subtitle.
+    """
+    for k in range(1, samples + 1):
+        t = start + (end - start) * k / (samples + 1)
+        if SubScan(t, _ocr_band(path, t)).has_sub_beyond(furniture):
+            return True
+    return False

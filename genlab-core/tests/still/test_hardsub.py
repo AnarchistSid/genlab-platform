@@ -73,3 +73,11 @@ def test_static_tokens_are_treated_as_furniture(tmp_path):
 def test_a_two_word_fragment_is_noise(tmp_path):
     assert not H.SubScan(0.0, "Koyoharu Got").has_sub
     assert H.SubScan(0.0, "a hero who saves everyone").has_sub
+
+
+def test_shot_level_gate_has_no_tolerance(tmp_path):
+    """A window may carry the odd line; a shot may not."""
+    clip = _clip(tmp_path / "shotgate.mp4", credit=True, sub=True)
+    furniture = H.learn_furniture(clip)
+    assert H.prints_in(clip, 4.0, 6.0, furniture), "subtitled shot must be rejected"
+    assert not H.prints_in(clip, 0.5, 2.5, furniture), "clean shot must pass"
