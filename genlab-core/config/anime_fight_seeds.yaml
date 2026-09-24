@@ -1,0 +1,19 @@
+# ANIME-PEAK-08 §2 — per-fighter colour seeds for the action box.
+#
+# HSV, matched against the whole frame (no birefnet foreground on this host).
+# A fighter with no nameable hue gets no seed and their shots fall back to
+# motion energy -- King is black-purple, and black has no hue.
+version: 1
+fights:
+  zoro_vs_king:
+    zoro:  {hue_deg: 120, hue_tol: 22, sat_min: 0.30, val_min: 0.20}   # haramaki
+    # king: none -- black body, white mask. motion fallback.
+  luffy_vs_kaido:
+    luffy: {hue_deg: 355, hue_tol: 18, sat_min: 0.40, val_min: 0.25}   # Gear 4 red
+    kaido: {hue_deg: 205, hue_tol: 20, sat_min: 0.30, val_min: 0.20}   # blue
+  deku_vs_overhaul:
+    deku:     {hue_deg: 150, hue_tol: 25, sat_min: 0.25, val_min: 0.18}
+    overhaul: {hue_deg: 285, hue_tol: 25, sat_min: 0.22, val_min: 0.15}
+  tanjiro_vs_akaza:
+    tanjiro: {hue_deg: 150, hue_tol: 25, sat_min: 0.25, val_min: 0.18}  # haori
+    akaza:   {hue_deg: 340, hue_tol: 20, sat_min: 0.35, val_min: 0.25}  # hair
