@@ -1,0 +1,39 @@
+# ANIME-PEAK-10 §2 — where trending-sound data comes from.
+#
+# Sources are listed here because security.md requires manual addition: a
+# fetcher never auto-discovers a host. Both were named by the operator in the
+# PEAK-10 packet.
+#
+# NOTHING HERE IS COMPOSITED. Spotify previews are 30 s and licensed for
+# preview use only; they are read for tempo/energy analysis and may be used as
+# a style REFERENCE where a generator accepts one. They are never placed in a
+# reel.
+version: 1
+
+user_agent: "GenLab/1.0 (+https://github.com/AnarchistSid/genlab-platform)"
+
+sources:
+  tiktok_creative_center:
+    enabled: true
+    host: ads.tiktok.com
+    # Public Creative Center trending-song endpoint, by region and period.
+    # Measured: this path returns HTTP 200 with {"code":40101,"msg":"no permission"}.
+    # The /song/rank_list variant 404s. Keeping the one that EXISTS so the
+    # failure reads as a permission problem, which it is, not a wrong path.
+    url: "https://ads.tiktok.com/creative_radar_api/v1/popular_trend/list"
+    regions: [US, BR, GB, IN]
+    period_days: 7
+    keywords: [phonk, funk, montagem, brazilian]
+    credential: null            # public
+  spotify:
+    enabled: true
+    host: api.spotify.com
+    token_url: "https://accounts.spotify.com/api/token"
+    # Editorial playlists named in the packet. IDs are resolved by search so a
+    # renamed playlist does not silently return nothing.
+    playlist_queries: ["Phonk", "Brazilian Phonk"]
+    credential:
+      client_id_env: SPOTIFY_CLIENT_ID
+      client_secret_env: SPOTIFY_CLIENT_SECRET
+
+output: ".tmp/music_trends/trending_sounds.json"

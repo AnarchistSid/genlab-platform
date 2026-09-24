@@ -647,3 +647,164 @@ def detect_tempo(path: Path, expected_bpm: float | None = None) -> float:
 
 def tempo_ok(measured: float, asked: float, tol: float = TEMPO_TOLERANCE) -> bool:
     return abs(measured - asked) <= tol * asked
+
+
+# ── PEAK-10 §1 — the window is fixed; the track adapts ──────────────────
+
+MAX_STRETCH = 0.04       # tempo may move this much, and no more
+
+
+def _atempo_chain(factor: float) -> str:
+    """atempo accepts 0.5-2.0 per instance; chain for anything outside."""
+    out, f = [], factor
+    while f < 0.5:
+        out.append("atempo=0.5")
+        f /= 0.5
+    while f > 2.0:
+        out.append("atempo=2.0")
+        f /= 2.0
+    out.append(f"atempo={f:.6f}")
+    return ",".join(out)
+
+
+def fit_bed(bed: Path, drop_t: float, impact_rel: float, reel_s: float,
+            bpm: float, dest: Path, *, bed_s: float | None = None) -> dict:
+    """Make the track fit the reel. The WINDOW never moves.
+
+    Three remedies, in the order they cost least:
+
+    1. **stretch** the whole track by at most ±4% so its drop moves toward
+       the impact. Cheap and inaudible at this size; it cannot close a large
+       gap on its own.
+    2. **trim** the intro from its start when the drop still lands late, or
+       **pre-roll** when it lands early -- the opening seconds then carry the
+       show's own audio alone.
+    3. **loop** a bar-aligned section after the drop when the track runs out
+       before the reel does. Bar-aligned so the grid survives the splice.
+
+    Shortening the fight to meet the drop is not among them: that is the edit
+    inverted, and PEAK-09 did it to Tanjiro before this rule existed.
+    """
+    from genlab_core.still.reference import duration_s
+
+    bed_s = bed_s if bed_s is not None else duration_s(bed)
+    want = impact_rel / drop_t if drop_t > 0 else 1.0
+    # A stretch factor < 1 SLOWS the track (its drop arrives later).
+    stretch = min(1 + MAX_STRETCH, max(1 - MAX_STRETCH, 1 / want))
+    eff_drop = drop_t / stretch
+    eff_len = bed_s / stretch
+
+    trim = max(0.0, eff_drop - impact_rel)
+    preroll = max(0.0, impact_rel - eff_drop)
+    covered = eff_len - trim + preroll
+
+    bar = (60.0 / bpm) * 4
+    loops, loop_from, loop_len = 0, 0.0, 0.0
+    if covered < reel_s - 0.05:
+        # loop a whole number of bars taken from after the drop
+        n_bars = max(1, int((eff_len - eff_drop) // bar))
+        loop_len = n_bars * bar
+        loop_from = eff_drop
+        loops = int((reel_s - covered) // loop_len) + 1
+
+    af = [_atempo_chain(stretch)] if abs(stretch - 1.0) > 1e-6 else []
+    if trim:
+        af += [f"atrim=start={trim:.3f}", "asetpts=PTS-STARTPTS"]
+    if preroll:
+        af.append(f"adelay={int(preroll * 1000)}|{int(preroll * 1000)}")
+    chain = ",".join(af) if af else "anull"
+
+    if loops:
+        segs = "".join(
+            f"[0:a]{chain},atrim=start={loop_from + trim:.3f}:"
+            f"end={loop_from + trim + loop_len:.3f},asetpts=PTS-STARTPTS[l{i}];"
+            for i in range(loops))
+        ins = "".join(f"[l{i}]" for i in range(loops))
+        fc = (f"[0:a]{chain}[base];{segs}[base]{ins}concat=n={loops + 1}:v=0:a=1,"
+              f"apad,atrim=0:{reel_s:.3f},asetpts=PTS-STARTPTS[a]")
+        cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(bed), "-filter_complex", fc,
+               "-map", "[a]"]
+    else:
+        cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(bed), "-af",
+               f"{chain},apad,atrim=0:{reel_s:.3f},asetpts=PTS-STARTPTS"]
+    subprocess.run(cmd + ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+                          str(dest)], check=True)
+
+    info = {"stretch": round(stretch, 4), "stretch_pct": round((stretch - 1) * 100, 2),
+            "trim_s": round(trim, 3), "preroll_s": round(preroll, 3),
+            "loops": loops, "loop_bars": round(loop_len / bar) if loops else 0,
+            "drop_at_reel_s": round(impact_rel, 3),
+            "effective_drop_s": round(eff_drop, 3)}
+    logger.info("[music] fit: stretch %+.1f%%, trim %.2fs, pre-roll %.2fs, %d loop(s)",
+                info["stretch_pct"], trim, preroll, loops)
+    return info
+
+
+# ── PEAK-10 §4 — style match, not a copy ────────────────────────────────
+
+CHROMA_HOP = 4096
+
+#: MEASURED 2026-09-25 on material already in hand: five pairs of unrelated
+#: generated tracks (different registers, different generations, and two
+#: against the earlier orchestral beds) scored 0.281-0.411, and a track
+#: against ITSELF scored 1.000. 0.55 sits clear of both. A reference-
+#: conditioned generation scoring above this is reproducing the tune, not the
+#: style, and is rejected.
+MAX_MELODY_SIMILARITY = 0.55
+
+
+def chroma(path: Path):
+    """Mean-normalised 12-bin pitch-class profile over time."""
+    import numpy as np
+
+    x = _decode(path).astype(np.float64)
+    n = 8192
+    if len(x) < n:
+        return np.zeros((12, 0))
+    freqs = np.fft.rfftfreq(n, 1 / SR)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        midi = 69 + 12 * np.log2(np.maximum(freqs, 1e-9) / 440.0)
+    pc = np.mod(np.round(midi).astype(int), 12)
+    usable = (freqs > 55) & (freqs < 4000)
+    cols = []
+    for i in range(0, len(x) - n, CHROMA_HOP):
+        spec = np.abs(np.fft.rfft(x[i:i + n] * np.hanning(n)))
+        v = np.zeros(12)
+        for k in range(12):
+            m = usable & (pc == k)
+            v[k] = spec[m].sum()
+        s = v.sum()
+        cols.append(v / s if s > 0 else v)
+    return np.array(cols).T if cols else np.zeros((12, 0))
+
+
+def chroma_similarity(a: Path, b: Path) -> float:
+    """Melodic/harmonic similarity in [0, 1], time-alignment invariant.
+
+    Cross-correlates the two chroma sequences over lag and pitch rotation and
+    keeps the best match, so a transposed or offset copy still scores high.
+    A STYLE match shares tempo, drums and texture but not the tune, and
+    should sit near the unrelated-track floor.
+    """
+    import numpy as np
+
+    ca, cb = chroma(a), chroma(b)
+    if ca.size == 0 or cb.size == 0:
+        return 0.0
+    n = min(ca.shape[1], cb.shape[1])
+    ca, cb = ca[:, :n], cb[:, :n]
+    best = 0.0
+    for rot in range(12):
+        bb = np.roll(cb, rot, axis=0)
+        for lag in range(0, max(1, n // 2), max(1, n // 40)):
+            x = ca[:, lag:].ravel()
+            y = bb[:, :n - lag].ravel() if lag else bb.ravel()
+            m = min(len(x), len(y))
+            if m < 24:
+                continue
+            x, y = x[:m], y[:m]
+            xs, ys = x - x.mean(), y - y.mean()
+            d = float(np.linalg.norm(xs) * np.linalg.norm(ys))
+            if d > 0:
+                best = max(best, float(np.dot(xs, ys) / d))
+    return max(0.0, best)

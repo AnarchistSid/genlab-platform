@@ -192,3 +192,69 @@ def test_tempo_gate_rejects_a_half_tempo_generation(tmp_path):
     assert not M.tempo_ok(M.detect_tempo(slow, 148.0), 148.0)
     fast = _click_track(tmp_path / "fast.wav", 148.0)
     assert M.tempo_ok(M.detect_tempo(fast, 148.0), 148.0)
+
+
+def _bed(path: Path, seconds: float, bpm: float = 150.0) -> Path:
+    period = 60.0 / bpm
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi",
+                    "-i", "sine=frequency=60:sample_rate=44100", "-t", str(seconds),
+                    "-af", f"volume='if(lt(mod(t,{period:.4f}),0.05),4,0.3)':eval=frame",
+                    "-c:a", "pcm_s16le", "-y", str(path)], check=True)
+    return path
+
+
+def test_fit_stretches_before_it_prerolls(tmp_path):
+    """A small stretch is cheaper than a silent opening, so it goes first."""
+    bed = _bed(tmp_path / "b.wav", 30.0)
+    info = M.fit_bed(bed, drop_t=10.0, impact_rel=10.3, reel_s=20.0, bpm=150.0,
+                     dest=tmp_path / "o.m4a")
+    assert info["preroll_s"] == 0.0 and info["trim_s"] == 0.0
+    assert -M.MAX_STRETCH * 100 <= info["stretch_pct"] < 0
+
+
+def test_fit_never_stretches_past_the_cap(tmp_path):
+    bed = _bed(tmp_path / "b.wav", 30.0)
+    info = M.fit_bed(bed, drop_t=5.0, impact_rel=20.0, reel_s=30.0, bpm=150.0,
+                     dest=tmp_path / "o.m4a")
+    assert abs(info["stretch_pct"]) <= M.MAX_STRETCH * 100 + 1e-6
+    assert info["preroll_s"] > 0, "the rest must be absorbed by pre-roll, not more stretch"
+
+
+def test_fit_trims_the_intro_when_the_drop_lands_late(tmp_path):
+    bed = _bed(tmp_path / "b.wav", 30.0)
+    info = M.fit_bed(bed, drop_t=18.0, impact_rel=6.0, reel_s=20.0, bpm=150.0,
+                     dest=tmp_path / "o.m4a")
+    assert info["trim_s"] > 5.0 and info["preroll_s"] == 0.0
+
+
+def test_fit_loops_bar_aligned_when_the_track_runs_out(tmp_path):
+    """Not exercised by the four pilot reels; pinned so it is not untested."""
+    bed = _bed(tmp_path / "b.wav", 12.0)
+    out = tmp_path / "o.m4a"
+    info = M.fit_bed(bed, drop_t=4.0, impact_rel=4.0, reel_s=28.0, bpm=150.0, dest=out)
+    assert info["loops"] >= 1 and info["loop_bars"] >= 1
+    from genlab_core.still.reference import duration_s
+    assert duration_s(out) == pytest.approx(28.0, abs=0.3)
+
+
+def test_the_window_is_never_shortened_to_meet_the_drop(tmp_path):
+    """fit_bed takes reel_s as GIVEN; it has no way to shorten the reel."""
+    import inspect
+    src = inspect.getsource(M.fit_bed)
+    assert "reel_s =" not in src, "fit_bed must not reassign the reel length"
+
+
+def test_melody_similarity_separates_a_copy_from_a_style_match(tmp_path):
+    """Calibrated on real material: unrelated 0.281-0.411, identical 1.000."""
+    a = tmp_path / "a.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi",
+                    "-i", "sine=frequency=220:sample_rate=44100", "-t", "6",
+                    "-c:a", "pcm_s16le", "-y", str(a)], check=True)
+    b = tmp_path / "b.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi",
+                    "-i", "sine=frequency=233:sample_rate=44100", "-t", "6",
+                    "-c:a", "pcm_s16le", "-y", str(b)], check=True)
+    assert M.chroma_similarity(a, a) > 0.95, "a track must match itself"
+    assert M.MAX_MELODY_SIMILARITY < 1.0
+    # a different pitch class is a different tune
+    assert M.chroma_similarity(a, b) < M.chroma_similarity(a, a)
