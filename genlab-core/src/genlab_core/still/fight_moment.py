@@ -244,3 +244,91 @@ def calibrate(
         if circular
         else "accuracy against independent marks",
     }
+
+
+# ── ANIME-PEAK-02 §2: blind marks, order enforced ────────────────────────
+
+
+class MarksNotBlind(RuntimeError):
+    """The marks were written after the selector ran. Not a calibration."""
+
+
+@dataclass(frozen=True)
+class Marks:
+    """One fight's hand marks, with the evidence that they came first."""
+
+    fight: str
+    impacts: list[float]
+    windup_starts: list[float] = None      # type: ignore[assignment]
+    falls: list[float] = None              # type: ignore[assignment]
+    sha256: str = ""
+    written_at: float = 0.0
+    marker_note: str = ""
+
+
+def write_marks(path: Path, fight: str, impacts: list[float], *,
+                windup_starts: list[float] | None = None,
+                falls: list[float] | None = None, note: str = "") -> Marks:
+    """Record marks and hash them. MUST happen before the selector runs."""
+    import hashlib
+    import json
+    import time
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = {"fight": fight, "impacts": impacts,
+            "windup_starts": windup_starts or [], "falls": falls or [],
+            "marker_note": note, "written_at": time.time()}
+    blob = json.dumps(body, sort_keys=True).encode()
+    body["sha256"] = hashlib.sha256(blob).hexdigest()[:16]
+    path.write_text(json.dumps(body, indent=2))
+    logger.info("[marks] %s: %d impacts, sha %s", fight, len(impacts), body["sha256"])
+    return Marks(fight, impacts, windup_starts or [], falls or [],
+                 body["sha256"], body["written_at"], note)
+
+
+def load_marks(path: Path) -> Marks:
+    import json
+
+    d = json.loads(path.read_text())
+    return Marks(d["fight"], d["impacts"], d.get("windup_starts", []),
+                 d.get("falls", []), d.get("sha256", ""), d.get("written_at", 0.0),
+                 d.get("marker_note", ""))
+
+
+def calibrate_blind(marks_path: Path, picks_path: Path,
+                    tolerance_s: float = CALIBRATION_TOLERANCE_S) -> dict:
+    """Calibrate ONLY if the marks predate the selector's output.
+
+    The order is the whole mechanism. Marks made after seeing the picks are
+    not marks — the first attempt at this reported a 100% hit rate at a
+    0.002 s median error because the marks WERE the picks. A file-mtime
+    comparison is not proof of intent, but it makes the cheap version of the
+    mistake impossible and leaves a record of which came first.
+
+    Reports PRECISION (picks near a mark) and RECALL (marks with no pick
+    near them) separately, because a selector that fires often will score
+    well on one and badly on the other, and recall is the one that says
+    whether the best moment was found.
+    """
+    import json
+
+    if not marks_path.exists():
+        raise MarksNotBlind(f"no marks at {marks_path}")
+    if picks_path.exists() and picks_path.stat().st_mtime < marks_path.stat().st_mtime:
+        raise MarksNotBlind(
+            f"{picks_path.name} predates {marks_path.name} — the selector ran "
+            f"before the marks were written, so these are not blind marks")
+
+    m = load_marks(marks_path)
+    picks = [float(x) for x in json.loads(picks_path.read_text())["picks"]]
+
+    matched_marks = [k for k in m.impacts if any(abs(p - k) <= tolerance_s for p in picks)]
+    matched_picks = [p for p in picks if any(abs(p - k) <= tolerance_s for k in m.impacts)]
+    recall = len(matched_marks) / len(m.impacts) if m.impacts else 0.0
+    precision = len(matched_picks) / len(picks) if picks else 0.0
+    missed = [k for k in m.impacts if k not in matched_marks]
+    return {"fight": m.fight, "marks_sha256": m.sha256, "n_marks": len(m.impacts),
+            "n_picks": len(picks), "tolerance_s": tolerance_s,
+            "recall": round(recall, 3), "precision": round(precision, 3),
+            "missed_marks_s": [round(x, 2) for x in missed],
+            "blind": True}

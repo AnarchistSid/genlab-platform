@@ -105,6 +105,15 @@ class SourceVerdict:
         return f"{self.fight:<26} REFUSED {self.reason}"
 
 
+#: Words that appear in half of anime titles and identify nobody.
+_GENERIC_WORDS = frozenset(
+    {
+        "man", "the", "and", "devil", "demon", "king", "lord", "master",
+        "hero", "boy", "girl", "clan", "slayer", "hunter", "chainsaw", "titan",
+    }
+)
+
+
 def names_the_fight(video_title: str, fight: str, show: str) -> bool:
     """Whether this clip is THE FIGHT, not merely from the right show.
 
@@ -130,8 +139,18 @@ def names_the_fight(video_title: str, fight: str, show: str) -> bool:
 
     # Each side may be a phrase ("the zenin"); any content word of it counts.
     def side_present(side: str) -> bool:
-        words = [w for w in side.split() if len(w) > 2 and w not in ("the", "and")]
-        return any(w in vt for w in words) if words else side in vt
+        """A side is present only on a DISTINCTIVE word, or the whole phrase.
+
+        Matching any word over two characters let "katana man" match
+        "Chainsaw Man" — so the gate accepted "Denji vs The Eternity Devil"
+        as Denji vs Katana Man, from an official channel, and it would have
+        been marked and rendered as the wrong fight. The same too-permissive
+        substring shape as the channel allowlist, one layer along.
+        """
+        if side in vt:
+            return True
+        words = [w for w in side.split() if len(w) >= 5 and w not in _GENERIC_WORDS]
+        return any(w in vt for w in words)
 
     if not all(side_present(c) for c in combatants):
         return False
