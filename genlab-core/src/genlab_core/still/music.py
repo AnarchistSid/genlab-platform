@@ -229,9 +229,10 @@ def register_for(fight_id: str) -> str:
     return cfg["fights"].get(fight_id, "brazilian_phonk")
 
 
-def prompt_for(register: str) -> tuple[str, float]:
+def prompt_for(register: str, intro_s: float = 8.0) -> tuple[str, float]:
     r = registers()["registers"][register]
-    return r["prompt"].format(tempo=r["tempo"]).strip(), float(r["tempo"])
+    return (r["prompt"].format(tempo=r["tempo"], intro=int(round(intro_s))).strip(),
+            float(r["tempo"]))
 
 
 @dataclass(frozen=True)
@@ -241,15 +242,18 @@ class Candidate:
     register: str
     continuous: bool = True
 
+    target_drop_s: float = 8.0
+
     @property
     def gates(self) -> dict[str, bool]:
         m = self.metrics
-        lo, hi = registers()["defaults"]["drop_window_s"]
+        resid = registers()["defaults"]["max_align_residual_s"]
         return {
             "tempo_130_165": m.in_tempo_band,
             "sub_share_25": m.sub_share >= MIN_SUB_SHARE,
             "has_drop": m.has_drop,
-            "drop_in_window": m.drop_t is not None and lo <= m.drop_t <= hi,
+            "drop_alignable": (m.drop_t is not None
+                               and abs(m.drop_t - self.target_drop_s) <= resid),
             "click_present": m.click_flatness >= MIN_CLICK_FLATNESS,
         }
 
@@ -273,7 +277,8 @@ MIN_CLICK_FLATNESS = 0.0
 
 
 def generate_candidates(fight_id: str, work: Path, *, n: int | None = None,
-                        duration_s: float | None = None) -> list[Candidate]:
+                        duration_s: float | None = None,
+                        target_drop_s: float = 8.0) -> list[Candidate]:
     """Generate and MEASURE n beds for this fight's register.
 
     Two prompt clauses from different packets collide here. ANIME-16 added
@@ -287,7 +292,7 @@ def generate_candidates(fight_id: str, work: Path, *, n: int | None = None,
 
     cfg = registers()
     reg = register_for(fight_id)
-    prompt, _ = prompt_for(reg)
+    prompt, _ = prompt_for(reg, intro_s=target_drop_s)
     n = n or int(cfg["defaults"]["candidates"])
     duration_s = duration_s or float(cfg["defaults"]["duration_s"])
     work.mkdir(parents=True, exist_ok=True)
@@ -299,24 +304,23 @@ def generate_candidates(fight_id: str, work: Path, *, n: int | None = None,
         p = prompt if i == 0 else f"{prompt}, variation {i + 1}"
         cont = i < max(1, n - 1)          # last candidate drops the clause
         generate_bed(p, duration_s, dest, continuous=cont)
-        out.append(Candidate(dest, measure(dest), reg, cont))
+        out.append(Candidate(dest, measure(dest), reg, cont, target_drop_s))
         logger.info("[music] %s", out[-1].row(dest.name))
     return out
 
 
-def pick(candidates: list[Candidate]) -> Candidate | None:
-    """The passing candidate whose drop sits best inside the window.
+def pick(candidates: list[Candidate], target_drop_s: float | None = None) -> Candidate | None:
+    """The passing candidate whose drop needs the least alignment.
 
-    Among passing candidates, prefer the one whose drop is nearest the middle
-    of the window -- that leaves the most room on both sides for the wind-up
-    and the reaction.
+    Nearest to the reel's OWN wind-up, not to a fixed window: the residual is
+    what align_bed has to absorb, either by trimming into the build or by
+    leaving a silent opening, and both are costs worth minimising.
     """
-    lo, hi = registers()["defaults"]["drop_window_s"]
-    mid = (lo + hi) / 2
     ok = [c for c in candidates if c.passes]
     if not ok:
         return None
-    return min(ok, key=lambda c: abs((c.metrics.drop_t or 0.0) - mid))
+    t = target_drop_s if target_drop_s is not None else ok[0].target_drop_s
+    return min(ok, key=lambda c: abs((c.metrics.drop_t or 0.0) - t))
 
 
 # ── §2 the reel is anchored on the drop ─────────────────────────────────
@@ -374,6 +378,41 @@ def beat_times(bed: Path, bpm: float, drop_t: float, reel_s: float,
         out.append(round(t, 4))
         t += period
     return out
+
+
+def downbeats(beats: list[float], every: int = 4, anchor: float = 0.0) -> list[float]:
+    """Every `every`-th beat, counted OUTWARD from the anchor.
+
+    The drop is a downbeat by construction, so the bar line is counted from
+    it. Counting from the file's start would put the bar line wherever the
+    detector's phase happened to land.
+    """
+    if not beats:
+        return []
+    period = beats[1] - beats[0] if len(beats) > 1 else 0.0
+    if period <= 0:
+        return list(beats)
+    bar = period * every
+    out, t = [], anchor
+    while t > beats[0] - bar:
+        t -= bar
+    while t <= beats[-1] + 1e-6:
+        if t >= beats[0] - 1e-6:
+            out.append(round(t, 4))
+        t += bar
+    return out
+
+
+def first_downbeat_after(t: float, beats: list[float], anchor: float = 0.0,
+                         every: int = 4) -> float:
+    """Where the hook slam goes: the first bar line at or after `t`.
+
+    Not the nearest BEAT -- at 150 BPM a bar is 1.6 s, so snapping the hook
+    to the nearest beat can put it three beats off the bar line, which reads
+    as a stumble rather than an entrance.
+    """
+    dbs = [d for d in downbeats(beats, every, anchor) if d >= t - 1e-6]
+    return dbs[0] if dbs else t
 
 
 def snap_to_beat(t: float, beats: list[float], max_shift_s: float = 0.20) -> float:

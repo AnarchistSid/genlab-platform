@@ -11,33 +11,41 @@ version: 1
 defaults:
   duration_s: 30
   candidates: 3
-  drop_window_s: [6.0, 10.0]
+  # The packet's 6-10 s drop window assumes a reel whose impact lands 6-10 s
+  # in. PEAK-08's character-scored windows put the impacts at 9.2-18.2 s, so
+  # the drop is instead aimed at each reel's OWN wind-up and the residual is
+  # absorbed by align_bed. This is the widest residual worth absorbing: past
+  # it the bed either starts mid-build or leaves a long silent opening.
+  max_align_residual_s: 5.0
 
 registers:
   brazilian_phonk:
     tempo: 148
     prompt: >-
-      Brazilian phonk montagem, {tempo} BPM, heavily distorted 808 sub bass,
-      cavalgada triplet cowbell pattern, low-pass-filtered 8-second intro
-      building into a hard drop, aggressive, club-ready, no vocals
+      Brazilian phonk montagem, {tempo} BPM, EXTREMELY heavy distorted 808 sub
+      bass dominating the mix, deep low-end, minimal treble, cavalgada triplet
+      cowbell pattern, low-pass-filtered {intro}-second intro building into a
+      hard drop, aggressive, club-ready, no vocals
   old_phonk:
     tempo: 140
     prompt: >-
-      old school Memphis phonk, {tempo} BPM, dark detuned cowbell, heavy
-      distorted 808 sub bass, lo-fi tape saturation, muffled filtered intro
-      opening into a hard drop, menacing, no vocals
+      old school Memphis phonk, {tempo} BPM, ENORMOUS distorted 808 sub bass
+      dominating the mix, deep low-end, muffled and dark, minimal treble,
+      detuned cowbell, low-pass-filtered {intro}-second intro opening into a
+      hard drop, menacing, no vocals
   phonk_slowed:
     tempo: 132
     prompt: >-
-      slowed phonk, {tempo} BPM, deep 808 sub bass, sparse reverbed cowbell,
-      melancholic detuned melody, filtered intro opening into a heavy drop,
-      no vocals
+      slowed phonk, {tempo} BPM, enormous deep 808 sub bass, sparse reverbed
+      cowbell, dark and muffled, melancholic detuned melody, low-pass-filtered
+      {intro}-second intro opening into a heavy drop, no vocals
   epic_hybrid:
     tempo: 150
     prompt: >-
-      epic orchestral phonk hybrid, {tempo} BPM, taiko and brass over a
-      distorted 808 sub bass and triplet cowbell, filtered 8-second build
-      into a hard orchestral drop, cinematic and aggressive, no vocals
+      epic orchestral phonk hybrid, {tempo} BPM, ENORMOUS distorted 808 sub
+      bass dominating the low end under taiko and brass, deep and muffled,
+      triplet cowbell, low-pass-filtered {intro}-second build into a hard
+      orchestral drop, cinematic and aggressive, no vocals
 
 fights:
   zoro_vs_king: brazilian_phonk

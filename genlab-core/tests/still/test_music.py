@@ -109,3 +109,13 @@ def test_mix_gate_rejects_a_title_louder_than_the_hit():
                       lufs=-14.0, true_peak=-1.5)
     assert not bad.passes and not bad.gates["loudest_is_the_hit"]
     assert good.passes
+
+
+def test_hook_goes_on_a_bar_line_not_the_nearest_beat():
+    """At 150 BPM a bar is 1.6 s; the nearest beat can be three beats off it."""
+    beats = M.beat_times(Path("x"), bpm=150.0, drop_t=8.0, reel_s=20.0, offset=12.0)
+    at = M.first_downbeat_after(0.30, beats, anchor=12.0)
+    bar = 4 * 60.0 / 150.0
+    assert abs((at - 12.0) / bar - round((at - 12.0) / bar)) < 1e-6
+    assert at >= 0.30
+    assert at != M.snap_to_beat(0.30, beats) or abs(at - 0.30) < 1e-9
