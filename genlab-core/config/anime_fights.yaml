@@ -39,6 +39,11 @@ fights:
   hardsub_trim: 'body ends 84.7s: ''K-Kaido-san...'' is burned across 84.8-87.2, the whole payoff shot,
     and sits below the print gate''s sensitivity. Trimmed by hand; reel falls under 20 s and takes the
     lower-third slate per section 5.'
+  music_register: brazilian_phonk
+  music_bpm: 148.0
+  music_drop_s: 6.75
+  music_sub_share: 0.495
+  music_drop_step_db: 32.3
 - id: luffy_vs_kaido
   show: One Piece
   studio: toei
@@ -72,6 +77,11 @@ fights:
     - 77.0
   impact_source: luma rise onset, confirmed by eye
   outro_card: null
+  music_register: brazilian_phonk
+  music_bpm: 148.0
+  music_drop_s: 13.45
+  music_sub_share: 0.297
+  music_drop_step_db: 17.7
 - id: goku_vs_frieza
   show: Dragon Ball Z
   studio: toei
@@ -260,6 +270,11 @@ fights:
     - 85.0
   impact_source: luma rise onset, confirmed by eye
   outro_card: null
+  music_register: old_phonk
+  music_bpm: 140.0
+  music_drop_s: 12.75
+  music_sub_share: 0.454
+  music_drop_step_db: 3.1
 - id: tanjiro_vs_akaza
   show: Demon Slayer
   studio: ufotable
@@ -292,10 +307,18 @@ fights:
   - 69.0
   - 72.0
   reel_body:
-  - - 72.0
+  - - 76.0
     - 96.0
   impact_source: luma rise onset, confirmed by eye
   outro_card: null
+  music_register: epic_hybrid
+  music_bpm: 150.0
+  music_drop_s: 16.55
+  music_sub_share: 0.342
+  music_drop_step_db: 13.6
+  windup_note: 'body starts at the 76.0 s cut, not 72.0: the generator places no drop later than ~13.7
+    s, so an 18.2 s wind-up cannot be served. The reel is shortened to the track rather than the track
+    stretched to the reel.'
 - id: saitama_vs_boros
   show: One Punch Man
   studio: madhouse

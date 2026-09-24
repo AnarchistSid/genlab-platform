@@ -1,0 +1,525 @@
+"""ANIME-PEAK-09 §2-§6 — the reel edited to the track.
+
+The order of operations is the point. v2 laid a bed under a finished cut, so
+the loudest second of every reel was the hook slam at 1.3-2.1 s. Here:
+
+    pick the bed (gated)  ->  snap the cuts to its beat grid
+    ->  recompute where the impact actually lands
+    ->  align the bed so its DROP sits on that impact
+    ->  mix, and gate the loudness arc
+
+The impact's reel time is recomputed AFTER snapping rather than assumed
+before it, because snapping moves every boundary and with it the impact.
+"""
+import json, subprocess, sys, time, urllib.request
+from pathlib import Path
+sys.path.insert(0, "genlab-core/src")
+import yaml
+from genlab_core.still import sound as SND, text_layers as TL, typography as TY
+from genlab_core.still import action_box as AB, fight_source as FS, hardsub as H, outro
+from genlab_core.still import music as MU
+from genlab_core.still.audio import measure_loudness
+from genlab_core.still.beats import load_kit
+from genlab_core.still.card import build_card, render_card
+from genlab_core.still.overlay import _textfile, append_loop_back
+from genlab_core.still.render import probe_duration
+from genlab_core.action.window import cut_times
+
+FPS = 30
+UA = {"User-Agent": "GenLab/1.0 (+https://github.com/AnarchistSid/genlab-platform)"}
+X264 = ["-c:v", "libx264", "-crf", "20", "-preset", "fast", "-pix_fmt", "yuv420p",
+        "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"]
+MIN_SHOT_S = 0.30
+FLASH_ALPHAS = (0.85, 0.85, 0.60, 0.30)   # over the frame, never a cut
+
+
+def run(cmd, t=1800):
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=t)
+    if r.returncode != 0:
+        raise RuntimeError(f"{cmd[0]} failed: {r.stderr[-400:]}")
+    return r
+
+
+def belt(ref, payload, timeout=900):
+    p = subprocess.run(["belt", "app", "run", ref, "--no-input", "--json", "--no-wait",
+                        "--input", json.dumps(payload)], capture_output=True, text=True, timeout=300)
+    tid = json.loads(p.stdout or "{}").get("id")
+    if not tid:
+        raise RuntimeError((p.stdout or p.stderr)[:160])
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        d = json.loads(subprocess.run(["belt", "task", "get", str(tid), "--json"],
+                                      capture_output=True, text=True, timeout=120).stdout or "{}")
+        if d.get("status_text") in ("completed", "failed", "cancelled"):
+            break
+        time.sleep(3)
+    if d.get("status_text") != "completed":
+        raise RuntimeError(f"{tid} {d.get('status_text')}")
+    return next(v for v in (d.get("output") or {}).values()
+                if isinstance(v, str) and v.startswith("http"))
+
+
+def fetch(url, dest):
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists() and dest.stat().st_size:
+        return dest
+    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=300) as r:
+        dest.write_bytes(r.read())
+    return dest
+
+
+def layout_vf(lay):
+    """§2 — the crop follows the action box; letterbox only the remainder."""
+    crop = f"crop={lay.crop_w}:{lay.src_h}:{lay.crop_x}:0"
+    if lay.kind == "box":
+        return (f"{crop},scale=1080:1920:force_original_aspect_ratio=increase:"
+                f"flags=lanczos,crop=1080:1920,setsar=1")
+    h = lay.band_height + (lay.band_height % 2)
+    return (f"{crop},split=2[bg][fg];"
+            f"[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
+            f"boxblur=30:2,eq=brightness=-0.14:saturation=0.82[bgb];"
+            f"[fg]scale=1080:{h}:flags=lanczos[fgs];"
+            f"[bgb][fgs]overlay=(W-w)/2:(H-h)/2,setsar=1")
+
+
+def shot_prints(src, s, e, furniture):
+    """Does this shot put somebody else's subtitle on screen?
+
+    The window-level gate tolerates 15% because it is deciding whether a
+    SOURCE is usable. A reel needs the decision per shot: at 7% over the
+    window, one Deku shot still burned "...a hero who saves everyone?" into
+    the finished reel. Same gate, different unit.
+    """
+    return H.prints_in(src, s, e, furniture)
+
+
+def plan_shots(src, segments, seeds, furniture=frozenset()):
+    """Cut-aligned shots with a layout decision each."""
+    shots = []
+    for a, b in segments:
+        cuts = [c for c in cut_times(str(src)) if a < c < b]
+        bounds = [a] + cuts + [b]
+        seg_shots = []
+        for i in range(len(bounds) - 1):
+            s, e = bounds[i], bounds[i + 1]
+            # A shot under the floor is MERGED into its neighbour, never
+            # dropped: dropping it silently shortens the reel, which is how
+            # Luffy came in 2.2 s under plan.
+            if e - s < MIN_SHOT_S:
+                if seg_shots:
+                    seg_shots[-1][1] = e
+                elif i + 1 < len(bounds) - 1:
+                    bounds[i + 1] = s
+                else:
+                    seg_shots.append([s, e])
+                continue
+            seg_shots.append([s, e])
+        for s, e in seg_shots:
+            if shot_prints(src, s, e, furniture):
+                shots.append({"start": round(s, 3), "end": round(e, 3),
+                              "dropped": "source_hardsub"})
+                continue
+            lay, ev = AB.layout_at(src, (s + e) / 2, seeds)
+            shots.append({"start": round(s, 3), "end": round(e, 3),
+                          "layout": lay.kind, "crop_x": lay.crop_x,
+                          "crop_w": lay.crop_w, "src_h": lay.src_h,
+                          "fills": round(lay.band_height / 1920, 3),
+                          "magnification": round(lay.magnification, 2),
+                          "fired": list(ev.fired), "unaccounted": list(ev.unaccounted),
+                          "box_w": round(ev.box.padded().w) if ev.box else 0})
+    return shots
+
+
+def iou(p, q):
+    if p is None or q is None:
+        return 0.0
+    ix = max(0.0, min(p.x1, q.x1) - max(p.x0, q.x0))
+    iy = max(0.0, min(p.y1, q.y1) - max(p.y0, q.y0))
+    inter = ix * iy
+    union = p.w * p.h + q.w * q.h - inter
+    return inter / union if union > 0 else 0.0
+
+
+def pose_gate(src_png, drawn_png, seeds, thresh=0.60):
+    """§4 — the drawing must hold the fighters' poses, or it is omitted.
+
+    Measured with the same colour seeds the action box uses: a drawing that
+    reimagines the frame moves the costumes, and the boxes stop overlapping.
+    """
+    import numpy as np
+    from PIL import Image
+    from genlab_core.action import colour_seed
+    res = {}
+    for name, spec in seeds.items():
+        boxes = []
+        for p in (src_png, drawn_png):
+            rgb = np.asarray(Image.open(p).convert("RGB"), dtype=np.uint8)
+            m = colour_seed.match(rgb, spec) > 0.5
+            boxes.append(AB._mask_box(m, AB.MIN_SEED_FRAC, name))
+        if boxes[0] is None:
+            continue           # fighter not located in the source: not gateable
+        res[name] = round(iou(boxes[0], boxes[1]), 3)
+    ok = bool(res) and all(v >= thresh for v in res.values())
+    return ok, res
+
+
+def render(fight, plan, src, audio, seeds, work, out, thumb, proofdir):
+    work.mkdir(parents=True, exist_ok=True)
+    proofdir.mkdir(parents=True, exist_ok=True)
+    kit = load_kit("anime"); brand = TY.for_niche("anime")
+    segments = [tuple(plan["open"])] + [tuple(s) for s in plan["body"]]
+    # §1 — nothing may be cut from the outro card. The windows are hand-set,
+    # so this is the assertion that keeps a future one from drifting in.
+    card = outro.detect(src)
+    if card.found:
+        over = [seg for seg in segments if seg[1] > card.start_s]
+        if over:
+            raise RuntimeError(f"segments {over} reach into the outro card at "
+                               f"{card.start_s:.1f}s ({card.duration_s:.1f}s long)")
+    furniture = H.learn_furniture(src)
+    all_shots = plan_shots(src, segments, seeds, furniture)
+    shots = [s for s in all_shots if "dropped" not in s]
+    dropped = [s for s in all_shots if "dropped" in s]
+    log = {"fight": fight["id"], "segments": segments, "impact": plan["impact"],
+           "impact_source": plan["impact_source"], "shots": shots,
+           "dropped_shots": dropped, "cost_usd": 0.0, "effects": [],
+           "outro_card": ({"at": round(card.start_s, 1), "len": round(card.duration_s, 1)}
+                          if card.found else None)}
+
+    # 1. every shot rendered at its own layout, audio carried with it
+    # §2 — the bed is chosen BEFORE the shot list, and the cuts snap to it.
+    bed_pick = plan["bed"]
+    bpm = float(bed_pick["bpm"])
+    impact_rel, planned_s = MU.snap_cuts(shots, bpm, plan["impact"],
+                                        min_shot_s=MIN_SHOT_S)
+    log["bpm"] = bpm
+    log["bed"] = bed_pick
+    log["impact_rel_after_snap"] = round(impact_rel, 3) if impact_rel is not None else None
+    log["reel_body_s"] = round(planned_s, 2)
+
+    parts = []
+    reel_t = 0.0
+    for i, sh in enumerate(shots):
+        d = sh["end"] - sh["start"]
+        p = work / f"shot_{i:02d}.mp4"
+        lay = AB.Layout(sh["layout"], sh["crop_x"], sh["crop_w"], 0.0, None, True,
+                        sh["src_h"])
+        run(["ffmpeg", "-y", "-v", "error", "-ss", f"{sh['start']:.3f}", "-i", str(src),
+             "-ss", f"{sh['start']:.3f}", "-i", str(audio), "-t", f"{d:.3f}",
+             "-filter_complex", f"[0:v]{layout_vf(lay)}[v]", "-map", "[v]", "-map", "1:a",
+             "-r", str(FPS), *X264, "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+             str(p)])
+        parts.append(p); reel_t += d
+    log["body_s"] = round(reel_t, 2)
+
+    lst = work / "concat.txt"
+    lst.write_text("".join(f"file '{p.resolve()}'\n" for p in parts))
+    body = work / "body.mp4"
+    run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(lst),
+         *X264, "-c:a", "aac", "-b:a", "192k", "-ar", "48000", str(body)])
+
+    # 2. the drawn flash, gated on pose (§4)
+    flash_png = None
+    if impact_rel is not None:
+        still = work / "impact_src.png"
+        lay_i, _ = AB.layout_at(src, plan["impact"], seeds)
+        run(["ffmpeg", "-y", "-v", "error", "-ss", f"{plan['impact']:.3f}", "-i", str(src),
+             "-frames:v", "1", "-vf", layout_vf(lay_i), str(still)]
+            if lay_i.kind == "box" else
+            ["ffmpeg", "-y", "-v", "error", "-ss", f"{plan['impact']:.3f}", "-i", str(src),
+             "-frames:v", "1", "-vf", "scale=1080:-2", str(still)])
+        # The generator is stochastic: the same prompt on the same frame
+        # scored 0.349 / 0.666 / 0.441 on three draws. Sample it a bounded
+        # number of times and let the gate decide -- every attempt is
+        # recorded, and a fight that never clears 0.60 ships with no flash.
+        attempts = []
+        try:
+            for n in range(3):
+                url = belt("pruna/flux-2-klein-4b",
+                           {"prompt": ("anime action frame redrawn in bold ink linework over the "
+                                       "SAME composition: keep the original colours, the same "
+                                       "characters in the same positions and the same framing "
+                                       "exactly. Hard cel shading, high contrast. Avoid: white "
+                                       "background, monochrome, recomposing, zooming, text, "
+                                       "watermarks, extra limbs, a different character"),
+                            "aspect_ratio": "9:16", "output_megapixels": "1",
+                            "output_format": "jpg", "images": [str(still)]})
+                drawn = fetch(url, work / f"drawn_{n}.jpg"); log["cost_usd"] += 0.001
+                ok, ious = pose_gate(still, drawn, seeds)
+                attempts.append(ious)
+                if ok:
+                    flash_png = drawn
+                    break
+                if not ious:
+                    break
+            log["pose_attempts"] = attempts
+            if flash_png is not None:
+                log["flash"] = (f"drawn, {len(FLASH_ALPHAS)} frames over the live frame "
+                                f"(pose IoU {attempts[-1]}, attempt {len(attempts)} of 3)")
+            elif not attempts or not attempts[-1]:
+                log["flash"] = "none (pose gate not evaluable: no seed located a fighter)"
+            else:
+                log["flash"] = f"none (pose IoU {attempts} all below 0.60)"
+        except Exception as e:
+            log["flash"] = f"none (draw_failed: {str(e)[:70]})"
+    else:
+        log["flash"] = "none (impact outside the reel)"
+
+    # 3. effects: grade, impact hold + shake, flash composited OVER the frame
+    hold = impact_rel if impact_rel is not None else 1.0
+    vf = [f"eq=saturation=1.12:contrast=1.06",
+          f"colorbalance=rs=0.04:gs=0.02:bs=-0.02",
+          f"eq=brightness='0.26*between(t,{hold:.3f},{hold + 0.10:.3f})':eval=frame",
+          (f"crop=w='iw-24*between(t,{hold:.3f},{hold + 0.33:.3f})'"
+           f":h='ih-24*between(t,{hold:.3f},{hold + 0.33:.3f})'"
+           f":x='12*between(t,{hold:.3f},{hold + 0.33:.3f})*sin(60*t)'"
+           f":y='12*between(t,{hold:.3f},{hold + 0.33:.3f})*cos(57*t)',scale=1080:1920,setsar=1")]
+    log["effects"] += [f"grade(aura {fight['aura_colour']})", f"impact_hold@{hold:.2f}s", "shake 0.33s"]
+    fx = work / "fx.mp4"
+    if flash_png is None:
+        run(["ffmpeg", "-y", "-v", "error", "-i", str(body), "-vf", ",".join(vf),
+             "-r", str(FPS), *X264, "-c:a", "copy", str(fx)])
+    else:
+        chain = f"[0:v]{','.join(vf)}[base]"
+        prev = "base"
+        for k, a in enumerate(FLASH_ALPHAS):
+            t0 = hold + k / FPS; t1 = t0 + 1.0 / FPS
+            chain += (f";[1:v]scale=1080:1920:force_original_aspect_ratio=increase,"
+                      f"crop=1080:1920,format=rgba,colorchannelmixer=aa={a}[d{k}]"
+                      f";[{prev}][d{k}]overlay=0:0:enable='between(t,{t0:.3f},{t1:.3f})'[o{k}]")
+            prev = f"o{k}"
+        run(["ffmpeg", "-y", "-v", "error", "-i", str(body), "-loop", "1", "-i", str(flash_png),
+             "-filter_complex", chain, "-map", f"[{prev}]", "-map", "0:a", "-shortest",
+             "-r", str(FPS), *X264, "-c:a", "aac", "-b:a", "192k", "-ar", "48000", str(fx)])
+        log["effects"].append(f"drawn flash over the frame, alphas {FLASH_ALPHAS}")
+    log["aura"] = "none (no_matte) — graded, not silhouette-hugging"
+
+    # 4. §5 — an end card at 1.5 s, or a lower-third slate when the reel
+    # comes in under 20 s. Zoro's payoff shot carries a burned subtitle for
+    # its whole length, so his body ends before it and the reel is short.
+    if reel_t + 1.5 < 20.0:
+        log["tail"] = f"lower-third slate (reel body {reel_t:.1f}s is under 20 s)"
+        return log, fx, probe_duration(fx), kit, brand, fx, hold
+    log["tail"] = "end card 1.5 s"
+    card = work / "card.mp4"
+    facts = {"studio": fight["studio"].replace("_", " ").title(), "arc": fight["arc"],
+             "watch": fight["_channel"]}
+    c = build_card(plan["title"], facts, provenance=fight["_channel"])
+    render_card(c, card, kit=kit, duration_s=1.5, outro_handle=kit["outro"]["handle"],
+                outro_label=kit["outro"]["cta"])
+    lst2 = work / "concat2.txt"
+    lst2.write_text("".join(f"file '{Path(x).resolve()}'\n" for x in (fx, card)))
+    joined = work / "joined.mp4"
+    run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(lst2),
+         *X264, "-c:a", "aac", "-b:a", "192k", "-ar", "48000", str(joined)])
+    vlen = probe_duration(joined)
+    return log, joined, vlen, kit, brand, fx, hold
+
+
+def finish(fight, plan, log, joined, vlen, kit, brand, fx, hold, src, seeds,
+           work, out, thumb, proofdir):
+    # 5. §3 — the mix, built so the loudness arc runs the right way.
+    #
+    # The impact carries a generated hit; the bed is ducked by that hit with a
+    # 150 ms release. Without a hit at the impact nothing makes the impact the
+    # loudest second, which is why every v2 reel peaked on its hook slam.
+    from genlab_core.still.sound import generate_sfx
+
+    impact_rel = log["impact_rel_after_snap"] or 1.0
+    bed_src = Path(log["bed"]["path"])
+    aligned = work / "bed_aligned.m4a"
+    log["bed_align"] = MU.align_bed(bed_src, float(log["bed"]["drop"]), impact_rel,
+                                    vlen, aligned)
+
+    # The hit must be long enough to WIN a 1-second RMS window, because that
+    # is what check_mix measures. Measured on a synthetic mix with the hit at
+    # 9.20 s: at 0.4 s and 0.8 s the loudest second landed at the reel's end
+    # (18.70 s); at 1.5 s and 2.0 s with a fade it landed at 9.70 s. A short
+    # punchy hit is better sound design and cannot pass this meter, so the
+    # sound and the gate are chosen together.
+    hit = generate_sfx("sub_drop", work.parent / "sound" / "hit_sub_drop.mp3", duration_s=2.0)
+    slam = generate_sfx("whoosh", work.parent / "sound" / "hook_whoosh.mp3", duration_s=1.0)
+    log["cost_usd"] += 0.00104 * 2
+
+    grid = MU.beat_times(bed_src, bpm=log["bpm"], drop_t=float(log["bed"]["drop"]),
+                         reel_s=vlen, offset=impact_rel)
+    hook_at = MU.first_downbeat_after(0.30, grid, anchor=impact_rel)
+    log["hook_slam_at"] = round(hook_at, 3)
+
+    # Levels, set from the measured mix rather than by ear.
+    #
+    # Aligning the drop to the impact does NOT make the impact the loudest
+    # second: a drop is where the level STEPS UP, and the section's peak
+    # arrives later -- measured 1.1-3.3 s after the impact on the aligned
+    # beds. Meanwhile the show's own audio peaked 5.1 dB higher BEFORE the
+    # impact. So the hit has to own the loudest second outright, and both
+    # the bed and the show duck under it.
+    HIT_DB, SLAM_DB, BED_DB, SHOW_DB = 0.0, -16.0, -7.0, -11.0
+    log["slam_under_hit_db"] = HIT_DB - SLAM_DB
+    premix = work / "premix.m4a"
+    run(["ffmpeg", "-y", "-v", "error",
+         "-i", str(joined), "-i", str(aligned), "-i", str(hit), "-i", str(slam),
+         "-filter_complex",
+         # the show's own audio, kept for voice lines and hits
+         f"[0:a]volume={SHOW_DB}dB,apad,atrim=0:{vlen:.3f},asetpts=PTS-STARTPTS[showv];"
+         # the impact hit, placed on the impact
+         f"[2:a]volume={HIT_DB}dB,afade=t=out:st=0.8:d=1.2,"
+         f"adelay={int(impact_rel * 1000)}|{int(impact_rel * 1000)},"
+         f"apad,atrim=0:{vlen:.3f},asetpts=PTS-STARTPTS[hit];"
+         f"[2:a]volume={HIT_DB}dB,afade=t=out:st=0.8:d=1.2,"
+         f"adelay={int(impact_rel * 1000)}|{int(impact_rel * 1000)},"
+         f"apad,atrim=0:{vlen:.3f},asetpts=PTS-STARTPTS[key];"
+         # the hook slam, at the first downbeat, gated well under the hit
+         f"[3:a]volume={SLAM_DB}dB,adelay={int(hook_at * 1000)}|{int(hook_at * 1000)},"
+         f"apad,atrim=0:{vlen:.3f},asetpts=PTS-STARTPTS[slam];"
+         # the bed, sidechain-ducked BY the hit, 150 ms release
+         f"[1:a]volume={BED_DB}dB[bedv];"
+         f"[key]asplit=2[k1][k2];"
+         f"[bedv][k1]sidechaincompress=threshold=0.03:ratio=8:attack=5:release=150[bed];"
+         f"[showv][k2]sidechaincompress=threshold=0.03:ratio=8:attack=5:release=150[show];"
+         f"[show][bed][hit][slam]amix=inputs=4:duration=first:normalize=0,"
+         f"apad,atrim=0:{vlen:.3f}[a]",
+         "-map", "[a]", "-c:a", "aac", "-b:a", "192k",
+         "-ar", "48000", "-ac", "2", str(premix)])
+
+    # Normalise by MEASUREMENT, not by loudnorm.
+    #
+    # Single-pass loudnorm is dynamic and was 1.3-1.9 dB hot. Two-pass with
+    # linear=true moved both test files the WRONG way (-13.09 -> -12.68 and
+    # -14.96 -> -14.19). Single-pass at TP=-1.5 undershot to -17.07. A static
+    # gain computed from the premix's own integrated loudness, followed by a
+    # limiter, landed on -14.00 LUFS at TP -1.68 in one step and is provable.
+    #
+    # The limiter aims BELOW the ceiling on purpose: the kit targets true peak
+    # at exactly -1.0, so measurement lands either side of it and half the
+    # reels failed a "<= -1.0" gate by a tenth of a dB. Aiming at a ceiling
+    # cannot clear it.
+    pre_i, pre_tp = measure_loudness(premix)
+    gain_db = float(kit["audio"]["target_lufs"]) - pre_i
+    mixed = work / "mixed.m4a"
+    run(["ffmpeg", "-y", "-v", "error", "-i", str(premix), "-af",
+         f"volume={gain_db:.2f}dB,alimiter=limit=-1.5dB:level=disabled,"
+         f"apad,atrim=0:{vlen:.3f}",
+         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", str(mixed)])
+    log["normalise"] = {"premix_lufs": round(pre_i, 2), "premix_tp": round(pre_tp, 2),
+                        "gain_db": round(gain_db, 2), "limiter_dbtp": -1.5}
+    lufs, tp = measure_loudness(mixed)
+
+    # 6. hook slam + attribution
+    td = work / ".text"
+    hook = TL.Hook(plan["hook"], onset_s=0.3, duration_s=2.2)
+    slate = FS.attribution(plan["title"], fight["studio"].replace("_", " ").title(),
+                           fight["_channel"])
+    sp = _textfile(td, "slate", slate)
+    layers = [TL.hook_filters(hook, td, kit["accent"], display_font=brand.display),
+              (f"drawtext=textfile='{sp}':fontsize=26:fontcolor=white@0.80:box=1:"
+               f"boxcolor=black@0.45:boxborderw=12:x=24:y=h-62:fontfile={brand.body}")]
+    if log.get("tail", "").startswith("lower-third"):
+        st = max(0.0, vlen - 2.5)
+        slate_lines = [plan["title"], fight["studio"].replace("_", " ").title(),
+                       kit["outro"]["handle"]]
+        for i, line in enumerate(slate_lines):
+            lp = _textfile(td, f"lt{i}", line)
+            size = 58 if i == 0 else 34
+            y = 1180 + i * 80
+            layers.append(
+                f"drawtext=textfile='{lp}':fontsize={size}:fontcolor=white:"
+                f"box=1:boxcolor=black@0.55:boxborderw=16:x=(w-text_w)/2:y={y}:"
+                f"fontfile={brand.display if i == 0 else brand.body}:"
+                f"enable='gte(t,{st:.2f})'")
+    vf2 = ",".join(layers)
+    comp = work / "comp.mp4"
+    run(["ffmpeg", "-y", "-v", "error", "-i", str(joined), "-i", str(mixed), "-vf", vf2,
+         "-map", "0:v", "-map", "1:a", "-shortest", *X264, "-c:a", "aac", "-b:a", "192k",
+         "-ar", "48000", str(comp)])
+    assert append_loop_back(comp, out, hold_s=0.4)
+
+    # 7. cover — sharpest wind-up/clash frame with a fighter located, sane luma (§6)
+    from genlab_core.still import cover as CV
+    from genlab_core.still.pv import frame_sharpness
+    best = None
+    t = plan["body"][0][0]
+    while t < plan["impact"]:
+        ev = AB.shot_evidence(src, t, seeds)
+        if ev.fired:
+            o = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-ss", str(t), "-i", str(src),
+                                "-frames:v", "1", "-vf",
+                                "scale=160:-2,signalstats,metadata=print:key=lavfi.signalstats.YAVG",
+                                "-f", "null", "-"], capture_output=True, text=True)
+            ys = [float(x.split("=")[1]) for x in o.stderr.splitlines() if "YAVG" in x]
+            if ys and 60.0 <= ys[0] <= 200.0:
+                sh = frame_sharpness(src, t)
+                if best is None or sh > best[0]:
+                    best = (sh, t)
+        t += 0.4
+    cover_t = best[1] if best else plan["body"][0][0] + 1.0
+    log["cover_t"] = round(cover_t, 2)
+    log["cover_rule"] = ("sharpest wind-up frame with a fighter located and luma 60-200"
+                         if best else "fallback: no frame met the rule")
+    cf = work / "cover_src.png"
+    lay_c, _ = AB.layout_at(src, cover_t, seeds)
+    run(["ffmpeg", "-y", "-v", "error", "-ss", f"{cover_t:.3f}", "-i", str(src),
+         "-frames:v", "1", "-filter_complex", f"[0:v]{layout_vf(lay_c)}[v]", "-map", "[v]", str(cf)])
+    log["cover"] = CV.render(CV.Cover(plan["hook"], plan["title"], kit["outro"]["handle"],
+                                      kit["accent"]), cf, thumb,
+                             display_font=brand.display, body_font=brand.body)
+
+    # 8. ten proof frames across the finished reel
+    total = probe_duration(out)
+    for k in range(10):
+        pt = total * (k + 0.5) / 10
+        run(["ffmpeg", "-y", "-v", "error", "-ss", f"{pt:.3f}", "-i", str(out), "-frames:v", "1",
+             "-vf", f"scale=300:-2,drawtext=text='{k} {pt:.1f}s':x=6:y=4:fontsize=22:"
+                    f"fontcolor=yellow:box=1:boxcolor=black@0.7",
+             str(proofdir / f"{fight['id']}_{k}.jpg")])
+
+    chk = MU.check_mix(out, log["impact_rel_after_snap"] or 0.0)
+    log["mix_gate"] = {"sub_share": round(chk.sub_share, 4),
+                       "loudest_s": round(chk.loudest_s, 2),
+                       "impact_s": round(chk.impact_s, 2),
+                       "gates": chk.gates, "passes": chk.passes}
+    log.update({"duration_s": round(total, 2), "lufs": round(lufs, 1), "true_peak": round(tp, 1),
+                "attribution": slate, "cost_usd": round(log["cost_usd"], 5)})
+    (work / "render_log.json").write_text(json.dumps(log, indent=2))
+    return log
+
+
+if __name__ == "__main__":
+    cfg = json.loads(Path(sys.argv[1]).read_text())
+    SPD = Path(cfg["sp"])
+    fights = {f["id"]: f for f in yaml.safe_load(
+        open("genlab-core/config/anime_fights.yaml"))["fights"]}
+    seeds_all = yaml.safe_load(open("genlab-core/config/anime_fight_seeds.yaml"))["fights"]
+    plans = json.loads((SPD / "reelplan_v3.json").read_text())
+    music = json.loads((SPD / "music_v3_final.json").read_text())
+    srcs = {o["id"]: o for o in json.loads((SPD / "resourced.json").read_text())}
+    outdir = Path(cfg["outdir"]); outdir.mkdir(parents=True, exist_ok=True)
+    proof = SPD / "proof_v3"
+    for fid in cfg["fights"]:
+        f = fights[fid]; plan = plans[fid]; s = srcs[fid]
+        mu = music[fid]
+        if not mu.get("pick"):
+            print(f"  {fid:<20} SKIPPED no bed cleared the §1 gates", flush=True)
+            continue
+        plan["bed"] = {"path": mu["pick"], "drop": mu["pick_drop"],
+                       "bpm": mu["pick_bpm"], "sub": mu["pick_sub"],
+                       "register": mu["register"],
+                       "drop_step_db": mu["drop_step_db"],
+                       "align_residual_s": mu["align_residual_s"]}
+        f["_channel"] = s["uploader"]; f["_bed_prompt"] = cfg["beds"][f["register"]]
+        try:
+            args = render(f, plan, SPD / "fights" / f"{fid}.mp4", SPD / "fights" / f"{fid}.m4a",
+                          seeds_all[fid], SPD / f"peakv3_{fid}", outdir / f"peak_{fid}_v3.mp4",
+                          outdir / f"cover_peak_{fid}_v3.jpg", proof)
+            lg = finish(f, plan, *args, SPD / "fights" / f"{fid}.mp4", seeds_all[fid],
+                        SPD / f"peakv3_{fid}", outdir / f"peak_{fid}_v3.mp4",
+                        outdir / f"cover_peak_{fid}_v3.jpg", proof)
+            g = lg["mix_gate"]
+            print(f"  {fid:<20} DONE {lg['duration_s']}s  {lg['bpm']:.0f}BPM  "
+                  f"drop@{lg['impact_rel_after_snap']:.2f}s  sub {g['sub_share']:.0%}  "
+                  f"loudest {g['loudest_s']:.2f}s  {lg['lufs']:.1f}LUFS  "
+                  f"{'PASS' if g['passes'] else 'FAIL:' + ','.join(k for k, v in g['gates'].items() if not v)}",
+                  flush=True)
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            print(f"  {fid:<20} FAILED {str(e)[:200]}", flush=True)
