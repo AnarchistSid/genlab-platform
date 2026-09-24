@@ -71,6 +71,9 @@ studios:
     note: >-
       Historically tolerant of short clips; Aniplex handles its enforcement and
       has been claim-first rather than strike-first.
+  madhouse:
+    posture: moderate
+    shows: ["One Punch Man", "Hunter x Hunter", "Death Note"]
   kyoto_animation:
     posture: moderate
     shows: ["Violet Evergarden", "A Silent Voice", "Hyouka"]

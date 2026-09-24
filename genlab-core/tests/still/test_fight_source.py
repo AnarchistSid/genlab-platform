@@ -142,3 +142,43 @@ class TestTheEpisodeGate:
 
     def test_no_episode_number_means_no_match(self):
         assert not FS.episode_matches("One Piece Episode 1062", None)
+
+
+class TestTheEpisodeGateChecksTheShowToo:
+    """ANIME-PEAK-03. The third instance of one-identifier-checked.
+
+    A distributor uploads dozens of series and numbers each from 1, so the
+    episode gate alone matched, all from allowlisted channels:
+
+        Sukuna vs Mahoraga (JJK ep 41)  -> "Fairy Tail - Episode 041 (S1E41)"
+        Denji vs Katana Man (ep 9)      -> "Junji Ito Collection ... Episode 9"
+        Mob vs Toichiro (S2E12)         -> "Mob Psycho 100 - Episode 12 (S1E12)"
+
+    The first two are different SHOWS; the third is the right show and the
+    wrong SEASON.
+    """
+
+    def test_the_right_number_on_the_wrong_show_is_refused(self):
+        assert not FS.episode_matches(
+            "Fairy Tail - Episode 041 (S1E41) [English Sub]", [41, 18], 2,
+            show_titles=["Jujutsu Kaisen"])
+        assert not FS.episode_matches(
+            "Junji Ito Collection Halloween Special Episode 9", [9], None,
+            show_titles=["Chainsaw Man"])
+
+    def test_the_right_show_and_wrong_season_is_refused(self):
+        assert not FS.episode_matches(
+            "Mob Psycho 100 - Episode 12 (S1E12)", [25, 12], 2,
+            show_titles=["Mob Psycho 100"])
+
+    def test_the_right_show_and_season_passes(self):
+        assert FS.episode_matches(
+            "Mob Psycho 100 II - Episode 12 (S2E12)", [25, 12], 2,
+            show_titles=["Mob Psycho 100"])
+        assert FS.episode_matches(
+            "Jujutsu Kaisen - Episode 41 (S2E18)", [41, 18], 2,
+            show_titles=["Jujutsu Kaisen"])
+
+    def test_omitting_show_titles_keeps_the_old_permissive_behaviour(self):
+        """Explicit, so a caller that forgets is not silently strict."""
+        assert FS.episode_matches("Fairy Tail - Episode 041", [41], None)

@@ -136,3 +136,42 @@ fights:
     register: edit
     aura_colour: "#E03A3A"
     status: unmade
+
+  # ── ANIME-PEAK-03 §1 test-set candidates ───────────────────────────────
+  - id: deku_vs_overhaul
+    show: "My Hero Academia"
+    studio: bones
+    arc: "Shie Hassaikai"
+    episode: [74, 11]
+    season: 4
+    combatants: ["Deku", "Overhaul"]
+    aka: ["Izuku vs Overhaul", "Deku vs Chisaki"]
+    approx_s: null
+    register: epic
+    aura_colour: "#3FA9A0"
+    status: unmade
+
+  - id: tanjiro_vs_akaza
+    show: "Demon Slayer"
+    studio: ufotable
+    arc: "Mugen Train"
+    episode: null
+    combatants: ["Tanjiro", "Akaza"]
+    aka: ["Rengoku vs Akaza", "Mugen Train Akaza"]
+    approx_s: null
+    register: epic
+    aura_colour: "#FF6A1A"
+    status: unmade
+
+  - id: saitama_vs_boros
+    show: "One Punch Man"
+    studio: madhouse
+    arc: "Alien Conquerors"
+    episode: [12]
+    season: 1
+    combatants: ["Saitama", "Boros"]
+    aka: ["Serious Punch", "Saitama vs Lord Boros"]
+    approx_s: null
+    register: epic
+    aura_colour: "#F2C14E"
+    status: unmade

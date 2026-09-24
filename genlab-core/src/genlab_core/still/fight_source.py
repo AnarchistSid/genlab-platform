@@ -185,7 +185,8 @@ def is_full_episode_channel(uploader: str) -> bool:
 
 
 def episode_matches(video_title: str, episode: int | list | None,
-                    season: int | None = None) -> bool:
+                    season: int | None = None,
+                    show_titles: list[str] | str | None = None) -> bool:
     """Whether this upload is the episode the fight is in.
 
     ANIME-PEAK-02 §1. ``names_the_fight`` is the right gate for a CLIP
@@ -203,6 +204,23 @@ def episode_matches(video_title: str, episode: int | list | None,
         return False
     numbers = episode if isinstance(episode, (list, tuple)) else [episode]
     t = (video_title or "").lower()
+
+    # THE SHOW FIRST. A distributor uploads dozens of series and numbers each
+    # from 1, so "episode 41" on Muse Asia matched Fairy Tail for a Jujutsu
+    # Kaisen fight, and "Episode 12" matched a Junji Ito special for Chainsaw
+    # Man. Checking one identifier and not the other is the same mistake as
+    # matching a channel by substring — third instance in this file.
+    if show_titles is not None:
+        names = [show_titles] if isinstance(show_titles, str) else list(show_titles)
+        if not any(_norm(n) and _norm(n) in _norm(video_title) for n in names if n):
+            return False
+
+    # A season marker in the title must AGREE. "Mob Psycho 100 - Episode 12
+    # (S1E12)" satisfied a [25, 12] list meant for S2E12, so the wrong season
+    # of the right show passed.
+    m = re.search(r"s(\d{1,2})\s*e(\d{1,3})\b", t)
+    if m and season is not None and int(m.group(1)) != int(season):
+        return False
     for n in numbers:
         if not n:
             continue
@@ -225,6 +243,7 @@ def find(
     episode: int | list | None = None,
     season: int | None = None,
     aka: list[str] | None = None,
+    show_titles: list[str] | None = None,
 ) -> SourceVerdict:
     """Search for a usable clip. Metadata only; nothing is downloaded here."""
     studio, posture = studio_posture(show)
@@ -257,7 +276,8 @@ def find(
                 continue
             full_ep = is_full_episode_channel(up)
             if full_ep:
-                if not episode_matches(rec["title"], episode, season):
+                if not episode_matches(rec["title"], episode, season,
+                                       show_titles=[show, *(show_titles or [])]):
                     rec["tier"] = f"{tier} (licensed channel, but not episode {episode})"
                     continue
                 rec["gate"] = f"episode {episode}"
