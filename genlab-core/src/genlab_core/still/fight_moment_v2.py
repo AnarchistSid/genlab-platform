@@ -197,3 +197,88 @@ def window_for(imp: Impact, duration_s: float) -> Sequence:
 
     b = Beat(imp.t, imp.detail, imp.audio_step, 0.0, imp.audio_step)
     return sequence_for(b, duration_s)
+
+
+# ── ANIME-PEAK-06 §2: one pick per window, and the flash is gated on it ──
+
+#: Two impacts closer than this inside one window are one impact.
+NMS_SEPARATION_S = 2.0
+
+
+@dataclass(frozen=True)
+class WindowPick:
+    """The single impact chosen for a marked window, and whether it is trusted."""
+
+    t: float | None
+    confirmed: bool
+    confirmed_by: str = ""
+    audio_step: float = 0.0
+    anchor_t: float = 0.0        # what the speed ramp anchors on
+    reason: str = ""
+
+    def row(self) -> str:
+        if self.confirmed:
+            return (f"impact {self.t:6.2f}s  CONFIRMED by {self.confirmed_by} "
+                    f"(audio +{self.audio_step:.1f} dB) -> drawn flash ON")
+        return (f"impact {('%.2fs' % self.t) if self.t is not None else '   none'}  "
+                f"UNCONFIRMED -> flash: none (impact_unconfirmed); "
+                f"ramp anchors on {self.anchor_t:.2f}s — {self.reason}")
+
+
+def pick_for_window(video: Path, audio: Path | None, window: tuple[float, float],
+                    impact_intervals: list[list[float]] | None = None) -> WindowPick:
+    """One impact for this window. The drawn flash is gated on the mark.
+
+    PEAK-03 produced 25 picks for 2 marks — a firing rate, not a recall. One
+    pick per window is what makes precision mean anything, and NMS at 2 s is
+    what makes it one.
+
+    The flash is only drawn when the pick lands inside a marked impact
+    interval. A missing flash beats a wrong one: an unconfirmed pick still
+    gives the speed ramp an anchor (the strongest audio onset in the window),
+    and the shot list says which happened.
+    """
+    a, b = window
+    cands = [i for i in find_impacts(video, audio, anchor="any", top_n=60)
+             if a <= i.t <= b]
+    env = audio_envelope(audio or video)
+    hop = 0.02
+    onsets = [t for t in (_audio_onsets(env, hop, AUDIO_STEP_DB) if env.size else [])
+              if a <= t <= b]
+
+    def strength(i: Impact) -> float:
+        return (min(max(i.audio_step, 0.0) / 8.0, 1.0) * 1.4
+                + min(i.detail / 60.0, 1.0) * 1.0
+                + (0.3 if i.confirmed_by == "spike" else 0.0))
+
+    kept: list[Impact] = []
+    for i in sorted(cands, key=strength, reverse=True):
+        if all(abs(i.t - k.t) >= NMS_SEPARATION_S for k in kept):
+            kept.append(i)
+    best = kept[0] if kept else None
+
+    # The ramp always has an anchor, confirmed or not.
+    anchor = (max(onsets, key=lambda t: t) if onsets else (best.t if best else (a + b) / 2))
+    if onsets:
+        anchor = sorted(onsets, key=lambda t: -_step_at(env, hop, t))[0]
+
+    if best is None:
+        return WindowPick(None, False, anchor_t=anchor,
+                          reason="no candidate impact inside the marked window")
+
+    intervals = impact_intervals or []
+    inside = any(lo - 0.3 <= best.t <= hi + 0.3 for lo, hi in intervals)
+    if inside:
+        return WindowPick(best.t, True, best.confirmed_by, best.audio_step, best.t,
+                          reason="inside a marked impact interval")
+    return WindowPick(best.t, False, best.confirmed_by, best.audio_step, anchor,
+                      reason=(f"pick {best.t:.2f}s is outside every marked interval "
+                              f"{intervals}"))
+
+
+def _step_at(env, hop: float, t: float) -> float:
+    k = int(t / hop)
+    pre, post = env[max(0, k - 25):max(1, k)], env[k:k + 10]
+    if not len(pre) or not len(post):
+        return 0.0
+    return float(post.max() - np.median(pre))

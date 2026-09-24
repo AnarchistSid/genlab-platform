@@ -1,30 +1,5 @@
 version: 1
 updated: 2026-09-24
-# EPISODE NUMBERS — status after ANIME-PEAK-05 §1.
-#
-# Resolved against AniList per-episode titles: 1 of 13.
-#
-#   tanjiro_vs_rui   ep 19  "Episode 19 - Hinokami"  (alias match, high)
-#
-# The other twelve are `episode_unresolved`. The reason is structural, not a
-# bug: ANIME EPISODE TITLES ARE THEMATIC, NOT DESCRIPTIVE. "Hinokami",
-# "Right and Wrong", "Cruelty" — none of them say which fight is inside. The
-# alias path works only where a fight is famous enough that its nickname IS
-# the episode title. Jikan, the second authority, returned HTTP 504 on every
-# request during this pass.
-#
-# The useful corollary: an episode number only matters for a FULL-EPISODE
-# source. Fights sourced from clip channels — Zoro, Luffy, Gojo, Deku,
-# Tanjiro vs Akaza all came from Crunchyroll clips — need no episode number
-# at all, because the clip IS the fight and names itself. Only the two
-# full-episode sources depend on it:
-#
-#   sukuna_vs_mahoraga   Ani-One  "#41"      unverified
-#   mob_vs_toichiro      Muse Asia "S2E12"   unverified, and suspect
-#
-# So the blocker is two fights, not thirteen, and hand-verification of two is
-# cheap. Do not mark regions for those two until they are verified.
-
 fights:
 - id: zoro_vs_king
   show: One Piece
@@ -40,6 +15,19 @@ fights:
   status: unmade
   show_aliases:
   - One Piece
+  peak_window:
+  - 55.0
+  - 69.0
+  peak_impacts:
+  - - 57.0
+    - 57.6
+  - - 62.3
+    - 62.8
+  - - 66.8
+    - 67.3
+  window_source: hand_mark
+  window_mark_commit: 16408e61
+  window_mark_sha256: d7950a7b8e344fcb
 - id: luffy_vs_kaido
   show: One Piece
   studio: toei
@@ -54,6 +42,15 @@ fights:
   status: unmade
   show_aliases:
   - One Piece
+  peak_window:
+  - 36.0
+  - 46.0
+  peak_impacts:
+  - - 39.3
+    - 39.8
+  window_source: hand_mark
+  window_mark_commit: 16408e61
+  window_mark_sha256: 6811345253fca8ec
 - id: goku_vs_frieza
   show: Dragon Ball Z
   studio: toei
@@ -117,6 +114,17 @@ fights:
   show_aliases:
   - JUJUTSU KAISEN
   - Jujutsu Kaisen
+  peak_window:
+  - 72.0
+  - 80.0
+  peak_impacts:
+  - - 75.3
+    - 75.8
+  - - 77.0
+    - 77.5
+  window_source: hand_mark
+  window_mark_commit: 16408e61
+  window_mark_sha256: 43ffb4a9e9b837d1
 - id: sukuna_vs_mahoraga
   show: Jujutsu Kaisen
   studio: mappa
@@ -207,6 +215,15 @@ fights:
   show_aliases:
   - Boku no Hero Academia 4th Season
   - My Hero Academia Season 4
+  peak_window:
+  - 56.0
+  - 64.0
+  peak_impacts:
+  - - 58.8
+    - 59.3
+  window_source: hand_mark
+  window_mark_commit: 16408e61
+  window_mark_sha256: 7e03ae1b9f462d27
 - id: tanjiro_vs_akaza
   show: Demon Slayer
   studio: ufotable
@@ -225,6 +242,17 @@ fights:
   show_aliases:
   - Kimetsu no Yaiba Movie Mugen Ressha-hen
   - Demon Slayer Mugen Train
+  peak_window:
+  - 31.0
+  - 38.0
+  peak_impacts:
+  - - 32.8
+    - 33.3
+  - - 35.3
+    - 35.8
+  window_source: hand_mark
+  window_mark_commit: 16408e61
+  window_mark_sha256: 625e7cbfe132b1e3
 - id: saitama_vs_boros
   show: One Punch Man
   studio: madhouse

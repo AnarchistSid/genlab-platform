@@ -24,7 +24,15 @@ logger = logging.getLogger(__name__)
 #: Fields that may appear on a card. Anything not here is not card material,
 #: however tempting -- scores and rankings move, and a stale number on a card
 #: is indistinguishable from a wrong one.
-CARD_FIELDS = ("studio", "season", "premiere", "genres", "episodes", "following")
+#: The allowlist exists so a card cannot show a field nobody vetted. It is
+#: extended deliberately, never widened to whatever a caller happens to pass.
+#: "arc", "episode" and "watch" are the edit lane's facts: an arc name and an
+#: episode number come from the catalog, and "watch" is the licensed channel
+#: the footage actually came from — the same string as the attribution slate.
+CARD_FIELDS = (
+    "studio", "season", "premiere", "genres", "episodes", "following",
+    "arc", "episode", "watch",
+)
 
 
 class NoCardData(RuntimeError):
