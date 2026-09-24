@@ -1,0 +1,74 @@
+<meta charset="utf-8"><title>Shot marker</title>
+<style>
+ body{background:#111;color:#ddd;font:13px/1.5 -apple-system,system-ui,sans-serif;margin:0;padding:16px}
+ h1{font-size:15px;font-weight:600;margin:0 0 12px}
+ #wrap{display:flex;gap:16px;align-items:flex-start}
+ video{max-height:62vh;background:#000;cursor:crosshair}
+ #side{flex:1;min-width:380px}
+ table{border-collapse:collapse;width:100%;font-size:12px}
+ th,td{border-bottom:1px solid #2a2a2a;padding:3px 6px;text-align:left}
+ tr.sel{background:#1e3a2a}
+ button{background:#222;color:#ddd;border:1px solid #444;padding:5px 9px;margin:2px;cursor:pointer;border-radius:3px}
+ button:hover{background:#2c2c2c}
+ .k{color:#8ab4f8}
+ #out{width:100%;height:150px;background:#0b0b0b;color:#9f9;font:11px monospace;border:1px solid #333}
+ .hint{color:#888;font-size:11px}
+</style>
+<h1>Shot marker — click a face to set the anchor, <span class="k">I</span> marks the impact,
+ <span class="k">[</span> / <span class="k">]</span> drag the boundary</h1>
+<div id="wrap">
+ <div>
+  <video id="v" controls></video>
+  <div class="hint">load the clip, then the shotlist.json</div>
+  <div><input type="file" id="vf" accept="video/*"> <input type="file" id="jf" accept="application/json"></div>
+ </div>
+ <div id="side">
+  <div>
+   <button onclick="setAnchorMode()">anchor: click a face</button>
+   <button onclick="markImpact()">I — impact here</button>
+   <button onclick="nudge(-0.1)">[ start -0.1</button>
+   <button onclick="nudge(0.1)">] start +0.1</button>
+   <button onclick="nudgeEnd(-0.1)">end -0.1</button>
+   <button onclick="nudgeEnd(0.1)">end +0.1</button>
+   <button onclick="splitHere()">split at playhead</button>
+   <button onclick="dropShot()">drop shot</button>
+   <button onclick="dump()">write JSON</button>
+  </div>
+  <table id="t"><thead><tr><th>#</th><th>in</th><th>out</th><th>subject</th><th>type</th><th>anchor</th></tr></thead><tbody></tbody></table>
+  <textarea id="out" placeholder="the JSON appears here — copy it over shotlist.json"></textarea>
+ </div>
+</div>
+<script>
+let shots=[],sel=0,impact=null,anchorMode=false;
+const v=document.getElementById('v'),tb=document.querySelector('#t tbody');
+document.getElementById('vf').onchange=e=>{v.src=URL.createObjectURL(e.target.files[0]);};
+document.getElementById('jf').onchange=e=>{const r=new FileReader();
+ r.onload=()=>{const d=JSON.parse(r.result);shots=d.shots||d;impact=d.impact??null;draw();};
+ r.readAsText(e.target.files[0]);};
+function draw(){tb.innerHTML='';shots.forEach((s,i)=>{const tr=document.createElement('tr');
+ if(i===sel)tr.className='sel';
+ tr.innerHTML=`<td>${i}</td><td>${s.start.toFixed(2)}</td><td>${s.end.toFixed(2)}</td>`+
+  `<td>${s.subject||'—'}</td><td>${s.shot_type}</td>`+
+  `<td>${s.anchor?s.anchor.map(x=>x.toFixed(2)).join(','):'—'}</td>`;
+ tr.onclick=()=>{sel=i;v.currentTime=s.start+0.05;draw();};tb.appendChild(tr);});}
+function setAnchorMode(){anchorMode=true;v.style.outline='2px solid #4a8';}
+v.addEventListener('click',e=>{if(!anchorMode)return;const r=v.getBoundingClientRect();
+ shots[sel].anchor=[(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height];
+ shots[sel].anchor_source='hand';anchorMode=false;v.style.outline='';draw();});
+function markImpact(){impact=v.currentTime;
+ const i=shots.findIndex(s=>s.start<=impact&&impact<s.end);if(i>=0)shots[i].shot_type='impact';draw();}
+function nudge(d){shots[sel].start=Math.max(0,shots[sel].start+d);
+ if(sel>0)shots[sel-1].end=shots[sel].start;draw();}
+function nudgeEnd(d){shots[sel].end=shots[sel].end+d;
+ if(sel<shots.length-1)shots[sel+1].start=shots[sel].end;draw();}
+function splitHere(){const t=v.currentTime,s=shots[sel];if(t<=s.start||t>=s.end)return;
+ shots.splice(sel+1,0,Object.assign({},s,{start:t}));shots[sel].end=t;draw();}
+function dropShot(){shots.splice(sel,1);sel=Math.max(0,sel-1);draw();}
+function dump(){document.getElementById('out').value=
+ JSON.stringify({n:shots.length,impact:impact,source:'hand',shots:shots},null,1);}
+document.addEventListener('keydown',e=>{
+ if(e.key==='i'||e.key==='I')markImpact();
+ if(e.key==='[')nudge(-0.1); if(e.key===']')nudge(0.1);
+ if(e.key==='ArrowDown'){sel=Math.min(shots.length-1,sel+1);draw();}
+ if(e.key==='ArrowUp'){sel=Math.max(0,sel-1);draw();}});
+</script>
