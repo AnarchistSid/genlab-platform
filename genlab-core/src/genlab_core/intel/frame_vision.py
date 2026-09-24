@@ -222,13 +222,36 @@ _FRAMING_SYSTEM = (
 )
 
 _FRAMING_SCHEMA = """Return a JSON array, one object per image, in order:
-[{"i": <index>, "action_visible": true|false,
-  "actor_visible": true|false,
-  "why": "<12 words or fewer>"}]
-action_visible means a viewer can see WHAT IS BEING DONE -- the strike, the
-sweep, the arc -- not merely that a character is present. A limb entering
-frame with its gesture cut off is false. A character standing still with no
-action is true only if the shot is not an action shot."""
+[{"i": <index>,
+  "describe": "<ONE sentence: what is happening in this frame>",
+  "legible_at_this_size": true|false,
+  "actor_visible": true|false}]
+You are shown the frames at the size a phone shows them. `describe` must name
+the ACTION -- who does what to whom -- not the contents of the picture. "Two
+characters in a blue effect" is not a description of an action; "Tanjiro
+swings his blade through Akaza's arm" is.
+legible_at_this_size means a viewer scrolling at this size can follow that
+action, not merely that something is on screen."""
+
+
+#: Words that mean "something is on screen" rather than naming an action.
+_EMPTY_DESCRIPTION = ("visible", "present", "shown", "appears", "displayed",
+                      "can be seen", "in frame", "on screen")
+
+
+def describes_action(desc: str, expected_terms: tuple[str, ...]) -> bool:
+    """Does the description NAME the action, and the right one?
+
+    A check that asks "is it visible" passes everything. This one requires a
+    verb-bearing sentence that mentions something the shot is supposed to
+    contain -- the subject, or a word from its type.
+    """
+    d = (desc or "").lower().strip()
+    if len(d.split()) < 4:
+        return False
+    if any(d.startswith(e) or d == e for e in _EMPTY_DESCRIPTION):
+        return False
+    return any(term.lower() in d for term in expected_terms if term)
 
 
 def check_framing(images: list[Path], labels: list[str],
