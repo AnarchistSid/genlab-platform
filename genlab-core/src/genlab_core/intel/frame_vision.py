@@ -49,8 +49,18 @@ _SCHEMA = """Return a JSON array with one object per image, in order:
   "faces": [{"name": <name>, "box": [x0,y0,x1,y1]}],   // 0-1 fractions of the frame
   "shot_type": one of ["windup","clash","impact","reaction","debris_or_effect","other"],
   "motion_blurred": true|false,
-  "text_or_watermark": [{"what": <"watermark"|"subtitle"|"credit">, "box": [x0,y0,x1,y1]}]
+  "text_or_watermark": [{"what": <"watermark"|"subtitle"|"credit">, "box": [x0,y0,x1,y1]},
+  "focal_point": [x,y],        // the point of contact, or the centre of the motion
+  "action_extent": [x0,y0,x1,y1],  // box containing the action: limbs, weapon, the arc of it
+  "hold": true|false           // is this image the SAME DRAWING as the previous one
 }]
+focal_point is where the action IS, not where a face is: the point of
+contact on a strike, the tip of a weapon's arc, the centre of an explosion.
+action_extent must contain the whole gesture -- a sword sweep's arc, not just
+the hands. On a frame with no action, focal_point may be the subject's centre
+and action_extent their body.
+hold: you are given the images in order; say true when this image is the same
+drawing as the one before it (anime holds frames).
 shot_type meanings: windup = a fighter gathering/preparing; clash = fighters
 engaged or a strike in flight; impact = the moment of contact or its flash;
 reaction = after the hit, a fighter recoiling/falling/looking; debris_or_effect
@@ -67,6 +77,9 @@ class FrameRecord:
     shot_type: str = "unknown"
     motion_blurred: bool = False
     text_or_watermark: list[dict] = field(default_factory=list)
+    focal_point: list[float] | None = None
+    action_extent: list[float] | None = None
+    hold: bool = False
     ok: bool = True
 
     @property
@@ -122,6 +135,27 @@ def _parse(blob: str) -> list[dict]:
     return json.loads(m.group(0))
 
 
+def _pt(v) -> list[float] | None:
+    """A point, range-checked. The model has returned coordinates outside the
+    frame before (a face box centred at y = 1.32), and shape validation says
+    nothing about range."""
+    try:
+        x, y = (float(a) for a in v)
+    except (TypeError, ValueError):
+        return None
+    return [x, y] if 0.0 <= x <= 1.0 and 0.0 <= y <= 1.0 else None
+
+
+def _box(v) -> list[float] | None:
+    try:
+        x0, y0, x1, y1 = (float(a) for a in v)
+    except (TypeError, ValueError):
+        return None
+    if not (0.0 <= x0 < x1 <= 1.0 and 0.0 <= y0 < y1 <= 1.0):
+        return None
+    return [x0, y0, x1, y1]
+
+
 def _validate(rec: dict, allowed: tuple[str, ...]) -> bool:
     if not isinstance(rec, dict):
         return False
@@ -163,7 +197,10 @@ def label_frames(frames: list[tuple[int, float, Path]], characters: tuple[str, .
                 i=i, t=t, characters=list(r.get("characters") or []),
                 faces=list(r.get("faces") or []), shot_type=r["shot_type"],
                 motion_blurred=bool(r.get("motion_blurred")),
-                text_or_watermark=list(r.get("text_or_watermark") or [])))
+                text_or_watermark=list(r.get("text_or_watermark") or []),
+                focal_point=_pt(r.get("focal_point")),
+                action_extent=_box(r.get("action_extent")),
+                hold=bool(r.get("hold"))))
         logger.info("[vision] batch %s: %d/%d labelled", idx, len(recs), len(chunk))
     return out
 
@@ -175,3 +212,43 @@ def write_frames_json(records: list[FrameRecord], dest: Path) -> dict:
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(payload, indent=1))
     return payload
+
+
+# ── PEAK-14 §3 — the model checks the RENDER ────────────────────────────
+
+_FRAMING_SYSTEM = (
+    "You are checking whether a rendered vertical video frame shows its action "
+    "clearly. You answer with JSON only."
+)
+
+_FRAMING_SCHEMA = """Return a JSON array, one object per image, in order:
+[{"i": <index>, "action_visible": true|false,
+  "actor_visible": true|false,
+  "why": "<12 words or fewer>"}]
+action_visible means a viewer can see WHAT IS BEING DONE -- the strike, the
+sweep, the arc -- not merely that a character is present. A limb entering
+frame with its gesture cut off is false. A character standing still with no
+action is true only if the shot is not an action shot."""
+
+
+def check_framing(images: list[Path], labels: list[str],
+                  timeout: int = 600) -> list[dict]:
+    """Ask whether the RENDERED frames read.
+
+    This is the control the framing never had. Every gate before it measured a
+    proxy on the source -- colour area, motion energy, a face box -- and none
+    of them could see the thing that actually ships. Runs before the file is
+    put in front of a person, so a bad layout is caught by the model that
+    chose it.
+    """
+    text = (f"{_FRAMING_SCHEMA}\nThere are {len(images)} images, indices "
+            f"{list(range(len(images)))}. Context per image: {labels}.")
+    try:
+        parsed = _parse(_belt_vision(images, text, timeout=timeout))
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[vision] framing check failed: %s", e)
+        return [{"i": i, "action_visible": None, "actor_visible": None,
+                 "why": "check failed"} for i in range(len(images))]
+    by_i = {r.get("i"): r for r in parsed if isinstance(r, dict)}
+    return [by_i.get(i, {"i": i, "action_visible": None, "actor_visible": None,
+                         "why": "missing"}) for i in range(len(images))]
