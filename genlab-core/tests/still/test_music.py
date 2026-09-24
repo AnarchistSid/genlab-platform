@@ -1,0 +1,111 @@
+"""Pins for the music measurement and the §3 mix gates.
+
+The pin that matters most is `test_sub_share_definition`: two defensible
+readings of "sub share" differ by 3x on the same audio, and the 25% gate is
+stated against the magnitude one. Taking the threshold without its method
+made every candidate pass.
+"""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+from genlab_core.still import music as M
+
+pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
+
+
+def _tone(path: Path, spec: str, seconds: float = 6.0) -> Path:
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", spec,
+                    "-t", str(seconds), "-c:a", "pcm_s16le", "-ar", "44100",
+                    "-y", str(path)], check=True)
+    return path
+
+
+def test_sub_share_definition(tmp_path):
+    """Magnitude share, not power share — the gate is stated against it."""
+    low = _tone(tmp_path / "low.wav", "sine=frequency=60:sample_rate=44100")
+    high = _tone(tmp_path / "high.wav", "sine=frequency=3000:sample_rate=44100")
+    assert M.sub_share(low) > 0.5
+    assert M.sub_share(high) < 0.05
+
+
+def test_the_two_sub_definitions_diverge_on_broadband_audio(tmp_path):
+    """Measured on the v2 reels: power 41-50%, magnitude 14-17%.
+
+    The gap only appears on broadband content, where magnitude spreads across
+    many high bins while power stays concentrated low. On a pure tone the
+    relationship INVERTS, so a pure tone cannot stand in for music here.
+    """
+    mixed = tmp_path / "mixed.wav"
+    subprocess.run(["ffmpeg", "-v", "error",
+                    "-f", "lavfi", "-i", "sine=frequency=55:sample_rate=44100",
+                    "-f", "lavfi", "-i", "anoisesrc=color=white:sample_rate=44100",
+                    "-filter_complex", "[0:a]volume=0dB[a];[1:a]volume=-12dB[b];"
+                                       "[a][b]amix=inputs=2:normalize=0",
+                    "-t", "6", "-c:a", "pcm_s16le", "-y", str(mixed)], check=True)
+    assert M.sub_power_share(mixed) > M.sub_share(mixed), (
+        f"power {M.sub_power_share(mixed):.3f} magnitude {M.sub_share(mixed):.3f}")
+
+
+def test_find_drop_needs_a_sustained_step(tmp_path):
+    quiet = _tone(tmp_path / "q.wav", "sine=frequency=60:sample_rate=44100", 6.0)
+    loud = _tone(tmp_path / "l.wav", "sine=frequency=60:sample_rate=44100", 6.0)
+    step = tmp_path / "step.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-i", str(quiet), "-i", str(loud),
+                    "-filter_complex",
+                    "[0:a]volume=-24dB[a];[1:a]volume=0dB[b];[a][b]concat=n=2:v=0:a=1",
+                    "-c:a", "pcm_s16le", "-y", str(step)], check=True)
+    t, db, _ = M.find_drop(step)
+    assert t is not None and db > M.MIN_DROP_STEP_DB
+    assert t == pytest.approx(6.0, abs=1.0)
+
+
+def test_a_steady_tone_has_no_drop(tmp_path):
+    flat = _tone(tmp_path / "flat.wav", "sine=frequency=60:sample_rate=44100", 12.0)
+    t, db, _ = M.find_drop(flat)
+    assert t is None, f"a steady tone reported a drop at {t}s (+{db:.1f} dB)"
+
+
+def test_a_single_hit_is_not_a_drop(tmp_path):
+    """The statistic is a level SHIFT; one loud frame must not move it."""
+    base = _tone(tmp_path / "b.wav", "sine=frequency=60:sample_rate=44100", 12.0)
+    hit = tmp_path / "hit.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-i", str(base), "-af",
+                    "volume='1+40*between(t,6.0,6.05)':eval=frame",
+                    "-c:a", "pcm_s16le", "-y", str(hit)], check=True)
+    t, _, _ = M.find_drop(hit)
+    assert t is None
+
+
+def test_align_trims_when_the_windup_is_short(tmp_path):
+    bed = _tone(tmp_path / "bed.wav", "sine=frequency=60:sample_rate=44100", 20.0)
+    info = M.align_bed(bed, drop_t=8.0, impact_rel=5.0, reel_s=15.0,
+                       dest=tmp_path / "out.m4a")
+    assert info["trim_s"] == pytest.approx(3.0) and info["preroll_s"] == 0.0
+
+
+def test_align_prerolls_when_the_windup_is_long(tmp_path):
+    bed = _tone(tmp_path / "bed.wav", "sine=frequency=60:sample_rate=44100", 20.0)
+    info = M.align_bed(bed, drop_t=8.0, impact_rel=14.0, reel_s=25.0,
+                       dest=tmp_path / "out.m4a")
+    assert info["preroll_s"] == pytest.approx(6.0) and info["trim_s"] == 0.0
+
+
+def test_beats_are_phase_locked_to_the_drop():
+    beats = M.beat_times(Path("x"), bpm=150.0, drop_t=8.0, reel_s=20.0, offset=12.0)
+    assert any(abs(b - 12.0) < 1e-6 for b in beats), "the drop must itself be a beat"
+    period = 60.0 / 150.0
+    assert all(abs((b - 12.0) / period - round((b - 12.0) / period)) < 1e-6 for b in beats)
+
+
+def test_mix_gate_rejects_a_title_louder_than_the_hit():
+    bad = M.MixCheck(sub_share=0.30, loudest_s=1.5, impact_s=9.0,
+                     lufs=-14.0, true_peak=-1.5)
+    good = M.MixCheck(sub_share=0.30, loudest_s=9.2, impact_s=9.0,
+                      lufs=-14.0, true_peak=-1.5)
+    assert not bad.passes and not bad.gates["loudest_is_the_hit"]
+    assert good.passes

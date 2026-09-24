@@ -1,0 +1,46 @@
+# ANIME-PEAK-09 §1 — music registers for the edit lane.
+#
+# The register is chosen per fight and decides the prompt. Every prompt names
+# the STRUCTURE explicitly (filtered intro -> hard drop), because the drop is
+# what the edit is anchored on: without one the candidate is rejected, and a
+# generator asked only for a genre returns a loop with no arc. The v2 beds
+# were asked for "epic orchestral anime battle bed" and returned exactly that
+# -- no build, no drop, and a sub share of 14-17% against a 25% bar.
+version: 1
+
+defaults:
+  duration_s: 30
+  candidates: 3
+  drop_window_s: [6.0, 10.0]
+
+registers:
+  brazilian_phonk:
+    tempo: 148
+    prompt: >-
+      Brazilian phonk montagem, {tempo} BPM, heavily distorted 808 sub bass,
+      cavalgada triplet cowbell pattern, low-pass-filtered 8-second intro
+      building into a hard drop, aggressive, club-ready, no vocals
+  old_phonk:
+    tempo: 140
+    prompt: >-
+      old school Memphis phonk, {tempo} BPM, dark detuned cowbell, heavy
+      distorted 808 sub bass, lo-fi tape saturation, muffled filtered intro
+      opening into a hard drop, menacing, no vocals
+  phonk_slowed:
+    tempo: 132
+    prompt: >-
+      slowed phonk, {tempo} BPM, deep 808 sub bass, sparse reverbed cowbell,
+      melancholic detuned melody, filtered intro opening into a heavy drop,
+      no vocals
+  epic_hybrid:
+    tempo: 150
+    prompt: >-
+      epic orchestral phonk hybrid, {tempo} BPM, taiko and brass over a
+      distorted 808 sub bass and triplet cowbell, filtered 8-second build
+      into a hard orchestral drop, cinematic and aggressive, no vocals
+
+fights:
+  zoro_vs_king: brazilian_phonk
+  luffy_vs_kaido: brazilian_phonk
+  deku_vs_overhaul: old_phonk
+  tanjiro_vs_akaza: epic_hybrid
