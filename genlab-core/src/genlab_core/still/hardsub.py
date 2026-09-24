@@ -29,6 +29,17 @@ MIN_CHARS = 8            # shorter strings are OCR noise on textured art
 MIN_WORDS = 3            # a two-word fragment in the band is OCR noise, not a line
 MIN_CONF = 55            # tesseract per-word confidence
 OCR_LANG = "eng+spa"
+SHOT_STRIDE_S = 0.5      # how densely a SHOT is sampled for print
+SHOT_MAX_SAMPLES = 10
+
+# MEASURED LIMIT, 2026-09-24. A short, low-contrast line stays below this
+# gate: "K-Kaido-san..." is legible to a viewer and invisible to tesseract at
+# every scale from 1080 to 2880 px. Four preprocessing variants were tried;
+# only threshold-then-invert returned it, and that variant pushed the CLEAN
+# Demon Slayer source to a 56% false positive. Each further step traded a
+# false negative for a false positive with no net gain, so the gate stops
+# here and known misses are trimmed from the reel plan by hand and recorded.
+# Do not re-tune without a labelled set of subtitled and clean frames.
 OCR_SCALE = 1080         # gate resolution, per reference.py GATE_SCALE
 
 # Studio bugs and platform furniture live in the same band on some uploads;
@@ -160,8 +171,7 @@ def check(path: Path, start: float, end: float,
 
 
 def prints_in(path: Path, start: float, end: float,
-              furniture: set[str] | frozenset[str] = frozenset(),
-              samples: int = 3) -> bool:
+              furniture: set[str] | frozenset[str] = frozenset()) -> bool:
     """Does this SHOT put somebody else's subtitle on screen?
 
     `check` decides whether a SOURCE is usable and tolerates 15%, because a
@@ -173,8 +183,9 @@ def prints_in(path: Path, start: float, end: float,
     Pass `furniture` from `learn_furniture` so the legal notice does not
     read as a subtitle.
     """
-    for k in range(1, samples + 1):
-        t = start + (end - start) * k / (samples + 1)
+    n = min(SHOT_MAX_SAMPLES, max(3, int((end - start) / SHOT_STRIDE_S)))
+    for k in range(n + 1):
+        t = start + (end - start) * k / n
         if SubScan(t, _ocr_band(path, t)).has_sub_beyond(furniture):
             return True
     return False
