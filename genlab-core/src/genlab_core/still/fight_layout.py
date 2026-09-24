@@ -44,36 +44,50 @@ class SubjectShot:
                 f"{self.magnification:.2f}x  {'seed' if self.located else 'motion'}")
 
 
-def crop_for_centre(centre_x: float, src_w: int, src_h: int,
-                    mag: float = 1.0) -> tuple[int, int, float]:
-    """A full-screen 9:16 crop centred on `centre_x`.
+def crop_for_subject(centre_x: float, subject_w: float, src_w: int, src_h: int,
+                     *, headroom: float = 1.15) -> tuple[int, int, float]:
+    """A full-screen 9:16 crop SIZED TO THE SUBJECT, not just centred on them.
 
-    `mag` is relative to full bleed: 1.0 is the widest 9:16 rectangle the
-    source contains, and the cap is MAX_MAG / full-bleed magnification.
+    Sizing matters more than centring and this is the second time the lesson
+    has cost a render. A colour seed locates a GARMENT; a crop chosen
+    independently of the subject's extent frames cloth. At 1.99x the crop was
+    542 px wide while the fighters' boxes measured 500-900 px, so the crop
+    was NARROWER than the fighter and a partial view was guaranteed -- the
+    proof frames came back as Akaza's stripes and Tanjiro's haori pattern
+    filling the screen.
+
+    The crop is therefore at least the subject's width plus headroom, still
+    clamped to full bleed at the wide end (there is no wider 9:16 rectangle)
+    and to MAX_MAG at the tight end.
     """
     full_bleed_w = int(src_h * OUT_W // OUT_H)
     fb_mag = OUT_H / src_h
-    mag = max(1.0, min(mag, MAX_MAG / fb_mag))
-    crop_w = int(round(full_bleed_w / mag))
+    # There is no 9:16 rectangle wider than full bleed, so the tightest crop
+    # can never exceed it. On a 720p source full bleed is ALREADY 2.667x --
+    # the MAX_MAG cap is unsatisfiable there and the source is simply smaller
+    # than the output. Clamping rather than pretending keeps the crop legal.
+    tightest = min(full_bleed_w, int(round(full_bleed_w * fb_mag / MAX_MAG)))
+    crop_w = int(round(max(tightest, min(full_bleed_w, subject_w * headroom))))
     crop_w -= crop_w % 2
     x = int(round(min(max(0.0, centre_x - crop_w / 2), src_w - crop_w)))
-    return crop_w, x, fb_mag * mag
+    return crop_w, x, OUT_W / crop_w
 
 
-def subject_centres(path: Path, t: float, seeds: dict[str, dict]) -> dict[str, float]:
-    """Each fighter's horizontal centre at `t`, for those a seed can locate."""
+def subject_boxes(path: Path, t: float, seeds: dict[str, dict]) -> dict[str, tuple[float, float]]:
+    """(centre_x, width) per fighter a seed can locate at `t`."""
     from genlab_core.still import action_box as AB
 
     out = {}
     for name, spec in seeds.items():
         b = AB.colour_box(path, t, spec, name)
         if b is not None:
-            out[name] = b.cx
+            p = b.padded(w=AB.probe_dims(path)[0], h=AB.probe_dims(path)[1])
+            out[name] = (p.cx, p.w)
     return out
 
 
-def plan_subject_shots(path: Path, shots: list[dict], seeds: dict[str, dict],
-                       *, mag: float = 1.12) -> list[SubjectShot]:
+def plan_subject_shots(path: Path, shots: list[dict],
+                       seeds: dict[str, dict]) -> list[SubjectShot]:
     """One subject per shot, alternating between fighters across cuts.
 
     Alternation is the point: the grammar is A, then B, then A. When only one
@@ -88,19 +102,19 @@ def plan_subject_shots(path: Path, shots: list[dict], seeds: dict[str, dict],
     last: str | None = None
     for sh in shots:
         t = (sh["start"] + sh["end"]) / 2
-        centres = subject_centres(path, t, seeds)
+        boxes = subject_boxes(path, t, seeds)
         pick, located = None, True
-        if centres:
-            # Prefer the fighter we did NOT just show.
-            others = [n for n in centres if n != last]
-            pick = others[0] if others else next(iter(centres))
+        if boxes:
+            others = [n for n in boxes if n != last]
+            pick = others[0] if others else next(iter(boxes))
         else:
             mb = AB.motion_box(path, t)
             located = False
             pick = "motion"
-            centres = {"motion": mb.cx if mb else src_w / 2}
-        cx = centres[pick]
-        crop_w, x, m = crop_for_centre(cx, src_w, src_h, mag)
+            boxes = {"motion": (mb.cx if mb else src_w / 2,
+                                mb.w if mb else src_h * OUT_W / OUT_H)}
+        cx, bw = boxes[pick]
+        crop_w, x, m = crop_for_subject(cx, bw, src_w, src_h)
         out.append(SubjectShot(sh["start"], sh["end"], pick, cx, crop_w, x,
                                src_w, src_h, m, located))
         if located:
@@ -123,8 +137,19 @@ def shot_filter(s: SubjectShot, *, shake_px: float = 3.0, shake_hz: float = 2.0,
     cx = max(0, min(s.crop_x - pad // 2, s.src_w - cw))
     f = [f"crop={cw}:{s.src_h}:{cx}:0"]
     zoom = f"1+{pulse:.4f}*abs(sin(PI*t/{pulse_period_s:.4f}))" if pulse else "1"
+    # Scale so the crop lands at OUT_W plus just enough margin for the shake
+    # to move into. Scaling to OUT_W*2 and then cropping OUT_W x OUT_H from
+    # the centre discards half the width AND half the height -- a silent 2x
+    # zoom on top of the intended crop, which is what filled the frame with
+    # haori pattern while crop_w read a correct 606 px.
+    # The shake pad widens the CROP, so the scale has to follow the CONTENT
+    # width or the padded frame scales down and the 9:16 crop no longer fits:
+    # scaling a 616 px padded crop to 1090 gives 1911 px of height against a
+    # 1920 px crop, and ffmpeg writes no packets at all.
+    sw = int(round(OUT_W * cw / s.crop_w))
+    sw -= sw % 2
     f.append(
-        f"scale={OUT_W * 2}:-2:flags=lanczos,"
+        f"scale={sw}:-2:flags=lanczos,"
         f"crop=w='{OUT_W}':h='{OUT_H}'"
         f":x='(iw-{OUT_W})/2+{shake_px:.1f}*sin(2*PI*{shake_hz}*t)'"
         f":y='(ih-{OUT_H})/2+{shake_px * 0.6:.1f}*cos(2*PI*{shake_hz * 1.3}*t)'")
@@ -132,8 +157,12 @@ def shot_filter(s: SubjectShot, *, shake_px: float = 3.0, shake_hz: float = 2.0,
         f.append(f"scale=w='iw*({zoom})':h='ih*({zoom})':eval=frame,"
                  f"crop={OUT_W}:{OUT_H}")
     if rgb_split_at:
-        cond = "+".join(f"between(t,{a:.3f},{a + 2 / 30:.3f})" for a in rgb_split_at)
-        f.append(f"rgbashift=rh='{split_px:.0f}*({cond})':"
-                 f"bh='-{split_px:.0f}*({cond})':eval=frame")
+        # rgbashift's shift options are integers evaluated ONCE -- they are not
+        # per-frame expressions and the filter has no eval option. The split is
+        # gated by timeline `enable=` instead, which is what the filter does
+        # support.
+        cond = "+".join(f"between(t,{a:.3f},{a + 2 / 24:.3f})" for a in rgb_split_at)
+        f.append(f"rgbashift=rh={int(split_px)}:bh=-{int(split_px)}:"
+                 f"enable='{cond}'")
     f.append("setsar=1")
     return ",".join(f)

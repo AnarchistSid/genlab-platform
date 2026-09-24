@@ -1,0 +1,260 @@
+"""ANIME-PEAK-11 — one reel, by hand, to the genre. Tanjiro vs Akaza.
+
+Three things the kit never did, all here:
+
+  §1 full-screen crops that track ONE fighter, cutting between them
+  §2 velocity ramps with real in-between frames on the slow-motion
+  §3 the track fitted to the window, drop on the impact
+
+Base cadence is 24 fps, the SOURCE cadence. Every reel before this rendered
+30 fps from 23.976/24 fps material, which is a 5:4 pulldown duplicating one
+frame in five; the shipped v4 reels measure 21-42% duplicate frames against
+25% in Tanjiro's own source. That judder is on every frame of every reel and
+no gate was looking at it.
+"""
+import json, subprocess, sys
+from pathlib import Path
+sys.path.insert(0, "genlab-core/src")
+import yaml
+from genlab_core.still import fight_layout as FL, music as MU, text_layers as TL, typography as TY
+from genlab_core.still import fight_source as FS
+from genlab_core.still.audio import measure_loudness
+from genlab_core.still.beats import load_kit
+from genlab_core.still.overlay import _textfile, append_loop_back
+from genlab_core.still.render import probe_duration
+from genlab_core.action.window import cut_times
+
+FPS = 24                      # the SOURCE cadence: no pulldown, no added duplicates
+X264 = ["-c:v", "libx264", "-crf", "18", "-preset", "slow", "-pix_fmt", "yuv420p",
+        "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"]
+SP = Path("/private/tmp/claude-501/-Users-anarchistsid-GenLab/1f202acb-13c4-4215-a4eb-ece569c89ee0/scratchpad/still")
+
+
+def run(cmd, t=1800):
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=t)
+    if r.returncode:
+        raise RuntimeError(f"{cmd[0]}: {r.stderr[-1200:]}")
+    return r
+
+
+def ramp_filter(speed: float, interpolate: bool) -> str:
+    """Velocity ramp. Slower than 1x gets REAL in-between frames.
+
+    minterpolate, not frame duplication: measured on the half-second before
+    the impact, duplication has a judder coefficient of 2.31 (big jumps then
+    nothing) against 1.03 for interpolation (even motion). Both were
+    inspected for warping on the anime's flat colour and neither showed any.
+    Probed alternatives: infsh/rife-video-interpolation ($0.00, cloud) and
+    topaz/frame-interpolation ($0.1429 for 2 s, settled at the low end of a
+    20x estimate range).
+    """
+    if speed >= 0.999:
+        return f"setpts={1 / speed:.4f}*PTS,fps={FPS}"
+    if interpolate:
+        inter = max(FPS, min(120, int(round(FPS / speed))))
+        return f"minterpolate=fps={inter}:mi_mode=mci:mc_mode=aobmc:vsbmc=1,setpts={1 / speed:.4f}*PTS,fps={FPS}"
+    return f"setpts={1 / speed:.4f}*PTS,fps={FPS}"
+
+
+def plan_ramps(subject_shots, impact_t, bpm):
+    """§2 — the velocity arc, laid on the shots.
+
+    wind-up fast, the half-second before the hit crushed to 0.25x through
+    interpolation, the hit held, the follow-through back to 1x, the reaction
+    at 0.6x. Returns a list of (start, end, speed, interpolate) SEGMENTS,
+    which may split a shot.
+    """
+    SLOW_LEAD = 0.5
+    out = []
+    for s in subject_shots:
+        a, b = s.start, s.end
+        if b <= impact_t - SLOW_LEAD:
+            out.append((s, a, b, 1.6, False))              # wind-up, quick
+        elif a >= impact_t:
+            out.append((s, a, b, 0.6, True))               # reaction, slowed
+        else:
+            # this shot straddles the hit: fast, then crushed, then hold
+            lead = max(a, impact_t - SLOW_LEAD)
+            if lead > a + 0.08:
+                out.append((s, a, lead, 1.6, False))
+            out.append((s, lead, impact_t, 0.28, True))     # the signature
+            if b > impact_t + 0.08:
+                out.append((s, impact_t, min(b, impact_t + 0.12), 0.12, True))  # the hold
+                if b > impact_t + 0.12:
+                    out.append((s, impact_t + 0.12, b, 1.0, False))
+    return out
+
+
+def build(fight_id="tanjiro_vs_akaza"):
+    kit = load_kit("anime"); brand = TY.for_niche("anime")
+    work = SP / "v5_hand"; work.mkdir(parents=True, exist_ok=True)
+    proof = SP / "proof_v5"; proof.mkdir(parents=True, exist_ok=True)
+    src = SP / "fights" / f"{fight_id}.mp4"
+    seeds = yaml.safe_load(open("genlab-core/config/anime_fight_seeds.yaml"))["fights"][fight_id]
+    plan = json.loads((SP / "reelplan_v4.json").read_text())[fight_id]
+    music = json.loads((SP / "music_v4_final.json").read_text())[fight_id]
+    impact_t = plan["impact"]
+    log = {"fight": fight_id, "fps": FPS, "segments": [], "cost_usd": 0.0}
+
+    # §1 — shots, one subject each, full screen
+    shots = []
+    for a, b in [tuple(plan["open"])] + [tuple(x) for x in plan["body"]]:
+        cuts = [c for c in cut_times(str(src)) if a < c < b]
+        bd = [a] + cuts + [b]
+        for i in range(len(bd) - 1):
+            if bd[i + 1] - bd[i] >= 0.30:
+                shots.append({"start": bd[i], "end": bd[i + 1]})
+    subj = FL.plan_subject_shots(src, shots, seeds)
+    log["shots"] = [s.__dict__ for s in subj]
+
+    bpm = float(music["pick_bpm"])
+    beat = 60.0 / bpm
+    segs = plan_ramps(subj, impact_t, bpm)
+
+    # render each segment at its own speed, with the movement on top
+    parts, reel_t, impact_rel = [], 0.0, None
+    for i, (s, a, b, speed, interp) in enumerate(segs):
+        if b - a < 0.04:
+            continue
+        if a <= impact_t < b:
+            impact_rel = reel_t + (impact_t - a) / speed
+        downbeats = [] if speed < 1 else [0.0]
+        vf = FL.shot_filter(s, shake_px=3.0, shake_hz=2.0,
+                            pulse=0.018 if speed >= 1 else 0.0,
+                            pulse_period_s=beat * 2, rgb_split_at=tuple(downbeats))
+        p = work / f"seg_{i:02d}.mp4"
+        # -t goes BEFORE -i. After -i it bounds the OUTPUT, so under a speed
+        # change ffmpeg reads however much SOURCE it needs to fill that --
+        # measured: a 1.6x segment asked for 2.0 s of source consumed 3.2 s
+        # and still emitted 2.0 s. With a time remap, input-side and
+        # output-side limits are not interchangeable, and every segment was
+        # reading a span the plan never chose.
+        run(["ffmpeg", "-y", "-v", "error", "-ss", f"{a:.3f}", "-t", f"{b - a:.3f}",
+             "-i", str(src), "-an", "-vf", f"{vf},{ramp_filter(speed, interp)}",
+             *X264, str(p)])
+        d = probe_duration(p)
+        log["segments"].append({"i": i, "src": [round(a, 3), round(b, 3)],
+                                "subject": s.subject, "speed": speed,
+                                "interpolated": interp, "reel_start": round(reel_t, 3),
+                                "out_s": round(d, 3)})
+        parts.append(p); reel_t += d
+    log["body_s"] = round(reel_t, 2)
+    log["impact_rel"] = round(impact_rel, 3) if impact_rel else None
+    log["remapped_segments"] = sum(1 for x in log["segments"] if x["speed"] != 1.0)
+    log["interpolated_segments"] = sum(1 for x in log["segments"] if x["interpolated"])
+    return log, parts, work, proof, kit, brand, src, music, bpm
+
+
+def finish(log, parts, work, proof, kit, brand, src, music, bpm, out):
+    from genlab_core.still.sound import generate_sfx
+
+    lst = work / "concat.txt"
+    lst.write_text("".join(f"file '{p.resolve()}'\n" for p in parts))
+    body = work / "body.mp4"
+    run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(lst),
+         "-r", str(FPS), *X264, str(body)])
+    vlen = probe_duration(body)
+    impact_rel = log["impact_rel"] or vlen / 2
+
+    # §3 — the track fitted to the reel; the drop on the impact
+    bed = Path(music["pick"])
+    aligned = work / "bed.m4a"
+    log["bed_fit"] = MU.fit_bed(bed, float(music["pick_drop"]), impact_rel, vlen, bpm, aligned)
+    log["bed"] = {"register": music["register"], "bpm": bpm,
+                  "drop": music["pick_drop"], "sub": music["pick_sub"]}
+
+    # §4 — the show's own SFX kept loud at the hit; the hit on top
+    hit = generate_sfx("sub_drop", work / "hit.mp3", duration_s=2.0)
+    log["cost_usd"] += 0.00104
+    # The fight clips carry no audio stream; the show's own audio is a
+    # sidecar .m4a beside them. It is taken from the window's start, which is
+    # only loosely in sync once the segments are time-remapped -- the genre
+    # keeps the show's SFX as texture under the track, not as sync sound.
+    src_a = work / "src_audio.m4a"
+    sidecar = src.with_suffix(".m4a")
+    run(["ffmpeg", "-y", "-v", "error", "-ss", f"{log['segments'][0]['src'][0]:.3f}",
+         "-i", str(sidecar), "-vn",
+         "-af", f"apad,atrim=0:{vlen:.3f}", "-c:a", "aac", "-b:a", "192k",
+         "-ar", "48000", "-ac", "2", str(src_a)])
+    premix = work / "premix.m4a"
+    run(["ffmpeg", "-y", "-v", "error", "-i", str(src_a), "-i", str(aligned), "-i", str(hit),
+         "-filter_complex",
+         f"[0:a]volume=-9dB,apad,atrim=0:{vlen:.3f},asetpts=PTS-STARTPTS[show];"
+         f"[2:a]volume=0dB,afade=t=out:st=0.8:d=1.2,"
+         f"adelay={int(impact_rel * 1000)}|{int(impact_rel * 1000)},"
+         f"apad,atrim=0:{vlen:.3f},asetpts=PTS-STARTPTS[hit];"
+         f"[2:a]volume=0dB,afade=t=out:st=0.8:d=1.2,"
+         f"adelay={int(impact_rel * 1000)}|{int(impact_rel * 1000)},"
+         f"apad,atrim=0:{vlen:.3f},asetpts=PTS-STARTPTS[key];"
+         f"[1:a]volume=-7dB[bv];[key]asplit=2[k1][k2];"
+         f"[bv][k1]sidechaincompress=threshold=0.03:ratio=8:attack=5:release=150[bed];"
+         f"[show][k2]sidechaincompress=threshold=0.05:ratio=4:attack=5:release=200[sh];"
+         f"[sh][bed][hit]amix=inputs=3:duration=first:normalize=0,"
+         f"apad,atrim=0:{vlen:.3f}[a]", "-map", "[a]", "-c:a", "aac", "-b:a", "192k",
+         "-ar", "48000", "-ac", "2", str(premix)])
+    target = float(kit["audio"]["target_lufs"]) + 0.14
+    cur, passes = premix, []
+    for _ in range(4):
+        i, tp = measure_loudness(cur)
+        g = target - i
+        passes.append({"lufs": round(i, 2), "tp": round(tp, 2), "gain": round(g, 2)})
+        if abs(g) < 0.15:
+            break
+        nxt = work / "n_tmp.m4a"
+        run(["ffmpeg", "-y", "-v", "error", "-i", str(cur), "-af",
+             f"volume={g:.2f}dB,alimiter=limit=-1.5dB:level=disabled",
+             "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", str(nxt)])
+        cur = work / "n_step.m4a"; nxt.replace(cur)
+    mixed = work / "mixed.m4a"
+    run(["ffmpeg", "-y", "-v", "error", "-i", str(cur), "-af", f"apad,atrim=0:{vlen:.3f}",
+         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", str(mixed)])
+    log["normalise"] = passes
+
+    # §4 — hook slam on the first downbeat; a lower-third slate, no end card
+    grid = MU.beat_times(bed, bpm=bpm, drop_t=float(music["pick_drop"]),
+                         reel_s=vlen, offset=impact_rel)
+    # §4 wants the hook on the first DOWNBEAT, but a bar at 150 BPM is 1.6 s
+    # and text_layers caps the onset at 1.5 s -- past that the line is not
+    # read in time. The two rules are incompatible at this tempo, so: the
+    # latest downbeat within the cap, else the latest beat within it.
+    from genlab_core.still.text_layers import HOOK_ONSET_MAX_S as CAP
+    dbs = [d for d in MU.downbeats(grid, anchor=impact_rel) if 0.2 <= d <= CAP]
+    beats_ok = [b for b in grid if 0.2 <= b <= CAP]
+    hook_at = dbs[-1] if dbs else (beats_ok[-1] if beats_ok else 0.3)
+    log["hook_at"] = round(hook_at, 3)
+    log["hook_on"] = "downbeat" if dbs else ("beat" if beats_ok else "fallback")
+    td = work / ".text"
+    hook = TL.Hook("Tanjiro finds the opening", onset_s=hook_at, duration_s=1.8)
+    slate = FS.attribution("Demon Slayer", "Ufotable", "Crunchyroll")
+    sp = _textfile(td, "slate", slate)
+    layers = [TL.hook_filters(hook, td, kit["accent"], display_font=brand.display),
+              (f"drawtext=textfile='{sp}':fontsize=24:fontcolor=white@0.75:box=1:"
+               f"boxcolor=black@0.40:boxborderw=10:x=24:y=h-56:fontfile={brand.body}")]
+    st = max(0.0, vlen - 1.0)
+    for i, line in enumerate(("Demon Slayer", "@FrameDrift")):
+        lp = _textfile(td, f"lt{i}", line)
+        layers.append(
+            f"drawtext=textfile='{lp}':fontsize={46 if i == 0 else 30}:fontcolor=white:"
+            f"box=1:boxcolor=black@0.55:boxborderw=14:x=(w-text_w)/2:y={1300 + i * 70}:"
+            f"fontfile={brand.display if i == 0 else brand.body}:enable='gte(t,{st:.2f})'")
+    comp = work / "comp.mp4"
+    run(["ffmpeg", "-y", "-v", "error", "-i", str(body), "-i", str(mixed),
+         "-vf", ",".join(layers), "-map", "0:v", "-map", "1:a", "-shortest",
+         "-r", str(FPS), *X264, "-c:a", "aac", "-b:a", "192k", "-ar", "48000", str(comp)])
+    assert append_loop_back(comp, out, hold_s=0.3)
+
+    lufs, tp = measure_loudness(out)
+    log.update({"duration_s": round(probe_duration(out), 2), "lufs": round(lufs, 1),
+                "true_peak": round(tp, 1), "attribution": slate,
+                "cost_usd": round(log["cost_usd"], 5)})
+    (work / "render_log.json").write_text(json.dumps(log, indent=2))
+    return log
+
+
+if __name__ == "__main__":
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else SP / "peak_tanjiro_v5_hand.mp4"
+    args = build()
+    lg = finish(*args, out)
+    print(f"  DONE {lg['duration_s']}s @ {FPS}fps  "
+          f"{lg['remapped_segments']} remapped / {lg['interpolated_segments']} interpolated  "
+          f"impact@{lg['impact_rel']}s  {lg['lufs']}LUFS", flush=True)
