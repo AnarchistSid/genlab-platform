@@ -273,8 +273,8 @@ class Candidate:
     metrics: MusicMetrics
     register: str
     continuous: bool = True
-
     target_drop_s: float = 8.0
+    asked_bpm: float | None = None
 
     @property
     def usable_drop(self) -> tuple[float, float] | None:
@@ -291,11 +291,22 @@ class Candidate:
         return min(drops, key=lambda d: abs(d[0] - self.target_drop_s))
 
     @property
+    def measured_tempo(self) -> float:
+        """Octave-resolved, so a half-tempo generation is REPORTABLE.
+
+        `metrics.bpm` comes from a 120-180 BPM search and cannot express a
+        74 BPM track at all -- a tempo gate built on it can never fail.
+        """
+        return detect_tempo(self.path, self.asked_bpm)
+
+    @property
     def gates(self) -> dict[str, bool]:
         m = self.metrics
         resid = registers()["defaults"]["max_align_residual_s"]
         u = self.usable_drop
+        ask = self.asked_bpm
         return {
+            "tempo_within_5pct": (tempo_ok(self.measured_tempo, ask) if ask else True),
             "tempo_130_165": m.in_tempo_band,
             "sub_share_25": m.sub_share >= MIN_SUB_SHARE,
             "has_drop": u is not None,
@@ -311,7 +322,7 @@ class Candidate:
         failed = [k for k, v in self.gates.items() if not v]
         u = self.usable_drop
         d = f"{u[0]:5.2f}s(+{u[1]:4.1f}dB)" if u else "   none      "
-        return (f"  {label:<20}{self.metrics.bpm:6.1f} BPM  sub "
+        return (f"  {label:<20}{self.measured_tempo:6.1f} BPM  sub "
                 f"{self.metrics.sub_share:4.0%}  usable drop {d}  "
                 + ("PASS" if self.passes else "fails: " + ",".join(failed)))
 
@@ -340,7 +351,7 @@ def generate_candidates(fight_id: str, work: Path, *, n: int | None = None,
 
     cfg = registers()
     reg = register_for(fight_id)
-    prompt, _ = prompt_for(reg, intro_s=target_drop_s)
+    prompt, asked = prompt_for(reg, intro_s=target_drop_s)
     n = n or int(cfg["defaults"]["candidates"])
     duration_s = duration_s or float(cfg["defaults"]["duration_s"])
     work.mkdir(parents=True, exist_ok=True)
@@ -352,7 +363,7 @@ def generate_candidates(fight_id: str, work: Path, *, n: int | None = None,
         p = prompt if i == 0 else f"{prompt}, variation {i + 1}"
         cont = i < max(1, n - 1)          # last candidate drops the clause
         generate_bed(p, duration_s, dest, continuous=cont)
-        out.append(Candidate(dest, measure(dest), reg, cont, target_drop_s))
+        out.append(Candidate(dest, measure(dest), reg, cont, target_drop_s, asked))
         logger.info("[music] %s", out[-1].row(dest.name))
     return out
 
@@ -536,8 +547,8 @@ MIN_IMPACT_HIT_S = 1.5
 
 
 def snap_cuts(shots: list[dict], bpm: float, impact_source_t: float,
-              *, min_shot_s: float = 0.30,
-              max_shift_s: float = 0.18) -> tuple[float | None, float]:
+              *, min_shot_s: float = 0.30, max_shift_s: float = 0.18,
+              locked_ends: tuple[float, ...] = ()) -> tuple[float | None, float]:
     """Snap every cut onto the beat grid; report where the impact LANDS.
 
     Mutates each shot's ``end`` and sets ``reel_start``. Returns
@@ -553,6 +564,11 @@ def snap_cuts(shots: list[dict], bpm: float, impact_source_t: float,
     * the impact's reel time is recomputed AFTER snapping, never assumed
       before it, because snapping moves every boundary and with it the
       impact. Aligning a bed to a pre-snap impact puts the drop off the hit.
+    * a cut listed in `locked_ends` does not move. The grid and the marked
+      window are both hard constraints and they collide at the boundary:
+      snapping pulled Luffy's last shot 0.113 s short of its mark, which
+      PEAK-10 §1 forbids. Interior cuts go to the grid; the window's own
+      edges do not.
     """
     period = 60.0 / bpm
     t = 0.0
@@ -561,9 +577,10 @@ def snap_cuts(shots: list[dict], bpm: float, impact_source_t: float,
         d = sh["end"] - sh["start"]
         if sh["start"] <= impact_source_t < sh["end"]:
             impact_rel = t + (impact_source_t - sh["start"])
+        locked = any(abs(sh["end"] - e) < 1e-6 for e in locked_ends)
         target = round((t + d) / period) * period
         nd = target - t
-        if abs(nd - d) <= max_shift_s and nd >= min_shot_s:
+        if not locked and abs(nd - d) <= max_shift_s and nd >= min_shot_s:
             sh["end"] = round(sh["start"] + nd, 3)
             d = nd
         sh["reel_start"] = round(t, 3)

@@ -258,3 +258,19 @@ def test_melody_similarity_separates_a_copy_from_a_style_match(tmp_path):
     assert M.MAX_MELODY_SIMILARITY < 1.0
     # a different pitch class is a different tune
     assert M.chroma_similarity(a, b) < M.chroma_similarity(a, a)
+
+
+def test_candidate_tempo_gate_uses_the_octave_resolved_tempo(tmp_path):
+    """metrics.bpm comes from a 120-180 search and can never report 74."""
+    slow = _click_track(tmp_path / "slow.wav", 74.0, seconds=25.0)
+    c = M.Candidate(slow, M.measure(slow), "brazilian_phonk", True, 8.0, 148.0)
+    assert c.measured_tempo == pytest.approx(74.0, rel=0.06)
+    assert not c.gates["tempo_within_5pct"]
+    assert c.metrics.bpm >= 120.0, "the old meter cannot see the failure"
+
+
+def test_snap_does_not_move_a_locked_window_edge():
+    """The grid and the mark collide at the boundary; the mark wins (§1)."""
+    shots = [{"start": 0.0, "end": 2.13}, {"start": 10.0, "end": 15.487}]
+    M.snap_cuts(shots, bpm=150.0, impact_source_t=11.0, locked_ends=(15.487,))
+    assert shots[-1]["end"] == 15.487, "a locked window edge must not move"
