@@ -141,3 +141,25 @@ def test_snap_cuts_never_drops_a_short_shot():
     _, total = M.snap_cuts(shots, bpm=150.0, impact_source_t=99.0)
     assert len(shots) == before
     assert total > 0.5
+
+
+def test_usable_drop_is_the_nearest_one_not_the_biggest(tmp_path):
+    """Phonk repeats its drop; taking only the largest loses the usable one."""
+    seg = []
+    for i, db in enumerate((-30, -2, -30, -6)):
+        p = tmp_path / f"s{i}.wav"
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi",
+                        "-i", "sine=frequency=60:sample_rate=44100", "-t", "5",
+                        "-af", f"volume={db}dB", "-c:a", "pcm_s16le", "-y", str(p)],
+                       check=True)
+        seg.append(p)
+    joined = tmp_path / "j.wav"
+    lst = tmp_path / "l.txt"
+    lst.write_text("".join(f"file '{p}'\n" for p in seg))
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "concat", "-safe", "0",
+                    "-i", str(lst), "-c:a", "pcm_s16le", "-y", str(joined)], check=True)
+    drops = M.find_drops(joined)
+    assert len(drops) >= 2, f"only found {drops}"
+    # the biggest step is the first one; the second is the one near 15 s
+    assert max(drops, key=lambda d: d[1])[0] < 10.0
+    assert any(abs(t - 15.0) <= 2.0 for t, _ in drops)

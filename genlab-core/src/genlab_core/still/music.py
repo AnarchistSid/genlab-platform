@@ -158,6 +158,38 @@ def find_drop(path: Path) -> tuple[float | None, float, list[float]]:
     return float(t[best_i]), float(best_step), db.tolist()
 
 
+def find_drops(path: Path, n: int = 4, min_gap_s: float = 4.0) -> list[tuple[float, float]]:
+    """Every level shift worth aligning to, strongest first.
+
+    Phonk repeats its drop -- the section comes back. Returning only the
+    largest throws away alignment points the track already contains, which is
+    what left two reels unservable when the generator put its first drop at
+    6.7 s and the reel needed 13.5 s.
+    """
+    import numpy as np
+
+    x = _decode(path, lp=400.0)
+    db, t = _rms_db(x)
+    if len(db) < 60:
+        return []
+    look = int(2.0 / 0.1)
+    steps = []
+    for i in range(look, len(db) - look):
+        before = float(np.median(db[i - look:i]))
+        after = float(np.median(db[i:i + look]))
+        steps.append((after - before, float(t[i])))
+    steps.sort(reverse=True)
+    out: list[tuple[float, float]] = []
+    for step, tt in steps:
+        if step < MIN_DROP_STEP_DB:
+            break
+        if all(abs(tt - o[0]) >= min_gap_s for o in out):
+            out.append((tt, step))
+        if len(out) >= n:
+            break
+    return out
+
+
 def loudest_second(path: Path) -> float:
     """Midpoint of the loudest 1-second window."""
     import numpy as np
@@ -245,15 +277,29 @@ class Candidate:
     target_drop_s: float = 8.0
 
     @property
+    def usable_drop(self) -> tuple[float, float] | None:
+        """The drop this candidate offers NEAREST the reel's wind-up.
+
+        Not the biggest one. Phonk repeats its drop, and taking only the
+        largest left two reels unservable when the generator put its first
+        drop at 6.7 s and the reel needed 13.5 s -- while the same file
+        carried a second one at 12.75 s.
+        """
+        drops = find_drops(self.path)
+        if not drops:
+            return None
+        return min(drops, key=lambda d: abs(d[0] - self.target_drop_s))
+
+    @property
     def gates(self) -> dict[str, bool]:
         m = self.metrics
         resid = registers()["defaults"]["max_align_residual_s"]
+        u = self.usable_drop
         return {
             "tempo_130_165": m.in_tempo_band,
             "sub_share_25": m.sub_share >= MIN_SUB_SHARE,
-            "has_drop": m.has_drop,
-            "drop_alignable": (m.drop_t is not None
-                               and abs(m.drop_t - self.target_drop_s) <= resid),
+            "has_drop": u is not None,
+            "drop_alignable": u is not None and abs(u[0] - self.target_drop_s) <= resid,
             "click_present": m.click_flatness >= MIN_CLICK_FLATNESS,
         }
 
@@ -263,9 +309,11 @@ class Candidate:
 
     def row(self, label: str) -> str:
         failed = [k for k, v in self.gates.items() if not v]
-        c = "cont" if self.continuous else "arc "
-        return (self.metrics.row(label) + f" {c}" +
-                ("  PASS" if self.passes else "  fails: " + ",".join(failed)))
+        u = self.usable_drop
+        d = f"{u[0]:5.2f}s(+{u[1]:4.1f}dB)" if u else "   none      "
+        return (f"  {label:<20}{self.metrics.bpm:6.1f} BPM  sub "
+                f"{self.metrics.sub_share:4.0%}  usable drop {d}  "
+                + ("PASS" if self.passes else "fails: " + ",".join(failed)))
 
 
 #: PROVISIONAL — not yet enforced. Measured on the v2 orchestral beds (no
@@ -320,7 +368,7 @@ def pick(candidates: list[Candidate], target_drop_s: float | None = None) -> Can
     if not ok:
         return None
     t = target_drop_s if target_drop_s is not None else ok[0].target_drop_s
-    return min(ok, key=lambda c: abs((c.metrics.drop_t or 0.0) - t))
+    return min(ok, key=lambda c: abs((c.usable_drop or (0.0, 0.0))[0] - t))
 
 
 # ── §2 the reel is anchored on the drop ─────────────────────────────────
