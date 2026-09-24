@@ -1,0 +1,18 @@
+{
+  "fight": "Tanjiro vs Akaza",
+  "impacts": [
+    33.0,
+    35.5
+  ],
+  "windup_starts": [
+    31.0,
+    34.5
+  ],
+  "falls": [
+    34.0,
+    36.5
+  ],
+  "marker_note": "Marked from a 4.46s grid then a 0.25s grid over 28-36s. 33.00 = bright blue water-breathing slash burst; 35.50 = orange spark clash. Detector v2 does not exist yet.",
+  "written_at": 1790234746.2741199,
+  "sha256": "c33edc62207b1965"
+}

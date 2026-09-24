@@ -1,0 +1,18 @@
+{
+  "fight": "Deku vs Overhaul",
+  "impacts": [
+    59.0,
+    81.5
+  ],
+  "windup_starts": [
+    56.0,
+    78.0
+  ],
+  "falls": [
+    62.0,
+    83.0
+  ],
+  "marker_note": "Marked from a 4.2s grid then 0.25s grids over 56-64s and 76-84s. 59.00 = Detroit Smash effect frames begin (yellow/magenta impact field); 81.50 = collision with the wall, white burst. Detector v2 does not exist yet.",
+  "written_at": 1790234746.273943,
+  "sha256": "487ed49213a02824"
+}
