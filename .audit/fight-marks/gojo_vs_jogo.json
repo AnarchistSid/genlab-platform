@@ -1,0 +1,19 @@
+{
+  "fight": "Gojo vs Jogo",
+  "impacts": [
+    75.5,
+    77.25,
+    112.0
+  ],
+  "windup_starts": [
+    72.0,
+    110.0
+  ],
+  "falls": [
+    78.0,
+    113.5
+  ],
+  "marker_note": "Marked from frame grids at 5.83s then 0.25s resolution, WITHOUT running find_beats on this clip. 75.50 = Red fires (white burst); 77.25 = second burst; 112.00 = Hollow Purple consumes Jogo. Resolution of the marking pass is 0.25s, inside the 0.30s tolerance.",
+  "written_at": 1790233115.829299,
+  "sha256": "e69fe880131807fd"
+}
