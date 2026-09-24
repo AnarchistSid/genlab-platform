@@ -564,6 +564,9 @@ def snap_cuts(shots: list[dict], bpm: float, impact_source_t: float,
     * the impact's reel time is recomputed AFTER snapping, never assumed
       before it, because snapping moves every boundary and with it the
       impact. Aligning a bed to a pre-snap impact puts the drop off the hit.
+    * a cut is ONE boundary: when it moves, the next shot's start moves with
+      it, or the frames in between are dropped from the reel without anything
+      reporting it.
     * a cut listed in `locked_ends` does not move. The grid and the marked
       window are both hard constraints and they collide at the boundary:
       snapping pulled Luffy's last shot 0.113 s short of its mark, which
@@ -573,7 +576,7 @@ def snap_cuts(shots: list[dict], bpm: float, impact_source_t: float,
     period = 60.0 / bpm
     t = 0.0
     impact_rel: float | None = None
-    for sh in shots:
+    for i, sh in enumerate(shots):
         d = sh["end"] - sh["start"]
         if sh["start"] <= impact_source_t < sh["end"]:
             impact_rel = t + (impact_source_t - sh["start"])
@@ -581,8 +584,16 @@ def snap_cuts(shots: list[dict], bpm: float, impact_source_t: float,
         target = round((t + d) / period) * period
         nd = target - t
         if not locked and abs(nd - d) <= max_shift_s and nd >= min_shot_s:
+            old_end = sh["end"]
             sh["end"] = round(sh["start"] + nd, 3)
             d = nd
+            # A cut is ONE boundary. Moving only this shot's end leaves the
+            # next shot's start where it was, and the source frames between
+            # them are silently skipped -- measured on Deku, where a named
+            # frame at 73.5 s fell into a 0.16 s hole opened by snapping.
+            nxt = shots[i + 1] if i + 1 < len(shots) else None
+            if nxt is not None and abs(nxt["start"] - old_end) < 1e-6:
+                nxt["start"] = sh["end"]
         sh["reel_start"] = round(t, 3)
         t += d
     return impact_rel, t

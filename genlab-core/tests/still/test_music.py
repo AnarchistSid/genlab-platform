@@ -274,3 +274,16 @@ def test_snap_does_not_move_a_locked_window_edge():
     shots = [{"start": 0.0, "end": 2.13}, {"start": 10.0, "end": 15.487}]
     M.snap_cuts(shots, bpm=150.0, impact_source_t=11.0, locked_ends=(15.487,))
     assert shots[-1]["end"] == 15.487, "a locked window edge must not move"
+
+
+def test_snapping_a_cut_moves_both_sides_of_it():
+    """Otherwise the source frames between them vanish from the reel."""
+    shots = [{"start": 10.0, "end": 12.34}, {"start": 12.34, "end": 15.0}]
+    M.snap_cuts(shots, bpm=150.0, impact_source_t=99.0)
+    assert shots[1]["start"] == shots[0]["end"], "a hole was opened at the cut"
+
+
+def test_snapping_does_not_join_shots_from_different_segments():
+    shots = [{"start": 10.0, "end": 12.34}, {"start": 40.0, "end": 45.0}]
+    M.snap_cuts(shots, bpm=150.0, impact_source_t=99.0)
+    assert shots[1]["start"] == 40.0, "a non-adjacent shot must not be pulled"
