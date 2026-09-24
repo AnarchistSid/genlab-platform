@@ -1,0 +1,92 @@
+# FrameDrift edit-lane rights posture. ANIME-PEAK-01 §1.
+#
+# Footage source is the whole rights question. A fight whose only source is a
+# fan upload, a compilation channel, or a full episode outside a licensed
+# channel IS NOT MADE — `source_unlicensed`, counted, not worked around.
+#
+# This file is read before any download. It is not advisory.
+
+version: 1
+updated: 2026-09-24
+
+# ── Channels whose uploads are official or licensed-regional ──────────────
+# `official`  = the rights holder or its own distribution arm
+# `licensed`  = a regional licensee whose uploads are legitimate for our
+#               audience (India). Muse Asia and Ani-One are the two that
+#               matter most for FrameDrift's geography.
+channels:
+  official:
+    - "Crunchyroll"
+    - "Crunchyroll Collection"
+    - "Netflix Anime"
+    - "TOEI Animation"
+    - "Toei Animation Europe"
+    - "One Piece Official"
+    - "Naruto Official"
+    - "MAPPA CHANNEL"
+    - "ufotable"
+    - "Kyoto Animation"
+    - "BONES"
+    - "Aniplex"
+    - "Aniplex USA"
+    - "KADOKAWAanime"
+    - "TOHO animation"
+    - "Shueisha"
+  licensed_regional:
+    - "Muse Asia"
+    - "Muse Indonesia"
+    - "Ani-One Asia"
+    - "Ani-One Asia Ultra"
+    - "Medialink"
+    - "MedialinkAnimation"
+
+# ── Per-studio posture ────────────────────────────────────────────────────
+# hostile   = enforces aggressively; only official/licensed uploads, and the
+#             stop rule is immediate on any claim
+# moderate  = enforces, but historically tolerant of short transformative use
+#
+# Posture does NOT relax the source rule. It sets how fast we stop.
+studios:
+  toei:
+    posture: hostile
+    shows: ["One Piece", "Dragon Ball", "Dragon Ball Z", "Dragon Ball Super"]
+    note: >-
+      Toei runs one of the most active takedown programmes in anime and has
+      struck long-standing channels over seconds of footage. Official uploads
+      only; pause the studio on the first claim of any kind.
+  shueisha_mappa:
+    posture: hostile
+    shows: ["Jujutsu Kaisen", "Chainsaw Man", "Attack on Titan Final Season"]
+    note: "Publisher-led enforcement; MAPPA titles are claimed quickly."
+  pierrot:
+    posture: hostile
+    shows: ["Naruto", "Naruto Shippuden", "Boruto", "Bleach"]
+  kyoto_animation:
+    posture: moderate
+    shows: ["Violet Evergarden", "A Silent Voice", "Hyouka"]
+  bones:
+    posture: moderate
+    shows: ["My Hero Academia", "Mob Psycho 100", "Fullmetal Alchemist"]
+  default:
+    posture: hostile
+    note: "Unknown studio defaults to the strictest posture, not the loosest."
+
+# ── The stop rule ─────────────────────────────────────────────────────────
+stop_rule:
+  # A copyright STRIKE pauses the studio immediately and the reel comes down.
+  on_strike:
+    pause_studio: true
+    take_down: true
+  # A Content ID CLAIM is revenue-share, not a strike. Recorded, surfaced,
+  # and NOT self-acting — the operator decides per studio after the pilot.
+  on_content_id_claim:
+    pause_studio: false
+    take_down: false
+    record: true
+    note: "Aditya's call per studio after the 14-day pilot window."
+  watch_days: 14
+
+# ── Attribution ───────────────────────────────────────────────────────────
+attribution:
+  required: true
+  template: "{show} · {studio} · via {channel}"
