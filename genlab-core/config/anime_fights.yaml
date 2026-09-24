@@ -377,6 +377,12 @@ fights:
   music_tempo_measured: 150.0
   restored_note: full marked window restored; PEAK-09 had started the body at 76.0 to meet the generator's
     drop. The track adapts instead (fit_bed).
+  scene_characters:
+  - Tanjiro
+  - Akaza
+  - Giyu
+  scene_characters_note: the VLM character list is every fighter IN THE SCENE, not just the two the fight
+    is named for. Giyu read as 'none' on a clear close-up because the list held two names.
 - id: saitama_vs_boros
   show: One Punch Man
   studio: madhouse

@@ -1,0 +1,26 @@
+# ANIME-PEAK-13 §3 — where each source channel burns its marks.
+#
+# MEASURED off the frame against a grid overlay, not asked of the VLM. The
+# model's semantic labels are reliable; its BOXES are not -- it returned a
+# face box centred at y = 1.32 (outside the frame) and watermark boxes with
+# the aspect inverted, a narrow tall box where the logo is a wide short
+# strip. Position is cheap to measure and expensive to get wrong, because a
+# mask in the wrong place either leaves the logo visible or covers a face.
+#
+# Boxes are fractions of the frame: [x0, y0, x1, y1].
+version: 1
+channels:
+  crunchyroll:
+    - {what: watermark, box: [0.000, 0.005, 0.315, 0.105], note: "top-left Crunchyroll wordmark"}
+    - {what: credit,    box: [0.715, 0.955, 1.000, 1.000], note: "bottom-right rights line"}
+  toei:
+    - {what: watermark, box: [0.000, 0.005, 0.230, 0.095], note: "TOEI ANIMATION, top-left"}
+    - {what: credit,    box: [0.700, 0.955, 1.000, 1.000]}
+  toho:
+    - {what: watermark, box: [0.000, 0.005, 0.230, 0.115], note: "TOHO animation, top-left"}
+    - {what: credit,    box: [0.700, 0.955, 1.000, 1.000]}
+fights:
+  tanjiro_vs_akaza: crunchyroll
+  zoro_vs_king: toei
+  luffy_vs_kaido: toei
+  deku_vs_overhaul: toho
