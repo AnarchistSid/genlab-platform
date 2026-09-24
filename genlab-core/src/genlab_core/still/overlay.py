@@ -226,7 +226,20 @@ def outro_filters(
     )
 
 
-def append_loop_back(video: Path, out: Path, hold_s: float = 0.4, *, timeout_s: int = 300) -> bool:
+def _probe_fps(video: Path) -> float:
+    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+                        "-show_entries", "stream=r_frame_rate", "-of", "csv=p=0",
+                        str(video)], capture_output=True, text=True)
+    txt = (r.stdout or "30/1").strip()
+    try:
+        num, den = txt.split("/")
+        return float(num) / float(den or 1)
+    except ValueError:
+        return float(txt or 30.0)
+
+
+def append_loop_back(video: Path, out: Path, hold_s: float = 0.4, *,
+                     fps: float | None = None, timeout_s: int = 300) -> bool:
     """Append frame 0 to the tail so the loop is invisible.
 
     The kit asks the reel to end on a frame matching frame 0. Appending the
@@ -241,9 +254,16 @@ def append_loop_back(video: Path, out: Path, hold_s: float = 0.4, *, timeout_s: 
     it stayed at 1.65 even with a LOSSLESS re-encode, which is what proves the
     loss was the colour round-trip and not the encoder. Staying in YUV scores
     0.51 on the same frame.
+
+    The tail is built at the INPUT's frame rate, not a hardcoded 30. The
+    concat below is a stream COPY, and copying a 30 fps tail onto a 24 fps
+    body does not error -- it produces a file whose duration is wrong. On a
+    23.71 s reel that added 6.32 s of broken timeline, visible only by
+    measuring the output.
     """
     out.parent.mkdir(parents=True, exist_ok=True)
-    frames = max(1, round(hold_s * 30))
+    fps = fps or _probe_fps(video)
+    frames = max(1, round(hold_s * fps))
     tail = out.with_suffix(".tail.mp4")
     p = subprocess.run(
         [
@@ -254,11 +274,11 @@ def append_loop_back(video: Path, out: Path, hold_s: float = 0.4, *, timeout_s: 
             "-i",
             str(video),
             "-vf",
-            f"select=eq(n\\,0),loop=loop={frames - 1}:size=1:start=0,setpts=N/30/TB",
+            f"select=eq(n\\,0),loop=loop={frames - 1}:size=1:start=0,setpts=N/{fps:.6f}/TB",
             "-frames:v",
             str(frames),
             "-r",
-            "30",
+            f"{fps:.6f}",
             "-c:v",
             "libx264",
             "-crf",
