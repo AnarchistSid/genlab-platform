@@ -512,6 +512,13 @@ def check_mix(reel: Path, impact_rel: float) -> MixCheck:
     The gate that matters is `loudest_is_the_hit`. On the v2 reels the
     loudest second sat at 1.3-2.1 s -- the hook slam -- which is the title
     being louder than the punch.
+
+    ALIGNING THE DROP DOES NOT SATISFY THIS GATE. A drop is where the level
+    steps UP; the section's own peak arrives later. Measured on the aligned
+    beds, the bed's loudest second landed 1.1-3.3 s AFTER the impact, while
+    the show's own audio peaked 5.1 dB higher BEFORE it. The impact hit has
+    to own the loudest second outright, with the bed and the show ducked
+    under it -- the bed's job is the step, not the peak.
     """
     from genlab_core.still.audio import measure_loudness
 
