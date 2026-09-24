@@ -98,3 +98,55 @@ the operator's accounts. The protocol is written below; it is not run.
    stays automated.
 6. Confound to control: post order and time of day. Alternate across the
    two-reel pair, or the difference measures the slot, not the sound.
+
+## Normalise by measurement, not by `loudnorm`
+
+The §3 LUFS gate failed three of four reels at −12.1 to −12.7 against a
+−14 ± 1 target, and the true-peak gate failed three at −0.9 to −1.1 against
+≤ −1.0. Both had causes worth keeping.
+
+**`loudnorm` moved the files the wrong way.** Measured on two real premixes:
+
+| stage | zoro | tanjiro |
+|---|---|---|
+| premix | −13.09 LUFS | −14.96 LUFS |
+| after two-pass `loudnorm` (`linear=true`) | −12.68 | −14.19 |
+
+Both got **louder**, in the direction away from the −14 target. Single-pass
+at `TP=−1.5` undershot instead, to −17.07. A static gain computed from the
+premix's own integrated loudness, followed by a limiter, landed on **−14.00
+LUFS at TP −1.68** in one step, and can be verified by re-measuring:
+
+```
+gain = target_lufs − measured_lufs(premix)
+volume={gain}dB, alimiter=limit=-1.5dB
+```
+
+**Aiming at a ceiling cannot clear it.** The kit targets true peak at exactly
+−1.0, so measurement lands either side and a `≤ −1.0` gate failed by a tenth
+of a dB. The limiter now aims at −1.5.
+
+## Aligning the drop does not make the impact the loudest second
+
+This corrected an assumption in the packet's own design, and the measurement
+is the reason the first v3 pass failed:
+
+| | bed's loudest | show's loudest | impact |
+|---|---|---|---|
+| luffy_vs_kaido | 16.90 s | — | 13.37 s |
+| deku_vs_overhaul | 15.30 s | 7.40 s (+5.1 dB over its level at the impact) | 13.78 s |
+
+A drop is where the level **steps up**; the section's own peak arrives 1.1–3.3 s
+later, and the show's own audio peaks *before* the impact. So the hit owns the
+loudest second outright at 0 dB, with the bed at −7 dB and the show at −11 dB,
+both sidechain-ducked **by the hit**. After that rebalance the loudest second
+landed +0.91 to +0.94 s from the impact on all four reels — inside the 1 s
+tolerance, on every one.
+
+## One bed came from the weaker prompt
+
+luffy_vs_kaido passed in round 2 and was therefore never regenerated with the
+round-3 prompt, which is why its sub share sat at 19% in the mix while the
+others reached 26–42%. Regenerated on the same prompt as the rest, it moved
+to 30% at source. **A candidate that passes early escapes the next
+improvement** — worth checking for whenever a gate is re-tuned mid-run.
