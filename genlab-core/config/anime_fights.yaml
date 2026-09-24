@@ -16,6 +16,19 @@
 version: 1
 updated: 2026-09-24
 
+# WARNING (ANIME-PEAK-04 §1). Every `episode` below was entered by hand from
+# recall. Cross-checked against fan-clip title consensus, ALL THREE that were
+# checked disagreed:
+#
+#   sukuna_vs_mahoraga   catalog S2 ep[41,18]  community S2E17  (support 4)
+#   mob_vs_toichiro      catalog S2 ep[25,12]  community ep 10  (support 4)
+#   deku_vs_overhaul     catalog S4 ep[74,11]  community S4E13  (support 5)
+#
+# A number entered from memory is a guess; a dozen uploaders agreeing is
+# evidence. Treat every unverified `episode` here as provisional and run
+# fight_window.episode_consensus before using one as a source gate — the Mob
+# vs Toichiro source accepted on "S2E12" is very likely the wrong episode.
+
 fights:
   - id: zoro_vs_king
     show: "One Piece"
