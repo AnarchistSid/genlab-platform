@@ -19,16 +19,22 @@ class TestTheLocatorNeverTouchesFootage:
 class TestEpisodeConsensus:
     """The locator's most useful output, and not what it was built for."""
 
-    def test_the_community_corrects_a_hand_entered_number(self):
-        titles = ["Sukuna vs. Mahoraga Part 1 | Jujutsu Kaisen Season 2 Episode 17",
-                  "Sukuna vs. Mahoraga Part 2 | Jujutsu Kaisen Season 2 Episode 17",
-                  "Sukuna vs Mahoraga [BLU-RAY] Fight in Hindi"]
-        c = FW.episode_consensus(titles)
+    def test_the_community_flags_a_hand_entered_number(self):
+        """FLAGS, not corrects — see TestConsensusIsAFlagNotACorrector. Needs
+        at least MIN_CONSENSUS_SUPPORT votes among titles naming the fight."""
+        titles = [f"Sukuna vs. Mahoraga Part {i} | Jujutsu Kaisen Season 2 Episode 17"
+                  for i in range(1, 5)]
+        c = FW.episode_consensus(titles, fight="Sukuna vs Mahoraga",
+                                 show="Jujutsu Kaisen")
         assert (c["season"], c["episode"]) == (2, 17)
-        assert c["support"] == 2
+        assert c["support"] == 4
 
     def test_a_bare_episode_number_still_counts(self):
-        assert FW.episode_consensus(["Mob vs Toichiro Episode 10"])["episode"] == 10
+        titles = ["Mob vs Toichiro Episode 10"] * 4
+        assert FW.episode_consensus(titles)["episode"] == 10
+
+    def test_one_title_is_never_enough(self):
+        assert FW.episode_consensus(["Mob vs Toichiro Episode 10"])["episode"] is None
 
     def test_no_episode_anywhere_reports_none(self):
         c = FW.episode_consensus(["Sukuna vs Mahoraga AMV", "best fight ever"])
@@ -85,3 +91,34 @@ class TestWindowGate:
 
     def test_the_cap_exists(self):
         assert FW.MAX_WINDOWS_PER_FIGHT <= 2
+
+
+class TestConsensusIsAFlagNotACorrector:
+    """ANIME-PEAK-04. Measured across 13 fights, unfiltered extraction gave
+    "Maki vs the Zenin -> JJK S3E4" (there is no season 3) and "Denji vs
+    Katana Man -> ep 12" on ONE supporting title out of 31."""
+
+    def test_a_single_vote_is_not_consensus(self):
+        titles = ["Denji vs Katana Man Episode 12"] + ["Chainsaw Man best moments"] * 30
+        c = FW.episode_consensus(titles, fight="Denji vs Katana Man", show="Chainsaw Man")
+        assert c["episode"] is None
+        assert "weak" in c["reason"]
+
+    def test_titles_that_do_not_name_the_fight_do_not_vote(self):
+        """A search for one fight returns plenty of clips from the same show,
+        and their episode numbers are someone else's scene."""
+        titles = ["Jujutsu Kaisen Episode 9 Gojo moments",
+                  "Jujutsu Kaisen Episode 9 best scenes",
+                  "Jujutsu Kaisen Episode 9 reaction"]
+        c = FW.episode_consensus(titles, fight="Gojo vs Jogo", show="Jujutsu Kaisen")
+        assert c["episode"] is None
+        assert c["n_voting"] == 0
+
+    def test_real_consensus_still_reports(self):
+        titles = ["Sukuna vs Mahoraga | Jujutsu Kaisen Season 2 Episode 17"] * 4
+        c = FW.episode_consensus(titles, fight="Sukuna vs Mahoraga", show="Jujutsu Kaisen")
+        assert (c["season"], c["episode"]) == (2, 17) and c["support"] == 4
+
+    def test_the_floor_constants_exist(self):
+        assert FW.MIN_CONSENSUS_SUPPORT >= 3
+        assert FW.MIN_CONSENSUS_FRACTION >= 0.10

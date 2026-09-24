@@ -97,7 +97,16 @@ class Window:
                 f"score {self.score:6.2f}  onsets {self.n_onsets:2d}  motion {self.motion:6.1f}")
 
 
-def episode_consensus(titles: list[str]) -> dict:
+#: A modal value over a handful of titles is not consensus. Measured across
+#: 13 fights, unfiltered extraction produced "Maki vs the Zenin -> JJK S3E4"
+#: (there is no season 3) and "Denji vs Katana Man -> ep 12" on a support of
+#: ONE title out of 31. Both would have been treated as ground truth.
+MIN_CONSENSUS_SUPPORT = 3
+MIN_CONSENSUS_FRACTION = 0.10
+
+
+def episode_consensus(titles: list[str], *, fight: str | None = None,
+                      show: str | None = None) -> dict:
     """What the community says the episode number is.
 
     This is the locator's most useful output, and it was not what it was built
@@ -110,8 +119,19 @@ def episode_consensus(titles: list[str]) -> dict:
     the catalog. It never silently overwrites it — a disagreement is reported
     so it can be looked at.
     """
+    # Only titles that NAME THIS FIGHT may vote. A search for one fight
+    # returns plenty of clips from the same show, and their episode numbers
+    # are someone else's scene. Reusing the source gate's matcher rather than
+    # writing a second one.
+    if fight and show:
+        from genlab_core.still.fight_source import names_the_fight
+
+        voting = [t for t in titles if names_the_fight(t, fight, show)]
+    else:
+        voting = list(titles)
+
     pairs: list[tuple[int | None, int]] = []
-    for t in titles:
+    for t in voting:
         matched = False
         for pat in _EP_IN_TITLE:
             m = pat.search(t or "")
@@ -124,10 +144,21 @@ def episode_consensus(titles: list[str]) -> dict:
             if m:
                 pairs.append((None, int(m.group(1))))
     if not pairs:
-        return {"episode": None, "season": None, "support": 0, "n_titles": len(titles)}
+        return {"episode": None, "season": None, "support": 0,
+                "n_titles": len(titles), "n_voting": len(voting),
+                "reason": "no episode reference in any title naming this fight"}
     top, n = Counter(pairs).most_common(1)[0]
+    frac = n / len(voting) if voting else 0.0
+    if n < MIN_CONSENSUS_SUPPORT or frac < MIN_CONSENSUS_FRACTION:
+        return {"episode": None, "season": None, "support": n,
+                "n_titles": len(titles), "n_voting": len(voting),
+                "reason": (f"weak: {n} votes ({frac:.0%} of {len(voting)} naming titles) "
+                           f"below the {MIN_CONSENSUS_SUPPORT}/{MIN_CONSENSUS_FRACTION:.0%} "
+                           f"floor — a modal value over a handful is not consensus"),
+                "all": dict(Counter(pairs).most_common(4))}
     return {"season": top[0], "episode": top[1], "support": n,
-            "n_titles": len(titles), "all": dict(Counter(pairs).most_common(4))}
+            "n_titles": len(titles), "n_voting": len(voting), "reason": "",
+            "all": dict(Counter(pairs).most_common(4))}
 
 
 def _seconds(m: re.Match) -> float:

@@ -17,17 +17,29 @@ version: 1
 updated: 2026-09-24
 
 # WARNING (ANIME-PEAK-04 §1). Every `episode` below was entered by hand from
-# recall. Cross-checked against fan-clip title consensus, ALL THREE that were
-# checked disagreed:
+# recall and NONE has been verified against an authoritative source. Treat
+# each as provisional.
 #
-#   sukuna_vs_mahoraga   catalog S2 ep[41,18]  community S2E17  (support 4)
-#   mob_vs_toichiro      catalog S2 ep[25,12]  community ep 10  (support 4)
-#   deku_vs_overhaul     catalog S4 ep[74,11]  community S4E13  (support 5)
+# Fan-clip title consensus was tried as a corrector and is NOT good enough.
+# With voting restricted to titles that name the fight, and a floor of 3 votes
+# at >=10%, 13 fights gave 4 disagreements — and one of them is impossible:
 #
-# A number entered from memory is a guess; a dozen uploaders agreeing is
-# evidence. Treat every unverified `episode` here as provisional and run
-# fight_window.episode_consensus before using one as a source gate — the Mob
-# vs Toichiro source accepted on "S2E12" is very likely the wrong episode.
+#   maki_vs_zenin   catalog S2 ep[43,20]   "community" JJK S3E4 (3 votes)
+#
+# Jujutsu Kaisen has no season 3. A signal that confidently returns a
+# non-existent season on a 3-vote plurality cannot be trusted to overwrite the
+# other three, however plausible those look:
+#
+#   sukuna_vs_mahoraga  catalog S2 ep[41,18]  community S2E17 (4)
+#   mob_vs_toichiro     catalog S2 ep[25,12]  community ep 10 (3)
+#   deku_vs_overhaul    catalog S4 ep[74,11]  community S4E13 (3)
+#
+# So episode_consensus is a FLAG, not a corrector, and it is wired that way.
+# The resolution is authoritative episode data — AniList/Jikan episode lists
+# carry per-episode TITLES ("Hinokami"), which can be matched to a fight's
+# `aka` without asking a crowd. Until that is done, do not use a catalog
+# episode number as a source gate: mob_vs_toichiro was accepted in PEAK-03 on
+# an "S2E12" match that may well be the wrong episode.
 
 fights:
   - id: zoro_vs_king
