@@ -176,6 +176,9 @@ characters:
   tag: INOSUKE
   cite: D303
   note: named in the burned subtitle twice; the boar mask / wild grey hair is the visual
+  masked: true
+  mask_note: the face detector does not fire on this character's mask; the HEAD box is the framing anchor
+    and the face rule relaxes to 'head whole'
 - id: nezuko
   names:
   - Nezuko

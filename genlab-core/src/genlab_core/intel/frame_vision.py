@@ -422,3 +422,34 @@ def accept_identity(rec: dict) -> str | None:
     if not who or who in (SOMEONE_ELSE, "unsure", "other"):
         return None
     return who if rec.get("beats_someone_else") is True else None
+
+
+# Identity accuracy tracks PIXEL COUNT, measured on the Eri case: the model
+# answered `eri` with the horn seen on a face box of area 0.116 (width 0.243)
+# and never answered eri on boxes of area ~0.039 (width ~0.15) in the adjacent
+# shot, with her horn described in the prompt both times. So an escape-hatch
+# win on a small box is as likely to be too little to see as a genuine unknown.
+IDENTITY_MIN_BOX_W = 0.20
+
+
+def resolve_identity(rec: dict, box: list[float], reask) -> tuple[str | None, str]:
+    """A name, with one widened retry before settling on no name.
+
+    ``reask`` is called with no arguments and returns a fresh record from a
+    LARGER crop of the same subject. It is only called when the escape hatch
+    won on a box narrower than ``IDENTITY_MIN_BOX_W`` -- a hatch win on a big
+    box is a real answer and is taken at face value.
+    """
+    name = accept_identity(rec)
+    if name:
+        return name, "accepted on the first ask"
+    w = (box[2] - box[0]) if box and len(box) >= 4 else 0.0
+    if w >= IDENTITY_MIN_BOX_W:
+        return None, f"no name: hatch won on a box {w:.3f} wide, big enough to be believed"
+    again = reask()
+    if again is None:
+        return None, f"no name: box {w:.3f} wide, no larger crop available"
+    name2 = accept_identity(again)
+    if name2:
+        return name2, f"accepted on the widened re-ask (first box was {w:.3f} wide)"
+    return None, f"no name: hatch won twice, first on {w:.3f} wide then on the widened crop"

@@ -438,6 +438,11 @@ rules:
     "someone else" on that crop; if the model cannot prefer a name over "someone else", the answer is
     no name. This is what stops a short list from manufacturing an identity.
 
+
+    RE-ASK BEFORE SETTLING ON NO NAME. When the escape hatch wins on a box below the size threshold, widen
+    the crop and ask once more; only then record no name. Identity accuracy tracks pixel count, so a hatch
+    win on a small box is as likely to be too little to see as it is to be a genuine unknown.
+
     '
   origin: ANIME-EDIT-01 Wave 1, operator decision 2026-09-26
   check: identity asked only of an existing detection; label consistency measured within cut-free shots
@@ -452,7 +457,8 @@ rules:
       with ''mitsuri'' in the list and ''shinobu'' absent, the model answered mitsuri on 10 of 20 crops.
       Looking showed Shinobu Kocho (butterfly hair ornaments) and Butterfly Mansion girls (pink flower
       clips). Mitsuri is not in the clip at all. Tanjiro, on the two largest boxes (0.217 and 0.297 wide),
-      was correct both times.'
+      was correct both times. Threshold from the Eri case: the model answered ''eri'' with the horn seen
+      on a box of area 0.116 (width 0.243) and never answered eri on boxes of area ~0.039 (width ~0.15).'
 - id: framing.burned_mark_whole_or_absent_on_a_static_window
   statement: 'A watermark burned into the PICTURE -- as opposed to a croppable band -- is either wholly
     inside a STATIC window or wholly outside it, never partly visible. Permitted static left edges are
@@ -539,3 +545,20 @@ rules:
     measured: 'YouTube returned HTTP 400 `uploadLimitExceeded`, "The user has exceeded the number of videos
       they may upload." Four titles never ran and JoJo got only its audio variant — which is exactly the
       shape CLM-011 warns about: there the audio variant read fine and the SILENT control found the block.'
+- id: framing.masked_characters_anchor_on_the_head_box
+  statement: 'A character whose face is covered -- a mask, a helmet, a beast head -- is anchored on the
+    HEAD box, not the face box, and geometry.faces_never_cropped relaxes to HEAD WHOLE for them. The anime
+    face detector does not fire on a mask, so ''no face detected'' on such a character means ''no HUMAN
+    face'', never ''no subject''. Characters are marked `masked: true` in the pack.
+
+    '
+  origin: ANIME-EDIT-01 Wave 2, operator decision 2026-09-26
+  check: 'for a pack character with masked: true, the window is placed from the head box and retention
+    is measured on the head box'
+  status: enforced
+  positive_control:
+    artefact: Demon Slayer SDBOxgbvZyY src 33.0-36.6, Inosuke in his boar mask
+    why: a zero-face reading was read as 'no reaction shot exists'
+    measured: the face detector returned 0 faces across all 13 samples of that window, and Inosuke is
+      plainly on screen in his boar mask at 33.5 and 34.5. The tile was described as 'an empty room' on
+      the strength of that zero. Overhaul's plague-doctor mask is the same shape of problem on MHA.

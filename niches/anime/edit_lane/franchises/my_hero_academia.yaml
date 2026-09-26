@@ -72,6 +72,9 @@ characters:
     accent: '#B03030'
   tag: OVERHAUL · SHIE HASSAIKAI
   cite: F201, F212, F214
+  masked: true
+  mask_note: the face detector does not fire on this character's mask; the HEAD box is the framing anchor
+    and the face rule relaxes to 'head whole'
 - id: eri
   names:
   - Eri
