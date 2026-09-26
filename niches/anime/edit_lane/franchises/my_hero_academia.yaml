@@ -1,55 +1,88 @@
 franchise: my_hero_academia
-display_name: "My Hero Academia"
+display_name: My Hero Academia
 rights:
-  holders: [Shueisha, Bones, TOHO animation]
-  stop_rule: {claims_in_14d: 2}
+  holders:
+  - Shueisha
+  - Bones
+  - TOHO animation
+  stop_rule:
+    claims_in_14d: 2
   works:
     tv_series:
-      title: "My Hero Academia (TV)"
+      title: My Hero Academia (TV)
       scope: tv_series
       tier: usable
       components:
         picture:
           status: clean
-          evidence: "PRB-002 preflight: 0 territories blocked; Studio read
-                     2026-09-26 reports 'No copyrighted content was found'"
+          evidence: 'PRB-002 preflight: 0 territories blocked; Studio read 2026-09-26 reports ''No copyrighted
+            content was found'''
           tested: 2026-09-26
         source_audio:
           status: clean
-          evidence: >
-            PRB-006, this clip's own 20 s preflight (ICO6ZRkVa0E, private):
-            no_block_detected, 0 territories, processed at t+45 s and stable
-            across 6 polls. Your caution was right to require it -- PRB-002
-            only cleared the trailer -- and the episode clip clears too.
+          evidence: 'PRB-006, this clip''s own 20 s preflight (ICO6ZRkVa0E, private): no_block_detected,
+            0 territories, processed at t+45 s and stable across 6 polls. Your caution was right to require
+            it -- PRB-002 only cleared the trailer -- and the episode clip clears too.
+
+            '
           tested: 2026-09-26
       usable: true
 sources:
-  - {name: crunchyroll_official, kind: clip_channel, uploader: Crunchyroll,
-     handle: "@crunchyroll",
-     url: "https://www.youtube.com/watch?v=hm-zgEdCRes"}
+- name: crunchyroll_official
+  kind: clip_channel
+  uploader: Crunchyroll
+  handle: '@crunchyroll'
+  url: https://www.youtube.com/watch?v=hm-zgEdCRes
 audio:
-  dub_en: false           # THIS clip is the subbed version; audio is Japanese (F208)
+  dub_en: false
   default_language: ja
   subtitle_language: en
   source_audio_policy: auto
   use_source_dialogue: true
   language_mode: sub_ja
-source_profiles: [modern_hd_16x9]
+source_profiles:
+- modern_hd_16x9
 source_constraints:
-  # The only allowlisted pull available today is 640x360 (android client).
-  # Every >=720p download 403s, with or without browser cookies, on every
-  # Crunchyroll MHA clip tested. Blocks RENDER, not planning.
-  available_resolution: [640, 360]
+  available_resolution:
+  - 640
+  - 360
   meets_min_resolution: false
-  blocker: "yt-dlp 2026.03.03 vs 2026.08.19 current; PO-token enforcement"
+  blocker: yt-dlp 2026.03.03 vs 2026.08.19 current; PO-token enforcement
 characters:
-  - {id: deku, names: ["Deku", "Izuku Midoriya"], skin: {accent: "#3FA34D"},
-     tag: "DEKU", cite: F201}
-  - {id: overhaul, names: ["Overhaul"], skin: {accent: "#B03030"},
-     tag: "OVERHAUL", cite: F201}
+- id: deku
+  names:
+  - Deku
+  - Izuku Midoriya
+  skin:
+    accent: '#3FA34D'
+  tag: DEKU
+  cite: F201
+- id: overhaul
+  names:
+  - Overhaul
+  - Kai Chisaki
+  skin:
+    accent: '#B03030'
+  tag: OVERHAUL · SHIE HASSAIKAI
+  cite: F201, F212, F214
+- id: eri
+  names:
+  - Eri
+  skin:
+    accent: '#C9C6D6'
+  tag: ERI
+  cite: F213, F215
+  note: 'verified against a detected box at src 43.84-45.60, x 0.39-0.54, detector score 0.73-0.84: a
+    child with white hair and a single horn. The image model called the same box mirio/nighteye/unsure
+    and never eri, with her horn described in the prompt.'
 techniques: []
 callbacks:
-  - {id: deku_creed, text: "IF HE CAN'T SAVE ONE", cite: F207}
+- id: deku_creed
+  text: IF HE CAN'T SAVE ONE
+  cite: F207
 never_clip: []
-content_flags: [graphic_violence]
-moment_grammars: [fight_exchange, speech]
+content_flags:
+- graphic_violence
+moment_grammars:
+- fight_exchange
+- speech

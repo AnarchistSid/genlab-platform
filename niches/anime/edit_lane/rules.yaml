@@ -2,18 +2,24 @@ version: 1
 origin_arc: PEAK-12 -> ANIME-EDIT-01
 rules:
 - id: story.one_continuous_span
-  statement: 'A reel covers one continuous span of the fight, in source order. Trims are allowed only
-    where the skipped material carries no dialogue and no action beat, and every trim is reported.
+  statement: 'A reel covers one continuous span of the fight, in source order. TRIMS MAY REMOVE ACTION,
+    but never dialogue and never a strip beat -- a beat the approved story strip depends on. Every trim
+    is reported, with its span and what it removed.
 
     '
-  origin: PEAK-25
-  check: plan_gate.spans_monotonic
+  origin: PEAK-25; amended by operator 2026-09-26 (action may be trimmed; dialogue and strip beats may
+    not)
+  check: each gap between consecutive segments is declared with its span; the gap is checked against the
+    cue table for dialogue and against the approved strip for beats
   status: enforced
   positive_control:
     artefact: none
     why: PREVENTIVE - order_gate passes on all 20 rendered versions; no corpus render is out of source
       order
-    measured: control named earlier does NOT fail this check
+    measured: 'control named earlier does NOT fail this check Amendment reason: option E removes 57.90-62.52,
+      62.52-68.65 and 72.40-76.80, which are action and carry no dialogue and no strip beat. Under the
+      old wording those were violations; the reel they produce reads better and runs 12.5 cuts/min slower
+      on the effective gate.'
 - id: story.dialogue_locked_to_picture
   statement: 'Each shot''s audio is cut from its own source span. Dialogue is never borrowed from elsewhere
     in the clip to sit under unrelated picture.
@@ -383,17 +389,23 @@ rules:
     measured: near-white share 2.3-5.0% in band vs 0.007% on a subtitle-free frame
 - id: rights.preserve_or_restate_the_notice
   statement: 'A rights notice burned into the source is preserved in frame where the crop allows. Where
-    the crop removes it, it is restated VERBATIM in both the slate and the caption. It is never simply
-    cropped away.
+    the crop removes it, it is restated VERBATIM. A PERSISTENT IN-FRAME CREDIT IS THE ON-SCREEN RESTATEMENT:
+    a notice carried in the safe zone for the whole reel satisfies this rule, and a separate end slate
+    is then optional. The caption restatement is still required. It is never simply cropped away, masked
+    or removed.
 
     '
-  origin: ANIME-EDIT-01 Wave 1
-  check: manual at strip approval + slate assertion
+  origin: ANIME-EDIT-01 Wave 1; amended by operator 2026-09-26 (persistent in-frame credit counts)
+  check: notice present verbatim in the caption AND either burned in frame for the reel's full duration
+    or on a slate; string compared, not eyeballed
   status: enforced
   positive_control:
     artefact: deku_vs_overhaul.mp4
     why: '"(c) K. Horikoshi / Shueisha, My Hero Academia Project" burned bottom-right'
-    measured: inside the subtitle band that rule text.crop_burned_subtitles removes
+    measured: 'inside the subtitle band that rule text.crop_burned_subtitles removes Amendment reason:
+      requiring a slate forced a 1.6 s card onto the end of every reel, which breaks looping. MHA v3 drops
+      the slate and carries the notice burned at y=1866 for all 32 s, so the reel loops and the notice
+      is on screen longer than a slate ever showed it.'
 - id: text.caption_timing_measured_on_the_render_source
   statement: 'In language mode sub_ja -- Japanese audio, English captions -- caption text and spans come
     from the BURNED subtitles, read off the source the reel will actually be rendered from, to a stated
