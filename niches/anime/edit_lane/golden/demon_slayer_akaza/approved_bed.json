@@ -1,0 +1,16 @@
+{
+  "title": "Epic Orchestral Strings (edited)",
+  "artist": "TheoJT",
+  "licence": "by",
+  "licence_name": "CC BY 4.0",
+  "licence_url": "https://creativecommons.org/licenses/by/4.0/",
+  "landing_url": "https://freesound.org/people/TheoJT/sounds/511196",
+  "attribution": "\"Epic Orchestral Strings\" by TheoJT, licensed under CC BY 4.0. Edited: a 4.80-beat section repeated at a beat boundary (27.703 s) to move the second drop.",
+  "edited": true,
+  "edit": "repeat of 2.1615 s (4.80 beats) spliced in at 27.7027 s with 0.08 s crossfades",
+  "bpm": 133.25,
+  "gap_s": 7.78,
+  "reel_gap_needed_s": 7.773,
+  "fit_err_frames": 0.17,
+  "commercial_use": "permitted under CC BY 4.0 with attribution; CC BY expressly allows adaptation provided the change is indicated"
+}

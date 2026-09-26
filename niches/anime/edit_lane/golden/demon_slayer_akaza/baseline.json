@@ -1,0 +1,21 @@
+{
+  "duration_s": 31.271,
+  "width": 1080,
+  "height": 1920,
+  "fps": "24/1",
+  "unique_per_s": 23.58,
+  "freezes": 3,
+  "alternations": 0,
+  "unauthored_black": 0,
+  "unauthored_white": 0,
+  "cuts_per_min": 42.64,
+  "shot_count": 23,
+  "min_shot_s": 0.125,
+  "noise_floor_db": -49.12,
+  "loudness_lufs": -14.1,
+  "true_peak_dbtp": -1.4,
+  "plate_aspects": [
+    "4:5"
+  ],
+  "detector_cuts_advisory": 26
+}

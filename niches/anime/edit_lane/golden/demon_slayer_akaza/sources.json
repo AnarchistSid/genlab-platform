@@ -1,0 +1,18 @@
+{
+  "main_fight_clip": {
+    "path": "/private/tmp/claude-501/-Users-anarchistsid-GenLab/1f202acb-13c4-4215-a4eb-ece569c89ee0/scratchpad/still/fights/tanjiro_vs_akaza.mp4",
+    "sha256": "1e4531c78b2d00a4440bfa7c0f6a3f5fa7a71e87624f0d8f0cbf63b97de84f38",
+    "url": "https://www.youtube.com/watch?v=HFAzgHHITVM",
+    "uploader": "Crunchyroll"
+  },
+  "cold_open_trailer": {
+    "path": "/private/tmp/claude-501/-Users-anarchistsid-GenLab/1f202acb-13c4-4215-a4eb-ece569c89ee0/scratchpad/still/callback/mugen_train_dub.mp4",
+    "sha256": "457d8a1bebb9bc88828a6de1b0b08a38f7368f46968435ab1018e457faccf219",
+    "url": "https://www.youtube.com/watch?v=L9MQLhV2u2E",
+    "uploader": "Aniplex USA"
+  },
+  "dialogue_audio": {
+    "path": "/private/tmp/claude-501/-Users-anarchistsid-GenLab/1f202acb-13c4-4215-a4eb-ece569c89ee0/scratchpad/still/fights/tanjiro_vs_akaza.m4a",
+    "sha256": "ac0f682f375e3d1b0f180387222520fb3c427b3601b70448f63202eb2880a5cc"
+  }
+}

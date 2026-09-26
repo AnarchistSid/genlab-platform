@@ -1,0 +1,1008 @@
+{
+  "shots": [
+    {
+      "i": 0,
+      "src": [
+        60.66,
+        61.83
+      ],
+      "aspect": "4:5",
+      "x0": 0.2188,
+      "x1": 0.6688,
+      "origin": "rule",
+      "who": [
+        "Giyu"
+      ],
+      "line": "11th Form.",
+      "line_src": [
+        60.96,
+        61.78
+      ],
+      "faces": [
+        [
+          0.3,
+          0.25,
+          0.7,
+          0.55
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [
+        {
+          "kind": "tag",
+          "text": "GIYU  \u00b7  WATER HASHIRA",
+          "tier": "IN-CLIP"
+        },
+        {
+          "kind": "card",
+          "text": "ELEVENTH FORM  \u00b7  DEAD CALM",
+          "tier": "CITED",
+          "on_line": [
+            60.96,
+            61.78
+          ],
+          "colour": "0x2A7FE8"
+        }
+      ],
+      "reel_start": 0.0,
+      "out_s": 1.17,
+      "pan": [
+        0.2188,
+        0.3312
+      ]
+    },
+    {
+      "i": 2,
+      "src": [
+        63.7,
+        64.75
+      ],
+      "aspect": "4:5",
+      "x0": 0.2972,
+      "x1": 0.7472,
+      "origin": "rule",
+      "who": [
+        "Akaza",
+        "Giyu"
+      ],
+      "line": null,
+      "line_src": null,
+      "faces": [
+        [
+          0.55,
+          0.38,
+          0.68,
+          0.52
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [
+        {
+          "kind": "slam",
+          "text": "HIS OWN FORM",
+          "tier": "CITED"
+        }
+      ],
+      "reel_start": 1.17,
+      "out_s": 1.05,
+      "pan": null
+    },
+    {
+      "i": 3,
+      "src": [
+        64.75,
+        65.35
+      ],
+      "aspect": "4:5",
+      "x0": 0.2972,
+      "x1": 0.7472,
+      "origin": "rule",
+      "who": [
+        "Akaza",
+        "Giyu"
+      ],
+      "line": null,
+      "line_src": null,
+      "faces": [
+        [
+          0.55,
+          0.38,
+          0.68,
+          0.52
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [],
+      "reel_start": 2.22,
+      "out_s": 0.6,
+      "pan": null
+    },
+    {
+      "i": 4,
+      "src": [
+        68.88,
+        70.231
+      ],
+      "aspect": "4:5",
+      "x0": 0.2489,
+      "x1": 0.6989,
+      "origin": "rule",
+      "who": [
+        "Tanjiro",
+        "Giyu"
+      ],
+      "line": "I've never seen that move before.",
+      "line_src": [
+        69.18,
+        71.3
+      ],
+      "faces": [
+        [
+          0.42,
+          0.35,
+          0.58,
+          0.48
+        ],
+        [
+          0.25,
+          0.48,
+          0.35,
+          0.56
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [
+        {
+          "kind": "caption",
+          "text": "I'VE NEVER SEEN|THAT MOVE BEFORE",
+          "tier": "EAR-CHECK",
+          "speaker": "Akaza",
+          "colour": "0xE83A6A",
+          "on_line": [
+            69.18,
+            71.3
+          ]
+        }
+      ],
+      "reel_start": 2.82,
+      "out_s": 1.351,
+      "punch_from": true,
+      "pan": null
+    },
+    {
+      "i": 4,
+      "src": [
+        70.231,
+        71.6
+      ],
+      "aspect": "4:5",
+      "x0": 0.2489,
+      "x1": 0.6989,
+      "origin": "rule",
+      "who": [
+        "Tanjiro",
+        "Giyu"
+      ],
+      "line": "I've never seen that move before.",
+      "line_src": [
+        69.18,
+        71.3
+      ],
+      "faces": [
+        [
+          0.42,
+          0.35,
+          0.58,
+          0.48
+        ],
+        [
+          0.25,
+          0.48,
+          0.35,
+          0.56
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [
+        {
+          "kind": "caption",
+          "text": "I'VE NEVER SEEN|THAT MOVE BEFORE",
+          "tier": "EAR-CHECK",
+          "speaker": "Akaza",
+          "colour": "0xE83A6A",
+          "on_line": [
+            69.18,
+            71.3
+          ]
+        }
+      ],
+      "reel_start": 4.171,
+      "out_s": 1.369,
+      "punch": true,
+      "pan": null
+    },
+    {
+      "i": 5,
+      "src": [
+        72.0,
+        73.801
+      ],
+      "aspect": "4:5",
+      "x0": 0.2442,
+      "x1": 0.6942,
+      "origin": "rule",
+      "who": [
+        "Akaza"
+      ],
+      "line": "Perhaps the last Water Hashira I killed never had a chance to use it.",
+      "line_src": [
+        72.3,
+        76.28
+      ],
+      "faces": [
+        [
+          0.32,
+          0.25,
+          0.52,
+          0.45
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [
+        {
+          "kind": "tag",
+          "text": "AKAZA  \u00b7  UPPER RANK THREE",
+          "tier": "CITED"
+        },
+        {
+          "kind": "caption",
+          "text": "THE LAST WATER HASHIRA|I KILLED",
+          "tier": "EAR-CHECK",
+          "speaker": "Akaza",
+          "colour": "0xE83A6A",
+          "on_line": [
+            72.3,
+            76.28
+          ]
+        }
+      ],
+      "reel_start": 5.54,
+      "out_s": 1.801,
+      "punch_from": true,
+      "pan": null
+    },
+    {
+      "i": 5,
+      "src": [
+        73.801,
+        75.33
+      ],
+      "aspect": "4:5",
+      "x0": 0.2442,
+      "x1": 0.6942,
+      "origin": "rule",
+      "who": [
+        "Akaza"
+      ],
+      "line": "Perhaps the last Water Hashira I killed never had a chance to use it.",
+      "line_src": [
+        72.3,
+        76.28
+      ],
+      "faces": [
+        [
+          0.32,
+          0.25,
+          0.52,
+          0.45
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [
+        {
+          "kind": "tag",
+          "text": "AKAZA  \u00b7  UPPER RANK THREE",
+          "tier": "CITED"
+        },
+        {
+          "kind": "caption",
+          "text": "THE LAST WATER HASHIRA|I KILLED",
+          "tier": "EAR-CHECK",
+          "speaker": "Akaza",
+          "colour": "0xE83A6A",
+          "on_line": [
+            72.3,
+            76.28
+          ]
+        }
+      ],
+      "reel_start": 7.341,
+      "out_s": 1.529,
+      "punch": true,
+      "pan": null
+    },
+    {
+      "i": 6,
+      "src": [
+        75.33,
+        76.0
+      ],
+      "aspect": "4:5",
+      "x0": 0.275,
+      "x1": 0.725,
+      "origin": "rule",
+      "who": [
+        "Akaza"
+      ],
+      "line": "Perhaps the last Water Hashira I killed never had a chance to use it.",
+      "line_src": [
+        72.3,
+        76.28
+      ],
+      "faces": [
+        [
+          0.52,
+          0.32,
+          0.75,
+          0.55
+        ],
+        [
+          0.15,
+          0.42,
+          0.38,
+          0.65
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [],
+      "reel_start": 8.87,
+      "out_s": 0.67,
+      "pan": null
+    },
+    {
+      "i": 7,
+      "src": [
+        76.0,
+        76.67
+      ],
+      "aspect": "4:5",
+      "x0": 0.275,
+      "x1": 0.725,
+      "origin": "rule",
+      "who": [
+        "Tanjiro",
+        "Akaza"
+      ],
+      "line": "Perhaps the last Water Hashira I killed never had a chance to use it.",
+      "line_src": [
+        72.3,
+        76.28
+      ],
+      "faces": [
+        [
+          0.52,
+          0.32,
+          0.75,
+          0.55
+        ],
+        [
+          0.15,
+          0.42,
+          0.38,
+          0.65
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [],
+      "reel_start": 9.54,
+      "out_s": 0.67,
+      "pan": null
+    },
+    {
+      "i": 8,
+      "src": [
+        76.67,
+        78.021
+      ],
+      "aspect": "4:5",
+      "x0": 0.2442,
+      "x1": 0.6942,
+      "origin": "rule",
+      "who": [
+        "Tanjiro"
+      ],
+      "line": "Hinokami Kagura, Raging Sun.",
+      "line_src": [
+        76.94,
+        79.54
+      ],
+      "faces": [
+        [
+          0.38,
+          0.28,
+          0.62,
+          0.5
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [
+        {
+          "kind": "tag",
+          "text": "TANJIRO KAMADO",
+          "tier": "CITED"
+        },
+        {
+          "kind": "card",
+          "text": "HINOKAMI KAGURA  \u00b7  RAGING SUN",
+          "tier": "IN-CLIP",
+          "on_line": [
+            76.94,
+            79.54
+          ],
+          "colour": "0xE8622A"
+        }
+      ],
+      "reel_start": 10.21,
+      "out_s": 1.351,
+      "punch_from": true,
+      "pan": null
+    },
+    {
+      "i": 8,
+      "src": [
+        78.021,
+        79.75
+      ],
+      "aspect": "4:5",
+      "x0": 0.2442,
+      "x1": 0.6942,
+      "origin": "rule",
+      "who": [
+        "Tanjiro"
+      ],
+      "line": "Hinokami Kagura, Raging Sun.",
+      "line_src": [
+        76.94,
+        79.54
+      ],
+      "faces": [
+        [
+          0.38,
+          0.28,
+          0.62,
+          0.5
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [
+        {
+          "kind": "tag",
+          "text": "TANJIRO KAMADO",
+          "tier": "CITED"
+        },
+        {
+          "kind": "card",
+          "text": "HINOKAMI KAGURA  \u00b7  RAGING SUN",
+          "tier": "IN-CLIP",
+          "on_line": [
+            76.94,
+            79.54
+          ],
+          "colour": "0xE8622A"
+        }
+      ],
+      "reel_start": 11.561,
+      "out_s": 1.729,
+      "punch": true,
+      "pan": null
+    },
+    {
+      "i": 9,
+      "src": [
+        79.75,
+        81.08
+      ],
+      "aspect": "4:5",
+      "x0": 0.2528,
+      "x1": 0.7028,
+      "origin": "rule",
+      "who": [
+        "Tanjiro"
+      ],
+      "line": null,
+      "line_src": null,
+      "faces": [
+        [
+          0.32,
+          0.24,
+          0.55,
+          0.44
+        ]
+      ],
+      "ramp": 0.5,
+      "layers": [
+        {
+          "kind": "slam",
+          "text": "HIS FATHER'S DANCE",
+          "tier": "CITED"
+        }
+      ],
+      "reel_start": 13.29,
+      "out_s": 2.66,
+      "pan": null
+    },
+    {
+      "i": 10,
+      "src": [
+        82.0,
+        83.21
+      ],
+      "aspect": "4:5",
+      "x0": 0.398,
+      "x1": 0.848,
+      "origin": "rule",
+      "who": [
+        "Tanjiro"
+      ],
+      "line": "He vanished. Fake Break, Kagura.",
+      "line_src": [
+        82.3,
+        86.39
+      ],
+      "faces": [
+        [
+          0.5,
+          0.28,
+          0.78,
+          0.54
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [
+        {
+          "kind": "caption",
+          "text": "HE VANISHED",
+          "tier": "EAR-CHECK",
+          "speaker": "Tanjiro",
+          "colour": "0xE8622A",
+          "on_line": [
+            82.3,
+            86.39
+          ]
+        }
+      ],
+      "reel_start": 15.95,
+      "out_s": 1.21,
+      "pan": null
+    },
+    {
+      "i": 11,
+      "src": [
+        83.21,
+        84.111
+      ],
+      "aspect": "4:5",
+      "x0": 0.275,
+      "x1": 0.725,
+      "origin": "rule",
+      "who": [
+        "Tanjiro",
+        "Akaza"
+      ],
+      "line": "He vanished. Fake Break, Kagura.",
+      "line_src": [
+        82.3,
+        86.39
+      ],
+      "faces": [
+        [
+          0.22,
+          0.28,
+          0.45,
+          0.5
+        ],
+        [
+          0.62,
+          0.22,
+          0.88,
+          0.48
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [],
+      "reel_start": 17.16,
+      "out_s": 0.901,
+      "punch_from": true,
+      "pan": null
+    },
+    {
+      "i": 11,
+      "src": [
+        84.111,
+        85.25
+      ],
+      "aspect": "4:5",
+      "x0": 0.275,
+      "x1": 0.725,
+      "origin": "rule",
+      "who": [
+        "Tanjiro",
+        "Akaza"
+      ],
+      "line": "He vanished. Fake Break, Kagura.",
+      "line_src": [
+        82.3,
+        86.39
+      ],
+      "faces": [
+        [
+          0.22,
+          0.28,
+          0.45,
+          0.5
+        ],
+        [
+          0.62,
+          0.22,
+          0.88,
+          0.48
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [],
+      "reel_start": 18.061,
+      "out_s": 1.139,
+      "punch": true,
+      "pan": null
+    },
+    {
+      "i": 12,
+      "src": [
+        85.25,
+        86.69
+      ],
+      "aspect": "4:5",
+      "x0": 0.275,
+      "x1": 0.725,
+      "origin": "rule",
+      "who": [
+        "Tanjiro",
+        "Akaza"
+      ],
+      "line": "He vanished. Fake Break, Kagura.",
+      "line_src": [
+        82.3,
+        86.39
+      ],
+      "faces": [
+        [
+          0.15,
+          0.2,
+          0.45,
+          0.5
+        ],
+        [
+          0.55,
+          0.15,
+          0.85,
+          0.45
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [],
+      "reel_start": 19.2,
+      "out_s": 1.44,
+      "pan": null
+    },
+    {
+      "i": 13,
+      "src": [
+        87.25,
+        88.17
+      ],
+      "aspect": "4:5",
+      "x0": 0.44,
+      "x1": 0.89,
+      "origin": "held-to-Akaza-face",
+      "who": [
+        "Tanjiro",
+        "Akaza"
+      ],
+      "line": null,
+      "line_src": null,
+      "faces": [
+        [
+          0.55,
+          0.32,
+          0.78,
+          0.55
+        ],
+        [
+          0.12,
+          0.28,
+          0.35,
+          0.48
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [],
+      "reel_start": 20.64,
+      "out_s": 0.92,
+      "pan": null
+    },
+    {
+      "i": 14,
+      "src": [
+        88.17,
+        89.971
+      ],
+      "aspect": "4:5",
+      "x0": 0.14,
+      "x1": 0.59,
+      "origin": "hand",
+      "who": [
+        "Tanjiro",
+        "Akaza",
+        "Giyu"
+      ],
+      "line": "Water Breathing. Second Form. Water Wheel.",
+      "line_src": [
+        88.36,
+        91.96
+      ],
+      "faces": [
+        [
+          0.32,
+          0.48,
+          0.42,
+          0.58
+        ],
+        [
+          0.48,
+          0.28,
+          0.62,
+          0.42
+        ],
+        [
+          0.08,
+          0.18,
+          0.18,
+          0.28
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [
+        {
+          "kind": "card",
+          "text": "WATER BREATHING  \u00b7  SECOND FORM|WATER WHEEL",
+          "tier": "CITED",
+          "on_line": [
+            88.36,
+            91.96
+          ],
+          "colour": "0x2A7FE8"
+        },
+        {
+          "kind": "slam",
+          "text": "TWO AGAINST AN UPPER MOON",
+          "tier": "CITED",
+          "after_line": [
+            88.36,
+            91.96
+          ]
+        }
+      ],
+      "reel_start": 21.56,
+      "out_s": 1.801,
+      "punch_from": true,
+      "pan": [
+        0.14,
+        0.25
+      ]
+    },
+    {
+      "i": 14,
+      "src": [
+        89.971,
+        91.96
+      ],
+      "aspect": "4:5",
+      "x0": 0.195,
+      "x1": 0.645,
+      "origin": "hand",
+      "who": [
+        "Tanjiro",
+        "Akaza",
+        "Giyu"
+      ],
+      "line": "Water Breathing. Second Form. Water Wheel.",
+      "line_src": [
+        88.36,
+        91.96
+      ],
+      "faces": [
+        [
+          0.32,
+          0.48,
+          0.42,
+          0.58
+        ],
+        [
+          0.48,
+          0.28,
+          0.62,
+          0.42
+        ],
+        [
+          0.08,
+          0.18,
+          0.18,
+          0.28
+        ]
+      ],
+      "ramp": 1.0,
+      "layers": [
+        {
+          "kind": "card",
+          "text": "WATER BREATHING  \u00b7  SECOND FORM|WATER WHEEL",
+          "tier": "CITED",
+          "on_line": [
+            88.36,
+            91.96
+          ],
+          "colour": "0x2A7FE8"
+        },
+        {
+          "kind": "slam",
+          "text": "TWO AGAINST AN UPPER MOON",
+          "tier": "CITED",
+          "after_line": [
+            88.36,
+            91.96
+          ]
+        }
+      ],
+      "reel_start": 23.361,
+      "out_s": 1.989,
+      "punch": true,
+      "pan": null
+    },
+    {
+      "i": 15,
+      "src": [
+        91.96,
+        93.04
+      ],
+      "aspect": "4:5",
+      "x0": 0.14,
+      "x1": 0.59,
+      "origin": "hand",
+      "who": [
+        "Tanjiro",
+        "Akaza",
+        "Giyu"
+      ],
+      "line": null,
+      "line_src": null,
+      "faces": [
+        [
+          0.32,
+          0.48,
+          0.42,
+          0.58
+        ],
+        [
+          0.48,
+          0.28,
+          0.62,
+          0.42
+        ],
+        [
+          0.08,
+          0.18,
+          0.18,
+          0.28
+        ]
+      ],
+      "ramp": 0.5,
+      "layers": [
+        {
+          "kind": "slam",
+          "text": "FOR RENGOKU",
+          "tier": "CITED"
+        }
+      ],
+      "reel_start": 25.35,
+      "out_s": 2.16,
+      "pan": [
+        0.14,
+        0.25
+      ]
+    }
+  ],
+  "pans": [
+    {
+      "shot": 0,
+      "keep": [
+        0.2188,
+        0.7812
+      ],
+      "from": 0.2188,
+      "to": 0.3312,
+      "travel": 0.1124
+    },
+    {
+      "shot": 14,
+      "keep": [
+        0.14,
+        0.7
+      ],
+      "from": 0.14,
+      "to": 0.25,
+      "travel": 0.11
+    },
+    {
+      "shot": 15,
+      "keep": [
+        0.14,
+        0.7
+      ],
+      "from": 0.14,
+      "to": 0.25,
+      "travel": 0.11
+    }
+  ],
+  "plate": [
+    1080,
+    1350
+  ],
+  "win": 0.45,
+  "punches": [
+    {
+      "shot": 4,
+      "at_src": 70.231,
+      "scale": 1.4,
+      "parts_s": [
+        1.35,
+        1.37
+      ]
+    },
+    {
+      "shot": 5,
+      "at_src": 73.801,
+      "scale": 1.4,
+      "parts_s": [
+        1.8,
+        1.53
+      ]
+    },
+    {
+      "shot": 8,
+      "at_src": 78.021,
+      "scale": 1.4,
+      "parts_s": [
+        1.35,
+        1.73
+      ]
+    },
+    {
+      "shot": 11,
+      "at_src": 84.111,
+      "scale": 1.4,
+      "parts_s": [
+        0.9,
+        1.14
+      ]
+    },
+    {
+      "shot": 14,
+      "at_src": 89.971,
+      "scale": 1.4,
+      "parts_s": [
+        1.8,
+        1.99
+      ]
+    }
+  ],
+  "bpm": 133.25
+}
