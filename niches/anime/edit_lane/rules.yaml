@@ -452,6 +452,16 @@ rules:
     factor. Reported per block, because a reel-level figure hides which block strobes. ADVISORY until
     the operator decides whether the corpus p75 describes compressed action at all.
 
+
+    JUDGEMENT IS PER BLOCK, WEIGHTED BY SCREEN TIME -- never the reel average. The average is a mix of
+    blocks at zero and blocks that strobe, so it hides both: MHA v2 averages 58.7/min, exactly at the
+    ceiling, while 21% of its screen time sits above it and one block reads 117. Report the per-block
+    table and the share of screen time over the ceiling; the average alone is not a verdict.
+
+
+    A cut within one frame of a block boundary IS the boundary, not an inside cut -- see pacing.cuts_inside().
+    Counting it both ways charges one visible cut twice.
+
     '
   origin: ANIME-EDIT-01 Wave 1, operator decision 2026-09-26
   check: still.pacing.Block / effective_verdict(); per-block against CUTS_PER_MIN_MAX
@@ -464,4 +474,6 @@ rules:
       -- so the metric separates the ramp from the content. Reel-level 71.2/min against a 26.7 authored
       rate. Bringing every over-block under the ceiling would need +9.94 s, taking the reel to 43.5 s
       against a 35 s cap, which is why this is advisory: the threshold''s applicability to ramped action
-      is the open question, not this reel.'
+      is the open question, not this reel. Option E (7.0 dropped, 7.1 trimmed to 2.50 s at 1.5x around
+      the impact at src 70.528) took the reel from 71.2 to 58.7/min, blocks over from 5 to 3, and screen
+      time over the ceiling from 37% to 21%.'

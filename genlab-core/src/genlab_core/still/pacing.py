@@ -222,3 +222,18 @@ def effective_verdict(blocks: list[Block], authored_cuts: int,
         "worst": max(rows, key=lambda r: r["effective_cuts_per_min"]) if rows else None,
         "PASS": reel <= CUTS_PER_MIN_MAX and not over,
     }
+
+
+def cuts_inside(cuts: list[float], a: float, b: float, fps: float = 24000/1001,
+                frames: float = 1.0) -> int:
+    """Source cuts strictly INSIDE a block, excluding those that ARE its joins.
+
+    A cut within a frame of a block boundary is the boundary. Counting it as an
+    inside cut charges the same visible cut twice -- once as the authored join,
+    once against the effective rate. Measured on MHA v2: transcribing segment
+    edges at 2 dp moved four boundary cuts inside their blocks and pushed 4.0
+    from 44.8 to 89.6 with no change to a single rendered frame, because a 5 ms
+    shift is 0.12 of a frame and `trim` selects the same frame either way.
+    """
+    eps = frames / fps
+    return len([c for c in cuts if a + eps < c < b - eps])
