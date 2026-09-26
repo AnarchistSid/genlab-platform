@@ -1,0 +1,211 @@
+# Rights loop — observed claims, from evidence, never from assumption.
+#
+# Source: YouTube Studio copyright read-out, 2026-09-26, over 9 private
+# preflight uploads on FrameDrift. The Data API gave territories only; the
+# claimant, asset and match type came from Studio. Both are recorded because
+# the preflight uses the API and only Studio names the claimant.
+#
+# match_type: visual | audio_track | audiovisual | composition
+# policy:     block | monetise | track | none
+
+version: 1
+observed: 2026-09-26
+channel: FrameDrift
+strikes: 0
+
+claims:
+
+  - id: CLM-001
+    component: picture
+    claimant: Aniplex
+    via_channel: "アニプレックスブロック用チャンネル2"
+    asset: "劇場版「鬼滅の刃」無限城編 第一章 猗窩座再来"
+    asset_en: "Demon Slayer: Infinity Castle, Chapter 1 — Akaza Returns (film)"
+    match_type: visual
+    policy: block
+    territories: global
+    seen_on: [FF9gIJ8Idfo, GtCYmUk-txA, mDpNKO74bQk, qf86vQEgoCA,
+              UkhzeePQB8A, Gt2dkka5amk, wLQcnuCJzHQ]
+    note: >
+      Fires on EVERY upload carrying the source picture, whatever the audio --
+      including audio that is entirely ours. This is the claim; nothing else in
+      the reel was ever the cause.
+    scope_question: >
+      The asset is the FILM. Whether Aniplex applies the same policy to the TV
+      series is untested and is the first probe.
+
+  - id: CLM-002
+    component: music
+    bed: "Epic Orchestral Strings (TheoJT, Freesound, CC BY 4.0) — bed B"
+    claimant: "RouteNote / Delar Records"
+    asset: '"Intro" by Ashley Garnier'
+    match_type: audio_track
+    policy: track
+    territories: global
+    seen_on: [GtCYmUk-txA]
+    flag: yellow
+    note: >
+      A CC BY 4.0 Freesound upload matching a commercially distributed track.
+      Track-only, so it neither blocks nor takes revenue today -- but a claimant
+      who can track can change policy, and we do not control that. Usable with
+      the flag recorded; not preferred.
+
+  - id: CLM-003
+    component: music
+    bed: "Harry Spotter (Alexi Action, CC BY 3.0) — bed A"
+    claimant: null
+    match_type: null
+    policy: none
+    territories: []
+    seen_on: [UkhzeePQB8A, mDpNKO74bQk]
+    note: >
+      NO CLAIM. This reverses my structural argument, which reasoned from the
+      artist's Spotify distribution that bed A was the riskier of the two. It is
+      the clean one.
+
+  - id: CLM-004
+    component: dialogue_audio
+    claimant: null
+    match_type: null
+    policy: none
+    territories: []
+    seen_on: [qf86vQEgoCA]
+    note: >
+      NO CLAIM on the English dub dialogue. My earlier report said this was
+      blocked; it was the picture claim showing through the file.
+
+  - id: CLM-007
+    component: source_audio
+    work: demon_slayer / tv_series
+    claimant: "Sony Music Entertainment (Japan) Inc., SME on behalf of Aniplex Inc."
+    asset: '"Inosuke, Information Gathering" (Go Shiina)'
+    match_type: audio
+    policy: "block in some territories; no earnings impact (Shorts); not a strike"
+    territories: [RU]
+    seen_on: [vOqtI9ngVQ0]
+    segment: "0:00-0:20 of 0:21"
+    note: >
+      I predicted this would be the LiSA theme song. It is not -- it is a Go
+      Shiina SCORE CUE from the episode's own soundtrack. Same shape (Sony
+      Music Japan, Russia-only), different asset. The distinction matters: a
+      score cue is in the clip's background audio throughout, so it is removed
+      by not using source audio, which is already the default path.
+
+  - id: CLM-008
+    component: picture_and_audio
+    work: megalo_box
+    claimant: TMSanime
+    asset: "MEGALOBOX_メガロボクス"
+    match_type: audiovisual
+    policy: "blocked globally + ineligible to earn; not a strike"
+    territories: worldwide
+    seen_on: [XkZ4WmXm9dE]
+    segment: "0:00-0:20 of 0:21"
+    note: >
+      AUDIOVISUAL match, so neither swapping the bed nor dropping the dialogue
+      helps. TMS blocks the work outright. boxing_round has no testable title
+      left until Ippo has a source.
+
+  - id: CLM-005
+    component: trailer_audio_ja
+    claimant: "Sony Music Japan"
+    asset: '"homura -MOVIE version-" (LiSA)'
+    match_type: audio_track
+    policy: block
+    territories: [RU]
+    seen_on: [Gt2dkka5amk]
+    note: >
+      The Mugen Train trailer's Japanese audio carries the theme song. Blocks in
+      Russia only, so it is a territory cost rather than a barrier -- but it is a
+      SECOND claim, independent of the picture, and any JP-audio variant carries it.
+
+  - id: CLM-006
+    component: picture_silent_quirk
+    claimant: null
+    policy: none
+    seen_on: [cQeyLlfHN6A]
+    note: >
+      The picture-only upload with a silent track drew no claim at all. Recorded
+      as an observation and explicitly NOT a strategy: see rule
+      rights.no_evasion_of_matching. Never rely on it.
+
+# ---------------------------------------------------------------------------
+# Franchise probes, 2026-09-26. Each is a 20 s excerpt of an OFFICIAL clip,
+# framed the way the lane frames it, uploaded private. API reading only --
+# blocks and territories. Claimant/asset/match type still need the Studio step.
+# Every reading below waited for uploadStatus=processed AND three unchanged
+# polls: ds_tv read 0 blocked for 405 s while still "uploaded" and only flipped
+# to 1 once processed, so an early read is not a reading.
+
+probes:
+
+  - id: PRB-001
+    franchise: demon_slayer
+    scope: tv_series
+    source: "Demon Slayer: Entertainment District Arc — Crunchyroll XoJCOAU_72U"
+    upload: vOqtI9ngVQ0
+    blocked_count: 1
+    territories: [RU]
+    verdict: USABLE
+    finding: >
+      THE FILM AND THE TV SERIES HAVE DIFFERENT POLICIES. The Infinity Castle
+      film is blocked globally (CLM-001, Aniplex visual). The TV series draws a
+      single-territory block. Russia-only matches the shape of CLM-005 (Sony
+      Music Japan, LiSA theme) rather than a visual block -- the Studio step
+      should confirm which, because "the franchise is hostile" was wrong as a
+      franchise-level statement.
+
+  - id: PRB-002
+    franchise: my_hero_academia
+    scope: tv_series
+    source: "MHA Final Season trailer — Crunchyroll pxbEWUjh6E4"
+    upload: pwm-U2kgU00
+    blocked_count: 0
+    territories: []
+    verdict: CLEAR
+    note: "No block anywhere. The cleanest probe of the set."
+
+  - id: PRB-003
+    franchise: megalo_box
+    scope: tv_series
+    source: "MEGALOBOX 'Two Animals' — Crunchyroll jmyfapqDKb0"
+    upload: XkZ4WmXm9dE
+    blocked_count: 249
+    territories: global
+    verdict: BLOCKED
+    note: >
+      Globally blocked, same shape as the Demon Slayer film. Rules out
+      boxing_round via this title unless Studio shows a claim we can clear.
+
+  - id: PRB-004
+    franchise: hajime_no_ippo
+    verdict: NO_ALLOWLISTED_SOURCE
+    note: >
+      Not probed: no upload from an allowlisted official channel was found.
+      The SOURCE gate stops this title before the rights question is reached.
+      A 2000 series is unlikely to have an official clip channel; needs a
+      licensing route, not a probe.
+
+  - id: PRB-005
+    franchise: fullmetal_alchemist_brotherhood
+    verdict: NO_ALLOWLISTED_SOURCE
+    note: >
+      Not probed: searches returned Netflix India and fan uploads, none on the
+      allowlist. The one Aniplex title requested could not be tested for the
+      same reason as Ippo.
+
+  - id: PRB-006
+    franchise: my_hero_academia
+    scope: tv_series_episode_clip
+    source: "Deku vs Overhaul — Crunchyroll hm-zgEdCRes"
+    upload: ICO6ZRkVa0E
+    blocked_count: 0
+    territories: []
+    verdict: CLEAR
+    reading: "processed at t+45 s, stable across 6 polls"
+    finding: >
+      The episode clip clears, not just the trailer. PRB-002 tested the FINAL
+      SEASON trailer and the operator flagged that trailers and episode clips
+      can be separate Content ID assets -- correctly, and this probe is what
+      turns that caution into evidence rather than assumption.
+

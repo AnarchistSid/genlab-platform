@@ -1,0 +1,85 @@
+# Source allowlist — OWNERSHIP, verified by handle.
+#
+# The old rule was a fixed list of uploader NAMES, and it rejected Netflix
+# India while Netflix Anime was allowed: same owner, different regional
+# channel, opposite verdicts. It also left Hajime no Ippo and FMA:B with "no
+# allowlisted source" when the real finding was "no source under the names we
+# happened to list".
+#
+# The rule is now: a channel is allowlisted if it is OWNED BY the rights holder
+# or one of its licensed distributors. Ownership is asserted per entity here
+# and the match is made on the channel's HANDLE (@name) or channel id, which
+# are stable identifiers, never on the display name, which is not.
+
+version: 2
+
+entities:
+
+  - id: crunchyroll
+    role: licensed_distributor
+    handles: ["@Crunchyroll", "@CrunchyrollDubs", "@CrunchyrollCollection",
+              "@crunchyroll_es", "@CrunchyrollStoreAustralia"]
+    note: "Sony-owned; the primary western anime distributor."
+
+  - id: aniplex
+    role: rights_holder
+    handles: ["@AniplexUSA", "@aniplex", "@AniplexplusOfficial"]
+
+  - id: netflix
+    role: licensed_distributor
+    handles: ["@NetflixAnime", "@NetflixIndiaOfficial", "@Netflix",
+              "@NetflixAsia", "@NetflixJapan"]
+    note: >
+      ADDED 2026-09-26. Netflix India was previously rejected while Netflix
+      Anime was accepted — the same owner under two regional handles. That
+      inconsistency is exactly what the name-list rule produced.
+
+  - id: toei
+    role: rights_holder
+    handles: ["@ToeiAnimation", "@ToeiAnimationOfficial", "@toei_anime"]
+
+  - id: tms
+    role: rights_holder
+    handles: ["@TMSanime", "@tmsofficialchannel"]
+    note: "Claimed MEGALOBOX audiovisually and blocks worldwide (CLM-008)."
+
+  - id: viz
+    role: licensed_distributor
+    handles: ["@VIZMedia"]
+
+  - id: kodansha
+    role: rights_holder
+    handles: ["@KodanshaOfficial", "@kodansha_anime"]
+
+  - id: sony_pictures
+    role: licensed_distributor
+    handles: ["@SonyPicturesIndia", "@sonypictures"]
+    status: REJECTED
+    note: >
+      Operator decision 2026-09-26: stays rejected. Sony owning Crunchyroll does
+      not make every Sony Pictures regional channel an anime distributor, and
+      the ANIME-PEAK-01 rejection stands. Listed here so the rejection is
+      recorded rather than rediscovered.
+
+  - id: retrocrush
+    role: licensed_distributor
+    handles: ["@RetroCrush"]
+    channel_ids: ["UCPZkYpT5XIUou8sV8zk-3jQ"]
+    licensed_titles: [hajime_no_ippo]
+    note: >
+      ADDED 2026-09-26, on the operator's condition that the handle be the
+      distributor's OWN. It is: @RetroCrush is the channel of the RetroCrush
+      service itself (936k subscribers), run by Digital Media Rights (since
+      acquired by Cinedigm), a free ad-supported legal streaming service.
+      RetroCrush licensed Hajime no Ippo, Champion Road and Mashiba vs. Kimura
+      in 2022. This unblocks the one title the ownership rule could not reach.
+      `licensed_titles` is scoped deliberately: RetroCrush is a distributor for
+      what it licenses, not a blanket allowlist for anything posted there.
+
+# Matching rule, in order:
+#   1. resolve the video's channel handle and channel id
+#   2. handle matches an entity's `handles` -> ALLOWED (record entity + role)
+#   3. no match -> REJECTED, and the reason names the handle so the allowlist
+#      can be extended deliberately rather than by loosening the check
+match_on: [handle, channel_id]
+never_match_on: [uploader_display_name, title, description]

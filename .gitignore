@@ -215,3 +215,10 @@ belt-apps/*/input.json
 # GitHub rejects the checkpoint outright at 100MB, which is how this was found.
 worker/.venv/
 worker/checkpoints/
+
+# Anime edit lane: licensed footage and derived renders never go in the repo.
+# Sources are pinned by sha256 + URL in golden/*/sources.json instead.
+niches/anime/edit_lane/**/*.mp4
+niches/anime/edit_lane/**/*.m4a
+niches/anime/edit_lane/**/*.wav
+niches/anime/edit_lane/**/*.mov
