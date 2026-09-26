@@ -1,0 +1,32 @@
+# Source profiles. Detection runs at ingest and is REPORTED; a human confirms
+# only when detection is uncertain.
+version: 1
+profiles:
+  - id: modern_hd_16x9
+    detect: {aspect: "~1.778", height_min: 720, interlaced: false}
+    handling: {framing_window: 0.45, upscale: none, deinterlace: none}
+  - id: sd_4x3_progressive
+    detect: {aspect: "~1.333", height_max: 576, interlaced: false}
+    handling: {framing_window: 0.60, upscale: topaz_proteus, deinterlace: none,
+               note: "a 4:5 plate from 4:3 needs ~0.60 of width, not 0.45"}
+  - id: sd_4x3_telecined
+    detect: {aspect: "~1.333", height_max: 576, interlaced: true}
+    handling: {order: [inverse_telecine, upscale], deinterlace: yadif_or_ivtc,
+               note: "IVTC BEFORE anything else or every later measurement is wrong"}
+  - id: hd_remaster
+    detect: {aspect: "~1.778", height_min: 1080, grain: low}
+    handling: {prefer_over: sd_4x3_progressive}
+  - id: film_grain_theatrical
+    detect: {grain: high, height_min: 1080}
+    handling: {sharpen: grain_aware, denoise: light, colour: theatrical}
+  - id: full_cg
+    detect: {cadence: full, twos_ratio_max: 0.15}
+    handling: {twos_logic: disabled, interpolation_threshold: relaxed}
+  - id: matted_widescreen_in_4x3
+    detect: {aspect: "~1.333", letterbox_bars: true}
+    handling: {order: [remove_matte, reframe]}
+  - id: mecha_subjects
+    detect: {manual: true}
+    handling: {subject_core: [head, cockpit],
+               note: "the faces-never-cropped rule extends to a SUBJECT CORE;
+                      a mobile suit has no face and still has a must-keep box"}

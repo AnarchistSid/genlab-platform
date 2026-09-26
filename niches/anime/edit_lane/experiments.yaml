@@ -1,0 +1,61 @@
+# Pre-registered experiments for the anime edit lane.
+# One hypothesis at a time. Variants alternate across comparable reels and are
+# read only after the stated minimum sample. Registering the hypothesis BEFORE
+# the data exists is the point -- it is what stops a result being chosen after
+# the fact.
+
+version: 1
+
+experiments:
+
+  - id: EXP-001-ig-audio-attach
+    status: registered            # registered | running | read | abandoned
+    opened: 2026-09-26
+    origin: ANIME-EDIT-01 Phase 0.4 re-probe
+    hypothesis: >
+      Attaching an Instagram-catalogue audio track to a reel (with video_volume
+      kept high enough that our own dialogue, SFX and bed stay audible) increases
+      reach on Instagram relative to the same edit published with our audio only.
+    why_it_is_open: >
+      The Audio API works on this account -- GET /ig_audio returned 25 trending
+      music items, 25 trending original_sound, 11 for "phonk" and 10 for "anime".
+      So the lever exists. Whether it helps an edit whose whole design is
+      speech-led is not known.
+    measured_facts:
+      - "endpoint: GET graph.facebook.com/v21.0/ig_audio, Facebook Login only"
+      - "fields: audio_id, audio_type, display_artist, duration_in_ms, ig_username,
+         is_ads_eligible, on_platform_audio_preview_link, title; search adds
+         cover_artwork_thumbnail_uri and download_url"
+      - "attachment via audio_configuration on POST /{ig-user-id}/media:
+         audio_id, audio_volume, video_volume (0-100)"
+      - "catalogue is the third-party-authorised subset, not the in-app library"
+    confounds:
+      - id: region_scope
+        note: >
+          TRENDING IS REGION-SCOPED, NOT GLOBAL. This account's trending music
+          came back Indian-market (Sidhu Moose Wala, Hindi titles) while the
+          target audience for an English-dub anime edit is not. Any read of this
+          experiment has to establish whose trend the track was trending in, or
+          the result is about the wrong audience.
+      - id: soundtrack_divergence
+        note: >
+          A reel with IG audio attached and the same reel on YouTube carry
+          different soundtracks. Cross-platform comparison stops being like-for-like.
+      - id: cc_by_obligation
+        note: >
+          Our CC BY bed's attribution obligation still applies wherever the bed
+          actually ships, regardless of what is layered on top on Instagram.
+      - id: ads_eligibility
+        note: "is_ads_eligible was False on the trending music sampled; matters if boosted."
+    design:
+      unit: one reel
+      variants: [our_audio_only, ig_audio_attached]
+      allocation: alternate across comparable reels of the same grammar
+      minimum_sample: 8 reels per variant
+      primary_metric: reach
+      secondary_metrics: [saves, shares, follows, average_watch_time]
+    constraints:
+      - "Do not attach audio to a live post until this experiment is given a go."
+      - "Never attach audio to the pilot reel; the pilot measures footage rights
+         exposure and a second variable would contaminate it."
+    blocked_on: operator go

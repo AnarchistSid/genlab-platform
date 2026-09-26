@@ -1,0 +1,52 @@
+# Moment grammars. Not every peak is a fight, and a sacrifice edit must never be
+# judged against a hype edit's cut rate. Percentiles are per grammar and per era;
+# where a grammar has no measured corpus yet the band is marked `inherited` and
+# says what it was inherited from, rather than pretending to be measured.
+version: 1
+grammars:
+  - id: fight_exchange
+    beats: [setup, wind_up, call, clash, impact, aftermath]
+    register: hype
+    cut_rate: {source: measured, corpus: anime_reference_29, p25: 15.78, p50: 41.39, p75: 58.70}
+    sound: {bed: driving, drop_on: impact, second_hit_on: final_technique}
+    examples: ["Tanjiro & Giyu vs Akaza", "Luffy vs Kaido", "Gon vs Pitou"]
+  - id: transformation
+    beats: [trigger, build, reveal, release]
+    register: epic
+    cut_rate: {source: inherited, from: fight_exchange, note: "hold the reveal longer; needs its own corpus"}
+    sound: {bed: swelling, drop_on: reveal}
+    examples: ["Super Saiyan", "Gear 5", "Bankai", "NT-D"]
+  - id: boxing_round
+    beats: [stare_down, feint, combo, counter, knockdown_or_bell]
+    register: hype
+    cut_rate: {source: inherited, from: fight_exchange}
+    sound: {bed: percussive, drop_on: counter}
+    examples: ["Hajime no Ippo", "Megalo Box"]
+  - id: speech
+    beats: [context, build, line, reaction]
+    register: analytical
+    cut_rate: {source: inherited, from: fight_exchange,
+               note: "MUST be slower; a speech edit cut at fight rate is unreadable"}
+    sound: {bed: sparse, duck_under: line}
+    examples: ["Lelouch's commands", "Erwin's charge"]
+  - id: sacrifice_death
+    beats: [stakes, act, loss, reaction]
+    register: emotional
+    cut_rate: {source: inherited, from: fight_exchange,
+               note: "slowest of the set; impact gate is replaced by a hold gate"}
+    sound: {bed: sustained, drop_on: none}
+    examples: ["Hughes", "Ace", "Jiraiya"]
+  - id: reveal_twist
+    beats: [normal, hint, reveal, reaction]
+    register: epic
+    cut_rate: {source: inherited, from: fight_exchange}
+    sound: {bed: tense, drop_on: reveal}
+    examples: ["Attack on Titan reveals"]
+  - id: comedy_beat
+    beats: [setup, escalation, punchline]
+    register: hype
+    cut_rate: {source: inherited, from: fight_exchange}
+    gates: {replace: impact_alignment, with: timing_alignment,
+            note: "the punchline lands on a beat, not on an impact"}
+    sound: {bed: light, drop_on: punchline}
+    examples: ["Assassination Classroom"]
