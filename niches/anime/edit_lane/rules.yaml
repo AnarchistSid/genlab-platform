@@ -426,3 +426,42 @@ rules:
       were right. On the ONNX detector's own crops the same shot returned deku 7/7. Separately the model's
       BOX coordinates scored 0/4 IoU against an independent box while reporting confidence 0.70-0.92,
       so coordinates from the image model are never a framing input.
+- id: framing.burned_mark_whole_or_absent_on_a_static_window
+  statement: 'A watermark burned into the PICTURE -- as opposed to a croppable band -- is either wholly
+    inside a STATIC window or wholly outside it, never partly visible. Permitted static left edges are
+    [0, m0] and [m1, 1-W]; the open interval (m0, m1) is forbidden. Prefer wholly out; take it wholly
+    in rather than cut the subject. A MOVING window may sweep across the mark: a mark sliding out of frame
+    reads as camera movement, which is normal, whereas a half-visible mark on a held frame reads as a
+    mistake. Never mask, delogo or otherwise remove it -- it is the rights holder''s credit.
+
+    '
+  origin: ANIME-EDIT-01 Wave 1, operator decision 2026-09-26 (split static/moving)
+  check: window placement asserts the left edge lies outside (m0, m1) for every static window; pans exempt,
+    with the crossing duration reported
+  status: enforced
+  positive_control:
+    artefact: MHA reel v1, TOHO animation mark at x 0.0141-0.2375
+    why: four v3 windows sliced the mark; the 1:1 plate cleared all four
+    measured: all 14 static windows land wholly out; a 101-point sweep of subject positions produces no
+      partial placement; shot 6.0's pan crosses for 0.42 s under ease-out, the shortest of four easings
+      tested (linear 0.67 s, smoothstep 0.63 s, hold-then-smoothstep 0.46 s) and accepted under the moving-window
+      clause
+- id: pacing.effective_cut_rate_counts_source_cuts_inside_ramps
+  statement: 'Pacing is also measured as an EFFECTIVE rate: the source''s own cuts inside a ramped block,
+    against that block''s on-screen length -- algebraically the source cut rate multiplied by the ramp
+    factor. Reported per block, because a reel-level figure hides which block strobes. ADVISORY until
+    the operator decides whether the corpus p75 describes compressed action at all.
+
+    '
+  origin: ANIME-EDIT-01 Wave 1, operator decision 2026-09-26
+  check: still.pacing.Block / effective_verdict(); per-block against CUTS_PER_MIN_MAX
+  status: advisory
+  positive_control:
+    artefact: MHA reel v1 block 7.0
+    why: the authored gate passed at 26.7/min while the viewer saw far more
+    measured: '7.0 reads 132.4/min effective (3 source cuts, 4.62 s of source at x3.4 = 1.36 s on screen)
+      and FAILS; the same block unramped reads 39.0 and PASSES; a quiet unramped block reads 0.0 and PASSES
+      -- so the metric separates the ramp from the content. Reel-level 71.2/min against a 26.7 authored
+      rate. Bringing every over-block under the ceiling would need +9.94 s, taking the reel to 43.5 s
+      against a 35 s cap, which is why this is advisory: the threshold''s applicability to ramped action
+      is the open question, not this reel.'
