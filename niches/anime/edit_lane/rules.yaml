@@ -1,0 +1,428 @@
+version: 1
+origin_arc: PEAK-12 -> ANIME-EDIT-01
+rules:
+- id: story.one_continuous_span
+  statement: 'A reel covers one continuous span of the fight, in source order. Trims are allowed only
+    where the skipped material carries no dialogue and no action beat, and every trim is reported.
+
+    '
+  origin: PEAK-25
+  check: plan_gate.spans_monotonic
+  status: enforced
+  positive_control:
+    artefact: none
+    why: PREVENTIVE - order_gate passes on all 20 rendered versions; no corpus render is out of source
+      order
+    measured: control named earlier does NOT fail this check
+- id: story.dialogue_locked_to_picture
+  statement: 'Each shot''s audio is cut from its own source span. Dialogue is never borrowed from elsewhere
+    in the clip to sit under unrelated picture.
+
+    '
+  origin: PEAK-25
+  check: genlab_core.still.story_gates.sync_gate
+  status: enforced
+  positive_control:
+    artefact: none
+    why: PREVENTIVE - v13 passes 4/4 once lines are mapped through the segment record
+    measured: control named earlier does NOT fail this check
+- id: story.no_retime_under_speech
+  statement: 'No ramp, slow-motion or speed change while a character is speaking. Zoom punches, flashes
+    and shake remain allowed.
+
+    '
+  origin: PEAK-25
+  check: genlab_core.still.story_gates.speech_speed_gate
+  status: enforced
+  positive_control:
+    artefact: peak_tanjiro_v15.mp4
+    why: ramped a shot that carries dialogue
+    measured: speech_speed_gate reports a retimed speech segment
+- id: geometry.fixed_plate_size
+  statement: 'One plate size for the whole reel. The plate''s height is identical across every cut; the
+    frame never visibly changes size between shots.
+
+    '
+  origin: ANIME-EDIT-01 (v23)
+  check: geometry_gate.plate_height_constant
+  status: enforced
+  positive_control:
+    artefact: peak_tanjiro_v22.mp4
+    why: mixes 4:5, 1:1 and 9:16 plates across its shots
+    measured: 3 distinct aspects in the segment record
+- id: geometry.scale_x_equals_scale_y
+  statement: 'Horizontal and vertical scale are equal on every shot. With a 1920x1080 source cropped at
+    full height, that fixes the window width: 0.45 for a 4:5 plate. Any other width stretches the picture.
+
+    '
+  origin: ANIME-EDIT-01 (v23)
+  check: geometry_gate.scale_equal
+  status: enforced
+  positive_control:
+    artefact: peak_tanjiro_v22.mp4
+    why: window widths 0.3164 / 0.45 / 0.5625 against three plate aspects
+    measured: more than one window width in the plan
+- id: geometry.faces_never_cropped
+  statement: 'A must-keep box is never narrowed to fit the window. If the box is wider than the window,
+    the window PANS across it; the box is not cropped and the plate is not resized.
+
+    '
+  origin: PEAK-24
+  check: geometry_gate.keep_box_covered
+  status: enforced
+  positive_control:
+    artefact: peak_tanjiro_v13_fullbleed.mp4
+    why: full-bleed 9:16 crop cuts faces on every wide shot
+    measured: must-keep box 0.5624 wide against a 0.3164 window
+- id: geometry.identity_verified_face_boxes
+  statement: 'Face boxes used for framing are cross-checked, not taken from one source. A model box that
+    no detector corroborates, and no human confirmed, does not drive a crop.
+
+    '
+  origin: PEAK-24
+  check: framing.merge_faces + operator sheet approval
+  status: manual
+  positive_control:
+    artefact: crop_sheet (PEAK-24, first delivery)
+    why: model boxes sat up to 0.35 of frame off the actual face
+    measured: 'operator rejected: ''face boxes are misplaced, not just phantom'''
+  note: 'The LBP detector is a cross-check only and is not always usable: on the Akaza close-up it found
+    0 faces (face markings defeat it) and on a Rengoku frame it returned the SUBTITLE as a face.
+
+    '
+- id: geometry.looking_room
+  statement: 'A profile shot gets looking room on the side the face points toward, not behind it.
+
+    '
+  origin: PEAK-24
+  check: framing.facing_from_geometry
+  status: enforced
+  positive_control:
+    artefact: crop_sheet (PEAK-24, first delivery)
+    why: room was added behind the face
+    measured: 'operator rejected: ''looking room is backwards'''
+- id: motion.collapse_held_frames_before_interpolation
+  statement: 'Slow motion decimates duplicated frames BEFORE interpolating. Interpolating already-duplicated
+    frames interpolates a frame with itself.
+
+    '
+  origin: PEAK-28
+  check: render.ramp_chain contains mpdecimate before minterpolate, or Topaz remove_duplicates=true
+  status: enforced
+  positive_control:
+    artefact: peak_tanjiro_v19.mp4
+    why: slowed with setpts alone
+    measured: 13 freezes, 4 alternation spans; fire dash 11.62 unique frames/s
+- id: motion.pushes_move_every_frame
+  statement: 'Every shot carries a push. A duration threshold on the push starves exactly the shots that
+    need it, because hold-split sub-shots land just under it.
+
+    '
+  origin: PEAK-28
+  check: render asserts a push filter on every segment
+  status: enforced
+  positive_control:
+    artefact: peak_tanjiro_v19.mp4
+    why: push gated at 0.8s while split sub-shots were 0.79s
+    measured: Akaza wide 8.73 unique/s with 13 freeze runs; 23.64 with a push
+- id: motion.no_join_glitches
+  statement: 'No freeze, black frame or white frame at a cut unless it is authored. Every such event is
+    either on the authored list or a defect.
+
+    '
+  origin: PEAK-28
+  check: genlab_core.still.smoothness.measure + ok(authored_holds, authored_flashes)
+  status: enforced
+  positive_control:
+    artefact: peak_tanjiro_v19.mp4
+    why: card surviving a cut, 5-frame freeze, stray black and white frames
+    measured: 13 freezes, 4 alternations, 1 unauthored black frame
+- id: pacing.one_transition_per_cut
+  statement: 'One transition per cut. No stacked whip + black + white, and at most two authored one-frame
+    shots in a reel.
+
+    '
+  origin: v22
+  check: genlab_core.still.pacing.verdict -> one_framers
+  status: enforced
+  positive_control:
+    artefact: none
+    why: PREVENTIVE - no version has a one-framer in its AUTHORED record; v21's stacking shows up as short
+      shots instead, caught by pacing.min_shot_length
+    measured: control named earlier does NOT fail this check
+- id: pacing.cut_rate_within_reference
+  statement: 'Cuts per minute must not exceed the reference corpus p75 for the grammar. For fight_exchange
+    on the 29-reel anime corpus that is 58.7.
+
+    '
+  origin: v22
+  check: genlab_core.still.pacing.verdict -> cuts_per_min
+  status: enforced
+  positive_control:
+    artefact: none
+    why: PREVENTIVE - highest authored rate in the corpus is 52.1 (v19) against a 58.7 ceiling
+    measured: control named earlier does NOT fail this check
+- id: pacing.min_shot_length
+  statement: 'No shot under 0.5s, except authored punctuation (the black gap, the loop-back tail), which
+    is exempted explicitly rather than by accident.
+
+    '
+  origin: v22
+  check: genlab_core.still.pacing.verdict -> min_shot_0.5s
+  status: enforced
+  positive_control:
+    artefact: peak_tanjiro_v21.mp4
+    why: a 0.25s whip shot and a 0.417s reframe fragment
+    measured: 2 shots under the floor in the authored record
+- id: sound.no_digital_silence
+  statement: 'The mix never reaches digital silence. Floor >= -60 dBFS in 50ms windows, everywhere, including
+    any black gap.
+
+    '
+  origin: v22
+  check: render.noise_floor
+  status: enforced
+  positive_control:
+    artefact: peak_tanjiro_v21.mp4
+    why: the black gap was hard-muted
+    measured: floor -180.0 dB
+- id: sound.drop_lands_on_the_impact
+  statement: 'The bed''s drop is aligned to the impact MEASURED ON THE PICTURE, within +/-2 frames, and
+    the correction loop closes on the same statistic the gate reads. Asking a generator for a drop at
+    a timestamp does not put one there.
+
+    '
+  origin: PEAK-26 / v23
+  check: genlab_core.still.alignment_gate.check
+  status: enforced
+  positive_control:
+    artefact: v23 first cut (ElevenLabs bed, pre-correction)
+    why: bed generated to a requested drop time, unverified
+    measured: sub onset +10.2 frames off the fire dash
+- id: sound.one_language_per_reel
+  statement: 'One spoken language per reel. Where an official English dub exists it is preferred; otherwise
+    Japanese audio with verified subtitles, throughout.
+
+    '
+  origin: v22
+  check: manual, recorded in the pack (audio.dub_en)
+  status: manual
+  positive_control:
+    artefact: peak_tanjiro_v21.mp4
+    why: Japanese cold open over an English-dub body
+    measured: ASR language id 'ja' on the cold open, 'en' on the body
+- id: text.captions_verbatim_and_fitted
+  statement: 'Captions are the verified line verbatim, chunked at phrase boundaries, and no caption leaves
+    the frame. Chunking decides where a sentence breaks; it says nothing about whether the chunk fits.
+
+    '
+  origin: PEAK-27 / v22
+  check: render.fit_text + caption text equality with the verified line
+  status: enforced
+  positive_control:
+    artefact: peak_tanjiro_v21.mp4
+    why: '"Perhaps the last Water Hashira I killed" ran off both frame edges'
+    measured: 1560px of text against a 984px safe width
+- id: text.stakes_line_names_its_subject
+  statement: 'A stakes line names who it is about. "He killed him" is not a stake.
+
+    '
+  origin: PEAK-26
+  check: manual, against the pack's callbacks
+  status: manual
+  positive_control:
+    artefact: peak_tanjiro_v18.mp4
+    why: slam read "HE KILLED RENGOKU" over a shot of neither man
+    measured: 'operator note: ''name the subject in a stake line'''
+- id: text.no_text_restating_audio
+  statement: 'A slam does not repeat what a caption or the dialogue already says.
+
+    '
+  origin: PEAK-26
+  check: manual, at strip approval
+  status: manual
+  positive_control:
+    artefact: peak_tanjiro_v18.mp4 (strip)
+    why: slams HE'S NEVER SEEN IT and HE'S KILLED HASHIRA BEFORE restated lines
+    measured: operator removed both
+- id: text.one_element_per_moment
+  statement: 'At most one text element on screen at a time, besides a name tag. Overlaps are detected,
+    not eyeballed.
+
+    '
+  origin: PEAK-27
+  check: render collision check over non-tag cues
+  status: enforced
+  positive_control:
+    artefact: peak_tanjiro_v18.mp4 (plan)
+    why: slam overlapped the Water Wheel card on shot 14
+    measured: collision check reports an overlapping pair
+- id: rights.flashbacks_marked_and_licensed
+  statement: 'A flashback is visually marked AND drawn only from a licensed, allowlisted source. A fan
+    upload is a locator, never a source.
+
+    '
+  origin: ANIME-PEAK-01 / PEAK-26
+  check: source gate on uploader allowlist + flashback treatment present
+  status: enforced
+  positive_control:
+    artefact: Sony Pictures India upload of the Mugen Train trailer
+    why: same footage, uploader not on the allowlist
+    measured: rejected at the source gate
+- id: rights.every_onscreen_claim_fact_gated
+  statement: 'Every on-screen and spoken claim traces to a cited source, logged by id. Nothing unsourced
+    reaches the screen.
+
+    '
+  origin: PEAK-26
+  check: fact ledger id required on every slam, card and VO line
+  status: enforced
+  positive_control:
+    artefact: peak_tanjiro_v18.mp4 (ASR draft)
+    why: '"Fake Break" was an ASR mishearing headed for a card'
+    measured: 'operator: ''no ASR text on screen unverified'''
+- id: rights.no_voice_cloning_or_changing
+  statement: 'No voice actor''s voice is cloned, converted or altered. Separation (isolating an existing
+    performance from its mix) is permitted; synthesis in someone''s voice is not.
+
+    '
+  origin: ANIME-EDIT-01
+  check: tool allowlist - voice-isolator permitted; any voice-conversion or voice-clone app is denied
+  status: enforced
+  positive_control:
+    artefact: n/a - never built
+    why: this rule is preventive; no version has violated it
+    measured: no control exists, and that is the intended state
+- id: craft.bed_must_fit_the_register
+  statement: 'A bed is chosen for musical character as well as drop geometry. A selector ranking only
+    on drop fit will return a field recording or a sad beat for a fight reel.
+
+    '
+  origin: v20 / v23
+  check: manual at bed pick; selector reports its top-5 for review
+  status: manual
+  positive_control:
+    artefact: bed selector output, PEAK-28 and ANIME-EDIT-01
+    why: top pick was "BG SaSc Car Passes" (a field recording), later "Sad Beat"
+    measured: best drop-fit, wrong register, both times
+- id: story.exchange_continuity
+  statement: 'No unexplained jump between consecutive shots'' source spans. A DECLARED trim -- skipped
+    material with no dialogue and no action beat -- is not a jump; an undeclared one is.
+
+    '
+  origin: PEAK-25 / ANIME-EDIT-01
+  check: genlab_core.still.edit_rules.exchange_continuity
+  status: enforced
+  positive_control:
+    artefact: peak_tanjiro_v14_adaptive.mp4
+    why: 'stitches three separate exchanges into one reel. The raw story_gates.exchange_gate is unusable
+      as written -- it fails the GOLDEN render too, because v23''s authorised trims look like jumps to
+      it. The check here excuses declared trims and keeps the rule.
+
+      '
+    measured: undeclared jumps between consecutive source spans
+- id: rights.no_evasion_of_matching
+  statement: 'Never pitch-shift, speed-shift, EQ-notch, time-stretch or otherwise alter audio (or picture)
+    for the purpose of avoiding a Content ID or Rights Manager match. If material matches, the answer
+    is to change what we publish -- captions-only, a different bed, a licence -- never to disguise what
+    we published.
+
+    '
+  origin: ANIME-EDIT-01 (post Content ID preflight)
+  check: 'genlab_core.still.edit_rules.no_evasion_of_matching -- fails if a render''s audio chain contains
+    a pitch/tempo/rubberband stage applied to SOURCE audio, or if a render log records an evasion_intent
+    flag.
+
+    '
+  status: enforced
+  scope_note: 'This does NOT forbid atempo where it serves the EDIT: a 0.5x ramp slows picture and its
+    own audio together, and that is a creative choice made before any match is known. The rule is about
+    INTENT -- altering audio in response to, or in anticipation of, a match.
+
+    '
+  positive_control:
+    artefact: none
+    why: 'PREVENTIVE - no render has done this, and the rule exists so that none does. The temptation
+      is real and specific: the pilot is blocked on its source audio, and a small pitch shift is the widely-circulated
+      trick. It is fraud against the rights holder and it is not available to us.
+
+      '
+    measured: no control exists, and that is the intended state
+- id: source.minimum_resolution
+  statement: 'The edit lane requires a source of at least 720p. Below that, a 0.45 window into a 4:5 plate
+    is an upscale, not a crop.
+
+    '
+  origin: ANIME-EDIT-01 Wave 1
+  check: genlab_core.still.edit_rules.source_min_resolution
+  status: enforced
+  rationale: 'Measured on the MHA clip: 640x360 gives a 288 px window upscaled to a 1080 px plate -- 3.75x.
+    The Demon Slayer source was 1920 wide, a 1.25x upscale, and that is the standard the reference reel
+    was built to.
+
+    '
+  positive_control:
+    artefact: deku_vs_overhaul.mp4 @ 640x360 (the android-client pull)
+    why: 288 px window against a 1080 px plate
+    measured: 3.75x upscale, against a 1.25x reference
+- id: text.crop_burned_subtitles_before_framing
+  statement: 'Burned distributor subtitles are cropped out BEFORE framing is computed, never painted over
+    afterwards. Their text is still the verified caption source; the pixels are not part of the picture.
+
+    '
+  origin: ANIME-EDIT-01 Wave 1
+  check: genlab_core.still.edit_rules.subtitle_band_removed
+  status: enforced
+  rationale: 'v22 blurred the band in place, which worked because that band sat below the face. Framing
+    computed on an uncropped plate silently reserves 12% of frame height for someone else''s text.
+
+    '
+  positive_control:
+    artefact: deku_vs_overhaul.mp4, band y 0.85-0.97
+    why: burned English subtitles across the lower third
+    measured: near-white share 2.3-5.0% in band vs 0.007% on a subtitle-free frame
+- id: rights.preserve_or_restate_the_notice
+  statement: 'A rights notice burned into the source is preserved in frame where the crop allows. Where
+    the crop removes it, it is restated VERBATIM in both the slate and the caption. It is never simply
+    cropped away.
+
+    '
+  origin: ANIME-EDIT-01 Wave 1
+  check: manual at strip approval + slate assertion
+  status: enforced
+  positive_control:
+    artefact: deku_vs_overhaul.mp4
+    why: '"(c) K. Horikoshi / Shueisha, My Hero Academia Project" burned bottom-right'
+    measured: inside the subtitle band that rule text.crop_burned_subtitles removes
+- id: text.caption_timing_measured_on_the_render_source
+  statement: 'In language mode sub_ja -- Japanese audio, English captions -- caption text and spans come
+    from the BURNED subtitles, read off the source the reel will actually be rendered from, to a stated
+    resolution of +/-0.3 s. ASR is not a timing source in this mode. A span is never carried across a
+    change of source, resolution or clip: it is re-measured.
+
+    '
+  origin: ANIME-EDIT-01 Wave 1, operator decision 2026-09-26
+  check: subtitle-band OCR sweep on a <=0.3 s grid across every cue the cut uses; both edges found
+  status: enforced
+  positive_control:
+    artefact: hm-zgEdCRes MHA cue table F203-F207d
+    why: spans carried from the 360p pass into the 720p pull
+    measured: all 7 spans wrong by 0.3-1.8 s; F207d started 1.8 s late and truly ended at 81.00, past
+      the 80.00 the ledger used; 20.6-24.4 held F205's text, not F204's. faster-whisper small.en returned
+      a hallucination loop on this Japanese audio and would have confirmed nothing.
+- id: framing.identity_is_verified_against_a_box_never_trusted_alone
+  statement: 'A character name is only ever attached to a DETECTED box, and the box decides the frame.
+    An identity answer is never used to place, widen or move a window, and a name without a box is not
+    recorded. Where two names are possible, consistency across a continuous cut-free shot is the check.
+
+    '
+  origin: ANIME-EDIT-01 Wave 1, operator decision 2026-09-26
+  check: identity asked only of an existing detection; label consistency measured within cut-free shots
+  status: enforced
+  positive_control:
+    artefact: MHA variant B shot 0.0
+    why: the image model named a verified face "overhaul"
+    measured: the crop is plainly Deku (teal hair, freckles); identity wrong on 1 of 2 while BOTH boxes
+      were right. On the ONNX detector's own crops the same shot returned deku 7/7. Separately the model's
+      BOX coordinates scored 0/4 IoU against an independent box while reporting confidence 0.70-0.92,
+      so coordinates from the image model are never a framing input.
