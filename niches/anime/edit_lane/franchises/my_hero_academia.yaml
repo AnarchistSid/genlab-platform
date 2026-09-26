@@ -18,6 +18,10 @@ rights:
           evidence: 'PRB-002 preflight: 0 territories blocked; Studio read 2026-09-26 reports ''No copyrighted
             content was found'''
           tested: 2026-09-26
+          kind: episode_clip
+          kind_note: read on hm-zgEdCRes itself (PRB-006 and the four v1-v4 reel preflights). PRB-002
+            separately cleared the Final Season TRAILER — a different kind, recorded but not generalised
+            to this one.
         source_audio:
           status: clean
           evidence: 'PRB-006, this clip''s own 20 s preflight (ICO6ZRkVa0E, private): no_block_detected,
@@ -26,13 +30,16 @@ rights:
 
             '
           tested: 2026-09-26
+          kind: episode_clip
       usable: true
 sources:
 - name: crunchyroll_official
-  kind: clip_channel
+  kind: episode_clip
   uploader: Crunchyroll
   handle: '@crunchyroll'
   url: https://www.youtube.com/watch?v=hm-zgEdCRes
+  channel_kind: clip_channel
+  kind_note: hm-zgEdCRes is a scene clip from episode 76, not a trailer
 audio:
   dub_en: false
   default_language: ja

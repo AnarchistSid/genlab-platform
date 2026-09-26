@@ -275,3 +275,150 @@ def check_framing(images: list[Path], labels: list[str],
     by_i = {r.get("i"): r for r in parsed if isinstance(r, dict)}
     return [by_i.get(i, {"i": i, "action_visible": None, "actor_visible": None,
                          "why": "missing"}) for i in range(len(images))]
+
+
+_BOX_SCHEMA = """Return a JSON array with one object per image, in order:
+[{"i": <index as given>,
+  "subjects": [{"name": <name from the allowed list>,
+                "facial_region": [x0,y0,x1,y1] | null,
+                "nose": [x,y] | null,
+                "in_action": true|false,
+                "face": [x0,y0,x1,y1] | null,
+                "torso": [x0,y0,x1,y1] | null,
+                "body": [x0,y0,x1,y1]}]
+}]
+All boxes are 0-1 fractions of the frame: x0<x1, y0<y1.
+
+`facial_region` is the FEATURES only: eyes, nose, mouth, chin. Not the hair,
+not the ears, not the skull above the brow. On a profile it is the visible
+half. Answer this box independently -- do not derive it from the head box.
+This is the box a crop may never cut, so it must be the smallest honest
+rectangle around the features.
+
+`nose` is a POINT on the tip of the nose (or, if the nose is hidden, the
+centre of the mouth). Screen coordinates. This is what tells us which way a
+face points: a nose sitting left of the head box's centre is a face looking
+left. Do not place it at the centre of the head by default -- on a profile it
+belongs near the edge of the head box, and a nose that is always centred
+carries no information at all.
+
+`in_action` is true when this character is part of what the shot is ABOUT --
+fighting, reacting, being struck -- and false for someone merely visible in
+the background. It decides how wide the window has to be, so a two-fighter
+exchange is `in_action` twice even when one of them is turned away and their
+face cannot be seen.
+
+`face` is the head only -- hair included, shoulders not. Give null if the head
+is not visible in the frame (turned away, out of shot, hidden by an effect).
+`torso` is the head plus the trunk of the body -- shoulders, chest, hips --
+and NOT the arms, legs, or any weapon. Think of what a portrait crop would
+hold. Give null only if no part of the trunk is visible.
+
+`body` is the whole visible extent of that character: torso, limbs, and the
+weapon they are holding if it reads as part of their silhouette. It must
+CONTAIN both the face and torso boxes when they exist.
+
+The difference between `torso` and `body` decides how tight a crop may be, so
+do not collapse them: a fighter mid-swing has a torso that fits a narrow
+portrait crop and a body that spans the frame.
+
+List every named character who is visible, even partly. A character at the very
+edge of frame with one shoulder showing is still present -- say so, and make
+the body box reach the edge. Omitting a partly-visible fighter is the failure
+mode that matters here: these boxes decide what a crop is allowed to cut."""
+
+
+def label_boxes(frames: list[tuple[int, float, Path]], characters: tuple[str, ...],
+                *, batch: int = BATCH) -> dict[int, list[dict]]:
+    """Per-character FACE and BODY boxes, per frame.
+
+    `label_frames` returns a focal POINT and one action box. A point says where
+    to centre a crop; it cannot say how wide the content is, so a two-fighter
+    shot centred on one fighter drops the other off the edge. That is exactly
+    what happened to the v13 full-bleed reel. Boxes are what the fit test needs.
+    """
+    allowed = tuple(characters)
+    head = f"Allowed character names: {list(allowed)}.\n{_BOX_SCHEMA}\n"
+    out: dict[int, list[dict]] = {}
+    for k in range(0, len(frames), batch):
+        chunk = frames[k:k + batch]
+        idx = [c[0] for c in chunk]
+        text = head + f"There are {len(chunk)} images, with indices {idx} in order."
+        for attempt in (0, 1):  # noqa: B007
+            try:
+                recs = _parse(_belt_vision([c[2] for c in chunk], text))
+            except Exception as exc:                     # noqa: BLE001
+                logger.warning("label_boxes batch %s failed (attempt %d): %s",
+                            idx, attempt, exc)
+                continue
+            got = {}
+            for r in recs:
+                i = r.get("i")
+                if i not in idx:
+                    continue
+                subs = []
+                for sdict in (r.get("subjects") or []):
+                    nm = sdict.get("name")
+                    if nm not in allowed:
+                        continue
+                    body = _box(sdict.get("body"))
+                    face = _box(sdict.get("face"))
+                    torso = _box(sdict.get("torso"))
+                    facial = _box(sdict.get("facial_region"))
+                    nose = _pt(sdict.get("nose"))
+                    in_action = bool(sdict.get("in_action", True))
+                    if body is None and face is None:
+                        continue
+                    subs.append({"name": nm, "face": face,
+                                 "facial_region": facial or face,
+                                 "nose": nose,
+                                 "in_action": in_action,
+                                 "torso": torso or face,
+                                 "body": body or torso or face})
+                got[i] = subs
+            if got:
+                out.update(got)
+                break
+    return out
+
+
+# --- identity, asked so that a short list cannot manufacture an answer -------
+# Measured 2026-09-26 on Demon Slayer SDBOxgbvZyY: asked to name faces from a
+# list containing `mitsuri` but not `shinobu`, the model answered mitsuri on 10
+# of 20 crops. Looking showed Shinobu Kocho and Butterfly Mansion girls, and
+# Mitsuri is not in that clip at all. The model does not fall back to "unsure"
+# when the true character is absent from the list -- it substitutes the nearest
+# name offered. So the list is the pack's FULL cast plus an explicit escape
+# hatch, and a name only counts when it beats that escape hatch.
+
+SOMEONE_ELSE = "someone else"
+
+
+def identity_question(cast: list[dict], show: str) -> str:
+    """Prompt for naming faces, with the pack's whole cast and an escape hatch.
+
+    `cast` is the pack's ``characters`` list; each entry may carry a ``look``
+    describing what is visible. Characters are listed even when they are not
+    expected in the shot: a name missing from the list is a name the model will
+    replace with a neighbour rather than decline.
+    """
+    names = [c["id"] for c in cast] + [SOMEONE_ELSE]
+    looks = [f"  {c['id']}: {c['look']}" for c in cast if c.get("look")]
+    return (
+        f"Close crops from {show}, each cut from a detected face box.\n"
+        '[{"i":<index>,"who":"' + "|".join(names) + '",'
+        '"beats_someone_else":true|false,"why":"<visible evidence>"}]\n'
+        + ("Who is who:\n" + "\n".join(looks) + "\n" if looks else "")
+        + f'"{SOMEONE_ELSE}" is a real answer and often the right one: this cast list is the '
+        f"whole franchise, not the people in this shot.\n"
+        '`beats_someone_else` is true only when the visible evidence picks that character over '
+        f'"{SOMEONE_ELSE}". If you would be guessing, say "{SOMEONE_ELSE}" and set it false.'
+    )
+
+
+def accept_identity(rec: dict) -> str | None:
+    """The name, or None. A name is accepted only when it beat "someone else"."""
+    who = (rec.get("who") or "").strip().lower()
+    if not who or who in (SOMEONE_ELSE, "unsure", "other"):
+        return None
+    return who if rec.get("beats_someone_else") is True else None

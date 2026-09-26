@@ -24,11 +24,13 @@ rights:
           territories: global
           evidence: Studio read 2026-09-26 on FF9gIJ8Idfo and 6 sibling uploads
           tested: 2026-09-26
+          kind: episode_clip
         dialogue_audio:
           status: clean
           claim: CLM-004
           evidence: 'Studio read 2026-09-26: no claim on the English dub dialogue'
           tested: 2026-09-26
+          kind: episode_clip
       usable: false
       note: Blocked worldwide on the picture. No audio change helps.
     tv_series:
@@ -40,6 +42,7 @@ rights:
           status: clean
           evidence: 'PRB-001: the only claim on the TV probe matched AUDIO, not visual'
           tested: 2026-09-26
+          kind: episode_clip
         source_audio:
           status: claimed_block
           claim: CLM-007
@@ -51,6 +54,7 @@ rights:
           - RU
           evidence: Studio read 2026-09-26 on vOqtI9ngVQ0, segment 0:00-0:20 of 0:21
           tested: 2026-09-26
+          kind: episode_clip
       usable: true
       note: 'Usable. The claim is the SHOW''S BACKGROUND SCORE -- a Go Shiina cue, not the LiSA theme
         I guessed -- so it travels with the source audio and goes away when the reel carries its own bed.
@@ -67,11 +71,13 @@ rights:
           status: clean
           evidence: 'CLM-010 preflight J7mWMQcM5lY: 0 territories blocked, 6 stable polls'
           tested: 2026-09-26
+          kind: trailer
         source_audio:
           status: claimed_block
           evidence: 'CLM-010 preflight y5EFRBy9R_M: 249 territories blocked, 6 stable polls'
           tested: 2026-09-26
           scope: worldwide (249 territories)
+          kind: trailer
       sources_probed:
         trailer: XoJCOAU_72U (1080p, Crunchyroll)
         episode_clip: NOT FOUND on an allowlisted channel — sourcing gap
@@ -87,23 +93,44 @@ rights:
           status: clean
           evidence: 'SDBOxgbvZyY 20 s probe: 0 territories, 6 stable polls'
           tested: '2026-09-26'
+          kind: bonus_segment
         source_audio:
           status: clean
           evidence: 'same probe, isolated-dialogue variant: 0 territories'
           tested: '2026-09-26'
+          kind: bonus_segment
       note: 'A THIRD asset class, distinct from both the episode clip and the trailer. On this show the
         three read differently: bonus segment clean/clean, Entertainment District TRAILER picture-clean/audio-blocked-249
         (CLM-010), Swordsmith Village EPISODE CLIP picture-blocked-249 (CLM-011). Asset class is the variable,
         not the show and not the arc.'
 sources:
 - name: crunchyroll_official
-  kind: clip_channel
+  kind: episode_clip
   uploader: Crunchyroll
   url: https://www.youtube.com/watch?v=HFAzgHHITVM
+  channel_kind: clip_channel
+  kind_note: a scene clip from the Infinity Castle FILM; the enum has no film_clip, and the distinction
+    that matters for rights is clip-vs-trailer-vs-bonus
 - name: aniplex_usa_official
-  kind: trailer_channel
+  kind: trailer
   uploader: Aniplex USA
   url: https://www.youtube.com/watch?v=L9MQLhV2u2E
+  channel_kind: trailer_channel
+- name: crunchyroll_ed_trailer
+  kind: trailer
+  channel_kind: clip_channel
+  uploader: Crunchyroll
+  handle: '@Crunchyroll'
+  url: https://www.youtube.com/watch?v=XoJCOAU_72U
+  note: Entertainment District Arc official trailer, 1080p, 80 s. Cold-open material only.
+- name: crunchyroll_sv_bonus
+  kind: bonus_segment
+  channel_kind: clip_channel
+  uploader: Crunchyroll
+  handle: '@Crunchyroll'
+  url: https://www.youtube.com/watch?v=SDBOxgbvZyY
+  note: Swordsmith Village arc-premiere end-of-episode segment, 1080p, 76 s. Both variants read 0 blocked
+    — the only DS asset kind that clears.
 audio:
   dub_en: true
   default_language: en

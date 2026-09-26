@@ -28,6 +28,9 @@ claims:
     untested and is the first probe.
 
     '
+  asset_kind: episode_clip
+  kind_scope: this reading applies to this asset kind only and does not generalise to other kinds of the
+    same work
 - id: CLM-002
   component: music
   bed: Epic Orchestral Strings (TheoJT, Freesound, CC BY 4.0) — bed B
@@ -88,6 +91,9 @@ claims:
     source audio, which is already the default path.
 
     '
+  asset_kind: episode_clip
+  kind_scope: this reading applies to this asset kind only and does not generalise to other kinds of the
+    same work
 - id: CLM-008
   component: picture_and_audio
   work: megalo_box
@@ -103,6 +109,9 @@ claims:
     work outright. boxing_round has no testable title left until Ippo has a source.
 
     '
+  asset_kind: episode_clip
+  kind_scope: this reading applies to this asset kind only and does not generalise to other kinds of the
+    same work
 - id: CLM-005
   component: trailer_audio_ja
   claimant: Sony Music Japan
@@ -148,6 +157,9 @@ claims:
   note: 'A negative reading is evidence and is recorded as such: it is the one thing that cannot be reconstructed
     later. The operator also observed that the v1-v3 mha_reel preflights all show ''-'' in Notices, so
     the whole MHA series reads clean -- unlike the ds_tv and megalobox probes, which did not.'
+  asset_kind: episode_clip
+  kind_scope: this reading applies to this asset kind only and does not generalise to other kinds of the
+    same work
 - id: CLM-010
   date: 2026-09-26
   work: demon_slayer / tv_series — Entertainment District Arc
@@ -423,6 +435,9 @@ claims:
     RU only) came from a TV episode clip. Different asset, different claim, and much broader. An episode
     clip still needs its own probe -- and none was found on an allowlisted channel, which is a sourcing
     gap, not a rights verdict.
+  asset_kind: trailer
+  kind_scope: this reading applies to this asset kind only and does not generalise to other kinds of the
+    same work
 - id: CLM-011
   date: 2026-09-26
   work: demon_slayer / tv_series — Swordsmith Village Arc
@@ -696,6 +711,9 @@ claims:
   note: This is the OPPOSITE of CLM-010 on the same show. The Entertainment District TRAILER reads picture-clean/audio-blocked;
     this Swordsmith Village EPISODE CLIP reads picture-blocked. Demon Slayer's rights position is per-asset,
     not per-show and not even per-arc — which is exactly why every clip gets its own preflight.
+  asset_kind: episode_clip
+  kind_scope: this reading applies to this asset kind only and does not generalise to other kinds of the
+    same work
 probes:
 - id: PRB-001
   franchise: demon_slayer

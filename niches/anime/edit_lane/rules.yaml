@@ -433,6 +433,11 @@ rules:
     offered. Build the list from who is actually on screen before asking, and treat a name that appears
     implausibly often as a symptom of a short list, not a finding.
 
+
+    THE CANDIDATE LIST IS THE PACK''S FULL CAST PLUS "someone else". A name is accepted only when it beats
+    "someone else" on that crop; if the model cannot prefer a name over "someone else", the answer is
+    no name. This is what stops a short list from manufacturing an identity.
+
     '
   origin: ANIME-EDIT-01 Wave 1, operator decision 2026-09-26
   check: identity asked only of an existing detection; label consistency measured within cut-free shots
@@ -499,3 +504,38 @@ rules:
       is the open question, not this reel. Option E (7.0 dropped, 7.1 trimmed to 2.50 s at 1.5x around
       the impact at src 70.528) took the reel from 71.2 to 58.7/min, blocks over from 5 to 3, and screen
       time over the ceiling from 37% to 21%.'
+- id: rights.a_probe_never_generalises_across_asset_kinds
+  statement: 'Every source declares a `kind`: trailer, episode_clip, bonus_segment or key_visual. A rights
+    reading is recorded against a kind and NEVER carried to another kind of the same work, the same arc
+    or the same channel. A clean trailer says nothing about an episode clip, and neither says anything
+    about a bonus segment. Sourcing searches look for all four kinds, not clips alone: bonus segments
+    and special features are their own category and, on at least one show, the only one that clears.
+
+    '
+  origin: ANIME-EDIT-01 Wave 2, operator decision 2026-09-26
+  check: pack validator requires `kind` on every source and on every tested rights component; claims entries
+    carry `asset_kind`
+  status: enforced
+  positive_control:
+    artefact: Demon Slayer — same show, same channel, same arc, three kinds
+    why: a clean trailer reading would have been taken as arc clearance
+    measured: 'trailer XoJCOAU_72U: picture CLEAN, audio BLOCKED 249 (CLM-010). episode_clip AR6-4GaCPn0:
+      picture BLOCKED 249, audio BLOCKED 249 (CLM-011). bonus_segment SDBOxgbvZyY: picture CLEAN, audio
+      CLEAN. Three kinds, three different answers, and the pilot only exists because the third was probed
+      after the second failed.'
+- id: ops.upload_budget_is_checked_before_a_batch
+  statement: 'The channel''s daily upload allowance is a scheduling constraint, roughly 13-15 videos.
+    The day''s PUBLISH is reserved first; preflights cost 2 uploads per reel and 2 per probe. A probe
+    batch checks the remaining budget before it starts and is spread across days if it does not fit. A
+    probe whose SILENT control never uploaded is incomplete and is not a clearance.
+
+    '
+  origin: ANIME-EDIT-01 Wave 2, operator decision 2026-09-26
+  check: scripts/anime_upload_budget.py before any batch; it reserves the publish
+  status: enforced
+  positive_control:
+    artefact: the 6-title clearance batch, 2026-09-26
+    why: 13 uploads had already gone to FrameDrift that day
+    measured: 'YouTube returned HTTP 400 `uploadLimitExceeded`, "The user has exceeded the number of videos
+      they may upload." Four titles never ran and JoJo got only its audio variant — which is exactly the
+      shape CLM-011 warns about: there the audio variant read fine and the SILENT control found the block.'
