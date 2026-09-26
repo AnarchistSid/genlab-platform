@@ -60,7 +60,7 @@ rights:
     tv_series_entertainment_district:
       title: 'Demon Slayer: Kimetsu no Yaiba — Entertainment District Arc'
       scope: tv_series_arc
-      tier: usable_without_source_audio
+      tier: usable_with_note
       usable: true
       components:
         picture:
@@ -68,12 +68,15 @@ rights:
           evidence: 'CLM-010 preflight J7mWMQcM5lY: 0 territories blocked, 6 stable polls'
           tested: 2026-09-26
         source_audio:
-          status: claimed_block_worldwide
+          status: claimed_block
           evidence: 'CLM-010 preflight y5EFRBy9R_M: 249 territories blocked, 6 stable polls'
           tested: 2026-09-26
+          scope: worldwide (249 territories)
       sources_probed:
         trailer: XoJCOAU_72U (1080p, Crunchyroll)
         episode_clip: NOT FOUND on an allowlisted channel — sourcing gap
+      tier_note: 'usable PICTURE-FIRST only: source audio is blocked in 249 territories (CLM-010), so
+        a reel from this arc carries a bed'
 sources:
 - name: crunchyroll_official
   kind: clip_channel
