@@ -562,3 +562,23 @@ rules:
     measured: the face detector returned 0 faces across all 13 samples of that window, and Inosuke is
       plainly on screen in his boar mask at 33.5 and 34.5. The tile was described as 'an empty room' on
       the strength of that zero. Overhaul's plague-doctor mask is the same shape of problem on MHA.
+- id: framing.a_group_shot_is_framed_on_the_speaker
+  statement: 'A dialogue shot with more subjects than the window can hold is framed on WHOEVER IS SPEAKING,
+    and the cut lands on the speaker change. This is a dialogue cut, not a hold jump, and is legal. Never
+    frame such a shot on the group centroid: a centroid window holds nobody. The speaker is the head box
+    with the most motion across the line''s span, cross-checked against the subtitle; below a 1.5x confidence
+    ratio over the next head, motion cannot separate them and the operator''s mark decides. No two adjacent
+    shots may share a window unless the picture also changes, or the speaker-change cut is invisible.
+
+    '
+  origin: ANIME-EDIT-01 Wave 2, operator decision 2026-09-26
+  check: 'per line: motion per head box over the span, confidence ratio reported; adjacent shots compared
+    for same-window-and-same-picture'
+  status: enforced
+  positive_control:
+    artefact: Demon Slayer SDBOxgbvZyY, an 11 s lineup of seven characters
+    why: framed on the group centroid, the first render cut off the speaker
+    measured: centroid framing put two silent girls in frame and cut Tanjiro, who asks the question, off
+      the left edge, with Kanao cut off at the right. Speaker framing turned 11 s of one static window
+      into three shots. Motion was decisive on one line (24.9x) and ambiguous on two (1.17x and 1.21x)
+      -- and its pick on the 1.17x line was Nezuko, who wears a muzzle and cannot speak.
