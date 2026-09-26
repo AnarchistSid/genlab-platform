@@ -1,0 +1,45 @@
+# Franchise pack schema (Layer 3). A new anime is a new pack, not new code.
+# Missing keys fall back to defaults and never crash (critical rule 2).
+#
+# rights.components is NOT decorative. Measured 2026-09-26 on FrameDrift:
+# the licensed anime's OWN DIALOGUE AUDIO is Content-ID blocked in 249
+# countries, while the same picture with silent audio is blocked in none.
+# Claim status therefore has to be recorded PER COMPONENT of a source, not
+# per source, or a pack will say "licensed" about material that cannot be
+# published.
+
+required: [franchise, display_name, rights, sources, audio, source_profiles,
+           characters, moment_grammars]
+
+fields:
+  franchise:        {type: 'str',  doc: "slug, matches the filename"}
+  display_name:     {type: 'str'}
+  rights:
+    holders:        {type: 'list[str]'}
+    tier:           {type: 'enum', values: [unknown, permissive, cautious, hostile],
+                     default: unknown, doc: "set by the rights loop, not by hand"}
+    stop_rule:      {type: 'map',  default: {claims_in_14d: 2}}
+    components:     {type: 'map',  default: {},
+                     doc: "per-component claim status: picture | dialogue_audio |
+                           music. Values: clean | claimed_block | claimed_monetise
+                           | untested. Evidence and date required for anything
+                           other than untested."}
+  sources:          {type: 'list[map]', doc: "each: name, kind, uploader, url_pattern"}
+  audio:
+    dub_en:         {type: 'bool', default: false}
+    default_language: {type: 'str', default: en}
+    use_source_dialogue: {type: 'bool', default: true,
+                     doc: "legacy hint; the preflight decides per reel"}
+    source_audio_policy: {type: 'enum',
+                     values: [auto, none, allow_monetised], default: auto,
+                     doc: "auto      = preflight decides per reel: block -> captions-only
+                           none      = never ship source audio for this franchise
+                           allow_monetised = ship source audio even when a claim
+                                             monetises or tracks, never when it blocks"}
+  source_profiles:  {type: 'list[str]', doc: "see profiles.yaml"}
+  characters:       {type: 'list[map]', doc: "id, names, skin.accent, tag"}
+  techniques:       {type: 'list[map]', default: [], doc: "name, user, cite"}
+  callbacks:        {type: 'list[map]', default: [], doc: "id, text, cite"}
+  never_clip:       {type: 'list[str]', default: []}
+  content_flags:    {type: 'list[str]', default: []}
+  moment_grammars:  {type: 'list[str]'}

@@ -1,0 +1,23 @@
+franchise: _template
+display_name: "Template — copy, do not edit in place"
+rights:
+  holders: []
+  tier: unknown
+  stop_rule: {claims_in_14d: 2}
+  components:
+    picture:        {status: untested}
+    dialogue_audio: {status: untested}
+    music:          {status: untested}
+sources: []
+audio:
+  dub_en: false
+  default_language: en
+  source_audio_policy: auto
+  use_source_dialogue: true
+source_profiles: [modern_hd_16x9]
+characters: []
+techniques: []
+callbacks: []
+never_clip: []
+content_flags: []
+moment_grammars: [fight_exchange]

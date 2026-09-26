@@ -1,0 +1,89 @@
+franchise: demon_slayer
+display_name: "Demon Slayer"
+rights:
+  holders: [Aniplex, Shueisha, ufotable]
+  stop_rule: {claims_in_14d: 2}
+  # TIER IS PER WORK, NOT PER FRANCHISE. Measured 2026-09-26: the film is
+  # blocked worldwide and the TV series draws a single-territory audio block.
+  # A franchise-level "hostile" would have retired a usable catalogue.
+  works:
+
+    infinity_castle_film:
+      title: "劇場版「鬼滅の刃」無限城編 第一章 猗窩座再来"
+      title_en: "Demon Slayer: Infinity Castle, Chapter 1 — Akaza Returns"
+      scope: film
+      tier: block
+      components:
+        picture:
+          status: claimed_block
+          claim: CLM-001
+          claimant: Aniplex
+          via_channel: "アニプレックスブロック用チャンネル2"
+          match_type: visual
+          policy: block
+          territories: global
+          evidence: "Studio read 2026-09-26 on FF9gIJ8Idfo and 6 sibling uploads"
+          tested: 2026-09-26
+        dialogue_audio:
+          status: clean
+          claim: CLM-004
+          evidence: "Studio read 2026-09-26: no claim on the English dub dialogue"
+          tested: 2026-09-26
+      usable: false
+      note: "Blocked worldwide on the picture. No audio change helps."
+
+    tv_series:
+      title: "Demon Slayer: Kimetsu no Yaiba (TV)"
+      scope: tv_series
+      tier: usable_with_note
+      components:
+        picture:
+          status: clean
+          evidence: "PRB-001: the only claim on the TV probe matched AUDIO, not visual"
+          tested: 2026-09-26
+        source_audio:
+          status: claimed_block
+          claim: CLM-007
+          claimant: "Sony Music Entertainment (Japan) Inc., SME on behalf of Aniplex Inc."
+          asset: '"Inosuke, Information Gathering" (Go Shiina)'
+          match_type: audio
+          policy: "block in some territories; no earnings impact (Shorts); not a strike"
+          territories: [RU]
+          evidence: "Studio read 2026-09-26 on vOqtI9ngVQ0, segment 0:00-0:20 of 0:21"
+          tested: 2026-09-26
+      usable: true
+      note: >
+        Usable. The claim is the SHOW'S BACKGROUND SCORE -- a Go Shiina cue,
+        not the LiSA theme I guessed -- so it travels with the source audio and
+        goes away when the reel carries its own bed. Russia-only, no earnings
+        impact, no strike. If a reel keeps source audio, it loses Russia.
+
+sources:
+  - {name: crunchyroll_official, kind: clip_channel, uploader: Crunchyroll,
+     url: "https://www.youtube.com/watch?v=HFAzgHHITVM"}
+  - {name: aniplex_usa_official, kind: trailer_channel, uploader: "Aniplex USA",
+     url: "https://www.youtube.com/watch?v=L9MQLhV2u2E"}
+audio:
+  dub_en: true
+  default_language: en
+  # The PREFLIGHT decides per reel; this is only the franchise-level stance.
+  # `auto` means: build both variants, measure, and let the result choose.
+  source_audio_policy: auto
+  use_source_dialogue: false   # legacy hint, superseded by the preflight
+source_profiles: [modern_hd_16x9, film_grain_theatrical]
+characters:
+  - {id: tanjiro, names: ["Tanjiro Kamado"], skin: {accent: "#E0533A"}, tag: "TANJIRO KAMADO"}
+  - {id: giyu,    names: ["Giyu Tomioka"],   skin: {accent: "#2A7FE8"}, tag: "GIYU · WATER HASHIRA"}
+  - {id: akaza,   names: ["Akaza"],          skin: {accent: "#E83A6A"}, tag: "AKAZA · UPPER RANK THREE"}
+  - {id: rengoku, names: ["Kyojuro Rengoku"],skin: {accent: "#F5A623"}, tag: "RENGOKU · FLAME HASHIRA"}
+techniques:
+  - {name: "Eleventh Form · Dead Calm",        user: giyu,    cite: F101}
+  - {name: "Hinokami Kagura · Raging Sun",     user: tanjiro, cite: F102}
+  - {name: "Water Breathing · Second Form · Water Wheel", user: giyu, cite: F103}
+  - {name: "Flame Breathing · First Form",     user: rengoku, cite: F104}
+callbacks:
+  - {id: rengoku_death, text: "AKAZA KILLED RENGOKU", cite: F003}
+  - {id: two_v_upper_moon, text: "TWO AGAINST AN UPPER MOON", cite: F005}
+never_clip: []
+content_flags: [graphic_violence]
+moment_grammars: [fight_exchange, speech]
