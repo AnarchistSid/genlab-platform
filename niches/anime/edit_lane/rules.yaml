@@ -582,3 +582,23 @@ rules:
       the left edge, with Kanao cut off at the right. Speaker framing turned 11 s of one static window
       into three shots. Motion was decisive on one line (24.9x) and ambiguous on two (1.17x and 1.21x)
       -- and its pick on the 1.17x line was Nezuko, who wears a muzzle and cannot speak.
+- id: framing.no_detection_anchors_on_a_clean_plate
+  statement: 'When no detector fires on a shot and the background is STATIC, the anchor comes from a temporal
+    difference against a CLEAN PLATE -- a frame of the same shot before the subject enters -- not from
+    any spatial statistic. A spatial measure finds whatever is most textured, which in a furnished room
+    is the furniture. The method refuses rather than guesses when too little changes, because a non-static
+    background, a wrong plate and a moving camera all look the same to it. Where the background is not
+    static, the shot goes to a hand mark.
+
+    '
+  origin: ANIME-EDIT-01 Wave 2, operator decision 2026-09-26
+  check: still.framing.clean_plate_anchor(); it returns ok=False rather than a number
+  status: enforced
+  positive_control:
+    artefact: Demon Slayer SDBOxgbvZyY, the ceiling reveal — neither detector fires
+    why: two spatial methods put the anchor on the furniture
+    measured: 'a saturation centroid and a column-variance profile both locked onto the doorframe and
+      shelving and returned cx 0.506. The subject is at 0.691. Differencing against a plate of the empty
+      room found him at once: cx 0.849 -> 0.529, median 0.691, against a hand mark of 0.685 -- within
+      0.006. The wrong 0.506 had already produced one bad render and a pan whose window excluded the subject
+      entirely.'
