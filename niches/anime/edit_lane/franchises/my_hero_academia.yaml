@@ -72,9 +72,25 @@ characters:
     accent: '#C9C6D6'
   tag: ERI
   cite: F213, F215
-  note: 'verified against a detected box at src 43.84-45.60, x 0.39-0.54, detector score 0.73-0.84: a
-    child with white hair and a single horn. The image model called the same box mirio/nighteye/unsure
-    and never eri, with her horn described in the prompt.'
+  note: Verified against a detected box TWICE, and the two readings differ by box size. On her CLOSE-UP
+    at src 43.751 (shot 4.0, box area 0.116) the image model answered 'eri' with the horn seen, first
+    ask. On the small box in 4.1 (area ~0.039) the same model answered mirio x3, nighteye x3, unsure x1
+    and never eri. Its identity answers are worth something on a large face and nothing on a small one
+    -- so the tag is placed from the box, and the box is chosen for size.
+  tag_anchor:
+    shot: '4.0'
+    src: 43.751
+    box:
+    - 0.418
+    - 0.15
+    - 0.661
+    - 0.628
+    reel_window:
+    - 14.93
+    - 16.05
+    placed: beside her face, right side
+    why_right: across 14.93-16.05 her box spans plate x 0.168-0.765; 0.235 of room on the right against
+      0.168 on the left
 techniques: []
 callbacks:
 - id: deku_creed
