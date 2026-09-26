@@ -77,6 +77,24 @@ rights:
         episode_clip: NOT FOUND on an allowlisted channel — sourcing gap
       tier_note: 'usable PICTURE-FIRST only: source audio is blocked in 249 territories (CLM-010), so
         a reel from this arc carries a bed'
+    tv_series_bonus_segments:
+      title: Demon Slayer — end-of-episode bonus segments (arc premiere / next-episode gags)
+      scope: bonus_segment
+      tier: usable
+      usable: true
+      components:
+        picture:
+          status: clean
+          evidence: 'SDBOxgbvZyY 20 s probe: 0 territories, 6 stable polls'
+          tested: '2026-09-26'
+        source_audio:
+          status: clean
+          evidence: 'same probe, isolated-dialogue variant: 0 territories'
+          tested: '2026-09-26'
+      note: 'A THIRD asset class, distinct from both the episode clip and the trailer. On this show the
+        three read differently: bonus segment clean/clean, Entertainment District TRAILER picture-clean/audio-blocked-249
+        (CLM-010), Swordsmith Village EPISODE CLIP picture-blocked-249 (CLM-011). Asset class is the variable,
+        not the show and not the arc.'
 sources:
 - name: crunchyroll_official
   kind: clip_channel
@@ -103,6 +121,7 @@ characters:
   skin:
     accent: '#E0533A'
   tag: TANJIRO KAMADO
+  cite: D302
 - id: giyu
   names:
   - Giyu Tomioka
@@ -121,6 +140,25 @@ characters:
   skin:
     accent: '#F5A623'
   tag: RENGOKU · FLAME HASHIRA
+- id: inosuke
+  names:
+  - Inosuke
+  - Inosuke Hashibira
+  skin:
+    accent: '#4A7C59'
+  tag: INOSUKE
+  cite: D303
+  note: named in the burned subtitle twice; the boar mask / wild grey hair is the visual
+- id: nezuko
+  names:
+  - Nezuko
+  skin:
+    accent: '#E8A0BF'
+  tag: null
+  cite: null
+  note: VISIBLE, NOT NAMED. Bamboo muzzle and pink chequered kimono are unmistakable on screen, but no
+    subtitle names her in this clip and appearance is not a citation. tag is null deliberately — do not
+    render one until a source names her.
 techniques:
 - name: Eleventh Form · Dead Calm
   user: giyu

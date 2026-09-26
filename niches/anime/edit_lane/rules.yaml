@@ -427,6 +427,12 @@ rules:
     An identity answer is never used to place, widen or move a window, and a name without a box is not
     recorded. Where two names are possible, consistency across a continuous cut-free shot is the check.
 
+
+    THE CANDIDATE LIST MUST BE COMPLETE FOR THE SCENE. Asked to name faces from a list, the model does
+    not answer ''unsure'' when the true character is absent from it -- it substitutes the nearest name
+    offered. Build the list from who is actually on screen before asking, and treat a name that appears
+    implausibly often as a symptom of a short list, not a finding.
+
     '
   origin: ANIME-EDIT-01 Wave 1, operator decision 2026-09-26
   check: identity asked only of an existing detection; label consistency measured within cut-free shots
@@ -434,10 +440,14 @@ rules:
   positive_control:
     artefact: MHA variant B shot 0.0
     why: the image model named a verified face "overhaul"
-    measured: the crop is plainly Deku (teal hair, freckles); identity wrong on 1 of 2 while BOTH boxes
-      were right. On the ONNX detector's own crops the same shot returned deku 7/7. Separately the model's
+    measured: 'the crop is plainly Deku (teal hair, freckles); identity wrong on 1 of 2 while BOTH boxes
+      were right. On the ONNX detector''s own crops the same shot returned deku 7/7. Separately the model''s
       BOX coordinates scored 0/4 IoU against an independent box while reporting confidence 0.70-0.92,
-      so coordinates from the image model are never a framing input.
+      so coordinates from the image model are never a framing input. Demon Slayer SDBOxgbvZyY, 2026-09-26:
+      with ''mitsuri'' in the list and ''shinobu'' absent, the model answered mitsuri on 10 of 20 crops.
+      Looking showed Shinobu Kocho (butterfly hair ornaments) and Butterfly Mansion girls (pink flower
+      clips). Mitsuri is not in the clip at all. Tanjiro, on the two largest boxes (0.217 and 0.297 wide),
+      was correct both times.'
 - id: framing.burned_mark_whole_or_absent_on_a_static_window
   statement: 'A watermark burned into the PICTURE -- as opposed to a croppable band -- is either wholly
     inside a STATIC window or wholly outside it, never partly visible. Permitted static left edges are

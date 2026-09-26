@@ -1,52 +1,168 @@
-# Moment grammars. Not every peak is a fight, and a sacrifice edit must never be
-# judged against a hype edit's cut rate. Percentiles are per grammar and per era;
-# where a grammar has no measured corpus yet the band is marked `inherited` and
-# says what it was inherited from, rather than pretending to be measured.
 version: 1
 grammars:
-  - id: fight_exchange
-    beats: [setup, wind_up, call, clash, impact, aftermath]
-    register: hype
-    cut_rate: {source: measured, corpus: anime_reference_29, p25: 15.78, p50: 41.39, p75: 58.70}
-    sound: {bed: driving, drop_on: impact, second_hit_on: final_technique}
-    examples: ["Tanjiro & Giyu vs Akaza", "Luffy vs Kaido", "Gon vs Pitou"]
-  - id: transformation
-    beats: [trigger, build, reveal, release]
-    register: epic
-    cut_rate: {source: inherited, from: fight_exchange, note: "hold the reveal longer; needs its own corpus"}
-    sound: {bed: swelling, drop_on: reveal}
-    examples: ["Super Saiyan", "Gear 5", "Bankai", "NT-D"]
-  - id: boxing_round
-    beats: [stare_down, feint, combo, counter, knockdown_or_bell]
-    register: hype
-    cut_rate: {source: inherited, from: fight_exchange}
-    sound: {bed: percussive, drop_on: counter}
-    examples: ["Hajime no Ippo", "Megalo Box"]
-  - id: speech
-    beats: [context, build, line, reaction]
-    register: analytical
-    cut_rate: {source: inherited, from: fight_exchange,
-               note: "MUST be slower; a speech edit cut at fight rate is unreadable"}
-    sound: {bed: sparse, duck_under: line}
-    examples: ["Lelouch's commands", "Erwin's charge"]
-  - id: sacrifice_death
-    beats: [stakes, act, loss, reaction]
-    register: emotional
-    cut_rate: {source: inherited, from: fight_exchange,
-               note: "slowest of the set; impact gate is replaced by a hold gate"}
-    sound: {bed: sustained, drop_on: none}
-    examples: ["Hughes", "Ace", "Jiraiya"]
-  - id: reveal_twist
-    beats: [normal, hint, reveal, reaction]
-    register: epic
-    cut_rate: {source: inherited, from: fight_exchange}
-    sound: {bed: tense, drop_on: reveal}
-    examples: ["Attack on Titan reveals"]
-  - id: comedy_beat
-    beats: [setup, escalation, punchline]
-    register: hype
-    cut_rate: {source: inherited, from: fight_exchange}
-    gates: {replace: impact_alignment, with: timing_alignment,
-            note: "the punchline lands on a beat, not on an impact"}
-    sound: {bed: light, drop_on: punchline}
-    examples: ["Assassination Classroom"]
+- id: fight_exchange
+  beats:
+  - setup
+  - wind_up
+  - call
+  - clash
+  - impact
+  - aftermath
+  register: hype
+  cut_rate:
+    source: measured
+    corpus: anime_reference_29
+    p25: 15.78
+    p50: 41.39
+    p75: 58.7
+  sound:
+    bed: driving
+    drop_on: impact
+    second_hit_on: final_technique
+  examples:
+  - Tanjiro & Giyu vs Akaza
+  - Luffy vs Kaido
+  - Gon vs Pitou
+- id: transformation
+  beats:
+  - trigger
+  - build
+  - reveal
+  - release
+  register: epic
+  cut_rate:
+    source: inherited
+    from: fight_exchange
+    note: hold the reveal longer; needs its own corpus
+  sound:
+    bed: swelling
+    drop_on: reveal
+  examples:
+  - Super Saiyan
+  - Gear 5
+  - Bankai
+  - NT-D
+- id: boxing_round
+  beats:
+  - stare_down
+  - feint
+  - combo
+  - counter
+  - knockdown_or_bell
+  register: hype
+  cut_rate:
+    source: inherited
+    from: fight_exchange
+  sound:
+    bed: percussive
+    drop_on: counter
+  examples:
+  - Hajime no Ippo
+  - Megalo Box
+- id: speech
+  beats:
+  - context
+  - build
+  - line
+  - reaction
+  register: analytical
+  cut_rate:
+    source: inherited
+    from: fight_exchange
+    note: MUST be slower; a speech edit cut at fight rate is unreadable
+  sound:
+    bed: sparse
+    duck_under: line
+  examples:
+  - Lelouch's commands
+  - Erwin's charge
+- id: sacrifice_death
+  beats:
+  - stakes
+  - act
+  - loss
+  - reaction
+  register: emotional
+  cut_rate:
+    source: inherited
+    from: fight_exchange
+    note: slowest of the set; impact gate is replaced by a hold gate
+  sound:
+    bed: sustained
+    drop_on: none
+  examples:
+  - Hughes
+  - Ace
+  - Jiraiya
+- id: reveal_twist
+  beats:
+  - normal
+  - hint
+  - reveal
+  - reaction
+  register: epic
+  cut_rate:
+    source: inherited
+    from: fight_exchange
+  sound:
+    bed: tense
+    drop_on: reveal
+  examples:
+  - Attack on Titan reveals
+- id: comedy_beat
+  beats:
+  - setup
+  - escalation
+  - punchline
+  register: light
+  cut_rate:
+    source: measured
+    corpus: n=1 — PROVISIONAL, not a corpus
+    sample: Crunchyroll SDBOxgbvZyY, Demon Slayer Swordsmith Village end-of-episode segment, 76.1 s
+    measured_cuts_per_min: 13.4
+    shot_length_s:
+      min: 0.42
+      median: 2.25
+      p75: 4.0
+      max: 12.26
+    band:
+      floor: 8.0
+      ceiling: 30.0
+      why: 'centred on the one measurement, 13.4/min. The fight ceiling of 58.7 is the FIGHT corpus p75
+        and has no authority here: this clip runs a QUARTER of it, with a median shot of 2.25 s and one
+        held 12.26 s. A band from n=1 is a placeholder — it needs >=5 comedy reference clips before it
+        can block a reel.'
+    status: PROVISIONAL — advisory only until the corpus exists
+  gates:
+    replace: impact_alignment
+    with: timing_alignment
+    timing_alignment:
+      statement: A punchline is preceded by a BEAT -- a silent gap -- and the reel must not cut inside
+        that gap. The pause is the joke; cutting through it kills it. Where a fight reel asks whether
+        the drop lands on the impact, this asks whether the cut respects the pause.
+      check: for each cue preceded by a gap >= beat_floor_s, assert no authored cut falls strictly inside
+        the gap, and the punchline cue begins within 0.25 s of either a cut or a held frame
+      beat_floor_s: 2.0
+      beat_floor_note: the OCR grid used to measure the cues was 1.0 s, so gaps below 1.0 s are unresolvable
+        and the measured median of 1.0 s IS the grid floor, not a finding. 2.0 s is the smallest gap this
+        measurement can actually distinguish from the grid. Re-measure at 0.3 s before treating it as
+        real.
+      beats_found:
+      - at: 12.0
+        gap: 6.0
+        before: So that means he was there / for over an hour at least?
+      - at: 27.0
+        gap: 3.0
+        before: What do you mean, "wrong"?
+      - at: 34.0
+        gap: 3.0
+        before: Rustle, rustle, rustle...
+      status: defined and measurable; NOT yet wired into still.edit_rules
+  sound:
+    bed: light
+    drop_on: punchline
+    note: source audio is usable on this asset — preflight read 0 blocked on both variants
+  examples:
+  - 'Demon Slayer: Swordsmith Village end-of-episode segment (SDBOxgbvZyY)'
+  register_note: was 'hype', inherited from fight_exchange. A comedy beat is not hype and the bed was
+    already 'light'; the two disagreed.
